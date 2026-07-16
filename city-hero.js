@@ -190,7 +190,7 @@ export function mountCityHero(canvas, opts) {
       const centre = Math.max(0, 1 - a);
       const s = 0.76 + centre * 0.57;                       // centre clearly the largest
       g.scale.set(s, s, s);
-      g.position.x = off * SPACING * (1 + a * 0.08);        // sides sit close, belonging to the centre
+      g.position.x = Math.sign(off) * SPACING * Math.pow(a, 1.7) * (1 + a * 0.08);  // ease toward centre mid-swipe -> no empty gap; full peek at rest
       g.position.z = -a * 1.5;
       g.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       g.rotation.y = -off * SIDE_ANGLE;
