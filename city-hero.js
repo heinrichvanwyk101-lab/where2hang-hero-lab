@@ -135,7 +135,7 @@ export function mountCityHero(canvas, opts) {
     else if (!boat.userData.active) { boat.userData.active = true; boat.userData.dir = Math.random() > .5 ? 1 : -1; boat.userData.x = boat.userData.dir > 0 ? -9 : 9; boat.userData.sp = .006 + Math.random() * .005; }
   }
 
-  const t0 = performance.now(); let lastIdx = -1, raf = 0;
+  const t0 = performance.now(); let lastIdx = -1, raf = 0, hintStart = -1;
   function frame() {
     raf = requestAnimationFrame(frame); if (!running) return;
     const t = (performance.now() - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
@@ -145,20 +145,25 @@ export function mountCityHero(canvas, opts) {
     cur += (target - cur) * 0.12;
     const idx = frontIndex(); const hot = idx === S.hotIndex; const pulse = hot ? (0.5 + 0.5 * Math.sin(t * 3)) : 0;
 
-    // place only prev / current / next; hide the rest
+    // gentle one-time nudge ~1s after load, to say "I'm swipeable"
+    if (hintStart < 0 && t > 1.1) hintStart = t;
+    let hintOff = 0;
+    if (hintStart > 0 && t - hintStart < 0.8) { const p = t - hintStart; hintOff = Math.sin(p * 8) * 0.1 * (1 - p / 0.8); }
+    const ec = cur + hintOff;
+    // prev / current / next — the sides PEEK at the edges (not hidden) so the carousel is discoverable
     cards.forEach((m, i) => {
-      let off = i - cur; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
+      let off = i - ec; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
       const a = Math.abs(off);
-      if (a > 1.15) { m.visible = false; return; }          // only prev / current / next
+      if (a > 1.15) { m.visible = false; return; }
       m.visible = true;
-      const centre = Math.max(0, 1 - a);                    // 1 at front, 0 at the sides
-      const s = 0.72 + centre * 0.42;
+      const centre = Math.max(0, 1 - a);
+      const s = 0.8 + centre * 0.35;                        // sides kept sizeable
       m.scale.set(s, s, s);
-      m.position.x = off * SPACING * (1 - a * 0.18);        // pull the side cards inward
-      m.position.z = -a * 2.1;                              // and further back, so they recede
+      m.position.x = off * SPACING * (1 + a * 0.28);        // push sides to the edge -> only a slice peeks in
+      m.position.z = -a * 1.8;
       m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       m.rotation.y = -off * SIDE_ANGLE;
-      m.material.opacity = Math.max(0, 1 - a * 1.15);       // neighbours vanish at rest; appear only mid-swipe (not a turntable)
+      m.material.opacity = Math.max(0, 1 - a * 0.4);        // ~60% at rest: a clear peek that says "more either side"
     });
 
     // stage lighting follows the floating centre card
