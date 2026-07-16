@@ -17,7 +17,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
 :root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('./Hero-night.webp') center 28%/cover no-repeat}
+.skybg{position:fixed;inset:-26px;z-index:0;background:#06202b url('./Hero-night.webp') center top/auto 112% no-repeat;filter:blur(9px) saturate(.9) contrast(.85) brightness(.93)}
 .skytod{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
 .skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
 .dots{display:flex;gap:7px;justify-content:center;margin-top:9px}
@@ -41,7 +41,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .hero{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;padding:2px 18px 0}
 .greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65)}
 .greeting span{color:var(--teal2)}
-.search{margin-top:12px;padding:4px 12px 4px;border-radius:16px;box-shadow:0 8px 22px rgba(0,0,0,.35),0 1px 0 rgba(180,255,246,.14) inset}
+.search{margin-top:12px;padding:4px 12px 4px;border-radius:16px;box-shadow:0 6px 17px rgba(0,0,0,.28),0 1px 0 rgba(180,255,246,.12) inset}
 .search .row{display:flex;align-items:center;gap:10px}
 .search .ic{color:var(--gold);flex:0 0 auto}
 .search .q{flex:1;color:#c7d3d1;font-size:14px;font-weight:500}
@@ -97,7 +97,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 
 /* EXPERIENCES 2* — chips */
 .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
-.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:linear-gradient(180deg,rgba(0,194,168,.12),rgba(0,194,168,.05));border:1px solid rgba(0,194,168,.26);transition:.25s var(--ease)}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:rgba(20,28,32,.62);border:1px solid rgba(0,194,168,.3);transition:.25s var(--ease)}
 .chip.on{background:linear-gradient(180deg,var(--teal2),var(--teal));color:#04120f;border-color:transparent}
 .chip.on .d{background:#04120f;box-shadow:none}
 .chip .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal2);margin-right:8px;vertical-align:middle;box-shadow:0 0 7px var(--teal2)}
@@ -210,7 +210,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=21';
+  import { mountCityHero } from './city-hero.js?v=22';
   import { mountAreaRail } from './area-rail.js?v=5';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';

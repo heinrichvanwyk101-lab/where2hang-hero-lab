@@ -90,23 +90,13 @@ export function mountCityHero(canvas, opts) {
   // window overlay (inner shadow + frame lip + top light-catch) and a soft cast shadow — drawn once, shared
   function frameTex() {
     const W2 = 512, H2 = 569, cv = document.createElement("canvas"); cv.width = W2; cv.height = H2; const c = cv.getContext("2d");
-    // all-round inner vignette -> photo darkens toward the edges, reads as set BACK
-    let rg = c.createRadialGradient(W2 / 2, H2 / 2, H2 * 0.3, W2 / 2, H2 / 2, H2 * 0.64);
-    rg.addColorStop(0, "transparent"); rg.addColorStop(1, "rgba(0,0,0,.46)"); c.fillStyle = rg; c.fillRect(0, 0, W2, H2);
-    // top inner shadow -> photo recessed under the top lip
-    let g = c.createLinearGradient(0, 0, 0, 120); g.addColorStop(0, "rgba(0,0,0,.6)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(0, 0, W2, 120);
-    // bottom scrim (depth + caption legibility)
-    g = c.createLinearGradient(0, H2, 0, H2 - 170); g.addColorStop(0, "rgba(0,0,0,.64)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(0, H2 - 170, W2, 170);
-    // dark frame lip (the window frame itself)
-    c.strokeStyle = "rgba(6,12,14,.72)"; c.lineWidth = 10; c.strokeRect(5, 5, W2 - 10, H2 - 10);
-    // lit top rim -> light catches the top of the frame
-    g = c.createLinearGradient(0, 4, 0, 42); g.addColorStop(0, "rgba(205,255,249,.6)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(12, 4, W2 - 24, 38);
-    // faint teal inner edge
-    c.strokeStyle = "rgba(120,230,218,.2)"; c.lineWidth = 2; c.strokeRect(13, 13, W2 - 26, H2 - 26);
-    // diagonal glass sheen -> a surface with depth, not a flat print
-    g = c.createLinearGradient(0, 0, W2, H2 * 0.5);
-    g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(.44, "rgba(255,255,255,.05)"); g.addColorStop(.5, "rgba(255,255,255,.12)"); g.addColorStop(.56, "rgba(255,255,255,.04)"); g.addColorStop(1, "rgba(255,255,255,0)");
-    c.fillStyle = g; c.fillRect(0, 0, W2, H2);
+    // gentle all-round vignette (soft, not a frame)
+    let rg = c.createRadialGradient(W2 / 2, H2 / 2, H2 * 0.34, W2 / 2, H2 / 2, H2 * 0.66);
+    rg.addColorStop(0, "transparent"); rg.addColorStop(1, "rgba(0,0,0,.26)"); c.fillStyle = rg; c.fillRect(0, 0, W2, H2);
+    // bottom scrim (caption legibility only)
+    let g = c.createLinearGradient(0, H2, 0, H2 - 165); g.addColorStop(0, "rgba(0,0,0,.55)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(0, H2 - 165, W2, 165);
+    // whisper of light along the very top edge (no border)
+    g = c.createLinearGradient(0, 2, 0, 30); g.addColorStop(0, "rgba(220,255,251,.32)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(16, 2, W2 - 32, 28);
     return new THREE.CanvasTexture(cv);
   }
   function cardShadowTex() {
@@ -117,7 +107,19 @@ export function mountCityHero(canvas, opts) {
   const frameT = frameTex(), shadowT = cardShadowTex();
 
   // venue cards — each a window: cast shadow (behind) + photo + frame overlay (front)
-  const geo = new THREE.PlaneGeometry(CW, CH);
+  function roundedPlane(w, h, r) {
+    const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+    s.moveTo(x + r, y);
+    s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+    s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+    s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+    const g = new THREE.ShapeGeometry(s, 16), p = g.attributes.position, uv = [];
+    for (let i = 0; i < p.count; i++) uv.push((p.getX(i) + w / 2) / w, (p.getY(i) + h / 2) / h);
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    return g;
+  }
+  const geo = roundedPlane(CW, CH, 0.17);
   const shadowGeo = new THREE.PlaneGeometry(CW * 1.24, CH * 1.2);
   const cards = venues.map((v) => {
     const g = new THREE.Group();
@@ -192,10 +194,10 @@ export function mountCityHero(canvas, opts) {
       g.position.z = -a * 1.5;
       g.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       g.rotation.y = -off * SIDE_ANGLE;
-      const op = Math.max(0, 1 - a * 0.42);                 // sides fade -> centre is tonight's pick
+      const op = Math.max(0, 1 - a * 0.45);                 // side cards ~55%
       g.userData.photo.material.opacity = op;
-      g.userData.fr.material.opacity = op * 0.95;
-      g.userData.sh.material.opacity = op * 0.62;
+      g.userData.fr.material.opacity = op * 0.7;            // gentle overlay, no heavy frame
+      g.userData.sh.material.opacity = op * 0.5;            // soft shadow only
     });
 
     // stage lighting follows the floating centre card
