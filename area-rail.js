@@ -41,7 +41,7 @@ export function mountAreaRail(canvas, opts) {
     if (a.count) { c.fillStyle = "#9FD8CF"; c.font = "600 24px Inter, sans-serif"; c.fillText(a.count, 26, 308); }
     // teal edge glow rim
     const hi = c.createLinearGradient(0, 0, 0, 96); hi.addColorStop(0, "rgba(190,255,247,.16)"); hi.addColorStop(1, "transparent"); c.fillStyle = hi; c.fillRect(6, 6, 500, 96);
-    c.strokeStyle = "rgba(61,233,205,.45)"; c.lineWidth = 5; rr(c, 6, 6, 500, 318, 24); c.stroke();
+    c.strokeStyle = "rgba(160,220,212,.28)"; c.lineWidth = 2; rr(c, 7, 7, 498, 316, 30); c.stroke();
     return new THREE.CanvasTexture(cv);
   }
   const loader = new THREE.TextureLoader(); loader.crossOrigin = "anonymous";
@@ -78,6 +78,7 @@ export function mountAreaRail(canvas, opts) {
       c.g.position.set(R * Math.sin(a), 0, -R + R * Math.cos(a));  // gentle outward arc
       c.g.rotation.y = a * 0.5;                                    // partial tilt — display case, not a wheel
       const s = 1 - ab * 0.035; c.g.scale.set(s, s, s);           // centre only slightly larger
+      const dim = Math.max(0.62, 1 - ab * 0.16); c.pm.material.color.setScalar(dim);  // inactive ~15% darker
       const op = Math.max(0, Math.min(1, 1.2 - Math.max(0, ab - 1.4) * 0.7));
       c.pm.material.opacity = op; c.lm.material.opacity = op;
     });

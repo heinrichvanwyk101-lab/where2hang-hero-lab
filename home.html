@@ -25,7 +25,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .dots i.on{width:18px;border-radius:3px;background:var(--teal2);box-shadow:0 0 8px rgba(0,194,168,.5)}
 .page{position:relative;z-index:2}
 .screen1{display:flex;flex-direction:column;min-height:100vh;min-height:100svh;padding-bottom:66px}
-.controls{padding:6px 18px 8px}
+.controls{padding:2px 18px 8px}
 /* cockpit material — used with INTENT, not everywhere */
 .glass{position:relative;background:linear-gradient(180deg,rgba(30,46,50,.44),rgba(14,26,30,.5));backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border:1px solid rgba(120,220,210,.28);border-radius:20px;box-shadow:0 16px 42px rgba(0,0,0,.5),0 0 22px rgba(0,194,168,.14),0 1px 0 rgba(180,255,246,.28) inset}
 .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(180,255,246,.10),transparent 42%)}
@@ -41,12 +41,12 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .hero{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;padding:2px 18px 0}
 .greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65)}
 .greeting span{color:var(--teal2)}
-.search{margin-top:14px;padding:12px 14px 11px;border-radius:22px}
+.search{margin-top:14px;padding:10px 14px 8px;border-radius:20px}
 .search .row{display:flex;align-items:center;gap:12px}
 .search .ic{color:var(--gold);flex:0 0 auto}
 .search .q{flex:1;color:#d3dedc;font-size:15px;font-weight:500}
 .search .go{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.45)}
-.search .wchip{display:inline-flex;align-items:center;gap:7px;margin-top:9px;font-size:11.5px;font-weight:600;color:var(--teal2)}
+.search .wchip{display:inline-flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;font-weight:600;color:var(--sub)}
 .search .wchip .o{width:7px;height:7px;border-radius:50%;background:var(--teal2);box-shadow:0 0 8px var(--teal2)}
 .stage{position:relative;flex:1;min-height:168px;margin:6px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
@@ -85,7 +85,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .board{margin-top:6px}
 .row{display:flex;align-items:center;gap:13px;padding:14px 4px}
 .row + .row{border-top:1px solid rgba(150,200,195,.07)}
-.row .th{width:46px;height:46px;border-radius:11px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5);transform:translateY(-1px)}
+.row .th{width:52px;height:52px;border-radius:12px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5);transform:translateY(-1px)}
 .row .th img{width:100%;height:100%;object-fit:cover}
 .row .info{flex:1;min-width:0}
 .row .nm{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -96,7 +96,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 
 /* EXPERIENCES 2* — chips */
 .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
-.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e2edeb;background:rgba(255,255,255,.05);border:1px solid rgba(150,200,195,.2)}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:linear-gradient(180deg,rgba(0,194,168,.12),rgba(0,194,168,.05));border:1px solid rgba(0,194,168,.26)}
 .chip .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal2);margin-right:8px;vertical-align:middle;box-shadow:0 0 7px var(--teal2)}
 
 /* EDITORIAL 2* — one strip, floating */
@@ -138,7 +138,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
         <span class="q">"padel, then lunch nearby"</span>
         <span class="go"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </div>
-      <div class="wchip"><span class="o"></span>Wasta online — ask me anything</div>
+      <div class="wchip"><span class="o"></span>Wasta online</div>
     </div>
     <div class="stage"><canvas id="gl" aria-label="Tonight in Abu Dhabi"></canvas>
       <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.</div>
@@ -160,7 +160,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 
   <section class="body">
     <!-- AREAS 4* -->
-    <div class="sec"><h4>Explore by area</h4><span class="va">View all</span></div>
+    <div class="sec"><h4>Areas</h4><span class="va">View all</span></div>
     <div class="arearail"><canvas id="arearail" aria-label="Explore Abu Dhabi by area — drag to browse districts"></canvas></div>
     <div class="areacap">Drag to explore · <b id="areaname">Corniche</b> · <span id="areacount">112 venues</span></div>
     <div class="dots" id="areadots"></div>
@@ -206,8 +206,8 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=12';
-  import { mountAreaRail } from './area-rail.js?v=3';
+  import { mountCityHero } from './city-hero.js?v=13';
+  import { mountAreaRail } from './area-rail.js?v=4';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
 

@@ -157,13 +157,13 @@ export function mountCityHero(canvas, opts) {
       if (a > 1.15) { m.visible = false; return; }
       m.visible = true;
       const centre = Math.max(0, 1 - a);
-      const s = 0.82 + centre * 0.42;                       // centre ~10% larger, sides ~5% smaller
+      const s = 0.78 + centre * 0.50;                       // centre ~6% larger; sides a touch smaller
       m.scale.set(s, s, s);
-      m.position.x = off * SPACING * (1 + a * 0.18);        // clean gap even with the wider card
+      m.position.x = off * SPACING * (1 + a * 0.06);        // bring sides in so they belong to the centre
       m.position.z = -a * 1.5;
       m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       m.rotation.y = -off * SIDE_ANGLE;
-      m.material.opacity = Math.max(0, 1 - a * 0.1);        // near-solid: front 100%, peeks ~90%
+      m.material.opacity = Math.max(0, 1 - a * 0.28);       // centre 100%, sides ~12% more transparent (clear focus)
     });
 
     // stage lighting follows the floating centre card
