@@ -41,16 +41,16 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .hero{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;padding:2px 18px 0}
 .greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65)}
 .greeting span{color:var(--teal2)}
-.search{margin-top:14px;padding:10px 14px 8px;border-radius:20px}
-.search .row{display:flex;align-items:center;gap:12px}
+.search{margin-top:12px;padding:7px 12px 6px;border-radius:18px;box-shadow:0 10px 26px rgba(0,0,0,.38),0 1px 0 rgba(180,255,246,.16) inset}
+.search .row{display:flex;align-items:center;gap:10px}
 .search .ic{color:var(--gold);flex:0 0 auto}
-.search .q{flex:1;color:#d3dedc;font-size:15px;font-weight:500}
-.search .go{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.45)}
-.search .wchip{display:inline-flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;font-weight:600;color:var(--sub)}
+.search .q{flex:1;color:#c7d3d1;font-size:14px;font-weight:500}
+.search .go{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 5px 14px rgba(0,194,168,.32)}
+.search .wchip{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:10px;font-weight:600;color:var(--sub);opacity:.82}
 .search .wchip .o{width:7px;height:7px;border-radius:50%;background:var(--teal2);box-shadow:0 0 8px var(--teal2)}
 .stage{position:relative;flex:1;min-height:168px;margin:6px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
-.cap{position:relative;z-index:3;text-align:center;margin-top:-30px;padding:6px 16px 2px;pointer-events:none}
+.cap{position:relative;z-index:3;text-align:center;margin-top:-44px;padding:6px 16px 2px;pointer-events:none}
 .cap::before{content:"";position:absolute;left:50%;transform:translateX(-50%);top:-8px;width:min(94%,470px);height:140px;z-index:-1;pointer-events:none;background:radial-gradient(120% 80% at 50% 46%,rgba(5,10,13,.6),rgba(5,10,13,0) 70%)}
 .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:2px}
 .cap h3{font-size:22px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 20px rgba(0,0,0,.9)}
@@ -96,7 +96,9 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 
 /* EXPERIENCES 2* — chips */
 .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
-.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:linear-gradient(180deg,rgba(0,194,168,.12),rgba(0,194,168,.05));border:1px solid rgba(0,194,168,.26)}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:linear-gradient(180deg,rgba(0,194,168,.12),rgba(0,194,168,.05));border:1px solid rgba(0,194,168,.26);transition:.25s var(--ease)}
+.chip.on{background:linear-gradient(180deg,var(--teal2),var(--teal));color:#04120f;border-color:transparent}
+.chip.on .d{background:#04120f;box-shadow:none}
 .chip .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal2);margin-right:8px;vertical-align:middle;box-shadow:0 0 7px var(--teal2)}
 
 /* EDITORIAL 2* — one strip, floating */
@@ -201,13 +203,14 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 <div class="labflag">LAB PROOF · richness descends · one continuous city</div>
 
 <script>
+  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}));
   const skydim=document.getElementById('skydim');
   function onScroll(){const h=window.innerHeight;skydim.style.opacity=Math.min(1,Math.max(0,(window.scrollY-h*0.4)/(h*0.7)));}
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=13';
-  import { mountAreaRail } from './area-rail.js?v=4';
+  import { mountCityHero } from './city-hero.js?v=14';
+  import { mountAreaRail } from './area-rail.js?v=5';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
 

@@ -46,7 +46,19 @@ export function mountAreaRail(canvas, opts) {
   }
   const loader = new THREE.TextureLoader(); loader.crossOrigin = "anonymous";
 
-  const geo = new THREE.PlaneGeometry(CW, CH);
+  function roundedPlane(w, h, r) {
+    const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+    s.moveTo(x + r, y);
+    s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+    s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+    s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+    const g = new THREE.ShapeGeometry(s, 14), p = g.attributes.position, uv = [];
+    for (let i = 0; i < p.count; i++) uv.push((p.getX(i) + w / 2) / w, (p.getY(i) + h / 2) / h);
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    return g;
+  }
+  const geo = roundedPlane(CW, CH, 0.16);
   const cards = areas.map((a) => {
     const g = new THREE.Group();
     const pm = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: placeholderTex(), transparent: true }));
@@ -77,7 +89,7 @@ export function mountAreaRail(canvas, opts) {
       c.g.visible = true;
       c.g.position.set(R * Math.sin(a), 0, -R + R * Math.cos(a));  // gentle outward arc
       c.g.rotation.y = a * 0.5;                                    // partial tilt — display case, not a wheel
-      const s = 1 - ab * 0.035; c.g.scale.set(s, s, s);           // centre only slightly larger
+      const s = 1.03 - ab * 0.06; c.g.scale.set(s, s, s);        // selected ~103% (tactile), sides recede
       const dim = Math.max(0.62, 1 - ab * 0.16); c.pm.material.color.setScalar(dim);  // inactive ~15% darker
       const op = Math.max(0, Math.min(1, 1.2 - Math.max(0, ab - 1.4) * 0.7));
       c.pm.material.opacity = op; c.lm.material.opacity = op;
