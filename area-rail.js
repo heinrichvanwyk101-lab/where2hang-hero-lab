@@ -83,7 +83,7 @@ export function mountAreaRail(canvas, opts) {
   function frontIndex() { return ((Math.round(cur)) % N + N) % N; }
   function place() {
     cards.forEach((c, i) => {
-      let off = i - cur; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
+      let off = (i - cur) % N; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
       const a = off * STEP, ab = Math.abs(off);
       if (ab > 2.7) { c.g.visible = false; return; }
       c.g.visible = true;

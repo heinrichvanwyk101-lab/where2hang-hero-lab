@@ -183,7 +183,7 @@ export function mountCityHero(canvas, opts) {
     const ec = cur + hintOff;
     // prev / current / next — the sides PEEK at the edges (not hidden) so the carousel is discoverable
     cards.forEach((g, i) => {
-      let off = i - ec; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
+      let off = (i - ec) % N; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
       const a = Math.abs(off);
       if (a > 1.15) { g.visible = false; return; }
       g.visible = true;
