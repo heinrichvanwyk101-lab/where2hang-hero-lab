@@ -20,8 +20,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .skybg{position:fixed;inset:0;z-index:0;background:#06202b url('https://where2hang.ae/images/Hero-skyline.webp') center 30%/cover no-repeat}
 .skytod{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
 .skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
-.dots{display:flex;gap:7px;justify-content:center;margin-top:8px}
-.cap .foot .dots{margin-top:0}
+.dots{display:flex;gap:7px;justify-content:center;margin-top:9px}
 .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.28);transition:.3s var(--ease)}
 .dots i.on{width:18px;border-radius:3px;background:var(--teal2);box-shadow:0 0 8px rgba(0,194,168,.5)}
 .page{position:relative;z-index:2}
@@ -47,20 +46,18 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .search .go{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.45)}
 .search .wchip{display:inline-flex;align-items:center;gap:7px;margin-top:9px;font-size:11.5px;font-weight:600;color:var(--teal2)}
 .search .wchip .o{width:7px;height:7px;border-radius:50%;background:var(--teal2);box-shadow:0 0 8px var(--teal2)}
-.stage{position:relative;height:40vh;margin:6px -18px 0}
+.stage{position:relative;height:clamp(300px,42vh,430px);margin:6px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
-.cap{position:relative;z-index:3;text-align:center;margin-top:-34px;pointer-events:none}
-.cap .capwrap{display:inline-block;max-width:430px;padding:9px 22px 8px;border-radius:16px;background:rgba(6,12,15,.42);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.07);box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.cap{position:relative;z-index:3;text-align:center;margin-top:-34px;padding:6px 16px 10px;pointer-events:none}
+.cap::before{content:"";position:absolute;left:50%;transform:translateX(-50%);top:-8px;width:min(94%,470px);height:140px;z-index:-1;pointer-events:none;background:radial-gradient(120% 80% at 50% 46%,rgba(5,10,13,.6),rgba(5,10,13,0) 70%)}
 .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:2px}
-.cap h3{font-size:20px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.85)}
-.cap p{font-size:12px;color:#c9d5d3;margin-top:1px}
-.cap .foot{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:6px}
-.cap .sw{font-size:11px;letter-spacing:1.2px;color:var(--sub);opacity:.85}
+.cap h3{font-size:22px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 20px rgba(0,0,0,.9)}
+.cap p{font-size:12.5px;color:#c9d5d3;margin-top:2px;text-shadow:0 2px 14px rgba(0,0,0,.8)}
 .scrollcue{text-align:center;color:var(--sub);font-size:11px;letter-spacing:1px;padding:4px 0 2px;opacity:.85}
 .scrollcue span{display:block;margin-top:3px;animation:bob 1.8s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(4px)}}
 
-.body{position:relative;padding:16px 18px 130px}
+.body{position:relative;padding:0 18px 130px;margin-top:-10px}
 /* controls (moderate) */
 .lens{display:flex;gap:8px;margin-top:6px}
 .lensbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:15px 6px;border-radius:18px;font-size:12.5px;font-weight:700;color:var(--sub);transition:.3s var(--ease)}
@@ -143,7 +140,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     <div class="stage"><canvas id="gl" aria-label="Tonight in Abu Dhabi"></canvas>
       <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.</div>
     </div>
-    <div class="cap"><div class="capwrap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p><div class="foot"><span class="sw" id="sw">←  Explore tonight  →</span><span class="dots" id="herodots"></span></div></div></div>
+    <div class="cap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p><div class="dots" id="herodots"></div></div>
   </section>
 
   <section class="body">
@@ -205,7 +202,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=9';
+  import { mountCityHero } from './city-hero.js?v=10';
   import { mountAreaRail } from './area-rail.js?v=3';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
@@ -217,7 +214,6 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   document.getElementById('skytod').style.background=TINT[tod]||TINT.night;
   const g=GREET[tod]||GREET.night;
   document.getElementById('greeting').innerHTML=g[0]+'<br><span>'+g[1]+'</span>';
-  document.getElementById('sw').textContent='←  Explore '+(evening?'tonight':'today')+'  →';
 
   // ---- lens worlds: each lens drives BOTH the hero venues AND the backdrop art ----
   const WORLDS={

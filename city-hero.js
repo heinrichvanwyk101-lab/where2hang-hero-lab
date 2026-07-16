@@ -25,7 +25,7 @@ export function mountCityHero(canvas, opts) {
 
   const N = venues.length;
   const CW = 1.95, CH = 2.55, CHALF = CH / 2;
-  const SPACING = 2.5, SIDE_ANGLE = 0.55, FLOAT = 0.55;
+  const SPACING = 2.2, SIDE_ANGLE = 0.55, FLOAT = 0.55;
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
@@ -157,7 +157,7 @@ export function mountCityHero(canvas, opts) {
       if (a > 1.15) { m.visible = false; return; }
       m.visible = true;
       const centre = Math.max(0, 1 - a);
-      const s = 0.86 + centre * 0.28;                       // sides larger, closer to the centre
+      const s = 0.82 + centre * 0.42;                       // centre ~10% larger, sides ~5% smaller
       m.scale.set(s, s, s);
       m.position.x = off * SPACING * (1 + a * 0.12);        // sit at the edge but show a good slice
       m.position.z = -a * 1.5;
