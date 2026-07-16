@@ -1,121 +1,314 @@
 <!DOCTYPE html>
-<!-- PASTE TARGET: where2hang-hero-lab/index.html
-     Where2Hang — city hero LAB. Standalone sandbox, isolated from the app.
-     GitHub Pages serves this. Loads three from a CDN (importmap), then mounts the
-     SAME city-hero.js leaf the app uses. Real skyline via CSS; venue cards fall back
-     to drawn placeholders here (cross-origin) — in the app they are real photos.
-     British spelling, no emojis. -->
+<!-- PASTE TARGET: where2hang-hero-lab/index.html  (REPLACES the hero-only version)
+     Full landing PREVIEW. A static mirror of app/landing/page.tsx with the live WebGL
+     hero embedded where the flat rail was — see the whole page in context, on the safe
+     Pages URL, app untouched. Images load from the live site. Preview only; the app's
+     page.tsx stays the source of truth. British spelling, no emojis.
+     Requires city-hero.js + city-state.js in the repo root. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Where2Hang — city hero lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Where2Hang — full landing preview</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
-</script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
-  html,body{background:#03060a;color:#F4F7F9;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
-  .tip{font-size:12px;color:#8A9997;text-align:center;margin-bottom:12px;max-width:460px}
-  .tip b{color:#3DE9CD;font-weight:600}
-  .hero{position:relative;width:100%;max-width:460px;height:min(72vh,620px);border-radius:20px;overflow:hidden;
-    border:1px solid #232B32;background:#06202b;
-    background-image:url('https://where2hang.ae/images/Hero-skyline.webp');background-size:cover;background-position:center 36%}
-  .tint{position:absolute;inset:0;z-index:1;opacity:.5;pointer-events:none;transition:background 1.6s ease}
-  #gl{position:absolute;inset:0;z-index:2;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
-  .cap{position:absolute;left:0;right:0;bottom:0;z-index:3;text-align:center;padding:16px 20px 18px;
-    background:linear-gradient(0deg,rgba(6,12,15,.92),transparent);pointer-events:none}
-  .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#1DE9C6;margin-bottom:5px}
-  .cap h3{font-size:20px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.7)}
-  .cap p{font-size:12.5px;color:#c3d0ce;margin-top:3px}
-  .devhandle{position:absolute;top:10px;right:10px;z-index:5;width:24px;height:24px;border-radius:50%;
-    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);display:grid;place-items:center;color:#5a6a68;font-size:13px;cursor:pointer}
-  #dev{display:none;position:absolute;left:10px;right:10px;bottom:10px;z-index:6;padding:12px;border-radius:14px;
-    background:rgba(10,14,16,.94);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12)}
-  #dev.show{display:block}
-  #dev .hd{font-size:10px;font-weight:700;letter-spacing:1.4px;color:#5FA79C;text-transform:uppercase;margin-bottom:8px}
-  #dev .r{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
-  #dev button{font:600 11px Inter;color:#9FB0AE;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:8px;cursor:pointer}
-  #dev button.on{color:#04120f;background:#3DE9CD;border-color:transparent}
-  #dev label{font-size:10px;color:#8A9997;display:block;margin:2px 0 4px}
-  #dev input[type=range]{width:100%}
-  .fb{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:30px;color:#9FB0AE;font-size:13px;z-index:9}
+html{color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body.w2h{
+  --bg:#090B0D;--bg2:#0E1216;--panel:#14191E;--panel2:#1A2026;--border:#232B32;--border2:#2A333B;
+  --teal:#00C2A8;--teal2:#1DE9C6;--gold:#E8B547;--gold2:#d49a2c;--text:#F4F7F9;--sub:#9AA4AD;--dim:#6B747C;
+  background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.w2h a{color:inherit;text-decoration:none}
+.w2h button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.w2h-wrap{max-width:1160px;margin:0 auto;padding:0 22px;position:relative;z-index:1}
+.w2h-backdrop{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(9,11,13,0) 0%,rgba(9,11,13,0) 35%,rgba(9,11,13,.5) 62%,rgba(9,11,13,.8) 88%,rgba(9,11,13,.96) 100%),
+  linear-gradient(90deg,rgba(9,11,13,.93) 0%,rgba(9,11,13,.72) 42%,rgba(9,11,13,.42) 100%),
+  url('https://where2hang.ae/images/Hero-skyline.webp');background-size:cover;background-position:center;background-repeat:no-repeat}
+.w2h-below{position:relative;z-index:1;background:var(--bg)}
+.w2h-nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(9,11,13,.72);border-bottom:1px solid var(--border)}
+.w2h-navin{display:flex;align-items:center;justify-content:space-between;min-height:66px;padding:9px 0;gap:14px}
+.w2h-logo{font-size:21px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:10px}
+.w2h-logoimg{height:38px;width:auto;object-fit:contain}
+.w2h-navright{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.w2h-beta{font-size:10px;font-weight:800;letter-spacing:.8px;color:var(--gold);background:rgba(232,181,71,.12);border:1px solid rgba(232,181,71,.34);padding:3px 8px;border-radius:6px;text-transform:uppercase;white-space:nowrap}
+.w2h-navauth{display:flex;align-items:center;gap:12px}
+.w2h-navlogin{font-size:14px;font-weight:700;padding:9px 6px}
+.w2h-cta{background:linear-gradient(135deg,var(--teal),var(--teal2));color:#04221d;font-weight:800;font-size:14px;padding:10px 18px;border-radius:11px;box-shadow:0 8px 30px rgba(0,194,168,.32);white-space:nowrap}
+.w2h-front{position:relative;z-index:1;padding:40px 0 46px}
+.w2h-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:1.1px;color:var(--teal);background:rgba(0,194,168,.10);border:1px solid rgba(0,194,168,.3);padding:7px 14px;border-radius:999px}
+.w2h-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal)}
+.w2h-h1{font-size:clamp(36px,6.6vw,60px);font-weight:800;line-height:1.03;letter-spacing:-1.4px;margin-top:18px;max-width:760px}
+.w2h-h1 .accent{color:var(--teal)}
+.w2h-lede{color:var(--sub);font-size:17px;line-height:1.5;margin-top:16px;max-width:520px}
+.w2h-beta-note{margin-top:12px;max-width:600px;font-size:13.5px;line-height:1.5;color:var(--dim)}
+.w2h-wasta{margin-top:22px;max-width:600px;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border2);border-radius:16px;padding:6px 6px 6px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 12px 40px rgba(0,0,0,.42)}
+.w2h-wasta .spark{color:var(--teal);display:flex}
+.w2h-wasta input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:16px;padding:12px 0;min-width:0}
+.w2h-wasta input::placeholder{color:var(--sub)}
+.w2h-wasta .go{background:linear-gradient(135deg,var(--teal),var(--teal2));color:#04221d;font-weight:800;font-size:14px;padding:12px 18px;border-radius:11px}
+.w2h-wchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;max-width:600px}
+.w2h-wchip{font-size:12.5px;color:var(--sub);border:1px solid var(--border);border-radius:999px;padding:7px 12px;background:rgba(255,255,255,.02)}
+.w2h-wchip b{color:var(--teal);font-weight:700}
+.w2h-teaser{margin-top:16px;max-width:600px;font-size:14px;line-height:1.55;color:var(--sub)}
+.w2h-teaser b{color:var(--teal);font-weight:700}
+.w2h-worlds{display:flex;gap:8px;margin-top:26px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.w2h-worlds::-webkit-scrollbar{display:none}
+.w2h-world{flex:0 0 auto;white-space:nowrap;font-size:13.5px;font-weight:700;color:var(--text);border:1px solid var(--border2);border-radius:11px;padding:10px 16px;background:rgba(14,18,22,.82)}
+.w2h-world.on{color:var(--teal2);border-color:var(--teal);background:rgba(0,194,168,.16)}
+.w2h-railhead{display:flex;align-items:center;justify-content:space-between;margin-top:22px}
+.w2h-railhead .t{display:flex;align-items:center;gap:9px;font-size:15px;font-weight:700}
+.w2h-live{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:.6px;color:var(--teal);background:rgba(0,194,168,.10);border:1px solid rgba(0,194,168,.3);padding:3px 9px;border-radius:999px}
+.w2h-all{font-size:13.5px;color:var(--teal);font-weight:700}
+.w2h-railhint{text-align:center;font-size:12.5px;color:var(--dim);margin-top:16px}
+.w2h-h3d{position:relative;height:460px;margin-top:13px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:#06202b;background-image:url('https://where2hang.ae/images/Hero-skyline.webp');background-size:cover;background-position:center 36%}
+.w2h-h3d .tint{position:absolute;inset:0;z-index:1;opacity:.5;pointer-events:none;transition:background 1.6s ease}
+.w2h-h3d canvas{position:absolute;inset:0;z-index:2;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+.w2h-h3d .cap{position:absolute;left:0;right:0;bottom:0;z-index:3;text-align:center;padding:16px 20px 18px;background:linear-gradient(0deg,rgba(6,12,15,.92),transparent);pointer-events:none}
+.w2h-h3d .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:5px}
+.w2h-h3d .cap h3{font-size:20px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.7)}
+.w2h-h3d .cap p{font-size:12.5px;color:#c3d0ce;margin-top:3px}
+.w2h-sec{padding:56px 0}
+.w2h-kick{color:var(--teal);font-size:12px;font-weight:800;letter-spacing:1.8px}
+.w2h-h2{font-size:clamp(25px,3.4vw,34px);font-weight:800;letter-spacing:-.6px;margin-top:9px;line-height:1.1}
+.w2h-sub2{color:var(--sub);font-size:15.5px;line-height:1.5;margin-top:11px;max-width:560px}
+.w2h-wcards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:26px}
+.w2h-wc{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--border);min-height:260px;display:flex;flex-direction:column;justify-content:flex-end;padding:22px}
+.w2h-wc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.w2h-wc::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(9,11,13,.96) 0%,rgba(9,11,13,.88) 30%,rgba(9,11,13,.45) 60%,rgba(9,11,13,.12) 100%)}
+.w2h-wc .in{position:relative;z-index:2}
+.w2h-wc h3{font-size:20px;font-weight:800}
+.w2h-wc p{color:var(--sub);font-size:13.5px;line-height:1.5;margin-top:7px}
+.w2h-wc .more{display:inline-flex;align-items:center;gap:6px;color:var(--teal);font-weight:700;font-size:13.5px;margin-top:13px}
+.w2h-proof{margin-top:26px;padding:20px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(180deg,var(--panel),var(--bg2))}
+.w2h-proofpill{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:1px;color:var(--teal);background:rgba(0,194,168,.10);border:1px solid rgba(0,194,168,.3);padding:5px 11px;border-radius:999px}
+.w2h-proofitems{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin-top:16px}
+.w2h-proofitems span{position:relative;padding-left:24px;font-size:13.5px;color:var(--sub);line-height:1.4}
+.w2h-proofitems span::before{content:"\2713";position:absolute;left:0;top:0;color:var(--teal);font-weight:800}
+.w2h-strap{margin-top:24px;font-size:clamp(20px,3.2vw,28px);font-weight:800;line-height:1.35;max-width:640px;letter-spacing:-.3px}
+.w2h-strap .g{color:var(--sub)}.w2h-strap .t{color:var(--teal)}
+.w2h-moat{margin-top:22px;max-width:560px;background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--border2);border-radius:18px;padding:20px}
+.w2h-moatq{display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--sub);background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 14px}
+.w2h-moatq b{color:var(--text);font-weight:600}
+.w2h-pair{margin-top:14px;position:relative}
+.w2h-pairrow{display:flex;align-items:center;gap:12px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:11px 12px}
+.w2h-pairrow + .w2h-pairrow{margin-top:2px}
+.w2h-pi{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--teal);background:linear-gradient(135deg,rgba(0,194,168,.18),rgba(0,194,168,.05));border:1px solid rgba(0,194,168,.22)}
+.w2h-pn{font-size:14px;font-weight:700}.w2h-pm{font-size:11.5px;color:var(--dim);margin-top:1px}
+.w2h-pairlink{width:2px;height:12px;background:var(--border2);margin:2px 0 2px 31px}
+.w2h-pairdist{position:absolute;right:12px;top:calc(50% - 12px);font-size:11px;font-weight:800;color:var(--teal);background:rgba(0,194,168,.10);border:1px solid rgba(0,194,168,.3);padding:4px 9px;border-radius:999px}
+.w2h-moatfoot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.w2h-moatfoot .v{font-size:13.5px;font-weight:700;color:var(--teal)}
+.w2h-moatnote{font-size:12.5px;color:var(--dim);margin-top:14px;line-height:1.5;max-width:560px}
+.w2h-planchips{display:flex;gap:8px;margin-top:22px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.w2h-planchips::-webkit-scrollbar{display:none}
+.w2h-planchip{flex:0 0 auto;white-space:nowrap;font-size:13.5px;font-weight:700;color:var(--text);border:1px solid var(--border2);border-radius:999px;padding:9px 16px;background:var(--panel)}
+.w2h-planchip.on{border-color:var(--teal);color:var(--teal);background:linear-gradient(180deg,rgba(0,194,168,.14),rgba(0,194,168,.04))}
+.w2h-planday{margin-top:14px;max-width:520px;background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--border);border-radius:16px;padding:16px 18px}
+.w2h-stop{display:flex;gap:13px;align-items:center;padding:10px 0}
+.w2h-stop + .w2h-stop{border-top:1px solid var(--border)}
+.w2h-stopn{width:27px;height:27px;border-radius:50%;border:1.5px solid var(--teal);color:var(--teal);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.w2h-stopname{font-size:14.5px;font-weight:700}.w2h-stopmeta{font-size:11.5px;color:var(--dim);margin-top:1px}
+.w2h-planfoot{display:flex;gap:10px;margin-top:16px;max-width:520px}
+.w2h-btnteal{flex:1;text-align:center;background:linear-gradient(135deg,var(--teal),var(--teal2));color:#04221d;font-weight:800;font-size:14px;padding:13px;border-radius:12px}
+.w2h-btnghost{padding:13px 18px;border-radius:12px;border:1px solid var(--border2);color:var(--sub);font-weight:700;font-size:14px}
+.w2h-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:26px}
+.w2h-tile{position:relative;height:150px;border-radius:15px;overflow:hidden;border:1px solid var(--border);display:flex;align-items:flex-end;padding:13px}
+.w2h-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;filter:brightness(1.06) saturate(1.05)}
+.w2h-tile::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(9,11,13,.9) 0%,rgba(9,11,13,.08) 60%)}
+.w2h-tile .lb{position:relative;z-index:2;font-size:14.5px;font-weight:700;text-shadow:0 1px 8px rgba(0,0,0,.65)}
+.w2h-tile .wt{position:absolute;top:11px;left:11px;z-index:2;font-size:9px;font-weight:800;letter-spacing:.6px;color:var(--text);background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.14);padding:3px 7px;border-radius:6px}
+.w2h-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:26px}
+.w2h-step{display:flex;flex-direction:column;gap:11px}
+.w2h-stepn{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--teal);color:var(--teal);font-weight:800;display:flex;align-items:center;justify-content:center}
+.w2h-step h4{font-size:15.5px;font-weight:700}.w2h-step p{font-size:13.5px;color:var(--sub);line-height:1.5}
+.w2h-band{background:linear-gradient(150deg,rgba(232,181,71,.12),var(--panel2));border:1px solid rgba(232,181,71,.3);border-radius:22px;padding:28px}
+.w2h-bandh{display:flex;gap:16px;align-items:flex-start}
+.w2h-bandic{width:52px;height:52px;border-radius:14px;background:rgba(232,181,71,.15);border:1px solid rgba(232,181,71,.34);display:flex;align-items:center;justify-content:center;color:var(--gold)}
+.w2h-band h3{font-size:21px;font-weight:800}
+.w2h-band p{color:var(--sub);font-size:14.5px;margin-top:5px;line-height:1.5;max-width:560px}
+.w2h-bandfeat{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px}
+.w2h-bf{background:var(--bg);border:1px solid var(--border);border-radius:13px;padding:15px 12px;display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;font-size:12.5px;color:var(--sub);font-weight:600}
+.w2h-bf .bic{color:var(--gold)}
+.w2h-goldbtn{display:inline-block;margin-top:22px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#2a1d04;font-weight:800;font-size:15px;padding:14px 26px;border-radius:12px;box-shadow:0 12px 30px rgba(232,181,71,.26)}
+.w2h-dubai{position:relative;border-radius:20px;overflow:hidden;border:1px solid var(--border);background:linear-gradient(135deg,#0d2a26,#0b1418);padding:28px;max-width:560px}
+.w2h-livenow{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.7px;color:var(--teal);background:rgba(0,194,168,.10);border:1px solid rgba(0,194,168,.3);padding:5px 12px;border-radius:999px}
+.w2h-dubai .cs{font-size:11px;letter-spacing:1.4px;color:var(--sub);margin-top:13px}
+.w2h-dubai h3{font-size:32px;font-weight:800;color:var(--teal);margin-top:3px}
+.w2h-dubai p{color:var(--sub);font-size:14px;margin-top:9px;line-height:1.5}
+.w2h-kindrow{display:flex;gap:8px;margin-top:15px}
+.w2h-kind{flex:1;text-align:center;font-size:13px;font-weight:700;padding:10px 12px;border-radius:11px;color:var(--sub);background:var(--bg);border:1px solid var(--border2)}
+.w2h-kind.on{color:#04221d;background:var(--teal);border-color:var(--teal)}
+.w2h-emailrow{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap}
+.w2h-input{flex:1;min-width:170px;background:var(--bg);border:1px solid var(--border2);border-radius:11px;padding:13px 15px;color:var(--text);font-size:14px;outline:none}
+.w2h-submit{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#2a1d04;font-weight:800;font-size:14px;padding:13px 20px;border-radius:11px}
+.w2h-foot{border-top:1px solid var(--border);padding:44px 0 60px;margin-top:20px;position:relative;z-index:1;background:var(--bg)}
+.w2h-footgrid{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:26px}
+.w2h-footgrid h5{font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-bottom:13px}
+.w2h-footgrid a{display:block;font-size:13.5px;color:var(--sub);margin-bottom:9px}
+.w2h-copy{color:var(--dim);font-size:12.5px;margin-top:32px;text-align:center}
+.lab-flag{position:fixed;left:0;right:0;bottom:0;z-index:99;text-align:center;font-size:11px;letter-spacing:.4px;color:#0a0d0e;background:var(--gold);padding:6px;font-weight:700}
+@media(max-width:920px){.w2h-wcards{grid-template-columns:1fr}.w2h-tiles{grid-template-columns:repeat(2,1fr)}.w2h-steps{grid-template-columns:1fr}.w2h-bandfeat{grid-template-columns:1fr 1fr}.w2h-footgrid{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.w2h-lede{max-width:none}.w2h-proofitems{grid-template-columns:1fr}}
 </style>
 </head>
-<body>
-  <div class="tip">the leaf that ships in the app — <b>drag</b> to spin, <b>tap</b> a card to open · dot (top-right) = dev</div>
-  <div class="hero">
-    <div class="tint" id="tint" aria-hidden></div>
-    <canvas id="gl" aria-label="Popular in Abu Dhabi"></canvas>
-    <div class="devhandle" id="devhandle">&#8943;</div>
-    <div class="cap">
-      <div class="eb" id="eb">Popular in Abu Dhabi</div>
-      <h3 id="nm">Iris</h3>
-      <p id="sb">Eat &amp; Drink · Yas Bay</p>
-    </div>
-    <div id="dev">
-      <div class="hd">Dev — not in the app UI</div>
-      <label>Time of day (app: real clock)</label>
-      <div class="r" id="todRow"></div>
-      <label>Busyness (app: live venue data) — <span id="bval">auto</span></label>
-      <input type="range" id="bslider" min="0" max="100" value="70">
-    </div>
-    <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.<br>Check the network and refresh.</div>
+<body class="w2h">
+<div class="w2h-backdrop"></div>
+
+<nav class="w2h-nav"><div class="w2h-wrap w2h-navin">
+  <div class="w2h-logo"><img src="https://where2hang.ae/images/Pin.png" class="w2h-logoimg" alt=""><span>Where<span style="color:var(--teal)">2</span>Hang</span></div>
+  <div class="w2h-navright"><div class="w2h-navauth"><a class="w2h-navlogin" href="#">Log in</a><a class="w2h-cta" href="#">Open App</a></div><span class="w2h-beta">Beta</span></div>
+</div></nav>
+
+<header class="w2h-front"><div class="w2h-wrap">
+  <span class="w2h-eyebrow"><span class="w2h-dot"></span> EARLY ACCESS · ABU DHABI</span>
+  <h1 class="w2h-h1">Where should <span class="accent">today take you?</span></h1>
+  <p class="w2h-lede">Tell us what you're in the mood for.</p>
+  <div class="w2h-wasta">
+    <span class="spark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg></span>
+    <input placeholder="dinner and live music" aria-label="Ask Where2Hang">
+    <button class="go">Ask</button>
   </div>
+  <div class="w2h-wchips"><span class="w2h-wchip"><b>dinner</b> and a movie</span><span class="w2h-wchip"><b>a park</b> where you can play padel</span><span class="w2h-wchip"><b>brunch</b> near the beach</span></div>
+  <p class="w2h-teaser">Not just where to go — <b>what goes with what</b>. Build a whole day from places that naturally fit together.</p>
+  <p class="w2h-beta-note">Early access — we're opening gradually as we onboard venues across Abu Dhabi.</p>
+
+  <div class="w2h-worlds"><button class="w2h-world on">All</button><button class="w2h-world">Eat &amp; Drink</button><button class="w2h-world">Activities</button><button class="w2h-world">Entertainment</button></div>
+  <div class="w2h-railhead"><div class="t">Popular in Abu Dhabi <span class="w2h-live"><span class="w2h-dot"></span> LIVE</span></div><a class="w2h-all" href="#">View all</a></div>
+
+  <div class="w2h-h3d">
+    <div class="tint" id="tint"></div>
+    <canvas id="gl" aria-label="Popular in Abu Dhabi"></canvas>
+    <div class="cap"><div class="eb" id="eb">Popular in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p></div>
+  </div>
+  <div class="w2h-railhint">Drag to spin · tap to open</div>
+</div></header>
+
+<div class="w2h-below">
+  <section class="w2h-sec"><div class="w2h-wrap">
+    <div class="w2h-kick">ONE APP</div><h2 class="w2h-h2">The whole city.</h2>
+    <p class="w2h-sub2">Not just a night out — Where2Hang holds all of Abu Dhabi, and knows how every place sits next to every other.</p>
+    <div class="w2h-wcards">
+      <a class="w2h-wc" href="#"><img src="https://where2hang.ae/images/Hero-skyline.webp" alt=""><div class="in"><h3>Eat &amp; Drink</h3><p>Rooftops, restaurants, cafés and bars — read by vibe, area and how busy they run.</p><span class="more">Explore &rarr;</span></div></a>
+      <a class="w2h-wc" href="#"><img src="https://where2hang.ae/images/Hero_activity.webp" alt=""><div class="in"><h3>Activities</h3><p>Parks, beaches, padel and adventure — the daytime city, for families and residents.</p><span class="more">Explore &rarr;</span></div></a>
+      <a class="w2h-wc" href="#"><img src="https://where2hang.ae/images/Hero-ent.webp" alt=""><div class="in"><h3>Entertainment</h3><p>Cinemas, arenas, theme parks and live shows — the whole going-out surface.</p><span class="more">Explore &rarr;</span></div></a>
+    </div>
+    <div class="w2h-proof"><div class="w2h-proofpill"><span class="w2h-dot"></span> LIVE IN ABU DHABI</div>
+      <div class="w2h-proofitems"><span>Eat &amp; Drink, Activities &amp; Entertainment</span><span>Real places across the whole city</span><span>Built for residents and visitors</span><span>Free to browse — always</span></div></div>
+  </div></section>
+
+  <section class="w2h-sec" style="padding-top:0"><div class="w2h-wrap">
+    <div class="w2h-kick">THE DIFFERENCE</div><h2 class="w2h-h2">Not just where. What goes with what.</h2>
+    <p class="w2h-sub2">Ask for two things and we pair them — the relationship between places a plain map can't express.</p>
+    <div class="w2h-strap"><span class="g">Google Maps tells you where things are. </span><span class="t">Where2Hang tells you what to do.</span></div>
+    <div class="w2h-moat">
+      <div class="w2h-moatq"><span style="color:var(--teal);display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg></span><span>a <b>restaurant</b> near a <b>beach</b></span></div>
+      <div class="w2h-pair">
+        <div class="w2h-pairrow"><span class="w2h-pi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14l-7 8v6M8 21h8"/></svg></span><div><div class="w2h-pn">Beluga Table</div><div class="w2h-pm">Restaurant · Al Bateen</div></div></div>
+        <div class="w2h-pairlink"></div>
+        <div class="w2h-pairrow"><span class="w2h-pi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span><div><div class="w2h-pn">Al Bateen Beach</div><div class="w2h-pm">Beach · Al Bateen</div></div></div>
+        <span class="w2h-pairdist">230 m apart</span>
+      </div>
+      <div class="w2h-moatfoot"><span style="font-size:12px;color:var(--dim)">Closest pair of 12 combinations</span><a class="v" href="#">View on map &rsaquo;</a></div>
+    </div>
+    <p class="w2h-moatnote">Live crowd levels get sharper as check-ins grow — the pairing works from day one.</p>
+  </div></section>
+
+  <section class="w2h-sec" style="padding-top:0"><div class="w2h-wrap">
+    <div class="w2h-kick">PLAN</div><h2 class="w2h-h2">Plan the whole day — not just the night</h2>
+    <p class="w2h-sub2">Pick a shape and we build a route from places that actually sit close together.</p>
+    <div class="w2h-planchips" id="planchips"></div>
+    <div class="w2h-planday" id="planday"></div>
+    <div class="w2h-planfoot"><a class="w2h-btnteal" href="#">Open in the app</a><a class="w2h-btnghost" href="#">Save plan</a></div>
+  </div></section>
+
+  <section class="w2h-sec" style="padding-top:0"><div class="w2h-wrap">
+    <div class="w2h-kick">DISCOVER BY EXPERIENCE</div><h2 class="w2h-h2">Whatever the day calls for</h2>
+    <div class="w2h-tiles" id="tiles"></div>
+  </div></section>
+
+  <section class="w2h-sec" style="padding-top:0"><div class="w2h-wrap">
+    <div class="w2h-kick">HOW IT WORKS</div><h2 class="w2h-h2">Three taps to your spot</h2>
+    <div class="w2h-steps">
+      <div class="w2h-step"><div class="w2h-stepn">1</div><h4>Ask, or just browse</h4><p>Type what you're after, or tap a world and scroll what's good right now.</p></div>
+      <div class="w2h-step"><div class="w2h-stepn">2</div><h4>We match the places — and how they pair</h4><p>The right spots, ranked, with the ones that sit close together grouped for you.</p></div>
+      <div class="w2h-step"><div class="w2h-stepn">3</div><h4>Go</h4><p>Open it on the map, save it, or plan the whole day around it.</p></div>
+    </div>
+  </div></section>
+
+  <section class="w2h-sec" style="padding-top:0"><div class="w2h-wrap"><div class="w2h-band">
+    <div class="w2h-bandh"><div class="w2h-bandic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5M4 9v11h16V9M4 9h16"/></svg></div>
+      <div><h3>Built for operators too</h3><p>Restaurants, beach clubs, padel courts, cinemas — claim your place, update what's on, run offers, and reach the right audience at the right time.</p></div></div>
+    <div class="w2h-bandfeat">
+      <div class="w2h-bf"><span class="bic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>What's on</div>
+      <div class="w2h-bf"><span class="bic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14l-7 8v6M8 21h8"/></svg></span>Offers &amp; happy hours</div>
+      <div class="w2h-bf"><span class="bic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>Promotions</div>
+      <div class="w2h-bf"><span class="bic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>Audience insights</div>
+    </div>
+    <a class="w2h-goldbtn" href="#">Add your venue</a>
+  </div></div></section>
+
+  <section class="w2h-sec" style="padding-top:0"><div class="w2h-wrap"><div class="w2h-dubai">
+    <span class="w2h-livenow"><span class="w2h-dot"></span> LIVE IN ABU DHABI</span>
+    <div class="cs">COMING SOON TO</div><h3>DUBAI</h3>
+    <p>Live across Abu Dhabi and heading north. Register your interest and be first through the door when Where2Hang lands in Dubai.</p>
+    <div class="w2h-kindrow"><button class="w2h-kind on">I'm a customer</button><button class="w2h-kind">I run a venue</button></div>
+    <div class="w2h-emailrow"><input class="w2h-input" placeholder="Enter your email address"><button class="w2h-submit">Notify me</button></div>
+  </div></div></section>
+</div>
+
+<footer class="w2h-foot"><div class="w2h-wrap"><div class="w2h-footgrid">
+  <div><div class="w2h-logo"><img src="https://where2hang.ae/images/Pin.png" class="w2h-logoimg" alt=""><span>Where<span style="color:var(--teal)">2</span>Hang</span></div><p style="color:var(--dim);font-size:13px;margin-top:12px;letter-spacing:1px">KNOW WHERE TO GO.</p></div>
+  <div><h5>Explore</h5><a href="#">Eat &amp; Drink</a><a href="#">Activities</a><a href="#">Entertainment</a><a href="#">Plan a day</a></div>
+  <div><h5>For operators</h5><a href="#">Add your venue</a><a href="#">Operator login</a><a href="#">Partners</a></div>
+  <div><h5>Company</h5><a href="#">About</a><a href="#">Contact</a><a href="#">Careers</a></div>
+  <div><h5>Legal</h5><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Cookies</a></div>
+</div><div class="w2h-copy">© 2026 Where2Hang. All rights reserved. · KNOW WHERE TO GO.</div></div></footer>
+
+<div class="lab-flag">LAB PREVIEW · static mirror · the app's page.tsx is the source of truth</div>
+
+<script>
+  const PLANS={
+    date:[["Coffee at Alkalima","Café · Saadiyat"],["Walk · Jubail Mangroves","8 min away"],["Dinner by the water","Waterfront · evening"]],
+    family:[["Umm Al Emarat Park","Park · morning"],["Lunch · The Galleria","6 min away"],["SeaWorld","Yas Island · afternoon"]],
+    friends:[["Brunch · Yas Bay","Late morning"],["Padel · Zayed Sports City","9 min away"],["Rooftop drinks","Yas Marina · evening"]],
+    visitors:[["Louvre Abu Dhabi","Saadiyat · morning"],["Lunch · Mamsha Al Saadiyat","6 min away"],["Corniche sunset walk","Evening"]],
+    solo:[["Coffee & a book","Café · Al Maryah"],["Gallery hour","5 min away"],["Cinema · VOX","Yas Mall · evening"]],
+    dog:[["Hudayriyat dog run","Morning"],["Brunch · Beach House","Dog-friendly · 4 min"],["Corniche walk","Waterfront · evening"]]
+  };
+  const TABS=[["date","Date"],["family","Family"],["friends","Friends"],["visitors","Visitors"],["solo","Solo"],["dog","Dog Day"]];
+  const chips=document.getElementById('planchips'),day=document.getElementById('planday');
+  function renderPlan(k){day.innerHTML=PLANS[k].map((s,i)=>'<div class="w2h-stop"><div class="w2h-stopn">'+(i+1)+'</div><div><div class="w2h-stopname">'+s[0]+'</div><div class="w2h-stopmeta">'+s[1]+'</div></div></div>').join('');[...chips.children].forEach(c=>c.classList.toggle('on',c.dataset.k===k));}
+  TABS.forEach(function(t){var b=document.createElement('button');b.className='w2h-planchip';b.dataset.k=t[0];b.textContent=t[1];b.onclick=function(){renderPlan(t[0]);};chips.appendChild(b);});
+  renderPlan('date');
+  const EXP=[["Brunch","Exp-brunch.webp","EAT & DRINK"],["Beach Day","Exp-beachday.webp","ACTIVITIES"],["Cinema Night","Exp-cinemanight.webp","ENTERTAINMENT"],["Family Day","Exp-family.webp","ACTIVITIES"],["Padel & Play","Exp-padel.webp","ACTIVITIES"],["Live Music","Exp-livemusic.webp","ENTERTAINMENT"],["Date Night","Exp-datenight.webp","EAT & DRINK"],["Happy Hour","Exp-happyhour.webp","EAT & DRINK"]];
+  document.getElementById('tiles').innerHTML=EXP.map(function(e){return '<a class="w2h-tile" href="#"><img src="https://where2hang.ae/images/'+e[1]+'" alt=""><span class="wt">'+e[2]+'</span><span class="lb">'+e[0]+'</span></a>';}).join('');
+  document.querySelectorAll('.w2h-world').forEach(function(b){b.onclick=function(){document.querySelectorAll('.w2h-world').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+</script>
 
 <script type="module">
   import { mountCityHero } from './city-hero.js';
   import { getCityState } from './city-state.js';
-
-  // curated venues — same set as the app POOL. Cross-origin photos fall back to drawn
-  // cards here; drop the webps into an ./images folder + use relative paths for real photos.
-  const BASE = 'https://where2hang.ae/images/';
-  const V = [
-    { name:"Iris",               sub:"Eat & Drink · Yas Bay",        img:BASE+"Venue-iris.webp",            fallback:BASE+"Hero-skyline.webp", href:"https://where2hang.ae/venue/1",     anchor:true },
-    { name:"McGettigan's",       sub:"Eat & Drink · Yas Marina",     img:BASE+"Venue-mcgettigans.webp",     fallback:BASE+"Hero-skyline.webp", href:"https://where2hang.ae/venue/5",     anchor:true },
-    { name:"Hudayriyat Beach",   sub:"Activities · Hudayriyat",      img:BASE+"Venue-hudayriyatbeach.webp", fallback:BASE+"Hero_activity.webp", href:"https://where2hang.ae/venue/13368", anchor:true },
-    { name:"SeaWorld Abu Dhabi", sub:"Entertainment · Yas Island",   img:BASE+"Venue-seaworld.webp",        fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/15148", anchor:true },
-    { name:"Coya",               sub:"Eat & Drink · Al Maryah",      img:BASE+"Venue-coya.webp",            fallback:BASE+"Hero-skyline.webp", href:"https://where2hang.ae/venue/19" },
-    { name:"Louvre Abu Dhabi",   sub:"Entertainment · Saadiyat",     img:BASE+"Venue-louvre.webp",          fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/15210" },
-    { name:"Ferrari World",      sub:"Entertainment · Yas Island",   img:BASE+"Venue-ferrariworld.webp",    fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/14971" },
-    { name:"VOX Cinemas",        sub:"Entertainment · Yas Mall",     img:BASE+"Venue-voxyasmall.webp",      fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/14909" },
+  const B='https://where2hang.ae/images/';
+  const V=[
+    {name:"Iris",sub:"Eat & Drink · Yas Bay",img:B+"Venue-iris.webp",fallback:B+"Hero-skyline.webp",href:"https://where2hang.ae/venue/1",anchor:true},
+    {name:"McGettigan's",sub:"Eat & Drink · Yas Marina",img:B+"Venue-mcgettigans.webp",fallback:B+"Hero-skyline.webp",href:"https://where2hang.ae/venue/5",anchor:true},
+    {name:"Hudayriyat Beach",sub:"Activities · Hudayriyat",img:B+"Venue-hudayriyatbeach.webp",fallback:B+"Hero_activity.webp",href:"https://where2hang.ae/venue/13368",anchor:true},
+    {name:"SeaWorld Abu Dhabi",sub:"Entertainment · Yas Island",img:B+"Venue-seaworld.webp",fallback:B+"Hero-ent.webp",href:"https://where2hang.ae/venue/15148",anchor:true},
+    {name:"Coya",sub:"Eat & Drink · Al Maryah",img:B+"Venue-coya.webp",fallback:B+"Hero-skyline.webp",href:"https://where2hang.ae/venue/19"},
+    {name:"Louvre Abu Dhabi",sub:"Entertainment · Saadiyat",img:B+"Venue-louvre.webp",fallback:B+"Hero-ent.webp",href:"https://where2hang.ae/venue/15210"},
+    {name:"Ferrari World",sub:"Entertainment · Yas Island",img:B+"Venue-ferrariworld.webp",fallback:B+"Hero-ent.webp",href:"https://where2hang.ae/venue/14971"},
+    {name:"VOX Cinemas",sub:"Entertainment · Yas Mall",img:B+"Venue-voxyasmall.webp",fallback:B+"Hero-ent.webp",href:"https://where2hang.ae/venue/14909"}
   ];
-
-  const TINT = {
-    dawn:   "linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)",
-    day:    "linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)",
-    sunset: "linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)",
-    night:  "linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)",
-  };
-
-  const eb = document.getElementById('eb'), nm = document.getElementById('nm'), sb = document.getElementById('sb');
-  const tintEl = document.getElementById('tint');
-  let override = null; // {tod, busyness, hotIndex}
-  const state = () => override || getCityState(V.length);
-  function applyTint(){ tintEl.style.background = TINT[state().tod] || TINT.night; }
-  applyTint();
-
-  try {
-    mountCityHero(document.getElementById('gl'), {
-      venues: V,
-      getState: state,
-      onFront: (_i, v) => { eb.textContent = v.anchor ? "Trending tonight" : "Popular in Abu Dhabi"; nm.textContent = v.name; sb.textContent = v.sub; },
-      onSelect: (_i, v) => { if (v.href) window.location.href = v.href; },
-    });
-  } catch (e) { document.getElementById('fb').style.display = 'grid'; console.error(e); }
-
-  // dev panel (lab only)
-  const dev = document.getElementById('dev');
-  document.getElementById('devhandle').addEventListener('click', () => dev.classList.toggle('show'));
-  if (/[?&]dev=1/.test(location.search)) dev.classList.add('show');
-  const tods = [["dawn","Dawn"],["day","Day"],["sunset","Sunset"],["night","Night"]];
-  const todRow = document.getElementById('todRow');
-  function ensure(){ if(!override){ const s=getCityState(V.length); override={tod:s.tod,busyness:s.busyness,hotIndex:s.hotIndex}; } }
-  tods.forEach(([v,l]) => { const b=document.createElement('button'); b.textContent=l; b.onclick=()=>{ ensure(); override.tod=v; [...todRow.children].forEach(x=>x.classList.toggle('on',x.textContent===l)); applyTint(); }; todRow.appendChild(b); });
-  const bs = document.getElementById('bslider');
-  bs.oninput = () => { ensure(); override.busyness = bs.value/100; override.hotIndex = override.busyness>0.62?0:-1; document.getElementById('bval').textContent=(bs.value/100).toFixed(2); };
+  const TINT={dawn:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)",day:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)",sunset:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)",night:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)"};
+  document.getElementById('tint').style.background=TINT[getCityState(V.length).tod]||TINT.night;
+  const eb=document.getElementById('eb'),nm=document.getElementById('nm'),sb=document.getElementById('sb');
+  try{
+    mountCityHero(document.getElementById('gl'),{venues:V,getState:function(){return getCityState(V.length);},
+      onFront:function(_i,v){eb.textContent=v.anchor?"Trending tonight":"Popular in Abu Dhabi";nm.textContent=v.name;sb.textContent=v.sub;},
+      onSelect:function(_i,v){if(v.href)window.location.href=v.href;}});
+  }catch(e){console.error(e);}
 </script>
 </body>
 </html>
