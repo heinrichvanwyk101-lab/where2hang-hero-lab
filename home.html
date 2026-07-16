@@ -36,7 +36,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 @keyframes bl{50%{opacity:.4}}
 
 /* HERO 5* */
-.hero{position:relative;padding:2px 18px 0;min-height:88vh}
+.hero{position:relative;padding:2px 18px 0}
 .greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65)}
 .greeting span{color:var(--teal2)}
 .search{display:flex;align-items:center;gap:12px;margin-top:14px;padding:14px 16px;border-radius:22px}
@@ -45,9 +45,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .search .go{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.45)}
 .wasta{display:inline-flex;align-items:center;gap:10px;margin-top:11px;padding:9px 15px;border-radius:22px;font-size:13.5px;font-weight:600}
 .wasta .o{width:8px;height:8px;border-radius:50%;background:var(--teal2);box-shadow:0 0 10px var(--teal2)}
-.stage{position:relative;height:40vh;margin:4px -18px 0}
+.stage{position:relative;height:38vh;margin:4px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
-.cap{position:absolute;left:0;right:0;bottom:12px;z-index:3;text-align:center;pointer-events:none}
+.cap{position:absolute;left:0;right:0;bottom:8px;z-index:3;text-align:center;pointer-events:none}
+.cap .capwrap{display:inline-block;padding:12px 22px 13px;border-radius:18px;background:rgba(6,12,15,.4);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);border:1px solid rgba(255,255,255,.07);box-shadow:0 10px 30px rgba(0,0,0,.35)}
 .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:4px}
 .cap h3{font-size:21px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.85)}
 .cap p{font-size:12.5px;color:#c9d5d3;margin-top:2px}
@@ -56,7 +57,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .scrollcue span{display:block;margin-top:3px;animation:bob 1.8s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(4px)}}
 
-.body{position:relative;padding:6px 18px 130px}
+.body{position:relative;padding:40px 18px 130px}
 /* controls (moderate) */
 .lens{display:flex;gap:8px;margin-top:6px}
 .lensbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:15px 6px;border-radius:18px;font-size:12.5px;font-weight:700;color:var(--sub);transition:.3s var(--ease)}
@@ -135,7 +136,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     </div>
     <div class="wasta glass"><span class="o"></span>Chat with Wasta</div>
     <div class="stage"><canvas id="gl" aria-label="Tonight in Abu Dhabi"></canvas>
-      <div class="cap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p><div class="sw">‹  swipe to explore tonight  ›</div><div class="dots" id="herodots"></div></div>
+      <div class="cap"><div class="capwrap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p><div class="sw" id="sw">←  Explore tonight  →</div><div class="dots" id="herodots"></div></div></div>
       <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.</div>
     </div>
   </section>
@@ -199,8 +200,8 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=7';
-  import { mountAreaRail } from './area-rail.js?v=2';
+  import { mountCityHero } from './city-hero.js?v=9';
+  import { mountAreaRail } from './area-rail.js?v=3';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
 
@@ -211,6 +212,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   document.getElementById('skytod').style.background=TINT[tod]||TINT.night;
   const g=GREET[tod]||GREET.night;
   document.getElementById('greeting').innerHTML=g[0]+'<br><span>'+g[1]+'</span>';
+  document.getElementById('sw').textContent='←  Explore '+(evening?'tonight':'today')+'  →';
 
   // ---- lens worlds: each lens drives BOTH the hero venues AND the backdrop art ----
   const WORLDS={
@@ -260,11 +262,11 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 
   // ---- Explore by Area (districts — city-level, not lens-filtered) ----
   const AREAS=[
-    {name:"Corniche",count:"112 venues",img:B+"Area-corniche.png",fallback:B+"Hero-skyline.webp"},
-    {name:"Saadiyat Island",count:"64 venues",img:B+"Area-saadiyat.png",fallback:B+"Hero-skyline.webp"},
-    {name:"Yas Marina",count:"89 venues",img:B+"Area-yasmerina.png",fallback:B+"Hero-skyline.webp"},
-    {name:"Al Maryah",count:"41 venues",img:B+"Area-almaryah.png",fallback:B+"Hero-skyline.webp"},
-    {name:"Al Reem",count:"38 venues",img:B+"Area-alreem.png",fallback:B+"Hero-skyline.webp"},
+    {name:"Corniche",count:"112 venues",img:B+"Area-corniche.png",fallback:B+"venue-plate-1-teal.webp"},
+    {name:"Saadiyat Island",count:"64 venues",img:B+"Area-saadiyat.png",fallback:B+"venue-plate-1-teal.webp"},
+    {name:"Yas Marina",count:"89 venues",img:B+"Area-yasmerina.png",fallback:B+"venue-plate-1-teal.webp"},
+    {name:"Al Maryah",count:"41 venues",img:B+"Area-almaryah.png",fallback:B+"venue-plate-1-teal.webp"},
+    {name:"Al Reem",count:"38 venues",img:B+"Area-alreem.png",fallback:B+"venue-plate-1-teal.webp"},
   ];
   const an=document.getElementById('areaname'),ac=document.getElementById('areacount'),areadots=document.getElementById('areadots');
   buildDots(areadots,AREAS.length);

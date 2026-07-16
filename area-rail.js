@@ -30,7 +30,8 @@ export function mountAreaRail(canvas, opts) {
   function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   function placeholderTex() {
     const cv = document.createElement("canvas"); cv.width = 512; cv.height = 330; const c = cv.getContext("2d");
-    const g = c.createLinearGradient(0, 0, 0, 330); g.addColorStop(0, "#16262b"); g.addColorStop(1, "#0a1417"); c.fillStyle = g; c.fillRect(0, 0, 512, 330);
+    const g = c.createLinearGradient(0, 0, 0, 330); g.addColorStop(0, "#123a37"); g.addColorStop(1, "#0a1f22"); c.fillStyle = g; c.fillRect(0, 0, 512, 330);
+    const rg = c.createRadialGradient(256, 120, 10, 256, 120, 300); rg.addColorStop(0, "rgba(0,194,168,.28)"); rg.addColorStop(1, "transparent"); c.fillStyle = rg; c.fillRect(0, 0, 512, 330);
     return new THREE.CanvasTexture(cv);
   }
   function labelTex(a) {
@@ -58,9 +59,9 @@ export function mountAreaRail(canvas, opts) {
   });
 
   function fit() {
-    const aspect = W / H, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const fa = Math.min(W / H, 1.5), vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const halfH = CH * 0.64, halfW = CW * 0.72;
-    bz = Math.max(halfH / vh, halfW / (vh * aspect), 3) * 1.08;
+    bz = Math.max(halfH / vh, halfW / (vh * fa), 3) * 1.08;   // cap aspect so ultra-wide (Fold) stays centred, not marooned
     camera.position.set(0, 0.28, bz); camera.lookAt(0, 0, -0.5);
   }
   fit();

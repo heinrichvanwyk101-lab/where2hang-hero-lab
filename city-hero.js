@@ -96,8 +96,8 @@ export function mountCityHero(canvas, opts) {
   });
 
   function fit() {
-    const aspect = W / H, halfSpan = SPACING * 0.72 + CW * 0.5, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    let z = Math.max(halfSpan / (vh * aspect), halfSpan / vh, 7.5) * 1.12;
+    const fa = Math.min(W / H, 1.4), halfSpan = SPACING * 0.72 + CW * 0.5, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    let z = Math.max(halfSpan / (vh * fa), halfSpan / vh, 7.5) * 1.12;   // cap aspect for the Fold
     bx = 0; by = z * 0.36 + 0.4; bz = z;
     camera.position.set(bx, by, bz); camera.lookAt(0, CHALF + FLOAT * 0.5, 0);
   }
@@ -163,7 +163,7 @@ export function mountCityHero(canvas, opts) {
       m.position.z = -a * 1.5;
       m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       m.rotation.y = -off * SIDE_ANGLE;
-      m.material.opacity = Math.max(0, 1 - a * 0.26);       // ~74% at rest: bright, legible peek (matches mockup)
+      m.material.opacity = Math.max(0, 1 - a * 0.1);        // near-solid: front 100%, peeks ~90%
     });
 
     // stage lighting follows the floating centre card
