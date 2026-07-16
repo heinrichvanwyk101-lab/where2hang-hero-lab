@@ -75,40 +75,17 @@ export function mountCityHero(canvas, opts) {
     new THREE.MeshBasicMaterial({ map: radialTex("rgba(0,194,168,.16)", "rgba(0,40,44,.03)"), transparent: true, opacity: .32, depthWrite: false, blending: THREE.AdditiveBlending }));
   water.position.set(0, -1.6, -6); water.rotation.x = -0.2; scene.add(water);
 
-  // ambient life lives in a group locked to the (static) skyline, so it never slides with the camera drift
-  const ambient = new THREE.Group(); scene.add(ambient);
-  // stars (sparse)
+  // The skyline PLATE now supplies the real sky, stars and water. We keep only a few faint
+  // twinkles welded to the camera (so they never slide) — no traffic, no planes, no boats.
+  const ambient = new THREE.Group(); camera.add(ambient); if (!scene.children.includes(camera)) scene.add(camera);
   const stars = [];
-  for (let i = 0; i < 6; i++) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(.3, .3), new THREE.MeshBasicMaterial({ map: radialTex("rgba(220,240,255,.9)", "rgba(180,210,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    s.position.set(-8 + Math.random() * 16, 3.6 + Math.random() * 2.4, -8); s.userData = { base: .18 + Math.random() * .2, tw: i < 3, ph: Math.random() * 6.28, sp: .6 + Math.random() }; ambient.add(s); stars.push(s);
+  for (let i = 0; i < 5; i++) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16), new THREE.MeshBasicMaterial({ map: radialTex("rgba(220,240,255,.9)", "rgba(180,210,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    // camera-local placement: up in the view, a little ahead
+    s.position.set(-2.2 + Math.random() * 4.4, 1.4 + Math.random() * 1.6, -6);
+    s.userData = { base: .16 + Math.random() * .16, ph: Math.random() * 6.28, sp: .5 + Math.random() * .6 };
+    ambient.add(s); stars.push(s);
   }
-  // one ferry + one plane (rare, subtle)
-  const boat = new THREE.Mesh(new THREE.PlaneGeometry(.55, .55), new THREE.MeshBasicMaterial({ map: radialTex("rgba(244,220,150,.9)", "rgba(244,200,120,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-  boat.position.set(0, -1.5, -6.5); boat.userData = { active: false, x: 0, dir: 1, sp: 0 }; ambient.add(boat);
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(.26, .26), new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(180,220,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-  plane.userData = { active: false, p: 0, y0: 0, dir: 1 }; ambient.add(plane);
-
-  // car-light streaks travelling along the waterfront band (frequent, subtle)
-  const WATER_Y = -1.05;
-  const cars = [];
-  for (let i = 0; i < 8; i++) {
-    const warm = Math.random() > .5;
-    const cc = new THREE.Mesh(new THREE.PlaneGeometry(.4, .1),
-      new THREE.MeshBasicMaterial({ map: radialTex(warm ? "rgba(255,210,140,1)" : "rgba(220,240,255,1)", "rgba(255,200,120,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    cc.position.set(0, WATER_Y, -4.6); cc.userData = { active: false, x: 0, dir: 1, sp: 0, warm }; ambient.add(cc); cars.push(cc);
-  }
-  // traffic signals along the shore — each cycles independently so they NEVER match
-  const SIG_COL = { g: [0.25, 0.95, 0.5], o: [0.98, 0.66, 0.18], r: [1.0, 0.3, 0.3] };
-  const signals = [
-    { x: -3.9, y: WATER_Y + 0.28, seq: ["g", "o", "r"], hold: [3.4, 1.1, 3.0], phase: 0, tP: 0.0 },
-    { x: -0.2, y: WATER_Y + 0.34, seq: ["r", "g", "o"], hold: [2.6, 3.8, 1.2], phase: 1, tP: 1.4 },
-    { x: 3.6,  y: WATER_Y + 0.26, seq: ["o", "r", "g"], hold: [1.3, 2.9, 3.6], phase: 2, tP: 0.7 },
-  ].map((s) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(.2, .2),
-      new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(255,255,255,0)"), transparent: true, opacity: .85, depthWrite: false, blending: THREE.AdditiveBlending }));
-    m.position.set(s.x, s.y, -4.5); m.userData = s; ambient.add(m); return m;
-  });
 
   // window overlay (inner shadow + frame lip + top light-catch) and a soft cast shadow — drawn once, shared
   function frameTex() {
@@ -189,20 +166,10 @@ export function mountCityHero(canvas, opts) {
   io.observe(canvas);
 
   // ambient scheduler: one rare event every 18–32s
-  let nextEvent = 0;
-  function fire() {
-    if (Math.random() < 0.3) { if (!plane.userData.active) { plane.userData.active = true; plane.userData.p = 0; plane.userData.dir = Math.random() > .5 ? 1 : -1; plane.userData.y0 = 5.6 + Math.random() * 1.3; } }
-    else if (!boat.userData.active) { boat.userData.active = true; boat.userData.dir = Math.random() > .5 ? 1 : -1; boat.userData.x = boat.userData.dir > 0 ? -9 : 9; boat.userData.sp = .006 + Math.random() * .005; }
-  }
-
-  const t0 = performance.now(); let lastIdx = -1, raf = 0, hintStart = -1, lastT = 0;
+  const t0 = performance.now(); let lastIdx = -1, raf = 0, hintStart = -1;
   function frame() {
     raf = requestAnimationFrame(frame); if (!running) return;
     const t = (performance.now() - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
-    const dt = Math.min(0.05, t - lastT); lastT = t;
-    if (Math.random() < 0.05 + busy * 0.06) { const cc = cars.find((x) => !x.userData.active); if (cc) { cc.userData.active = true; cc.userData.dir = Math.random() > .5 ? 1 : -1; cc.userData.x = cc.userData.dir > 0 ? -8 : 8; cc.userData.sp = 0.022 + Math.random() * 0.026; } }
-    if (nextEvent === 0) nextEvent = t + 18 + Math.random() * 14;
-    if (t > nextEvent) { fire(); nextEvent = t + (18 + (1 - busy) * 6) + Math.random() * 8; }
 
     cur += (target - cur) * 0.12;
     const idx = frontIndex(); const hot = idx === S.hotIndex; const pulse = hot ? (0.5 + 0.5 * Math.sin(t * 3)) : 0;
@@ -237,21 +204,14 @@ export function mountCityHero(canvas, opts) {
     backGlow.material.opacity = 0.26 + 0.08 * Math.sin(t * 1.4) + pulse * 0.2;
     backGlow.position.y = CHALF + FLOAT + Math.sin(t * 1.1) * 0.05;
     water.material.opacity = 0.28 + busy * 0.12 + Math.sin(t * 0.7) * 0.03;
-    stars.forEach((s) => { const b = s.userData.base; s.material.opacity = s.userData.tw ? b * (0.5 + 0.5 * Math.sin(t * s.userData.sp + s.userData.ph)) : b; });
+    stars.forEach((s) => { s.material.opacity = s.userData.base * (0.45 + 0.55 * Math.sin(t * s.userData.sp + s.userData.ph)); });
 
-    // subtle cinematic camera drift (the camera moves, the venue does not spin)
-    camera.position.set(bx + Math.sin(t * 0.16) * 0.55, by + Math.sin(t * 0.22) * 0.18, bz + Math.cos(t * 0.16) * 0.22);
-    camera.lookAt(0, CHALF + FLOAT * 0.5, 0);
-    // keep stars/plane/boat/cars/signals pinned to the static skyline (cancel the full drift, incl. z)
-    ambient.position.set(camera.position.x - bx, camera.position.y - by, camera.position.z - bz);
-
-    if (boat.userData.active) { boat.userData.x += boat.userData.sp * boat.userData.dir; boat.position.x = boat.userData.x; const e = 1 - Math.min(1, (9 - Math.abs(boat.userData.x)) / 2); boat.material.opacity = 0.45 * (1 - e); boat.position.y = -1.5 + Math.sin(t * 1.1 + boat.position.x) * 0.04; if (Math.abs(boat.userData.x) > 9) { boat.userData.active = false; boat.material.opacity = 0; } }
-    if (plane.userData.active) { plane.userData.p += 0.0016; const p = plane.userData.p; plane.position.x = (-8 + p * 16) * plane.userData.dir; plane.position.y = plane.userData.y0 + Math.sin(p * Math.PI) * 1.1; plane.material.opacity = Math.max(0, Math.sin(p * Math.PI)) * (0.5 + 0.5 * Math.sin(t * 8)) * 0.9; if (p >= 1) { plane.userData.active = false; plane.material.opacity = 0; } }
-
-    // car-light streaks along the waterfront
-    cars.forEach((cc) => { if (cc.userData.active) { cc.userData.x += cc.userData.sp * cc.userData.dir; cc.position.x = cc.userData.x; const edge = Math.min(1, (8 - Math.abs(cc.userData.x)) / 2.2); cc.material.opacity = 0.85 * Math.max(0, edge); if (Math.abs(cc.userData.x) > 8) { cc.userData.active = false; cc.material.opacity = 0; } } });
-    // traffic signals: each on its own sequence + timing, so they never sync
-    signals.forEach((m) => { const u = m.userData; u.tP += dt; if (u.tP > u.hold[u.phase]) { u.tP = 0; u.phase = (u.phase + 1) % 3; } const col = SIG_COL[u.seq[u.phase]]; m.material.color.setRGB(col[0], col[1], col[2]); m.material.opacity = 0.8 + 0.12 * Math.sin(t * 4 + u.x); });
+    // cinematic drift as a pure DOLLY: translate the camera AND its look-at together (no rotation)
+    const dxx = Math.sin(t * 0.16) * 0.55, dyy = Math.sin(t * 0.22) * 0.18, dzz = Math.cos(t * 0.16) * 0.22;
+    camera.position.set(bx + dxx, by + dyy, bz + dzz);
+    camera.lookAt(dxx, CHALF + FLOAT * 0.5 + dyy, dzz);
+    // ambient translates with the camera -> screen-locked to the static skyline, no slide, no parallax
+    ambient.position.set(dxx, dyy, dzz);
 
     if (idx !== lastIdx) { lastIdx = idx; onFront(idx, venues[idx]); }
     renderer.render(scene, camera);

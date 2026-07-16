@@ -17,7 +17,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
 :root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('https://where2hang.ae/images/Hero-skyline.webp') center 30%/cover no-repeat}
+.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('./Hero-night.webp') center 28%/cover no-repeat}
 .skytod{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
 .skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
 .dots{display:flex;gap:7px;justify-content:center;margin-top:9px}
@@ -210,7 +210,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=19';
+  import { mountCityHero } from './city-hero.js?v=21';
   import { mountAreaRail } from './area-rail.js?v=5';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
@@ -222,6 +222,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   document.getElementById('skytod').style.background=TINT[tod]||TINT.night;
   const g=GREET[tod]||GREET.night;
   document.getElementById('greeting').innerHTML=g[0]+'<br><span>'+g[1]+'</span>';
+
+  // ---- backdrop = time-of-day PLATE (local lab files). Night is the safe default. ----
+  const PLATE={dawn:"Hero-morning.webp",day:"Hero-afternoon.webp",sunset:"Hero-night.webp",night:"Hero-night.webp"};
+  document.getElementById('skybg').style.backgroundImage="url('./"+(PLATE[tod]||"Hero-night.webp")+"')";
 
   // ---- lens worlds: each lens drives BOTH the hero venues AND the backdrop art ----
   const WORLDS={
@@ -255,8 +259,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   let heroH=null;
   function mountWorld(w){
     const world=WORLDS[w];
-    document.getElementById('skybg').style.backgroundImage="url('"+B+world.bg+"')";
-    const vs=world.venues.map(v=>({...v,fallback:B+world.bg,href:B}));
+    const vs=world.venues.map(v=>({...v,fallback:"./Hero-night.webp",href:B}));
     if(heroH)heroH.destroy();
     buildDots(herodots,vs.length);
     heroH=mountCityHero(document.getElementById('gl'),{venues:vs,getState:()=>getCityState(vs.length),
