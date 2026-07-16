@@ -18,6 +18,14 @@
 :root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 .skybg{position:fixed;inset:0;z-index:0;background:#06202b url('./Hero-night.webp') center bottom/cover no-repeat;filter:saturate(.9) contrast(.87) brightness(.96)}
+/* wide screens (unfolded Fold, tablets): the portrait plate would crop to a thin band with cover.
+   Fit by width and anchor the skyline low so it stays whole; extra height reads as sky. */
+@media (min-aspect-ratio: 3/4){
+  .skybg{background-size:100% auto;background-position:center 78%}
+}
+@media (min-aspect-ratio: 1/1){
+  .skybg{background-size:100% auto;background-position:center 88%}
+}
 .skytod{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
 .skyscrim{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(5,10,13,.52) 0%,rgba(5,10,13,.14) 22%,rgba(5,10,13,0) 42%,rgba(5,10,13,0) 60%,rgba(5,10,13,.42) 100%)}
 .skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
@@ -212,7 +220,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=27';
+  import { mountCityHero } from './city-hero.js?v=28';
   import { mountAreaRail } from './area-rail.js?v=7';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
