@@ -24,7 +24,7 @@ export function mountCityHero(canvas, opts) {
   if (!venues.length) return { destroy() {} };
 
   const N = venues.length;
-  const CW = 2.3, CH = 2.55, CHALF = CH / 2;
+  const CW = 2.5, CH = 2.78, CHALF = CH / 2;
   const SPACING = 2.2, SIDE_ANGLE = 0.55, FLOAT = 0.55;
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -96,8 +96,8 @@ export function mountCityHero(canvas, opts) {
   });
 
   function fit() {
-    const fa = Math.min(W / H, 1.4), halfSpan = SPACING * 0.72 + CW * 0.5, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    let z = Math.max(halfSpan / (vh * fa), halfSpan / vh, 7.5) * 1.12;   // cap aspect for the Fold
+    const fa = Math.min(W / H, 1.4), halfSpan = SPACING * 0.66 + CW * 0.5, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    let z = Math.max(halfSpan / (vh * fa), halfSpan / vh, 6.5) * 0.98;   // cap aspect for the Fold; tighter frame = bigger cards
     bx = 0; by = z * 0.36 + 0.4; bz = z;
     camera.position.set(bx, by, bz); camera.lookAt(0, CHALF + FLOAT * 0.5, 0);
   }
