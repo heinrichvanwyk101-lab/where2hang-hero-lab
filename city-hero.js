@@ -24,7 +24,7 @@ export function mountCityHero(canvas, opts) {
   if (!venues.length) return { destroy() {} };
 
   const N = venues.length;
-  const CW = 1.95, CH = 2.55, CHALF = CH / 2;
+  const CW = 2.3, CH = 2.55, CHALF = CH / 2;
   const SPACING = 2.2, SIDE_ANGLE = 0.55, FLOAT = 0.55;
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -159,7 +159,7 @@ export function mountCityHero(canvas, opts) {
       const centre = Math.max(0, 1 - a);
       const s = 0.82 + centre * 0.42;                       // centre ~10% larger, sides ~5% smaller
       m.scale.set(s, s, s);
-      m.position.x = off * SPACING * (1 + a * 0.12);        // sit at the edge but show a good slice
+      m.position.x = off * SPACING * (1 + a * 0.18);        // clean gap even with the wider card
       m.position.z = -a * 1.5;
       m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       m.rotation.y = -off * SIDE_ANGLE;

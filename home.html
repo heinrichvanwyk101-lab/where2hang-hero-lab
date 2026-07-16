@@ -24,6 +24,8 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.28);transition:.3s var(--ease)}
 .dots i.on{width:18px;border-radius:3px;background:var(--teal2);box-shadow:0 0 8px rgba(0,194,168,.5)}
 .page{position:relative;z-index:2}
+.screen1{display:flex;flex-direction:column;min-height:100vh;min-height:100svh;padding-bottom:98px}
+.controls{padding:6px 18px 8px}
 /* cockpit material — used with INTENT, not everywhere */
 .glass{position:relative;background:linear-gradient(180deg,rgba(30,46,50,.44),rgba(14,26,30,.5));backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border:1px solid rgba(120,220,210,.28);border-radius:20px;box-shadow:0 16px 42px rgba(0,0,0,.5),0 0 22px rgba(0,194,168,.14),0 1px 0 rgba(180,255,246,.28) inset}
 .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(180,255,246,.10),transparent 42%)}
@@ -36,7 +38,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 @keyframes bl{50%{opacity:.4}}
 
 /* HERO 5* */
-.hero{position:relative;padding:2px 18px 0}
+.hero{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;padding:2px 18px 0}
 .greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65)}
 .greeting span{color:var(--teal2)}
 .search{margin-top:14px;padding:12px 14px 11px;border-radius:22px}
@@ -46,9 +48,9 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .search .go{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.45)}
 .search .wchip{display:inline-flex;align-items:center;gap:7px;margin-top:9px;font-size:11.5px;font-weight:600;color:var(--teal2)}
 .search .wchip .o{width:7px;height:7px;border-radius:50%;background:var(--teal2);box-shadow:0 0 8px var(--teal2)}
-.stage{position:relative;height:clamp(300px,42vh,430px);margin:6px -18px 0}
+.stage{position:relative;flex:1;min-height:168px;margin:6px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
-.cap{position:relative;z-index:3;text-align:center;margin-top:-34px;padding:6px 16px 10px;pointer-events:none}
+.cap{position:relative;z-index:3;text-align:center;margin-top:-30px;padding:6px 16px 2px;pointer-events:none}
 .cap::before{content:"";position:absolute;left:50%;transform:translateX(-50%);top:-8px;width:min(94%,470px);height:140px;z-index:-1;pointer-events:none;background:radial-gradient(120% 80% at 50% 46%,rgba(5,10,13,.6),rgba(5,10,13,0) 70%)}
 .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:2px}
 .cap h3{font-size:22px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 20px rgba(0,0,0,.9)}
@@ -57,7 +59,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .scrollcue span{display:block;margin-top:3px;animation:bob 1.8s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(4px)}}
 
-.body{position:relative;padding:0 18px 130px;margin-top:-10px}
+.body{position:relative;padding:16px 18px 130px}
 /* controls (moderate) */
 .lens{display:flex;gap:8px;margin-top:6px}
 .lensbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:15px 6px;border-radius:18px;font-size:12.5px;font-weight:700;color:var(--sub);transition:.3s var(--ease)}
@@ -121,6 +123,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 <div class="skydim" id="skydim"></div>
 
 <div class="page">
+  <div class="screen1">
   <div class="nav">
     <div class="brand"><img src="https://where2hang.ae/images/Pin.png" alt="">Where<i>2</i>Hang</div>
     <div class="online glass"><span class="d"></span>150 online</div>
@@ -142,9 +145,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     </div>
     <div class="cap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p><div class="dots" id="herodots"></div></div>
   </section>
-
-  <section class="body">
-    <!-- controls -->
+  <div class="controls">
     <div class="lens">
       <button class="lensbtn glass on" data-world="eat"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v8M8 3v8M6.5 11v10M16 3c-2 0-3 2-3 5s1 5 3 5v8"/></svg>Eat &amp; Drink</button>
       <button class="lensbtn glass" data-world="do"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Activities</button>
@@ -154,7 +155,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
       <div class="act glass"><span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><span><b>Find My Spot</b><small>Nearest to you</small></span></div>
       <div class="act g glass"><span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h4"/></svg></span><span><b>Plan a day</b><small>Multi-stop route</small></span></div>
     </div>
+    </div>
+  </div>
 
+  <section class="body">
     <!-- AREAS 4* -->
     <div class="sec"><h4>Explore by area</h4><span class="va">View all</span></div>
     <div class="arearail"><canvas id="arearail" aria-label="Explore Abu Dhabi by area — drag to browse districts"></canvas></div>
@@ -202,7 +206,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=10';
+  import { mountCityHero } from './city-hero.js?v=11';
   import { mountAreaRail } from './area-rail.js?v=3';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
