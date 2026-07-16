@@ -149,16 +149,16 @@ export function mountCityHero(canvas, opts) {
     cards.forEach((m, i) => {
       let off = i - cur; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
       const a = Math.abs(off);
-      if (a > 1.4) { m.visible = false; return; }
+      if (a > 1.15) { m.visible = false; return; }          // only prev / current / next
       m.visible = true;
       const centre = Math.max(0, 1 - a);                    // 1 at front, 0 at the sides
       const s = 0.72 + centre * 0.42;
       m.scale.set(s, s, s);
-      m.position.x = off * SPACING * (1 - a * 0.10);
-      m.position.z = -a * 1.5;
-      m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;  // float, strongest at centre
+      m.position.x = off * SPACING * (1 - a * 0.18);        // pull the side cards inward
+      m.position.z = -a * 2.1;                              // and further back, so they recede
+      m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       m.rotation.y = -off * SIDE_ANGLE;
-      m.material.opacity = Math.max(0, 1 - a * 0.75);
+      m.material.opacity = Math.max(0, 1 - a * 1.15);       // neighbours vanish at rest; appear only mid-swipe (not a turntable)
     });
 
     // stage lighting follows the floating centre card

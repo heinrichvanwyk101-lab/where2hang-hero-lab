@@ -73,9 +73,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .areacap{text-align:center;margin-top:2px;color:var(--sub);font-size:11.5px}
 .areacap b{color:var(--text);font-weight:700}
 
-/* ON TODAY 3* — calm departure board. Rows, not cards. */
-.board{margin-top:6px;border-top:1px solid rgba(150,200,195,.16)}
-.row{display:flex;align-items:center;gap:13px;padding:13px 4px;border-bottom:1px solid rgba(150,200,195,.14)}
+/* ON TODAY 3* — calm departure board. Rows float over the city, no container. */
+.board{margin-top:6px}
+.row{display:flex;align-items:center;gap:13px;padding:14px 4px}
+.row + .row{border-top:1px solid rgba(150,200,195,.07)}
 .row .th{width:46px;height:46px;border-radius:11px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5);transform:translateY(-1px)}
 .row .th img{width:100%;height:100%;object-fit:cover}
 .row .info{flex:1;min-width:0}
@@ -90,8 +91,8 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e2edeb;background:rgba(255,255,255,.05);border:1px solid rgba(150,200,195,.2)}
 .chip .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal2);margin-right:8px;vertical-align:middle;box-shadow:0 0 7px var(--teal2)}
 
-/* EDITORIAL 2* — one strip */
-.edi{display:flex;align-items:center;gap:12px;margin-top:6px;padding:14px 15px;border-radius:16px;background:rgba(255,255,255,.045);border:1px solid rgba(150,200,195,.18)}
+/* EDITORIAL 2* — one strip, floating */
+.edi{display:flex;align-items:center;gap:12px;margin-top:6px;padding:10px 2px}
 .edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.12);border:1px solid rgba(120,220,210,.3)}
 .edi .t{flex:1;font-size:13.5px;font-weight:600}.edi .t span{color:var(--teal2)}
 .edi .c{color:var(--sub)}
@@ -194,8 +195,8 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=4';
-  import { mountAreaRail } from './area-rail.js?v=1';
+  import { mountCityHero } from './city-hero.js?v=5';
+  import { mountAreaRail } from './area-rail.js?v=2';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
 

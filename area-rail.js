@@ -16,7 +16,7 @@ export function mountAreaRail(canvas, opts) {
   const onSelect = opts.onSelect || (() => {});
   if (!areas.length) return { destroy() {} };
 
-  const N = areas.length, STEP = 0.46, R = 3.7, CW = 2.5, CH = 1.6;
+  const N = areas.length, STEP = 0.40, R = 6.5, CW = 2.35, CH = 1.5;
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
@@ -24,7 +24,7 @@ export function mountAreaRail(canvas, opts) {
   let W = canvas.clientWidth, H = canvas.clientHeight || 1;
   renderer.setSize(W, H, false);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(46, W / H, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 100);
   let bz = 6;
 
   function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
@@ -39,7 +39,8 @@ export function mountAreaRail(canvas, opts) {
     c.fillStyle = "#F4F7F9"; c.font = "800 42px Inter, sans-serif"; c.fillText(a.name, 26, 276, 460);
     if (a.count) { c.fillStyle = "#9FD8CF"; c.font = "600 24px Inter, sans-serif"; c.fillText(a.count, 26, 308); }
     // teal edge glow rim
-    c.strokeStyle = "rgba(61,233,205,.4)"; c.lineWidth = 3; rr(c, 4, 4, 504, 322, 22); c.stroke();
+    const hi = c.createLinearGradient(0, 0, 0, 96); hi.addColorStop(0, "rgba(190,255,247,.16)"); hi.addColorStop(1, "transparent"); c.fillStyle = hi; c.fillRect(6, 6, 500, 96);
+    c.strokeStyle = "rgba(61,233,205,.45)"; c.lineWidth = 5; rr(c, 6, 6, 500, 318, 24); c.stroke();
     return new THREE.CanvasTexture(cv);
   }
   const loader = new THREE.TextureLoader(); loader.crossOrigin = "anonymous";
@@ -58,7 +59,7 @@ export function mountAreaRail(canvas, opts) {
 
   function fit() {
     const aspect = W / H, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const halfH = CH * 0.62, halfW = CW * 0.6;
+    const halfH = CH * 0.64, halfW = CW * 0.72;
     bz = Math.max(halfH / vh, halfW / (vh * aspect), 3) * 1.08;
     camera.position.set(0, 0.28, bz); camera.lookAt(0, 0, -0.5);
   }
@@ -71,17 +72,17 @@ export function mountAreaRail(canvas, opts) {
     cards.forEach((c, i) => {
       let off = i - cur; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
       const a = off * STEP, ab = Math.abs(off);
-      if (ab > 2.3) { c.g.visible = false; return; }
+      if (ab > 2.7) { c.g.visible = false; return; }
       c.g.visible = true;
-      c.g.position.set(R * Math.sin(a), 0, -R + R * Math.cos(a));  // convex: centre nearest, sides recede
-      c.g.rotation.y = a;                                          // side cards angle outward
-      const s = 1 - ab * 0.06; c.g.scale.set(s, s, s);
-      const op = Math.max(0, Math.min(1, 1.15 - Math.max(0, ab - 1.2) * 0.9));
+      c.g.position.set(R * Math.sin(a), 0, -R + R * Math.cos(a));  // gentle outward arc
+      c.g.rotation.y = a * 0.5;                                    // partial tilt — display case, not a wheel
+      const s = 1 - ab * 0.035; c.g.scale.set(s, s, s);           // centre only slightly larger
+      const op = Math.max(0, Math.min(1, 1.2 - Math.max(0, ab - 1.4) * 0.7));
       c.pm.material.opacity = op; c.lm.material.opacity = op;
     });
   }
   function render() { place(); renderer.render(scene, camera); const i = frontIndex(); if (i !== lastIdx) { lastIdx = i; onFront(i, areas[i]); } }
-  function loop() { if (!alive) return; raf = requestAnimationFrame(loop); if (!running) return; const d = target - cur; cur += d * 0.14; render(); if (Math.abs(d) < 0.0004 && !down) { cur = target; render(); cancelAnimationFrame(raf); raf = 0; } }
+  function loop() { if (!alive) return; raf = requestAnimationFrame(loop); if (!running) return; const d = target - cur; cur += d * 0.08; render(); if (Math.abs(d) < 0.0004 && !down) { cur = target; render(); cancelAnimationFrame(raf); raf = 0; } }
   function kick() { if (!raf && alive) loop(); }
 
   function down_(e) { down = true; moved = false; sx = e.clientX; st = target; dt0 = performance.now(); canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); kick(); }
