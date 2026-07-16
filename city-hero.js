@@ -138,7 +138,7 @@ export function mountCityHero(canvas, opts) {
     const fa = Math.min(W / H, 1.4), halfSpan = SPACING * 0.66 + CW * 0.5, vh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     let z = Math.max(halfSpan / (vh * fa), halfSpan / vh, 6.5) * 0.98;   // cap aspect for the Fold; tighter frame = bigger cards
     bx = 0; by = z * 0.36 + 0.4; bz = z;
-    camera.position.set(bx, by, bz); camera.lookAt(0, 0.75, 0);
+    camera.position.set(bx, by, bz); camera.lookAt(0, 1.1, 0);
   }
   fit();
 
@@ -212,7 +212,7 @@ export function mountCityHero(canvas, opts) {
     // cinematic drift as a pure DOLLY: translate the camera AND its look-at together (no rotation)
     const dxx = Math.sin(t * 0.16) * 0.55, dyy = Math.sin(t * 0.22) * 0.18, dzz = Math.cos(t * 0.16) * 0.22;
     camera.position.set(bx + dxx, by + dyy, bz + dzz);
-    camera.lookAt(dxx, 0.75 + dyy, dzz);
+    camera.lookAt(dxx, 1.1 + dyy, dzz);
     // ambient translates with the camera -> screen-locked to the static skyline, no slide, no parallax
     ambient.position.set(dxx, dyy, dzz);
 
