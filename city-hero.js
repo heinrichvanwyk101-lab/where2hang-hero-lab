@@ -75,24 +75,83 @@ export function mountCityHero(canvas, opts) {
     new THREE.MeshBasicMaterial({ map: radialTex("rgba(0,194,168,.16)", "rgba(0,40,44,.03)"), transparent: true, opacity: .32, depthWrite: false, blending: THREE.AdditiveBlending }));
   water.position.set(0, -1.6, -6); water.rotation.x = -0.2; scene.add(water);
 
+  // ambient life lives in a group locked to the (static) skyline, so it never slides with the camera drift
+  const ambient = new THREE.Group(); scene.add(ambient);
   // stars (sparse)
   const stars = [];
   for (let i = 0; i < 6; i++) {
     const s = new THREE.Mesh(new THREE.PlaneGeometry(.3, .3), new THREE.MeshBasicMaterial({ map: radialTex("rgba(220,240,255,.9)", "rgba(180,210,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    s.position.set(-8 + Math.random() * 16, 3.6 + Math.random() * 2.4, -8); s.userData = { base: .18 + Math.random() * .2, tw: i < 3, ph: Math.random() * 6.28, sp: .6 + Math.random() }; scene.add(s); stars.push(s);
+    s.position.set(-8 + Math.random() * 16, 3.6 + Math.random() * 2.4, -8); s.userData = { base: .18 + Math.random() * .2, tw: i < 3, ph: Math.random() * 6.28, sp: .6 + Math.random() }; ambient.add(s); stars.push(s);
   }
   // one ferry + one plane (rare, subtle)
   const boat = new THREE.Mesh(new THREE.PlaneGeometry(.55, .55), new THREE.MeshBasicMaterial({ map: radialTex("rgba(244,220,150,.9)", "rgba(244,200,120,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-  boat.position.set(0, -1.5, -6.5); boat.userData = { active: false, x: 0, dir: 1, sp: 0 }; scene.add(boat);
+  boat.position.set(0, -1.5, -6.5); boat.userData = { active: false, x: 0, dir: 1, sp: 0 }; ambient.add(boat);
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(.26, .26), new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(180,220,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-  plane.userData = { active: false, p: 0, y0: 0, dir: 1 }; scene.add(plane);
+  plane.userData = { active: false, p: 0, y0: 0, dir: 1 }; ambient.add(plane);
 
-  // venue cards
+  // car-light streaks travelling along the waterfront band (a few at a time, subtle)
+  const WATER_Y = -1.15;
+  const cars = [];
+  for (let i = 0; i < 5; i++) {
+    const warm = Math.random() > .5;
+    const cc = new THREE.Mesh(new THREE.PlaneGeometry(.34, .09),
+      new THREE.MeshBasicMaterial({ map: radialTex(warm ? "rgba(255,214,150,.95)" : "rgba(235,245,255,.95)", "rgba(255,200,120,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    cc.position.set(0, WATER_Y, -6.2); cc.userData = { active: false, x: 0, dir: 1, sp: 0 }; ambient.add(cc); cars.push(cc);
+  }
+  // a couple of traffic-signal blips along the shore — cycle green -> orange -> red on staggered timers
+  const SIG = [{ x: -3.4 }, { x: 2.9 }];
+  const SIG_COL = [[0.2, 0.95, 0.5], [0.98, 0.68, 0.2], [1.0, 0.28, 0.28]];   // green, orange, red
+  const SIG_HOLD = [4.2, 1.3, 3.6];                                            // seconds per phase
+  const signals = SIG.map((s, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16),
+      new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(255,255,255,0)"), transparent: true, opacity: .0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    m.position.set(s.x, WATER_Y + 0.12, -6.1); m.userData = { phase: i % 3, tPhase: Math.random() * 3 };
+    ambient.add(m); return m;
+  });
+
+  // window overlay (inner shadow + frame lip + top light-catch) and a soft cast shadow — drawn once, shared
+  function frameTex() {
+    const W2 = 512, H2 = 569, cv = document.createElement("canvas"); cv.width = W2; cv.height = H2; const c = cv.getContext("2d");
+    // all-round inner vignette -> photo darkens toward the edges, reads as set BACK
+    let rg = c.createRadialGradient(W2 / 2, H2 / 2, H2 * 0.3, W2 / 2, H2 / 2, H2 * 0.64);
+    rg.addColorStop(0, "transparent"); rg.addColorStop(1, "rgba(0,0,0,.46)"); c.fillStyle = rg; c.fillRect(0, 0, W2, H2);
+    // top inner shadow -> photo recessed under the top lip
+    let g = c.createLinearGradient(0, 0, 0, 120); g.addColorStop(0, "rgba(0,0,0,.6)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(0, 0, W2, 120);
+    // bottom scrim (depth + caption legibility)
+    g = c.createLinearGradient(0, H2, 0, H2 - 170); g.addColorStop(0, "rgba(0,0,0,.64)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(0, H2 - 170, W2, 170);
+    // dark frame lip (the window frame itself)
+    c.strokeStyle = "rgba(6,12,14,.72)"; c.lineWidth = 10; c.strokeRect(5, 5, W2 - 10, H2 - 10);
+    // lit top rim -> light catches the top of the frame
+    g = c.createLinearGradient(0, 4, 0, 42); g.addColorStop(0, "rgba(205,255,249,.6)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(12, 4, W2 - 24, 38);
+    // faint teal inner edge
+    c.strokeStyle = "rgba(120,230,218,.2)"; c.lineWidth = 2; c.strokeRect(13, 13, W2 - 26, H2 - 26);
+    // diagonal glass sheen -> a surface with depth, not a flat print
+    g = c.createLinearGradient(0, 0, W2, H2 * 0.5);
+    g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(.44, "rgba(255,255,255,.05)"); g.addColorStop(.5, "rgba(255,255,255,.12)"); g.addColorStop(.56, "rgba(255,255,255,.04)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    c.fillStyle = g; c.fillRect(0, 0, W2, H2);
+    return new THREE.CanvasTexture(cv);
+  }
+  function cardShadowTex() {
+    const cv = document.createElement("canvas"); cv.width = 256; cv.height = 300; const c = cv.getContext("2d");
+    c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = 48; c.shadowOffsetY = 12; c.fillStyle = "rgba(0,0,0,.85)"; c.fillRect(44, 40, 168, 220);
+    return new THREE.CanvasTexture(cv);
+  }
+  const frameT = frameTex(), shadowT = cardShadowTex();
+
+  // venue cards — each a window: cast shadow (behind) + photo + frame overlay (front)
   const geo = new THREE.PlaneGeometry(CW, CH);
+  const shadowGeo = new THREE.PlaneGeometry(CW * 1.24, CH * 1.2);
   const cards = venues.map((v) => {
-    const mat = new THREE.MeshBasicMaterial({ map: placeholderTex(v), transparent: true, opacity: 0 });
-    loadPhoto(mat, v);
-    const m = new THREE.Mesh(geo, mat); m.visible = false; scene.add(m); return m;
+    const g = new THREE.Group();
+    const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ map: shadowT, transparent: true, opacity: 0, depthWrite: false }));
+    sh.position.set(0, -0.14, -0.08);
+    const photo = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: placeholderTex(v), transparent: true, opacity: 0 }));
+    loadPhoto(photo.material, v);
+    const fr = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: frameT, transparent: true, opacity: 0, depthWrite: false }));
+    fr.position.z = 0.012;
+    g.add(sh); g.add(photo); g.add(fr); g.visible = false; scene.add(g);
+    g.userData = { photo, fr, sh };
+    return g;
   });
 
   function fit() {
@@ -131,14 +190,16 @@ export function mountCityHero(canvas, opts) {
   // ambient scheduler: one rare event every 18–32s
   let nextEvent = 0;
   function fire() {
-    if (Math.random() < 0.3) { if (!plane.userData.active) { plane.userData.active = true; plane.userData.p = 0; plane.userData.dir = Math.random() > .5 ? 1 : -1; plane.userData.y0 = 4 + Math.random() * 1.2; } }
+    if (Math.random() < 0.3) { if (!plane.userData.active) { plane.userData.active = true; plane.userData.p = 0; plane.userData.dir = Math.random() > .5 ? 1 : -1; plane.userData.y0 = 5.6 + Math.random() * 1.3; } }
     else if (!boat.userData.active) { boat.userData.active = true; boat.userData.dir = Math.random() > .5 ? 1 : -1; boat.userData.x = boat.userData.dir > 0 ? -9 : 9; boat.userData.sp = .006 + Math.random() * .005; }
   }
 
-  const t0 = performance.now(); let lastIdx = -1, raf = 0, hintStart = -1;
+  const t0 = performance.now(); let lastIdx = -1, raf = 0, hintStart = -1, lastT = 0;
   function frame() {
     raf = requestAnimationFrame(frame); if (!running) return;
     const t = (performance.now() - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
+    const dt = Math.min(0.05, t - lastT); lastT = t;
+    if (Math.random() < 0.004 + busy * 0.01) { const cc = cars.find((x) => !x.userData.active); if (cc) { cc.userData.active = true; cc.userData.dir = Math.random() > .5 ? 1 : -1; cc.userData.x = cc.userData.dir > 0 ? -9 : 9; cc.userData.sp = 0.02 + Math.random() * 0.02; } }
     if (nextEvent === 0) nextEvent = t + 18 + Math.random() * 14;
     if (t > nextEvent) { fire(); nextEvent = t + (18 + (1 - busy) * 6) + Math.random() * 8; }
 
@@ -151,19 +212,22 @@ export function mountCityHero(canvas, opts) {
     if (hintStart > 0 && t - hintStart < 0.8) { const p = t - hintStart; hintOff = Math.sin(p * 8) * 0.1 * (1 - p / 0.8); }
     const ec = cur + hintOff;
     // prev / current / next — the sides PEEK at the edges (not hidden) so the carousel is discoverable
-    cards.forEach((m, i) => {
+    cards.forEach((g, i) => {
       let off = i - ec; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
       const a = Math.abs(off);
-      if (a > 1.15) { m.visible = false; return; }
-      m.visible = true;
+      if (a > 1.15) { g.visible = false; return; }
+      g.visible = true;
       const centre = Math.max(0, 1 - a);
       const s = 0.76 + centre * 0.57;                       // centre clearly the largest
-      m.scale.set(s, s, s);
-      m.position.x = off * SPACING * (1 + a * 0.08);        // sides sit close, belonging to the centre
-      m.position.z = -a * 1.5;
-      m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
-      m.rotation.y = -off * SIDE_ANGLE;
-      m.material.opacity = Math.max(0, 1 - a * 0.42);       // sides fade more -> centre is tonight's pick
+      g.scale.set(s, s, s);
+      g.position.x = off * SPACING * (1 + a * 0.08);        // sides sit close, belonging to the centre
+      g.position.z = -a * 1.5;
+      g.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
+      g.rotation.y = -off * SIDE_ANGLE;
+      const op = Math.max(0, 1 - a * 0.42);                 // sides fade -> centre is tonight's pick
+      g.userData.photo.material.opacity = op;
+      g.userData.fr.material.opacity = op * 0.95;
+      g.userData.sh.material.opacity = op * 0.62;
     });
 
     // stage lighting follows the floating centre card
@@ -177,9 +241,16 @@ export function mountCityHero(canvas, opts) {
     // subtle cinematic camera drift (the camera moves, the venue does not spin)
     camera.position.set(bx + Math.sin(t * 0.16) * 0.55, by + Math.sin(t * 0.22) * 0.18, bz + Math.cos(t * 0.16) * 0.22);
     camera.lookAt(0, CHALF + FLOAT * 0.5, 0);
+    // keep the stars/plane/boat pinned to the static skyline, not sliding with the drift
+    ambient.position.set(camera.position.x - bx, camera.position.y - by, 0);
 
     if (boat.userData.active) { boat.userData.x += boat.userData.sp * boat.userData.dir; boat.position.x = boat.userData.x; const e = 1 - Math.min(1, (9 - Math.abs(boat.userData.x)) / 2); boat.material.opacity = 0.45 * (1 - e); boat.position.y = -1.5 + Math.sin(t * 1.1 + boat.position.x) * 0.04; if (Math.abs(boat.userData.x) > 9) { boat.userData.active = false; boat.material.opacity = 0; } }
     if (plane.userData.active) { plane.userData.p += 0.0016; const p = plane.userData.p; plane.position.x = (-8 + p * 16) * plane.userData.dir; plane.position.y = plane.userData.y0 + Math.sin(p * Math.PI) * 1.1; plane.material.opacity = Math.max(0, Math.sin(p * Math.PI)) * (0.5 + 0.5 * Math.sin(t * 8)) * 0.9; if (p >= 1) { plane.userData.active = false; plane.material.opacity = 0; } }
+
+    // car-light streaks along the waterfront
+    cars.forEach((cc) => { if (cc.userData.active) { cc.userData.x += cc.userData.sp * cc.userData.dir; cc.position.x = cc.userData.x; const edge = Math.min(1, (9 - Math.abs(cc.userData.x)) / 2.5); cc.material.opacity = 0.5 * Math.max(0, edge); if (Math.abs(cc.userData.x) > 9) { cc.userData.active = false; cc.material.opacity = 0; } } });
+    // traffic signals: green -> orange -> red on staggered timers
+    signals.forEach((m) => { m.userData.tPhase += dt; if (m.userData.tPhase > SIG_HOLD[m.userData.phase]) { m.userData.tPhase = 0; m.userData.phase = (m.userData.phase + 1) % 3; } const col = SIG_COL[m.userData.phase]; m.material.color.setRGB(col[0], col[1], col[2]); m.material.opacity = 0.5 + 0.1 * Math.sin(t * 3); });
 
     if (idx !== lastIdx) { lastIdx = idx; onFront(idx, venues[idx]); }
     renderer.render(scene, camera);
