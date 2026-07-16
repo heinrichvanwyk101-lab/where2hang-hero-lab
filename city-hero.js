@@ -157,13 +157,13 @@ export function mountCityHero(canvas, opts) {
       if (a > 1.15) { m.visible = false; return; }
       m.visible = true;
       const centre = Math.max(0, 1 - a);
-      const s = 0.8 + centre * 0.35;                        // sides kept sizeable
+      const s = 0.86 + centre * 0.28;                       // sides larger, closer to the centre
       m.scale.set(s, s, s);
-      m.position.x = off * SPACING * (1 + a * 0.28);        // push sides to the edge -> only a slice peeks in
-      m.position.z = -a * 1.8;
+      m.position.x = off * SPACING * (1 + a * 0.12);        // sit at the edge but show a good slice
+      m.position.z = -a * 1.5;
       m.position.y = CHALF + FLOAT * (0.6 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;
       m.rotation.y = -off * SIDE_ANGLE;
-      m.material.opacity = Math.max(0, 1 - a * 0.4);        // ~60% at rest: a clear peek that says "more either side"
+      m.material.opacity = Math.max(0, 1 - a * 0.26);       // ~74% at rest: bright, legible peek (matches mockup)
     });
 
     // stage lighting follows the floating centre card
