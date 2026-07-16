@@ -174,6 +174,7 @@ export function mountCityHero(canvas, opts) {
     const t = (performance.now() - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
 
     cur += (target - cur) * 0.12;
+    if (!down) { while (cur >= N) { cur -= N; target -= N; } while (cur < 0) { cur += N; target += N; } }  // keep small forever (invisible shift) -> no nth-round blank
     const idx = frontIndex(); const hot = idx === S.hotIndex; const pulse = hot ? (0.5 + 0.5 * Math.sin(t * 3)) : 0;
 
     // gentle one-time nudge ~1s after load, to say "I'm swipeable"

@@ -96,7 +96,7 @@ export function mountAreaRail(canvas, opts) {
     });
   }
   function render() { place(); renderer.render(scene, camera); const i = frontIndex(); if (i !== lastIdx) { lastIdx = i; onFront(i, areas[i]); } }
-  function loop() { if (!alive) return; raf = requestAnimationFrame(loop); if (!running) return; const d = target - cur; cur += d * 0.08; render(); if (Math.abs(d) < 0.0004 && !down) { cur = target; render(); cancelAnimationFrame(raf); raf = 0; } }
+  function loop() { if (!alive) return; raf = requestAnimationFrame(loop); if (!running) return; const d = target - cur; cur += d * 0.08; if (!down) { while (cur >= N) { cur -= N; target -= N; } while (cur < 0) { cur += N; target += N; } } render(); if (Math.abs(d) < 0.0004 && !down) { cur = target; render(); cancelAnimationFrame(raf); raf = 0; } }
   function kick() { if (!raf && alive) loop(); }
 
   function down_(e) { down = true; moved = false; sx = e.clientX; st = target; dt0 = performance.now(); canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); kick(); }
