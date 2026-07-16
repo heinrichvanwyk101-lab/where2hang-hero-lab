@@ -1,46 +1,39 @@
 <!DOCTYPE html>
-<!-- PASTE TARGET: where2hang-hero-lab/home.html  (replaces the previous version)
-     FULL HOME · Living City hero -> calm Glass Cockpit, one continuous city.
-     The whole body uses the cockpit material system: illuminated frosted-glass panels,
-     teal edge-glow, depth, rounded controls, the city always visible behind. Motion calms
-     below the hero; the visual world stays continuous. Real sections + real nav.
-     Prototype. Reuses city-hero.js + city-state.js. British spelling, no emojis. -->
+<!-- PASTE TARGET: where2hang-hero-lab/home.html  (replaces previous)
+     FULL HOME · one environment, richness DESCENDS down the page.
+     Hero 5* (living 3D) -> Explore by Area 4* (convex WebGL rail) -> On Today 3* (calm
+     departure-board rows, not cards) -> Experiences 2* (chips) -> Editorial 2* (one strip)
+     -> Categories 1* (plain text). Same Living City / Glass Cockpit world throughout, but
+     each module is treated by importance, not identically. Reuses city-hero.js, area-rail.js,
+     city-state.js. Prototype. British spelling, no emojis. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Where2Hang — Home (glass cockpit)</title>
+<title>Where2Hang — Home</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
-:root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--ease:cubic-bezier(.4,0,.2,1)}
+:root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-
-/* ONE continuous city behind everything — it recedes but never goes black */
 .skybg{position:fixed;inset:0;z-index:0;background:#06202b url('https://where2hang.ae/images/Hero-skyline.webp') center 30%/cover no-repeat}
-.skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;
-  background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
+.skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
 .page{position:relative;z-index:2}
+/* cockpit material — used with INTENT, not everywhere */
+.glass{position:relative;background:linear-gradient(180deg,rgba(30,46,50,.44),rgba(14,26,30,.5));backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);border:1px solid rgba(120,220,210,.28);border-radius:20px;box-shadow:0 16px 42px rgba(0,0,0,.5),0 0 22px rgba(0,194,168,.14),0 1px 0 rgba(180,255,246,.28) inset}
+.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(180,255,246,.10),transparent 42%)}
 
-/* THE COCKPIT MATERIAL — illuminated frosted glass with a teal edge-glow rim */
-.glass{position:relative;background:linear-gradient(180deg,rgba(30,46,50,.44),rgba(14,26,30,.5));
-  backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);
-  border:1px solid rgba(120,220,210,.28);border-radius:20px;
-  box-shadow:0 16px 42px rgba(0,0,0,.5), 0 0 22px rgba(0,194,168,.14), 0 1px 0 rgba(180,255,246,.28) inset, 0 0 0 1px rgba(0,0,0,.15)}
-.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  background:linear-gradient(180deg,rgba(180,255,246,.10),transparent 42%)}
-
-.nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
 .brand{font-weight:800;font-size:20px;letter-spacing:-.4px;display:flex;align-items:center;gap:9px;text-shadow:0 2px 16px rgba(0,0,0,.7)}
 .brand img{height:26px}.brand i{color:var(--teal);font-style:normal}
 .online{display:flex;align-items:center;gap:7px;padding:8px 13px;font-size:12px;font-weight:600;border-radius:20px}
 .online .d{width:7px;height:7px;border-radius:50%;background:#3ce9a4;box-shadow:0 0 8px #3ce9a4;animation:bl 2.2s infinite}
 @keyframes bl{50%{opacity:.4}}
 
-/* LIVING CITY hero */
-.hero{position:relative;padding:2px 18px 0;min-height:90vh}
-.greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65);margin-top:2px}
+/* HERO 5* */
+.hero{position:relative;padding:2px 18px 0;min-height:88vh}
+.greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65)}
 .greeting span{color:var(--teal2)}
 .search{display:flex;align-items:center;gap:12px;margin-top:14px;padding:14px 16px;border-radius:22px}
 .search .ic{color:var(--gold);flex:0 0 auto}
@@ -58,44 +51,56 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .scrollcue span{display:block;margin-top:3px;animation:bob 1.8s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(4px)}}
 
-/* GLASS COCKPIT body — same material, calmer motion */
 .body{position:relative;padding:6px 18px 130px}
-.lens{display:flex;gap:8px;margin-top:8px}
-.lensbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:16px 6px;border-radius:20px;font-size:12.5px;font-weight:700;color:var(--sub);transition:.3s var(--ease)}
+/* controls (moderate) */
+.lens{display:flex;gap:8px;margin-top:6px}
+.lensbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:15px 6px;border-radius:18px;font-size:12.5px;font-weight:700;color:var(--sub);transition:.3s var(--ease)}
 .lensbtn svg{color:var(--teal2)}
 .lensbtn.on{color:var(--text);border-color:rgba(120,220,210,.55);box-shadow:0 16px 42px rgba(0,0,0,.5),0 0 26px rgba(0,194,168,.28),0 1px 0 rgba(180,255,246,.4) inset}
-.acts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
-.act{display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:18px}
-.act .i{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.14);border:1px solid rgba(120,220,210,.3);color:var(--teal2)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.act{display:flex;align-items:center;gap:11px;padding:14px 16px;border-radius:16px}
+.act .i{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.14);border:1px solid rgba(120,220,210,.3);color:var(--teal2)}
 .act.g .i{background:rgba(232,181,71,.14);color:var(--gold)}
 .act b{font-size:14px}.act small{display:block;color:var(--sub);font-size:11px}
-.sec{display:flex;align-items:baseline;justify-content:space-between;margin:28px 4px 12px}
+
+.sec{display:flex;align-items:baseline;justify-content:space-between;margin:30px 4px 12px}
 .sec h4{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#dbe7e5;text-shadow:0 2px 12px rgba(0,0,0,.6)}
 .sec .va{color:var(--teal2);font-size:12px;font-weight:600}
-.rail{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -18px;padding:0 18px 6px;scrollbar-width:none}
-.rail::-webkit-scrollbar{display:none}
-/* area/experience tiles: glass FRAME holding the photo, city glows around it */
-.tile{flex:0 0 172px;scroll-snap-align:start;padding:7px;border-radius:20px}
-.tile .ph{position:relative;height:118px;border-radius:14px;overflow:hidden}
-.tile .ph img{width:100%;height:100%;object-fit:cover}
-.tile .ph .sc{position:absolute;inset:0;background:linear-gradient(0deg,rgba(4,12,14,.7),transparent 55%)}
-.tile b{display:block;padding:9px 6px 4px;font-size:14.5px;font-weight:700}
-.tile small{display:block;padding:0 6px 4px;font-size:11px;color:var(--sub)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.rowcard{display:flex;align-items:center;gap:13px;padding:11px 13px;border-radius:16px}
-.rowcard .th{width:52px;height:52px;border-radius:12px;flex:0 0 auto;overflow:hidden;border:1px solid rgba(120,220,210,.25)}
-.rowcard .th img{width:100%;height:100%;object-fit:cover}
-.rowcard .info{flex:1;min-width:0}
-.rowcard h5{font-size:14.5px;font-weight:700}
-.rowcard .rec{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--gold);font-size:12px;font-weight:600}
-.rowcard .dist{color:var(--sub);font-size:11.5px;font-weight:600}
-.chips{display:flex;flex-wrap:wrap;gap:9px}
-.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e2edeb}
+
+/* AREAS 4* — the convex WebGL rail (its own theatre) */
+.arearail{position:relative;height:230px;margin:2px -18px 0}
+.arearail canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+.areacap{text-align:center;margin-top:2px;color:var(--sub);font-size:11.5px}
+.areacap b{color:var(--text);font-weight:700}
+
+/* ON TODAY 3* — calm departure board. Rows, not cards. */
+.board{margin-top:6px;border-top:1px solid rgba(150,200,195,.16)}
+.row{display:flex;align-items:center;gap:13px;padding:13px 4px;border-bottom:1px solid rgba(150,200,195,.14)}
+.row .th{width:46px;height:46px;border-radius:11px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5);transform:translateY(-1px)}
+.row .th img{width:100%;height:100%;object-fit:cover}
+.row .info{flex:1;min-width:0}
+.row .nm{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .tg{display:flex;align-items:center;gap:8px;margin-top:3px}
+.row .live{font-size:9.5px;font-weight:800;letter-spacing:.6px;color:#04120f;background:var(--teal2);padding:2px 6px;border-radius:5px}
+.row .rec{font-size:12px;color:var(--gold);font-weight:600}
+.row .dist{font-family:var(--mono);font-size:12px;color:var(--sub);letter-spacing:-.3px;text-align:right;flex:0 0 auto}
+
+/* EXPERIENCES 2* — chips */
+.chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e2edeb;background:rgba(255,255,255,.05);border:1px solid rgba(150,200,195,.2)}
 .chip .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal2);margin-right:8px;vertical-align:middle;box-shadow:0 0 7px var(--teal2)}
-.edi{display:flex;align-items:center;gap:12px;margin-top:14px;padding:14px 15px;border-radius:16px}
+
+/* EDITORIAL 2* — one strip */
+.edi{display:flex;align-items:center;gap:12px;margin-top:6px;padding:14px 15px;border-radius:16px;background:rgba(255,255,255,.045);border:1px solid rgba(150,200,195,.18)}
 .edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.12);border:1px solid rgba(120,220,210,.3)}
 .edi .t{flex:1;font-size:13.5px;font-weight:600}.edi .t span{color:var(--teal2)}
 .edi .c{color:var(--sub)}
+
+/* CATEGORIES 1* — plainest */
+.cats{margin-top:14px;display:flex;flex-wrap:wrap;gap:x;gap:8px 16px}
+.cats a{font-size:13px;color:var(--sub);font-weight:500}
+.cats a:active{color:var(--teal2)}
+
 .navbar{position:fixed;left:12px;right:12px;bottom:30px;z-index:30;display:flex;justify-content:space-around;padding:12px 6px;border-radius:26px}
 .navbar a{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--sub);font-size:10px;font-weight:600}
 .navbar a.on{color:var(--teal2)}.navbar a.on svg{filter:drop-shadow(0 0 8px rgba(0,194,168,.5))}
@@ -113,7 +118,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     <div class="online glass"><span class="d"></span>150 online</div>
   </div>
 
-  <!-- LIVING CITY -->
+  <!-- HERO 5* -->
   <section class="hero">
     <h1 class="greeting">Good evening.<br><span>Where to tonight?</span></h1>
     <div class="search glass">
@@ -129,44 +134,46 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     <div class="scrollcue">SCROLL INTO THE CITY<span>&darr;</span></div>
   </section>
 
-  <!-- GLASS COCKPIT BODY -->
   <section class="body">
+    <!-- controls -->
     <div class="lens">
       <button class="lensbtn glass on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v8M8 3v8M6.5 11v10M16 3c-2 0-3 2-3 5s1 5 3 5v8"/></svg>Eat &amp; Drink</button>
       <button class="lensbtn glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Activities</button>
       <button class="lensbtn glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8c3-3 5 3 8 0s5 3 8 0M4 15c3-3 5 3 8 0s5 3 8 0"/></svg>Entertainment</button>
     </div>
-
     <div class="acts">
       <div class="act glass"><span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><span><b>Find My Spot</b><small>Nearest to you</small></span></div>
       <div class="act g glass"><span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h4"/></svg></span><span><b>Plan a day</b><small>Multi-stop route</small></span></div>
     </div>
 
+    <!-- AREAS 4* -->
     <div class="sec"><h4>Explore by area</h4><span class="va">View all</span></div>
-    <div class="rail">
-      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-corniche.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Corniche</b><small>112 venues</small></div>
-      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-saadiyat.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Saadiyat Island</b><small>64 venues</small></div>
-      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-yasmerina.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Yas Marina</b><small>89 venues</small></div>
-      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-almaryah.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Al Maryah</b><small>41 venues</small></div>
-    </div>
+    <div class="arearail"><canvas id="arearail" aria-label="Explore Abu Dhabi by area — drag to browse districts"></canvas></div>
+    <div class="areacap">Drag to explore · <b id="areaname">Corniche</b> · <span id="areacount">112 venues</span></div>
 
+    <!-- ON TODAY 3* -->
     <div class="sec"><h4>On today</h4><span class="va">View all</span></div>
-    <div class="grid2">
-      <div class="rowcard glass"><div class="th"><img src="https://where2hang.ae/images/Venue-mcgettigans.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><h5>The Brewhouse</h5><div class="rec">&#8635; Live Sport · Daily</div></div><span class="dist">1.2 km</span></div>
-      <div class="rowcard glass"><div class="th"><img src="https://where2hang.ae/images/Venue-coya.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><h5>Marco's Italian</h5><div class="rec">&#8635; Business Lunch</div></div><span class="dist">2.1 km</span></div>
+    <div class="board">
+      <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-mcgettigans.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">The Brewhouse</div><div class="tg"><span class="live">LIVE</span><span class="rec">Premier League · all day</span></div></div><div class="dist">1.2 km</div></div>
+      <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-coya.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">Coya Abu Dhabi</div><div class="tg"><span class="rec">Business lunch · 12–3pm</span></div></div><div class="dist">2.1 km</div></div>
+      <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-iris.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">Iris Yas Bay</div><div class="tg"><span class="live">LIVE</span><span class="rec">Ladies' night · from 8pm</span></div></div><div class="dist">3.4 km</div></div>
     </div>
 
+    <!-- EXPERIENCES 2* -->
     <div class="sec"><h4>By experience</h4></div>
     <div class="chips">
-      <span class="chip glass"><span class="d"></span>Brunch</span>
-      <span class="chip glass"><span class="d"></span>Live Music</span>
-      <span class="chip glass"><span class="d"></span>Beach Day</span>
-      <span class="chip glass"><span class="d"></span>Date Night</span>
-      <span class="chip glass"><span class="d"></span>Padel</span>
-      <span class="chip glass"><span class="d"></span>Sunset Spots</span>
+      <span class="chip"><span class="d"></span>Brunch</span><span class="chip"><span class="d"></span>Live Music</span><span class="chip"><span class="d"></span>Beach Day</span><span class="chip"><span class="d"></span>Date Night</span><span class="chip"><span class="d"></span>Padel</span><span class="chip"><span class="d"></span>Sunset Spots</span>
     </div>
 
-    <div class="edi glass"><span class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6"/></svg></span><span class="t"><span>Grazia Middle East</span> · All the fashion news…</span><span class="c">&rsaquo;</span></div>
+    <!-- EDITORIAL 2* -->
+    <div class="sec"><h4>Reading</h4></div>
+    <div class="edi"><span class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6"/></svg></span><span class="t"><span>Grazia Middle East</span> · Where to be seen this weekend</span><span class="c">&rsaquo;</span></div>
+
+    <!-- CATEGORIES 1* -->
+    <div class="sec"><h4>Browse all</h4></div>
+    <div class="cats">
+      <a>Restaurants</a><a>Bars</a><a>Cafés</a><a>Beaches</a><a>Parks</a><a>Padel</a><a>Cinemas</a><a>Rooftops</a><a>Museums</a><a>Nightlife</a>
+    </div>
   </section>
 </div>
 
@@ -177,7 +184,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/></svg>Map</a>
   <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</a>
 </nav>
-<div class="labflag">LAB PROOF · Living City &rarr; Glass Cockpit · one continuous city</div>
+<div class="labflag">LAB PROOF · richness descends · one continuous city</div>
 
 <script>
   const lensBtns=document.querySelectorAll('.lensbtn');
@@ -188,8 +195,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 </script>
 <script type="module">
   import { mountCityHero } from './city-hero.js?v=4';
+  import { mountAreaRail } from './area-rail.js?v=1';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
+
   const V=[
     {name:"Iris",sub:"Eat & Drink · Yas Bay",img:B+"Venue-iris.webp",fallback:B+"Hero-skyline.webp",href:B,anchor:true},
     {name:"McGettigan's",sub:"Eat & Drink · Yas Marina",img:B+"Venue-mcgettigans.webp",fallback:B+"Hero-skyline.webp",href:B,anchor:true},
@@ -199,11 +208,21 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     {name:"Ferrari World",sub:"Entertainment · Yas Island",img:B+"Venue-ferrariworld.webp",fallback:B+"Hero-ent.webp",href:B},
   ];
   const eb=document.getElementById('eb'),nm=document.getElementById('nm'),sb=document.getElementById('sb');
-  try{
-    mountCityHero(document.getElementById('gl'),{venues:V,getState:()=>getCityState(V.length),
-      onFront:(_i,v)=>{eb.textContent=v.anchor?"Trending tonight":"Tonight in Abu Dhabi";nm.textContent=v.name;sb.textContent=v.sub;},
-      onSelect:()=>{}});
+  try{ mountCityHero(document.getElementById('gl'),{venues:V,getState:()=>getCityState(V.length),
+    onFront:(_i,v)=>{eb.textContent=v.anchor?"Trending tonight":"Tonight in Abu Dhabi";nm.textContent=v.name;sb.textContent=v.sub;},onSelect:()=>{}});
   }catch(e){document.getElementById('fb').style.display='grid';console.error(e);}
+
+  const AREAS=[
+    {name:"Corniche",count:"112 venues",img:B+"Area-corniche.png",fallback:B+"Hero-skyline.webp"},
+    {name:"Saadiyat Island",count:"64 venues",img:B+"Area-saadiyat.png",fallback:B+"Hero-skyline.webp"},
+    {name:"Yas Marina",count:"89 venues",img:B+"Area-yasmerina.png",fallback:B+"Hero-skyline.webp"},
+    {name:"Al Maryah",count:"41 venues",img:B+"Area-almaryah.png",fallback:B+"Hero-skyline.webp"},
+    {name:"Al Reem",count:"38 venues",img:B+"Area-alreem.png",fallback:B+"Hero-skyline.webp"},
+  ];
+  const an=document.getElementById('areaname'),ac=document.getElementById('areacount');
+  try{ mountAreaRail(document.getElementById('arearail'),{areas:AREAS,
+    onFront:(_i,a)=>{an.textContent=a.name;ac.textContent=a.count;},onSelect:()=>{}});
+  }catch(e){console.error(e);}
 </script>
 </body>
 </html>
