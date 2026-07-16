@@ -1,91 +1,111 @@
 <!DOCTYPE html>
-<!-- PASTE TARGET: where2hang-hero-lab/home.html  (new file; sits alongside index.html)
-     THE ONE-EXPERIENCE PROOF. Living City hero bleeds edge-to-edge into a Glass Cockpit
-     interface over ONE continuous Abu Dhabi skyline. Scroll: the city is alive and in focus
-     at the top, then dims behind calm glass as you enter the "cockpit". Same city throughout.
-     Prototype only. Reuses city-hero.js + city-state.js. British spelling, no emojis. -->
+<!-- PASTE TARGET: where2hang-hero-lab/home.html  (replaces the previous version)
+     FULL HOME · Living City hero -> calm Glass Cockpit, one continuous city.
+     The whole body uses the cockpit material system: illuminated frosted-glass panels,
+     teal edge-glow, depth, rounded controls, the city always visible behind. Motion calms
+     below the hero; the visual world stays continuous. Real sections + real nav.
+     Prototype. Reuses city-hero.js + city-state.js. British spelling, no emojis. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Where2Hang — one experience (Home proof)</title>
+<title>Where2Hang — Home (glass cockpit)</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
-:root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#9FB0AE;
-  --glass:rgba(18,28,30,.42);--line:rgba(255,255,255,.14);--ease:cubic-bezier(.4,0,.2,1)}
+:root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-/* ONE continuous city behind everything */
-.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('https://where2hang.ae/images/Hero-skyline.webp') center 32%/cover no-repeat}
-.scrim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .15s linear;
-  background:linear-gradient(180deg,rgba(5,8,11,.1),rgba(5,8,11,.86) 60%,rgba(5,8,11,.97))}
-.page{position:relative;z-index:2}
-.glass{background:var(--glass);backdrop-filter:blur(22px) saturate(1.25);-webkit-backdrop-filter:blur(22px) saturate(1.25);border:1px solid var(--line);box-shadow:0 18px 46px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.16) inset}
 
-/* nav floats over the city */
+/* ONE continuous city behind everything — it recedes but never goes black */
+.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('https://where2hang.ae/images/Hero-skyline.webp') center 30%/cover no-repeat}
+.skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;
+  background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
+.page{position:relative;z-index:2}
+
+/* THE COCKPIT MATERIAL — illuminated frosted glass with a teal edge-glow rim */
+.glass{position:relative;background:linear-gradient(180deg,rgba(30,46,50,.44),rgba(14,26,30,.5));
+  backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);
+  border:1px solid rgba(120,220,210,.28);border-radius:20px;
+  box-shadow:0 16px 42px rgba(0,0,0,.5), 0 0 22px rgba(0,194,168,.14), 0 1px 0 rgba(180,255,246,.28) inset, 0 0 0 1px rgba(0,0,0,.15)}
+.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(180,255,246,.10),transparent 42%)}
+
 .nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px}
-.brand{font-weight:800;font-size:20px;letter-spacing:-.4px;display:flex;align-items:center;gap:9px;text-shadow:0 2px 16px rgba(0,0,0,.6)}
-.brand img{height:26px}
-.brand i{color:var(--teal);font-style:normal}
-.online{display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:20px;font-size:12px;font-weight:600}
+.brand{font-weight:800;font-size:20px;letter-spacing:-.4px;display:flex;align-items:center;gap:9px;text-shadow:0 2px 16px rgba(0,0,0,.7)}
+.brand img{height:26px}.brand i{color:var(--teal);font-style:normal}
+.online{display:flex;align-items:center;gap:7px;padding:8px 13px;font-size:12px;font-weight:600;border-radius:20px}
 .online .d{width:7px;height:7px;border-radius:50%;background:#3ce9a4;box-shadow:0 0 8px #3ce9a4;animation:bl 2.2s infinite}
 @keyframes bl{50%{opacity:.4}}
 
-/* LIVING CITY hero — bleeds, no card */
-.hero{position:relative;padding:6px 18px 0;min-height:96vh}
-.greeting{font-weight:800;font-size:34px;line-height:1.04;letter-spacing:-1.1px;text-shadow:0 4px 30px rgba(0,0,0,.6);margin-top:4px}
+/* LIVING CITY hero */
+.hero{position:relative;padding:2px 18px 0;min-height:90vh}
+.greeting{font-weight:800;font-size:29px;line-height:1.04;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.65);margin-top:2px}
 .greeting span{color:var(--teal2)}
-.search{display:flex;align-items:center;gap:12px;margin-top:20px;padding:15px 16px;border-radius:18px}
+.search{display:flex;align-items:center;gap:12px;margin-top:14px;padding:14px 16px;border-radius:22px}
 .search .ic{color:var(--gold);flex:0 0 auto}
-.search .q{flex:1;color:#c6d3d1;font-size:15px;font-weight:500}
-.search .go{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.4)}
-.wasta{display:inline-flex;align-items:center;gap:10px;margin-top:11px;padding:9px 14px;border-radius:20px;font-size:13.5px;font-weight:600}
+.search .q{flex:1;color:#d3dedc;font-size:15px;font-weight:500}
+.search .go{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 8px 22px rgba(0,194,168,.45)}
+.wasta{display:inline-flex;align-items:center;gap:10px;margin-top:11px;padding:9px 15px;border-radius:22px;font-size:13.5px;font-weight:600}
 .wasta .o{width:8px;height:8px;border-radius:50%;background:var(--teal2);box-shadow:0 0 10px var(--teal2)}
-.stage{position:relative;height:52vh;margin:8px -18px 0}
+.stage{position:relative;height:40vh;margin:4px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
-.cap{position:absolute;left:0;right:0;bottom:6px;z-index:3;text-align:center;pointer-events:none}
+.cap{position:absolute;left:0;right:0;bottom:2px;z-index:3;text-align:center;pointer-events:none}
 .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:4px}
-.cap h3{font-size:21px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.8)}
-.cap p{font-size:12.5px;color:#c3d0ce;margin-top:2px}
-.scrollcue{text-align:center;color:var(--sub);font-size:11.5px;letter-spacing:1px;padding:6px 0 2px;opacity:.8}
-.scrollcue span{display:block;margin-top:4px;animation:bob 1.8s ease-in-out infinite}
+.cap h3{font-size:21px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.85)}
+.cap p{font-size:12.5px;color:#c9d5d3;margin-top:2px}
+.scrollcue{text-align:center;color:var(--sub);font-size:11px;letter-spacing:1px;padding:4px 0 2px;opacity:.85}
+.scrollcue span{display:block;margin-top:3px;animation:bob 1.8s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(4px)}}
 
-/* GLASS COCKPIT — everything below */
-.cockpit{position:relative;padding:8px 18px 120px}
-.lens{display:flex;gap:5px;margin-top:8px;padding:6px;border-radius:16px;position:relative}
-.lens button{flex:1;border:0;background:transparent;color:var(--sub);font:600 13px Inter;padding:11px 4px;border-radius:12px;position:relative;z-index:2;transition:color .35s var(--ease)}
-.lens button.on{color:#04120f}
-.glider{position:absolute;top:6px;left:6px;height:calc(100% - 12px);border-radius:12px;z-index:1;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 6px 18px rgba(0,194,168,.35);transition:transform .45s var(--ease),width .45s var(--ease)}
-.acts{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:14px}
-.act{display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:16px}
-.act .i{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.12);border:1px solid var(--line);color:var(--teal2)}
-.act.g .i{background:rgba(232,181,71,.12);color:var(--gold)}
+/* GLASS COCKPIT body — same material, calmer motion */
+.body{position:relative;padding:6px 18px 130px}
+.lens{display:flex;gap:8px;margin-top:8px}
+.lensbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:16px 6px;border-radius:20px;font-size:12.5px;font-weight:700;color:var(--sub);transition:.3s var(--ease)}
+.lensbtn svg{color:var(--teal2)}
+.lensbtn.on{color:var(--text);border-color:rgba(120,220,210,.55);box-shadow:0 16px 42px rgba(0,0,0,.5),0 0 26px rgba(0,194,168,.28),0 1px 0 rgba(180,255,246,.4) inset}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.act{display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:18px}
+.act .i{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.14);border:1px solid rgba(120,220,210,.3);color:var(--teal2)}
+.act.g .i{background:rgba(232,181,71,.14);color:var(--gold)}
 .act b{font-size:14px}.act small{display:block;color:var(--sub);font-size:11px}
-.sec{display:flex;align-items:baseline;justify-content:space-between;margin:26px 2px 12px}
-.sec h4{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#d6e2e0}
+.sec{display:flex;align-items:baseline;justify-content:space-between;margin:28px 4px 12px}
+.sec h4{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#dbe7e5;text-shadow:0 2px 12px rgba(0,0,0,.6)}
 .sec .va{color:var(--teal2);font-size:12px;font-weight:600}
+.rail{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -18px;padding:0 18px 6px;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+/* area/experience tiles: glass FRAME holding the photo, city glows around it */
+.tile{flex:0 0 172px;scroll-snap-align:start;padding:7px;border-radius:20px}
+.tile .ph{position:relative;height:118px;border-radius:14px;overflow:hidden}
+.tile .ph img{width:100%;height:100%;object-fit:cover}
+.tile .ph .sc{position:absolute;inset:0;background:linear-gradient(0deg,rgba(4,12,14,.7),transparent 55%)}
+.tile b{display:block;padding:9px 6px 4px;font-size:14.5px;font-weight:700}
+.tile small{display:block;padding:0 6px 4px;font-size:11px;color:var(--sub)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.tile{position:relative;height:120px;border-radius:16px;overflow:hidden}
-.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
-.tile .sc{position:absolute;inset:0;z-index:1;background:linear-gradient(0deg,rgba(4,10,12,.86),transparent 58%)}
-.tile b{position:absolute;left:13px;bottom:12px;z-index:2;font-size:15px;font-weight:700}
-.tile.glass{border:1px solid var(--line)}
-.edi{display:flex;align-items:center;gap:12px;margin-top:12px;padding:14px 15px;border-radius:15px}
-.edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.1);border:1px solid var(--line)}
+.rowcard{display:flex;align-items:center;gap:13px;padding:11px 13px;border-radius:16px}
+.rowcard .th{width:52px;height:52px;border-radius:12px;flex:0 0 auto;overflow:hidden;border:1px solid rgba(120,220,210,.25)}
+.rowcard .th img{width:100%;height:100%;object-fit:cover}
+.rowcard .info{flex:1;min-width:0}
+.rowcard h5{font-size:14.5px;font-weight:700}
+.rowcard .rec{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--gold);font-size:12px;font-weight:600}
+.rowcard .dist{color:var(--sub);font-size:11.5px;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:9px}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e2edeb}
+.chip .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal2);margin-right:8px;vertical-align:middle;box-shadow:0 0 7px var(--teal2)}
+.edi{display:flex;align-items:center;gap:12px;margin-top:14px;padding:14px 15px;border-radius:16px}
+.edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.12);border:1px solid rgba(120,220,210,.3)}
 .edi .t{flex:1;font-size:13.5px;font-weight:600}.edi .t span{color:var(--teal2)}
 .edi .c{color:var(--sub)}
-.navbar{position:fixed;left:12px;right:12px;bottom:32px;z-index:30;display:flex;justify-content:space-around;padding:12px 6px;border-radius:24px}
+.navbar{position:fixed;left:12px;right:12px;bottom:30px;z-index:30;display:flex;justify-content:space-around;padding:12px 6px;border-radius:26px}
 .navbar a{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--sub);font-size:10px;font-weight:600}
-.navbar a.on{color:var(--teal2)}.navbar a.on svg{filter:drop-shadow(0 0 8px rgba(0,194,168,.4))}
+.navbar a.on{color:var(--teal2)}.navbar a.on svg{filter:drop-shadow(0 0 8px rgba(0,194,168,.5))}
 .labflag{position:fixed;left:0;right:0;bottom:0;z-index:40;text-align:center;font-size:10.5px;letter-spacing:.4px;color:#0a0d0e;background:var(--gold);padding:5px;font-weight:700}
 .fb{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:30px;color:var(--sub);font-size:13px}
 </style>
 </head>
 <body>
 <div class="skybg"></div>
-<div class="scrim" id="scrim"></div>
+<div class="skydim" id="skydim"></div>
 
 <div class="page">
   <div class="nav">
@@ -102,7 +122,6 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
       <span class="go"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
     </div>
     <div class="wasta glass"><span class="o"></span>Chat with Wasta</div>
-
     <div class="stage"><canvas id="gl" aria-label="Tonight in Abu Dhabi"></canvas>
       <div class="cap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p></div>
       <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.</div>
@@ -110,30 +129,41 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     <div class="scrollcue">SCROLL INTO THE CITY<span>&darr;</span></div>
   </section>
 
-  <!-- GLASS COCKPIT -->
-  <section class="cockpit">
-    <div class="lens glass"><div class="glider" id="glider"></div>
-      <button class="on" data-i="0">Eat &amp; drink</button><button data-i="1">Activities</button><button data-i="2">Entertainment</button>
+  <!-- GLASS COCKPIT BODY -->
+  <section class="body">
+    <div class="lens">
+      <button class="lensbtn glass on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v8M8 3v8M6.5 11v10M16 3c-2 0-3 2-3 5s1 5 3 5v8"/></svg>Eat &amp; Drink</button>
+      <button class="lensbtn glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>Activities</button>
+      <button class="lensbtn glass"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8c3-3 5 3 8 0s5 3 8 0M4 15c3-3 5 3 8 0s5 3 8 0"/></svg>Entertainment</button>
     </div>
+
     <div class="acts">
       <div class="act glass"><span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><span><b>Find My Spot</b><small>Nearest to you</small></span></div>
       <div class="act g glass"><span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h4"/></svg></span><span><b>Plan a day</b><small>Multi-stop route</small></span></div>
     </div>
 
     <div class="sec"><h4>Explore by area</h4><span class="va">View all</span></div>
-    <div class="grid2">
-      <div class="tile glass"><img src="https://where2hang.ae/images/Area-corniche.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div><b>Corniche</b></div>
-      <div class="tile glass"><img src="https://where2hang.ae/images/Area-saadiyat.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div><b>Saadiyat Island</b></div>
-      <div class="tile glass"><img src="https://where2hang.ae/images/Area-yasmerina.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div><b>Yas Marina</b></div>
-      <div class="tile glass"><img src="https://where2hang.ae/images/Area-almaryah.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div><b>Al Maryah</b></div>
+    <div class="rail">
+      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-corniche.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Corniche</b><small>112 venues</small></div>
+      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-saadiyat.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Saadiyat Island</b><small>64 venues</small></div>
+      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-yasmerina.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Yas Marina</b><small>89 venues</small></div>
+      <div class="tile glass"><div class="ph"><img src="https://where2hang.ae/images/Area-almaryah.png" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""><div class="sc"></div></div><b>Al Maryah</b><small>41 venues</small></div>
     </div>
 
-    <div class="sec"><h4>Discover by experience</h4><span class="va">View all</span></div>
+    <div class="sec"><h4>On today</h4><span class="va">View all</span></div>
     <div class="grid2">
-      <div class="tile glass"><img src="https://where2hang.ae/images/Exp-brunch.webp" alt=""><div class="sc"></div><b>Brunch</b></div>
-      <div class="tile glass"><img src="https://where2hang.ae/images/Exp-livemusic.webp" alt=""><div class="sc"></div><b>Live Music</b></div>
-      <div class="tile glass"><img src="https://where2hang.ae/images/Exp-beachday.webp" alt=""><div class="sc"></div><b>Beach Day</b></div>
-      <div class="tile glass"><img src="https://where2hang.ae/images/Exp-datenight.webp" alt=""><div class="sc"></div><b>Date Night</b></div>
+      <div class="rowcard glass"><div class="th"><img src="https://where2hang.ae/images/Venue-mcgettigans.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><h5>The Brewhouse</h5><div class="rec">&#8635; Live Sport · Daily</div></div><span class="dist">1.2 km</span></div>
+      <div class="rowcard glass"><div class="th"><img src="https://where2hang.ae/images/Venue-coya.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><h5>Marco's Italian</h5><div class="rec">&#8635; Business Lunch</div></div><span class="dist">2.1 km</span></div>
+    </div>
+
+    <div class="sec"><h4>By experience</h4></div>
+    <div class="chips">
+      <span class="chip glass"><span class="d"></span>Brunch</span>
+      <span class="chip glass"><span class="d"></span>Live Music</span>
+      <span class="chip glass"><span class="d"></span>Beach Day</span>
+      <span class="chip glass"><span class="d"></span>Date Night</span>
+      <span class="chip glass"><span class="d"></span>Padel</span>
+      <span class="chip glass"><span class="d"></span>Sunset Spots</span>
     </div>
 
     <div class="edi glass"><span class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6"/></svg></span><span class="t"><span>Grazia Middle East</span> · All the fashion news…</span><span class="c">&rsaquo;</span></div>
@@ -147,20 +177,17 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/></svg>Map</a>
   <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</a>
 </nav>
-<div class="labflag">LAB PROOF · one-experience test · Living City &rarr; Glass Cockpit</div>
+<div class="labflag">LAB PROOF · Living City &rarr; Glass Cockpit · one continuous city</div>
 
 <script>
-  // lens glider + city dims as you scroll into the cockpit
-  const lens=document.querySelector('.lens'),glider=document.getElementById('glider');
-  function move(b){[...lens.querySelectorAll('button')].forEach(x=>x.classList.remove('on'));b.classList.add('on');glider.style.width=b.offsetWidth+'px';glider.style.transform='translateX('+(b.offsetLeft-6)+'px)';}
-  lens.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>move(b)));
-  window.addEventListener('load',()=>requestAnimationFrame(()=>move(lens.querySelector('button.on'))));
-  const scrim=document.getElementById('scrim');
-  function onScroll(){const h=window.innerHeight;scrim.style.opacity=Math.min(.88,Math.max(0,(window.scrollY-h*0.35)/(h*0.6)));}
+  const lensBtns=document.querySelectorAll('.lensbtn');
+  lensBtns.forEach(b=>b.addEventListener('click',()=>{lensBtns.forEach(x=>x.classList.remove('on'));b.classList.add('on');}));
+  const skydim=document.getElementById('skydim');
+  function onScroll(){const h=window.innerHeight;skydim.style.opacity=Math.min(1,Math.max(0,(window.scrollY-h*0.4)/(h*0.7)));}
   window.addEventListener('scroll',onScroll,{passive:true});onScroll();
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=2';
+  import { mountCityHero } from './city-hero.js?v=4';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
   const V=[
