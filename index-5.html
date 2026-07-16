@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<!-- PASTE TARGET: where2hang-hero-lab/index.html
+     Where2Hang — city hero LAB. Standalone sandbox, isolated from the app.
+     GitHub Pages serves this. Loads three from a CDN (importmap), then mounts the
+     SAME city-hero.js leaf the app uses. Real skyline via CSS; venue cards fall back
+     to drawn placeholders here (cross-origin) — in the app they are real photos.
+     British spelling, no emojis. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Where2Hang — city hero lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+  html,body{background:#03060a;color:#F4F7F9;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+  .tip{font-size:12px;color:#8A9997;text-align:center;margin-bottom:12px;max-width:460px}
+  .tip b{color:#3DE9CD;font-weight:600}
+  .hero{position:relative;width:100%;max-width:460px;height:min(72vh,620px);border-radius:20px;overflow:hidden;
+    border:1px solid #232B32;background:#06202b;
+    background-image:url('https://where2hang.ae/images/Hero-skyline.webp');background-size:cover;background-position:center 36%}
+  .tint{position:absolute;inset:0;z-index:1;opacity:.5;pointer-events:none;transition:background 1.6s ease}
+  #gl{position:absolute;inset:0;z-index:2;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+  .cap{position:absolute;left:0;right:0;bottom:0;z-index:3;text-align:center;padding:16px 20px 18px;
+    background:linear-gradient(0deg,rgba(6,12,15,.92),transparent);pointer-events:none}
+  .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#1DE9C6;margin-bottom:5px}
+  .cap h3{font-size:20px;font-weight:800;letter-spacing:-.3px;text-shadow:0 3px 18px rgba(0,0,0,.7)}
+  .cap p{font-size:12.5px;color:#c3d0ce;margin-top:3px}
+  .devhandle{position:absolute;top:10px;right:10px;z-index:5;width:24px;height:24px;border-radius:50%;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);display:grid;place-items:center;color:#5a6a68;font-size:13px;cursor:pointer}
+  #dev{display:none;position:absolute;left:10px;right:10px;bottom:10px;z-index:6;padding:12px;border-radius:14px;
+    background:rgba(10,14,16,.94);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12)}
+  #dev.show{display:block}
+  #dev .hd{font-size:10px;font-weight:700;letter-spacing:1.4px;color:#5FA79C;text-transform:uppercase;margin-bottom:8px}
+  #dev .r{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+  #dev button{font:600 11px Inter;color:#9FB0AE;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);padding:6px 10px;border-radius:8px;cursor:pointer}
+  #dev button.on{color:#04120f;background:#3DE9CD;border-color:transparent}
+  #dev label{font-size:10px;color:#8A9997;display:block;margin:2px 0 4px}
+  #dev input[type=range]{width:100%}
+  .fb{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:30px;color:#9FB0AE;font-size:13px;z-index:9}
+</style>
+</head>
+<body>
+  <div class="tip">the leaf that ships in the app — <b>drag</b> to spin, <b>tap</b> a card to open · dot (top-right) = dev</div>
+  <div class="hero">
+    <div class="tint" id="tint" aria-hidden></div>
+    <canvas id="gl" aria-label="Popular in Abu Dhabi"></canvas>
+    <div class="devhandle" id="devhandle">&#8943;</div>
+    <div class="cap">
+      <div class="eb" id="eb">Popular in Abu Dhabi</div>
+      <h3 id="nm">Iris</h3>
+      <p id="sb">Eat &amp; Drink · Yas Bay</p>
+    </div>
+    <div id="dev">
+      <div class="hd">Dev — not in the app UI</div>
+      <label>Time of day (app: real clock)</label>
+      <div class="r" id="todRow"></div>
+      <label>Busyness (app: live venue data) — <span id="bval">auto</span></label>
+      <input type="range" id="bslider" min="0" max="100" value="70">
+    </div>
+    <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.<br>Check the network and refresh.</div>
+  </div>
+
+<script type="module">
+  import { mountCityHero } from './city-hero.js';
+  import { getCityState } from './city-state.js';
+
+  // curated venues — same set as the app POOL. Cross-origin photos fall back to drawn
+  // cards here; drop the webps into an ./images folder + use relative paths for real photos.
+  const BASE = 'https://where2hang.ae/images/';
+  const V = [
+    { name:"Iris",               sub:"Eat & Drink · Yas Bay",        img:BASE+"Venue-iris.webp",            fallback:BASE+"Hero-skyline.webp", href:"https://where2hang.ae/venue/1",     anchor:true },
+    { name:"McGettigan's",       sub:"Eat & Drink · Yas Marina",     img:BASE+"Venue-mcgettigans.webp",     fallback:BASE+"Hero-skyline.webp", href:"https://where2hang.ae/venue/5",     anchor:true },
+    { name:"Hudayriyat Beach",   sub:"Activities · Hudayriyat",      img:BASE+"Venue-hudayriyatbeach.webp", fallback:BASE+"Hero_activity.webp", href:"https://where2hang.ae/venue/13368", anchor:true },
+    { name:"SeaWorld Abu Dhabi", sub:"Entertainment · Yas Island",   img:BASE+"Venue-seaworld.webp",        fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/15148", anchor:true },
+    { name:"Coya",               sub:"Eat & Drink · Al Maryah",      img:BASE+"Venue-coya.webp",            fallback:BASE+"Hero-skyline.webp", href:"https://where2hang.ae/venue/19" },
+    { name:"Louvre Abu Dhabi",   sub:"Entertainment · Saadiyat",     img:BASE+"Venue-louvre.webp",          fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/15210" },
+    { name:"Ferrari World",      sub:"Entertainment · Yas Island",   img:BASE+"Venue-ferrariworld.webp",    fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/14971" },
+    { name:"VOX Cinemas",        sub:"Entertainment · Yas Mall",     img:BASE+"Venue-voxyasmall.webp",      fallback:BASE+"Hero-ent.webp",     href:"https://where2hang.ae/venue/14909" },
+  ];
+
+  const TINT = {
+    dawn:   "linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)",
+    day:    "linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)",
+    sunset: "linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)",
+    night:  "linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)",
+  };
+
+  const eb = document.getElementById('eb'), nm = document.getElementById('nm'), sb = document.getElementById('sb');
+  const tintEl = document.getElementById('tint');
+  let override = null; // {tod, busyness, hotIndex}
+  const state = () => override || getCityState(V.length);
+  function applyTint(){ tintEl.style.background = TINT[state().tod] || TINT.night; }
+  applyTint();
+
+  try {
+    mountCityHero(document.getElementById('gl'), {
+      venues: V,
+      getState: state,
+      onFront: (_i, v) => { eb.textContent = v.anchor ? "Trending tonight" : "Popular in Abu Dhabi"; nm.textContent = v.name; sb.textContent = v.sub; },
+      onSelect: (_i, v) => { if (v.href) window.location.href = v.href; },
+    });
+  } catch (e) { document.getElementById('fb').style.display = 'grid'; console.error(e); }
+
+  // dev panel (lab only)
+  const dev = document.getElementById('dev');
+  document.getElementById('devhandle').addEventListener('click', () => dev.classList.toggle('show'));
+  if (/[?&]dev=1/.test(location.search)) dev.classList.add('show');
+  const tods = [["dawn","Dawn"],["day","Day"],["sunset","Sunset"],["night","Night"]];
+  const todRow = document.getElementById('todRow');
+  function ensure(){ if(!override){ const s=getCityState(V.length); override={tod:s.tod,busyness:s.busyness,hotIndex:s.hotIndex}; } }
+  tods.forEach(([v,l]) => { const b=document.createElement('button'); b.textContent=l; b.onclick=()=>{ ensure(); override.tod=v; [...todRow.children].forEach(x=>x.classList.toggle('on',x.textContent===l)); applyTint(); }; todRow.appendChild(b); });
+  const bs = document.getElementById('bslider');
+  bs.oninput = () => { ensure(); override.busyness = bs.value/100; override.hotIndex = override.busyness>0.62?0:-1; document.getElementById('bval').textContent=(bs.value/100).toFixed(2); };
+</script>
+</body>
+</html>
