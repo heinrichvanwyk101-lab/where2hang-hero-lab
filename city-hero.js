@@ -89,24 +89,25 @@ export function mountCityHero(canvas, opts) {
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(.26, .26), new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(180,220,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
   plane.userData = { active: false, p: 0, y0: 0, dir: 1 }; ambient.add(plane);
 
-  // car-light streaks travelling along the waterfront band (a few at a time, subtle)
-  const WATER_Y = -1.15;
+  // car-light streaks travelling along the waterfront band (frequent, subtle)
+  const WATER_Y = -1.05;
   const cars = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 8; i++) {
     const warm = Math.random() > .5;
-    const cc = new THREE.Mesh(new THREE.PlaneGeometry(.34, .09),
-      new THREE.MeshBasicMaterial({ map: radialTex(warm ? "rgba(255,214,150,.95)" : "rgba(235,245,255,.95)", "rgba(255,200,120,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    cc.position.set(0, WATER_Y, -6.2); cc.userData = { active: false, x: 0, dir: 1, sp: 0 }; ambient.add(cc); cars.push(cc);
+    const cc = new THREE.Mesh(new THREE.PlaneGeometry(.4, .1),
+      new THREE.MeshBasicMaterial({ map: radialTex(warm ? "rgba(255,210,140,1)" : "rgba(220,240,255,1)", "rgba(255,200,120,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    cc.position.set(0, WATER_Y, -4.6); cc.userData = { active: false, x: 0, dir: 1, sp: 0, warm }; ambient.add(cc); cars.push(cc);
   }
-  // a couple of traffic-signal blips along the shore — cycle green -> orange -> red on staggered timers
-  const SIG = [{ x: -3.4 }, { x: 2.9 }];
-  const SIG_COL = [[0.2, 0.95, 0.5], [0.98, 0.68, 0.2], [1.0, 0.28, 0.28]];   // green, orange, red
-  const SIG_HOLD = [4.2, 1.3, 3.6];                                            // seconds per phase
-  const signals = SIG.map((s, i) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16),
-      new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(255,255,255,0)"), transparent: true, opacity: .0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    m.position.set(s.x, WATER_Y + 0.12, -6.1); m.userData = { phase: i % 3, tPhase: Math.random() * 3 };
-    ambient.add(m); return m;
+  // traffic signals along the shore — each cycles independently so they NEVER match
+  const SIG_COL = { g: [0.25, 0.95, 0.5], o: [0.98, 0.66, 0.18], r: [1.0, 0.3, 0.3] };
+  const signals = [
+    { x: -3.9, y: WATER_Y + 0.28, seq: ["g", "o", "r"], hold: [3.4, 1.1, 3.0], phase: 0, tP: 0.0 },
+    { x: -0.2, y: WATER_Y + 0.34, seq: ["r", "g", "o"], hold: [2.6, 3.8, 1.2], phase: 1, tP: 1.4 },
+    { x: 3.6,  y: WATER_Y + 0.26, seq: ["o", "r", "g"], hold: [1.3, 2.9, 3.6], phase: 2, tP: 0.7 },
+  ].map((s) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(.2, .2),
+      new THREE.MeshBasicMaterial({ map: radialTex("rgba(255,255,255,1)", "rgba(255,255,255,0)"), transparent: true, opacity: .85, depthWrite: false, blending: THREE.AdditiveBlending }));
+    m.position.set(s.x, s.y, -4.5); m.userData = s; ambient.add(m); return m;
   });
 
   // window overlay (inner shadow + frame lip + top light-catch) and a soft cast shadow — drawn once, shared
@@ -199,7 +200,7 @@ export function mountCityHero(canvas, opts) {
     raf = requestAnimationFrame(frame); if (!running) return;
     const t = (performance.now() - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
     const dt = Math.min(0.05, t - lastT); lastT = t;
-    if (Math.random() < 0.004 + busy * 0.01) { const cc = cars.find((x) => !x.userData.active); if (cc) { cc.userData.active = true; cc.userData.dir = Math.random() > .5 ? 1 : -1; cc.userData.x = cc.userData.dir > 0 ? -9 : 9; cc.userData.sp = 0.02 + Math.random() * 0.02; } }
+    if (Math.random() < 0.05 + busy * 0.06) { const cc = cars.find((x) => !x.userData.active); if (cc) { cc.userData.active = true; cc.userData.dir = Math.random() > .5 ? 1 : -1; cc.userData.x = cc.userData.dir > 0 ? -8 : 8; cc.userData.sp = 0.022 + Math.random() * 0.026; } }
     if (nextEvent === 0) nextEvent = t + 18 + Math.random() * 14;
     if (t > nextEvent) { fire(); nextEvent = t + (18 + (1 - busy) * 6) + Math.random() * 8; }
 
@@ -241,16 +242,16 @@ export function mountCityHero(canvas, opts) {
     // subtle cinematic camera drift (the camera moves, the venue does not spin)
     camera.position.set(bx + Math.sin(t * 0.16) * 0.55, by + Math.sin(t * 0.22) * 0.18, bz + Math.cos(t * 0.16) * 0.22);
     camera.lookAt(0, CHALF + FLOAT * 0.5, 0);
-    // keep the stars/plane/boat pinned to the static skyline, not sliding with the drift
-    ambient.position.set(camera.position.x - bx, camera.position.y - by, 0);
+    // keep stars/plane/boat/cars/signals pinned to the static skyline (cancel the full drift, incl. z)
+    ambient.position.set(camera.position.x - bx, camera.position.y - by, camera.position.z - bz);
 
     if (boat.userData.active) { boat.userData.x += boat.userData.sp * boat.userData.dir; boat.position.x = boat.userData.x; const e = 1 - Math.min(1, (9 - Math.abs(boat.userData.x)) / 2); boat.material.opacity = 0.45 * (1 - e); boat.position.y = -1.5 + Math.sin(t * 1.1 + boat.position.x) * 0.04; if (Math.abs(boat.userData.x) > 9) { boat.userData.active = false; boat.material.opacity = 0; } }
     if (plane.userData.active) { plane.userData.p += 0.0016; const p = plane.userData.p; plane.position.x = (-8 + p * 16) * plane.userData.dir; plane.position.y = plane.userData.y0 + Math.sin(p * Math.PI) * 1.1; plane.material.opacity = Math.max(0, Math.sin(p * Math.PI)) * (0.5 + 0.5 * Math.sin(t * 8)) * 0.9; if (p >= 1) { plane.userData.active = false; plane.material.opacity = 0; } }
 
     // car-light streaks along the waterfront
-    cars.forEach((cc) => { if (cc.userData.active) { cc.userData.x += cc.userData.sp * cc.userData.dir; cc.position.x = cc.userData.x; const edge = Math.min(1, (9 - Math.abs(cc.userData.x)) / 2.5); cc.material.opacity = 0.5 * Math.max(0, edge); if (Math.abs(cc.userData.x) > 9) { cc.userData.active = false; cc.material.opacity = 0; } } });
-    // traffic signals: green -> orange -> red on staggered timers
-    signals.forEach((m) => { m.userData.tPhase += dt; if (m.userData.tPhase > SIG_HOLD[m.userData.phase]) { m.userData.tPhase = 0; m.userData.phase = (m.userData.phase + 1) % 3; } const col = SIG_COL[m.userData.phase]; m.material.color.setRGB(col[0], col[1], col[2]); m.material.opacity = 0.5 + 0.1 * Math.sin(t * 3); });
+    cars.forEach((cc) => { if (cc.userData.active) { cc.userData.x += cc.userData.sp * cc.userData.dir; cc.position.x = cc.userData.x; const edge = Math.min(1, (8 - Math.abs(cc.userData.x)) / 2.2); cc.material.opacity = 0.85 * Math.max(0, edge); if (Math.abs(cc.userData.x) > 8) { cc.userData.active = false; cc.material.opacity = 0; } } });
+    // traffic signals: each on its own sequence + timing, so they never sync
+    signals.forEach((m) => { const u = m.userData; u.tP += dt; if (u.tP > u.hold[u.phase]) { u.tP = 0; u.phase = (u.phase + 1) % 3; } const col = SIG_COL[u.seq[u.phase]]; m.material.color.setRGB(col[0], col[1], col[2]); m.material.opacity = 0.8 + 0.12 * Math.sin(t * 4 + u.x); });
 
     if (idx !== lastIdx) { lastIdx = idx; onFront(idx, venues[idx]); }
     renderer.render(scene, camera);
