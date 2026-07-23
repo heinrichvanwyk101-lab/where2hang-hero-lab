@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v13. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v14. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,19 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v14 — THE PANORAMA MODEL. The reference is a phone panorama viewer: turn the handset and
+     sweep across the scene. That gesture is YAW, and neither gravity nor deviceorientation
+     gamma can see yaw — rotating about the gravity vector leaves gravity unchanged by
+     definition. Several rounds of range, gain, damping and curve tuning were spent on an
+     input that was physically incapable of responding to the movement being made.
+     tilt.js now integrates the GYROSCOPE, which measures yaw directly. Consequences here:
+       · Look-around covers the FULL width of the file again, as a panorama does. This
+         supersedes the 40px ambient drift from v12 — that was the right answer for a
+         gravity-roll input and the wrong one for a panorama.
+       · The response is direct rather than spring-lagged. A panorama does not trail behind
+         your hand; only light smoothing remains.
+       · Drag still works and still reaches the ends, for when a wrist turn is not wanted.
+
      v13 — crispness and the dim:
        1. NOTHING WAS BLURRING THE CITY. The plates are 724px tall and were being displayed
           at about 2189 device pixels on a DPR-3 Fold — a 3x upscale. There were simply not
@@ -584,8 +597,8 @@ function bgDown(e){ if(e.target.closest('.panewrap,.featured,.askrow'))return;
   if(scrollP > PRESENT){ recall(); return; }
   pdown=true; psx=e.clientX; psy=e.clientY; pbx=panX; pby=panY;
   if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);} }
-function bgMove(e){ if(!pdown)return; const r=skyRoom();
-  panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*2.4));
+function bgMove(e){ if(!pdown)return; const r=skyRoom(); const dragMax=r.x*0.55;
+  panX=Math.max(-dragMax,Math.min(dragMax, pbx+(e.clientX-psx)*2.4));
   panY=Math.max(-r.down,Math.min(r.up, pby+(e.clientY-psy)*0.5)); }
 function bgUp(){ pdown=false; }
 stage.addEventListener('pointerdown',bgDown);
@@ -646,8 +659,8 @@ function loop(){
   // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
   // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
   // Tilt moves your head; the drag moves your feet.
-  const aimX = T.x*42;                       // ambient window drift, not navigation
-  const aimY = T.y*11;                       // vertical stays a quarter of horizontal
+  const aimX = T.x*room.x*0.98;              // a turn of the wrist sweeps the whole file
+  const aimY = T.y*room.up*0.85;             // nodding still does less than turning
   curPanX += ((panX+aimX) - curPanX)*0.075;
   curPanY += ((panY+aimY) - curPanY)*0.075;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
