@@ -13,6 +13,16 @@
 //   · Listener throttled to ~30Hz and detached whenever the hero is offscreen or hidden.
 //   · Returns {x,y} in [-1,1]; the consumer decides amplitude.
 //
+// TILT vs MOVEMENT — the honest limit.
+// A real window changes what you see when you MOVE your head, not when you rotate the pane.
+// Rotation is therefore the less correct cue, but it is the only one a phone can report
+// reliably: translation has to be double-integrated from the accelerometer and drifts metres
+// within a few seconds, so a pure movement mapping would wander off and never come back.
+// What we do instead: tilt provides the stable, absolute aim, and a short-lived IMPULSE from
+// actual acceleration is added on top and decays to nothing. Shift the phone sideways and the
+// city lurches and settles. It is not true parallax, but it is the part of true parallax a
+// person actually notices, and it cannot drift.
+//
 // API:  const t = mountTilt({ enabled: true });
 //       t.get();            -> { x, y }   smoothed, clamped
 //       t.setEnabled(bool);              // wire to IntersectionObserver on the hero
@@ -36,6 +46,28 @@ export function mountTilt(opts = {}) {
   let enabled = opts.enabled !== false && !REDUCE;
   let last = 0, alive = true, raf = 0;
 
+  // --- movement impulse (high-passed acceleration, decaying) ---
+  const IMPULSE = opts.impulse ?? 0.34;   // how much of full deflection a shove can borrow
+  let gx = 0, gy = 0, vx = 0, vy = 0, ix = 0, iy = 0, mlast = 0;
+  function onMotion(e) {
+    if (!enabled || !alive) return;
+    const now = performance.now();
+    if (now - mlast < HZ) return;
+    mlast = now;
+    let a = e.acceleration;
+    if (!a || (a.x == null && a.y == null)) {
+      // most Android devices only report acceleration WITH gravity. Subtract a slow running
+      // mean to high-pass it — what is left is the movement, not the orientation.
+      const g = e.accelerationIncludingGravity; if (!g) return;
+      gx = gx * 0.96 + (g.x || 0) * 0.04; gy = gy * 0.96 + (g.y || 0) * 0.04;
+      a = { x: (g.x || 0) - gx, y: (g.y || 0) - gy };
+    }
+    vx = vx * 0.86 + (a.x || 0) * 0.030;
+    vy = vy * 0.86 + (a.y || 0) * 0.030;
+    ix = clamp(ix * 0.90 + vx);
+    iy = clamp(iy * 0.90 - vy);
+  }
+
   const clamp = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 
   function onOrient(e) {
@@ -55,13 +87,21 @@ export function mountTilt(opts = {}) {
   function tick(now) {
     if (!alive) { raf = 0; return; }
     raf = requestAnimationFrame(tick);
-    if (!enabled) { cx += (0 - cx) * STIFF; cy += (0 - cy) * STIFF; return; }  // ease back to centre when off
+    if (!enabled) { cx += (0 - cx) * STIFF; cy += (0 - cy) * STIFF; ix *= 0.9; iy *= 0.9; return; }
     cx += (tx - cx) * STIFF;
     cy += (ty - cy) * STIFF;
+    ix *= 0.965; iy *= 0.965;   // the impulse always returns to nothing — this is what stops drift
   }
 
-  function attach() { window.addEventListener("deviceorientation", onOrient, { passive: true }); }
-  function detach() { window.removeEventListener("deviceorientation", onOrient); }
+  function attach() {
+    window.addEventListener("deviceorientation", onOrient, { passive: true });
+    if (IMPULSE > 0) window.addEventListener("devicemotion", onMotion, { passive: true });
+  }
+  function detach() {
+    window.removeEventListener("deviceorientation", onOrient);
+    window.removeEventListener("devicemotion", onMotion);
+    vx = vy = ix = iy = 0;
+  }
 
   const onVis = () => { if (document.hidden) detach(); else if (enabled) attach(); };
   document.addEventListener("visibilitychange", onVis);
@@ -81,7 +121,7 @@ export function mountTilt(opts = {}) {
   raf = requestAnimationFrame(tick);
 
   return {
-    get() { return { x: cx, y: cy }; },
+    get() { return { x: clamp(cx + ix * IMPULSE), y: clamp(cy + iy * IMPULSE) }; },
     setEnabled(v) { enabled = !!v && !REDUCE; if (enabled) attach(); else detach(); },
     recentre() { baseB = null; baseG = null; },
     request,
