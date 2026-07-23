@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v19. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v20. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,16 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v20 — ABSOLUTE AIM. The debug build showed yaw sitting at 15.5, 12.5, 10.5 and -14.9
+     against a range of 16: pinned at the rail, which is why the city stopped responding.
+     Integrating a gyroscope RATE gives an angle with no absolute reference — it accumulates
+     and jams against the clamp. tilt.js now reads absolute orientation and computes WHERE THE
+     PHONE IS AIMED from the rotation matrix, so returning the handset returns the view.
+     Roll drops out as a property of the geometry rather than as a filter.
+     (grav.y also read 1.00 on the Fold: Android reports accelerationIncludingGravity as the
+     reaction force, pointing up, where iOS reports it pointing down. That inverted the old
+     projection too. The new method does not use that signal at all.)
+
      v19 — ORIENTATION-CONTROLLED PANORAMIC VIEWPORT.
        Roll no longer drives horizontal movement. tilt.js now projects the angular velocity
        vector onto world vertical using gravity, so banking the handset contributes nothing
@@ -539,7 +549,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=19';
+import { mountTilt } from './tilt.js?v=20';
 import { tap } from './haptics.js?v=2';
 
 const B='https://where2hang.ae/images/';
@@ -766,13 +776,14 @@ function loop(){
   if(DEBUG && hud){
     const d = dbg || {};
     hud.textContent =
-      'rate.gamma  ' + (d.rate!=null ? d.rate.toFixed(1).padStart(7) : '   n/a') + ' deg/s\n' +
-      'yaw         ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '   n/a') + ' deg\n' +
-      'T.x         ' + T.x.toFixed(3).padStart(7) + '\n' +
-      'image dx    ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +
-      'SIGN_YAW    ' + (d.sign!=null ? String(d.sign).padStart(7) : '   n/a') + '\n' +
-      'grav.y      ' + (d.grav!=null ? d.grav.toFixed(2).padStart(7) : '   n/a') + '\n' +
-      '\nturn RIGHT: rate should be +\nand image dx should be -\nBANK the phone: rate ~ 0';
+      'heading   ' + (d.heading!=null ? d.heading.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
+      'elevation ' + (d.elev!=null ? d.elev.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
+      'yaw       ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '  n/a') + ' / 16\n' +
+      'pitch     ' + (d.pitch!=null ? d.pitch.toFixed(1).padStart(7) : '  n/a') + ' / 7\n' +
+      'T.x  T.y  ' + T.x.toFixed(2).padStart(6) + T.y.toFixed(2).padStart(6) + '\n' +
+      'image dx  ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +
+      'absolute  ' + (d.abs ? '    yes' : '     no') + '\n' +
+      '\nheading must RETURN to 0\nwhen you face the same way.\nBANK: heading must not move.';
   }
 
   /* light rakes across the glass as it turns */
