@@ -27,10 +27,17 @@
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const G = 9.81;
-  // full deflection at this much tilt. 14 and 11 degrees: intentional tilt reads, tremor does not.
-  const RANGE_X = G * Math.sin((opts.rangeX ?? 14) * Math.PI / 180);
-  const RANGE_Y = G * Math.sin((opts.rangeY ?? 11) * Math.PI / 180);
-  const STIFF = opts.stiffness ?? 0.070;
+  // Full deflection at this much tilt. Deliberately WIDE. The instinct is to shrink the range
+  // so small movements do more, but that is what made it twitchy: gain per degree goes up and
+  // tremor rides along with it. A wide range keeps gain per degree low — a gentle 5 degrees
+  // still only moves a fifth of the way — while a deliberate lean reaches the end of the file.
+  const RANGE_X = G * Math.sin((opts.rangeX ?? 16) * Math.PI / 180);
+  const RANGE_Y = G * Math.sin((opts.rangeY ?? 14) * Math.PI / 180);
+  const STIFF = opts.stiffness ?? 0.055;   // heavier: the skyline is kilometres away
+  // Response curve. Linear tracking is the giveaway that a phone is being followed. Raising
+  // the input to a power means small movements barely register and larger ones build, which
+  // is how something with mass behaves — it starts slowly and accelerates.
+  const CURVE = opts.curve ?? 1.35;
   const DEAD = opts.deadzone ?? 0.045;
   const IMPULSE = opts.impulse ?? 0.34;
   const HZ = 1000 / 30;
@@ -61,8 +68,11 @@ export function mountTilt(opts = {}) {
     tx = dead(clamp((gx - baseX) / RANGE_X));
     ty = dead(clamp((gy - baseY) / RANGE_Y));
 
-    // high pass -> movement. What is left once gravity is removed is the shove.
-    const ax = (g.x || 0) - gx, ay = (g.y || 0) - gy;
+    // high pass -> movement. What is left once gravity is removed is the shove. Anything below
+    // the threshold is sensor noise from a hand, not a movement, and must not reach the city.
+    let ax = (g.x || 0) - gx, ay = (g.y || 0) - gy;
+    if (Math.abs(ax) < 0.35) ax = 0;
+    if (Math.abs(ay) < 0.35) ay = 0;
     vx = vx * 0.86 + ax * 0.030;
     vy = vy * 0.86 + ay * 0.030;
     ix = clamp(ix * 0.90 + vx);
@@ -126,7 +136,10 @@ export function mountTilt(opts = {}) {
   raf = requestAnimationFrame(tick);
 
   return {
-    get() { return { x: clamp(cx + ix * IMPULSE), y: clamp(cy + iy * IMPULSE) }; },
+    get() {
+      const shape = (v) => Math.sign(v) * Math.pow(Math.abs(v), CURVE);
+      return { x: shape(clamp(cx + ix * IMPULSE)), y: shape(clamp(cy + iy * IMPULSE)) };
+    },
     setEnabled(v) { enabled = !!v && !REDUCE; if (enabled) attach(); else detach(); },
     recentre() { baseX = null; baseY = null; primed = false; },
     request,

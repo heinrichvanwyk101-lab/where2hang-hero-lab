@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v10. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v13. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,46 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v13 — crispness and the dim:
+       1. NOTHING WAS BLURRING THE CITY. The plates are 724px tall and were being displayed
+          at about 2189 device pixels on a DPR-3 Fold — a 3x upscale. There were simply not
+          enough pixels. Re-exported at 4344x1448 with sharpening, which brings the browser's
+          own upscale down to 1.5x. The proper fix is generating at native height; see the
+          note in the PANO section.
+       2. The grading was also flattening it. saturate .86 / contrast .88 / brightness .90
+          was tuned to push a plate BACK behind a hero that no longer exists in this fork.
+          Eased off, so the city reads as distant through atmosphere rather than through gauze.
+       3. The dim came down again — it was still winning against the city below the fold.
+
+     v12 — TILT AND DRAG ARE DIFFERENT GESTURES. This resolves a genuine contradiction in the
+     direction: "rotation must reach both ends of the file" and "the horizon should drift only
+     15-30px and the user must never know it is a panning image" cannot both hold. At 20px of
+     drift, 99% of a 2172px panorama is never seen and the wide plates were wasted.
+       TILT is the window. Ambient, heavy, about 40px at full lean, non-linear so it starts
+         slowly and builds. You never approach an edge and never think about panning.
+       DRAG is turning your head. Deliberate, full range, reaches the ends of the file.
+     Also, and this was the sharpest point in the feedback: THE GLASS WAS MOVING WITH THE CITY.
+     A pane held in your hand does not translate when you tilt the phone — it is in the phone.
+     Only the view through it changes. The pane no longer moves or rotates with tilt at all;
+     only the specular sheen shifts, because the light genuinely does move relative to it.
+     Vertical is now a quarter of horizontal: natural viewing is left and right, and vertical
+     drift makes the horizon feel unmoored.
+
+     v11 — tilt reaches the ends, and the city shows THROUGH the surfaces:
+       1. WHY TILT COULD NOT REACH THE ENDS. Two reasons. Its travel was capped at about 1.7
+          viewport widths while the file has well over two, and — the real one — drag and tilt
+          were ADDED and then clamped together, so once a drag had taken you near an edge the
+          tilt had nowhere left to go and simply died. Now a drag is limited to half the file
+          and tilt covers the whole of it, so rotation always has room and always reaches the
+          end from wherever you have dragged to.
+       2. The range went WIDER, not narrower — 28 degrees. Shrinking it was the instinct and
+          it was wrong: a small range raises gain per degree, which is precisely what drags
+          hand tremor into the picture. Wide range, low gain, deliberate lean reaches the end.
+       3. LIGHTENING THE FILLS DOES NOT REVEAL THE CITY — the dim was hiding it, not the
+          cards. So the dim comes down, the surfaces become genuinely translucent with the
+          city refracting through the larger ones, and text carries its own shadow for
+          legibility rather than relying on a blanket of darkness.
+
      v10 — pan range opened up, lower surfaces lifted:
        1. USE THE FILE. The panos have well over a thousand pixels of travel each side and
           tilt was only borrowing about 200 of them, which is why it felt limited however
@@ -162,7 +202,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
   background:var(--sheet,linear-gradient(180deg,#0a1a24 0%,#0b2029 30%,#07161d 58%,#05080b 100%));transition:background 1.1s var(--ease)}
 /* the city recedes as you descend instead of being covered over */
 .citydim{position:fixed;top:0;left:0;right:0;height:100vh;height:100lvh;z-index:1;pointer-events:none;opacity:0;
-  background:linear-gradient(180deg,rgba(4,9,12,.93) 0%,rgba(4,9,12,.96) 45%,rgba(4,9,12,.97) 100%)}
+  background:linear-gradient(180deg,rgba(4,9,12,.84) 0%,rgba(4,9,12,.89) 45%,rgba(4,9,12,.91) 100%)}
 
 /* --- BACKGROUND: two plates, crossfaded when the intention changes --- */
 /* THE CITY PLANE. Deliberately larger than the viewport in both axes so there is somewhere
@@ -170,7 +210,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
    portrait plate the horizontal range is small — that is the asset limitation, not a bug. */
 .sky{position:absolute;top:-25%;left:50%;height:82%;width:auto;max-width:none;
      -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 74%,transparent 99%);mask-image:linear-gradient(180deg,#000 0%,#000 74%,transparent 99%);
-     filter:saturate(.86) contrast(.88) brightness(.9);transition:opacity 1.1s var(--ease);
+     filter:saturate(.96) contrast(.97) brightness(.96);transition:opacity 1.1s var(--ease);
      will-change:transform;transform:translate3d(-50%,0,0)}
 #skyA{opacity:1}#skyB{opacity:0}
 .tint{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background:var(--tint);opacity:.34;mix-blend-mode:soft-light;transition:background 1.1s var(--ease);pointer-events:none}
@@ -251,7 +291,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
    the glass as you continue, and it is deliberately flatter than the stage.
    =========================================================================== */
 .reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.55) 0%,rgba(5,8,11,.12) 9%,rgba(5,8,11,0) 18%);padding:8px 18px 130px;margin-top:-12vh}
-.pull{text-align:center;padding:2px 0 18px;color:var(--sub);font-size:11px;letter-spacing:1.4px}
+.pull{text-align:center;padding:2px 0 18px;color:var(--sub);font-size:11px;letter-spacing:1.4px;text-shadow:0 2px 10px rgba(0,0,0,.8)}
 /* richness builds on the way down — modules arrive as they are reached, never all at once */
 @media (prefers-reduced-motion: no-preference){
   @supports (animation-timeline: view()){
@@ -269,16 +309,16 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 
 .lens{display:flex;gap:8px;margin-top:12px}
 .lensbtn{flex:1;padding:10px 6px;border-radius:13px;font-size:12px;font-weight:700;color:var(--sub);
-  background:rgba(32,44,50,.66);border:1px solid rgba(120,220,210,.24);transition:.28s var(--ease)}
+  background:rgba(30,44,50,.34);backdrop-filter:blur(9px) saturate(1.25);-webkit-backdrop-filter:blur(9px) saturate(1.25);border:1px solid rgba(120,220,210,.28);transition:.28s var(--ease)}
 .lensbtn.on{color:var(--text);border-color:rgba(120,220,210,.62);background:rgba(0,96,86,.40)}
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-.act2{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:13px;background:rgba(32,44,50,.62);border:1px solid rgba(120,220,210,.22)}
+.act2{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:13px;background:rgba(30,44,50,.32);backdrop-filter:blur(9px) saturate(1.25);-webkit-backdrop-filter:blur(9px) saturate(1.25);border:1px solid rgba(120,220,210,.26)}
 .act2 .i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.12);color:var(--teal2)}
 .act2.g .i{background:rgba(232,181,71,.13);color:var(--gold)}
 .act2 b{font-size:13.5px}.act2 small{display:block;color:var(--sub);font-size:10.5px}
 
 .sec{display:flex;align-items:baseline;justify-content:space-between;margin:30px 4px 12px}
-.sec h4{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#dbe7e5}
+.sec h4{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#e6f1ef;text-shadow:0 2px 12px rgba(0,0,0,.85)}
 .sec .va{color:var(--teal2);font-size:12px;font-weight:600}
 
 .arearail{position:relative;height:200px;margin:2px -18px 0}
@@ -295,21 +335,21 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .row .th{width:52px;height:52px;border-radius:12px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5)}
 .row .th img{width:100%;height:100%;object-fit:cover}
 .row .info{flex:1;min-width:0}
-.row .nm{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .nm{font-size:15px;font-weight:700;text-shadow:0 2px 10px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .tg{display:flex;align-items:center;gap:8px;margin-top:3px}
 .row .live{font-size:9.5px;font-weight:800;letter-spacing:.6px;color:#04120f;background:var(--teal2);padding:2px 6px;border-radius:5px}
-.row .rec{font-size:12px;color:var(--gold);font-weight:600}
-.row .dist{font-family:var(--mono);font-size:12px;color:var(--sub);flex:0 0 auto}
+.row .rec{font-size:12px;color:var(--gold);font-weight:600;text-shadow:0 2px 10px rgba(0,0,0,.8)}
+.row .dist{font-family:var(--mono);font-size:12px;color:var(--sub);flex:0 0 auto;text-shadow:0 2px 10px rgba(0,0,0,.8)}
 
 .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
-.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#eef7f5;background:rgba(34,46,52,.72);border:1px solid rgba(0,194,168,.36)}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#eef7f5;background:rgba(30,44,50,.42);border:1px solid rgba(0,194,168,.4);text-shadow:0 2px 8px rgba(0,0,0,.7)}
 .chip.on{background:linear-gradient(180deg,var(--teal2),var(--teal));color:#04120f;border-color:transparent}
 .edi{display:flex;align-items:center;gap:12px;margin-top:6px;padding:10px 2px}
 .edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.2);border:1px solid rgba(120,220,210,.4)}
-.edi .t{flex:1;font-size:13.5px;font-weight:600}.edi .t span{color:var(--teal2)}
+.edi .t{flex:1;font-size:13.5px;font-weight:600;text-shadow:0 2px 10px rgba(0,0,0,.8)}.edi .t span{color:var(--teal2)}
 .edi .c{color:var(--sub)}
 .cats{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px 16px}
-.cats a{font-size:13px;color:#c2d0ce;font-weight:500}
+.cats a{font-size:13px;color:#c8d6d4;font-weight:500;text-shadow:0 2px 10px rgba(0,0,0,.8)}
 
 /* navigation stays out of the way until the stage has done its job */
 .navbar{position:fixed;left:12px;right:12px;bottom:16px;z-index:30;display:flex;justify-content:space-around;padding:7px 6px;border-radius:20px;
@@ -429,6 +469,13 @@ const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
    moment, and it costs three CSS property writes.
    Temporary assets: the three existing tod plates, reused as moods.
 --------------------------------------------------------------------------- */
+/* PANO RESOLUTION — the ceiling on how crisp this can get.
+   The stage displays the plate at roughly 2189 device pixels tall on a DPR-3 Fold. The
+   originals were 724px, so the browser was upscaling 3x and the result looked blurred. They
+   are now 4344x1448 (2x Lanczos plus unsharp), which drops that to 1.5x. Upscaling cannot
+   invent detail, so for genuinely native sharpness the panos need REGENERATING at 6144x2048,
+   same 3:1 and same UI spec. Everything below works unchanged if they are replaced. */
+
 /* Each mood carries a wide pano and a portrait fallback. If a pano 404s the portrait loads
    in its place and only the horizontal range suffers — nothing breaks. */
 function plateFor(m, img){ img.onerror = () => { img.onerror=null; img.src = m.plate; }; return m.pano || m.plate; }
@@ -568,7 +615,7 @@ addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max
   const span=Math.max(1,document.documentElement.scrollHeight-h);
   pageP=Math.min(1,Math.max(0,scrollY/span));
   if(scrollY>h*0.30) navbar.classList.add('on'); else navbar.classList.remove('on');
-  citydim.style.opacity = Math.min(0.87, Math.max(0,(scrollY - h*0.15)/(h*0.70)));
+  citydim.style.opacity = Math.min(0.68, Math.max(0,(scrollY - h*0.15)/(h*0.70)));
   const moving = scrollY > h*0.06;
   hint.classList.toggle('gone', moving || touched);
   featured.classList.toggle('on', touched && !moving);
@@ -580,12 +627,12 @@ function loop(){
   curX += (dragX-curX)*0.12;
 
   /* the pane: drag rotates it, tilt nudges it, scroll pushes it back and down */
-  const ry = curX*17 + T.x*5.5;
-  const rx = -T.y*4.2 + scrollP*13;
+  const ry = curX*17;                        // drag turns the pane; tilt does not
+  const rx = scrollP*13;
   const tz = -scrollP*260;
   const ty = scrollP*70;
   const op = 1-scrollP*0.92;
-  panewrap.style.transform=`translate(-50%,-50%) translate3d(${curX*16+T.x*10}px,${ty}px,${tz}px) rotateY(${ry}deg) rotateX(${rx}deg)`;
+  panewrap.style.transform=`translate(-50%,-50%) translate3d(${curX*16}px,${ty}px,${tz}px) rotateY(${ry}deg) rotateX(${rx}deg)`;
   panewrap.style.opacity=op;
   panewrap.style.pointerEvents = scrollP>0.85 ? 'none' : 'auto';
   /* the sill is the stage's foreground. It must not survive into the reveal as a dark band
@@ -599,8 +646,8 @@ function loop(){
   // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
   // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
   // Tilt moves your head; the drag moves your feet.
-  const aimX = T.x*Math.min(room.x, stage.clientWidth*1.7);
-  const aimY = T.y*Math.min(room.up, stage.clientHeight*0.085);
+  const aimX = T.x*42;                       // ambient window drift, not navigation
+  const aimY = T.y*11;                       // vertical stays a quarter of horizontal
   curPanX += ((panX+aimX) - curPanX)*0.075;
   curPanY += ((panY+aimY) - curPanY)*0.075;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
@@ -609,7 +656,7 @@ function loop(){
   skyA.style.transform=tf; skyB.style.transform=tf;
 
   /* light rakes across the glass as it turns */
-  pane.style.setProperty('--sheen', (curX*46 + T.x*30) + '%');
+  pane.style.setProperty('--sheen', (curX*46 + T.x*34) + '%');
 }
 if(!REDUCE) loop();
 
