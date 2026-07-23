@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v18. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v19. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,17 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v19 — ORIENTATION-CONTROLLED PANORAMIC VIEWPORT.
+       Roll no longer drives horizontal movement. tilt.js now projects the angular velocity
+       vector onto world vertical using gravity, so banking the handset contributes nothing
+       and only a genuine body turn pans the city. See the note at the top of that file.
+       Travel is now restrained and named at the top of this script rather than derived from
+       the file width: LOOK_X_PX and LOOK_Y_PX. Horizontal is generous, vertical deliberately
+       about a quarter of it, because a floating horizon is what makes these feel unmoored.
+       Direction is stated positively: turn RIGHT, reveal the RIGHT of the panorama, which
+       means the image itself travels LEFT.
+       Drag is unchanged and still reaches the ends of the file for deliberate exploration.
+
      v18 — stop guessing about direction.
        CACHE: tilt.js was imported as ?v=1 through every rewrite of that file. GitHub Pages
        serves assets with a ten-minute cache, so some tests may have run against an older
@@ -528,7 +539,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=18';
+import { mountTilt } from './tilt.js?v=19';
 import { tap } from './haptics.js?v=2';
 
 const B='https://where2hang.ae/images/';
@@ -577,6 +588,15 @@ const skyA=imgsA[1], skyB=imgsB[1];                 // the skyline band is the r
 // then separate by a handful of pixels according to how far you have looked. Sky sits back,
 // water sits forward. Eight pixels is beneath conscious notice and cannot ghost.
 const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
+
+// ---------------------------------------------------------------------------------
+// LOOK-AROUND TRAVEL. How far the city moves at the end of the viewing range. These are the
+// two numbers to change if the movement feels too much or too little. Everything else about
+// the panorama is calibrated in tilt.js (yawRange / pitchRange = how far you must turn).
+//   turn RIGHT -> reveal the RIGHT of the panorama -> the image travels LEFT
+// ---------------------------------------------------------------------------------
+const LOOK_X_PX = 150;
+const LOOK_Y_PX = 38;
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
@@ -729,8 +749,8 @@ function loop(){
   // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
   // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
   // Tilt moves your head; the drag moves your feet.
-  const aimX = T.x*room.x*0.98;              // a turn of the wrist sweeps the whole file
-  const aimY = T.y*room.up*0.85;             // nodding still does less than turning
+  const aimX = -T.x*Math.min(room.x, LOOK_X_PX);   // turn right -> image goes left
+  const aimY =  T.y*Math.min(room.up, LOOK_Y_PX);  // point up -> reveal more sky
   curPanX += ((panX+aimX) - curPanX)*0.075;
   curPanY += ((panY+aimY) - curPanY)*0.075;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
@@ -751,7 +771,8 @@ function loop(){
       'T.x         ' + T.x.toFixed(3).padStart(7) + '\n' +
       'image dx    ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +
       'SIGN_YAW    ' + (d.sign!=null ? String(d.sign).padStart(7) : '   n/a') + '\n' +
-      '\nturn LEFT and watch image dx.\npositive = image slides right';
+      'grav.y      ' + (d.grav!=null ? d.grav.toFixed(2).padStart(7) : '   n/a') + '\n' +
+      '\nturn RIGHT: rate should be +\nand image dx should be -\nBANK the phone: rate ~ 0';
   }
 
   /* light rakes across the glass as it turns */
