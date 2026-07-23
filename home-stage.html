@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v2. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v3. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -43,6 +43,20 @@
      RICHNESS BUILDS. The reveal no longer arrives all at once — modules stagger in as they
      are reached, so the page gets denser as you go rather than peaking on load.
 
+     v3 — THE CITY IS A PLANE, NOT A PICTURE.
+     The plate is no longer pinned at cover. It is a wide image larger than the viewport,
+     and you look AROUND it: tilt the phone and the city pans; drag the background and it
+     pans further. The pane moves more than the city, so the gap between them reads as
+     distance. This is the difference between a backdrop and a place.
+
+     ASSET REQUIRED — see PANO below. The mechanism ships now and works with the existing
+     portrait plates at reduced range; it only becomes properly immersive once a WIDE plate
+     exists, because a portrait plate has almost nothing to pan to.
+
+     v3 also cuts the scroll distance. v1/v2 held the stage for two full viewport heights
+     before the reveal began, which is three or four thumb swipes of nothing happening.
+     Now the pane is gone by ~0.55 of a viewport and act one ends at 1.3.
+
      Reuses tilt.js, haptics.js, area-rail.js, city-state.js. Does NOT use city-hero.js. -->
 <html lang="en">
 <head>
@@ -67,12 +81,17 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
    reveal while the city stays put. All sky layers pinned to 100lvh so the
    Android URL-bar collapse can never resize them (the old crop-jump bug).
    =========================================================================== */
-.act1{position:relative;height:200lvh}
+.act1{position:relative;height:130lvh}
 .stage{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden;perspective:1150px;perspective-origin:50% 44%}
 
 /* --- BACKGROUND: two plates, crossfaded when the intention changes --- */
-.sky{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background-position:center bottom;background-size:cover;background-repeat:no-repeat;
-     filter:saturate(.86) contrast(.88) brightness(.9);transform:translateZ(0) scale(1.12);transition:opacity 1.1s var(--ease);will-change:transform,opacity}
+/* THE CITY PLANE. Deliberately larger than the viewport in both axes so there is somewhere
+   to look. height:132% gives vertical range; a wide image gives horizontal range. With a
+   portrait plate the horizontal range is small — that is the asset limitation, not a bug. */
+.skywrap{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;overflow:hidden}
+.sky{position:absolute;top:-16%;left:50%;height:132%;width:auto;max-width:none;
+     filter:saturate(.86) contrast(.88) brightness(.9);transition:opacity 1.1s var(--ease);
+     will-change:transform;transform:translate3d(-50%,0,0)}
 #skyA{opacity:1}#skyB{opacity:0}
 .tint{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background:var(--tint);opacity:.34;mix-blend-mode:soft-light;transition:background 1.1s var(--ease);pointer-events:none}
 /* HAZE: atmosphere sitting between the city and the glass. This is the plane that makes the
@@ -151,7 +170,7 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
    ACT 2 — the reveal. Nothing here is above the fold. It rises from behind
    the glass as you continue, and it is deliberately flatter than the stage.
    =========================================================================== */
-.reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.86) 0%,#05080b 12%);padding:8px 18px 130px;margin-top:-6vh}
+.reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.86) 0%,#05080b 12%);padding:8px 18px 130px;margin-top:-12vh}
 .pull{text-align:center;padding:2px 0 18px;color:var(--sub);font-size:11px;letter-spacing:1.4px}
 /* richness builds on the way down — modules arrive as they are reached, never all at once */
 @media (prefers-reduced-motion: no-preference){
@@ -231,8 +250,10 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
 
 <div class="act1">
   <div class="stage" id="stage">
-    <div class="sky" id="skyA"></div>
-    <div class="sky" id="skyB"></div>
+    <div class="skywrap">
+      <img class="sky" id="skyA" alt="">
+      <img class="sky" id="skyB" alt="">
+    </div>
     <div class="tint" id="tint"></div>
     <div class="haze" id="haze"></div>
 
@@ -326,6 +347,23 @@ const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
    moment, and it costs three CSS property writes.
    Temporary assets: the three existing tod plates, reused as moods.
 --------------------------------------------------------------------------- */
+/* PANO — the asset this feature actually needs.
+   Generate to the same UI spec as the existing plates (Spec v2 §5: horizon ~58-60%, dark
+   upper band, dark water lower band, brand palette, no foreground clutter, static) but at
+   roughly 3:1, e.g. 3072x1024. Drop them in the lab root as:
+       Hero-pano-night.webp / Hero-pano-morning.webp / Hero-pano-afternoon.webp
+   Until they exist every mood silently falls back to its portrait plate and the horizontal
+   range collapses to almost nothing. The mechanism is identical either way. */
+const PANO = { "./Hero-night.webp":"./Hero-pano-night.webp",
+               "./Hero-morning.webp":"./Hero-pano-morning.webp",
+               "./Hero-afternoon.webp":"./Hero-pano-afternoon.webp" };
+function plateFor(src, img){
+  const wide = PANO[src];
+  if(!wide) return src;
+  img.onerror = () => { img.onerror=null; img.src = src; };   // no pano yet -> portrait
+  return wide;
+}
+
 const MOODS = [
   { intent:"Somewhere with a view",   kicker:"Abu Dhabi · golden hour",
     plate:"./Hero-afternoon.webp", tint:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)", haze:"rgba(40,26,20,.5)",
@@ -363,7 +401,7 @@ prog.style.width=(100/MOODS.length)+'%';
 function applyMood(i,{silent=false}={}){
   const m=MOODS[i];
   const show = front ? skyB : skyA, hide = front ? skyA : skyB;
-  show.style.backgroundImage=`url('${m.plate}')`;
+  show.src = plateFor(m.plate, show);
   requestAnimationFrame(()=>{ show.style.opacity=1; hide.style.opacity=0; front=!front; });
   tintEl.style.background=m.tint;
   hazeEl.style.setProperty('--haze',m.haze);
@@ -375,7 +413,7 @@ function applyMood(i,{silent=false}={}){
   prog.style.transform='translateX('+(i*100)+'%)';
   if(!silent) tap('commit');
 }
-skyA.style.backgroundImage=`url('${MOODS[idx].plate}')`;
+skyA.src = plateFor(MOODS[idx].plate, skyA);
 applyMood(idx,{silent:true});
 
 /* --- the pane as the search surface. Tap the row, speak to the window. --- */
@@ -407,6 +445,28 @@ if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.request
 new IntersectionObserver(es=>es.forEach(e=>tilt.setEnabled(e.isIntersecting&&!REDUCE)),{threshold:.05}).observe(stage);
 
 let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
+/* looking around: an offset in PIXELS applied to the city plane, clamped to whatever the
+   image actually has spare. Dragging the background holds where you put it — snapping back
+   would undo the feeling of having looked somewhere. */
+let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;
+function skyRoom(){
+  const img=skyA.naturalWidth?skyA:skyB;
+  const h=stage.clientHeight*1.32;
+  const w=img.naturalWidth ? h*(img.naturalWidth/img.naturalHeight) : stage.clientWidth;
+  return { x:Math.max(0,(w-stage.clientWidth)/2), y:Math.max(0,(h-stage.clientHeight)/2) };
+}
+function bgDown(e){ if(e.target.closest('.panewrap,.featured,.askrow'))return;
+  pdown=true; psx=e.clientX; psy=e.clientY; pbx=panX; pby=panY;
+  if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);} }
+function bgMove(e){ if(!pdown)return; const r=skyRoom();
+  panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*1.15));
+  panY=Math.max(-r.y,Math.min(r.y, pby+(e.clientY-psy)*0.55)); }
+function bgUp(){ pdown=false; }
+stage.addEventListener('pointerdown',bgDown);
+stage.addEventListener('pointermove',bgMove);
+stage.addEventListener('pointerup',bgUp);
+stage.addEventListener('pointercancel',bgUp);
+window.addEventListener('pointerup',bgUp);
 function onDown(e){ if(asking)return; down=true;sx=e.clientX;panewrap.setPointerCapture&&panewrap.setPointerCapture(e.pointerId);
   if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);}}
 function onMove(e){ if(!down||asking)return; dragX=(e.clientX-sx)/ (window.innerWidth*0.5); dragX=Math.max(-1.3,Math.min(1.3,dragX)); }
@@ -422,8 +482,8 @@ window.addEventListener('pointerup',onUp);
 
 /* scroll drives the pane away — the reveal is earned, not shown */
 let scrollP=0;
-addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max(0,scrollY/(h*0.95)));
-  if(scrollY>h*0.45) navbar.classList.add('on'); else navbar.classList.remove('on');
+addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max(0,scrollY/(h*0.55)));
+  if(scrollY>h*0.30) navbar.classList.add('on'); else navbar.classList.remove('on');
 },{passive:true});
 
 function loop(){
@@ -440,10 +500,16 @@ function loop(){
   panewrap.style.transform=`translate(-50%,-46%) translate3d(${curX*16+T.x*10}px,${ty}px,${tz}px) rotateY(${ry}deg) rotateX(${rx}deg)`;
   panewrap.style.opacity=op;
 
-  /* the city moves LESS than the glass — that difference is the depth */
-  const sx2 = T.x*11 + curX*7;
-  const sy2 = T.y*7 - scrollP*26;
-  skyA.style.transform=skyB.style.transform=`translate3d(${sx2}px,${sy2}px,0) scale(1.12)`;
+  /* LOOKING AROUND. Tilt aims the view; drag holds it. Clamped to real image overflow so
+     an edge can never appear. The city moves LESS than the glass — that gap is the depth. */
+  const room=skyRoom();
+  const aimX = T.x*room.x*0.62, aimY = T.y*room.y*0.55;
+  curPanX += ((panX+aimX) - curPanX)*0.10;
+  curPanY += ((panY+aimY) - curPanY)*0.10;
+  const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
+  const cy2=Math.max(-room.y,Math.min(room.y,curPanY - scrollP*30));
+  const tf=`translate3d(calc(-50% + ${cx2}px),${cy2}px,0)`;
+  skyA.style.transform=tf; skyB.style.transform=tf;
 
   /* light rakes across the glass as it turns */
   pane.style.setProperty('--sheen', (curX*46 + T.x*30) + '%');
