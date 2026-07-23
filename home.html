@@ -28,7 +28,23 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
 :root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('./Hero-night.webp') center bottom/cover no-repeat;filter:saturate(.9) contrast(.87) brightness(.96);will-change:transform}
+/* ============================================================================
+   THE SCROLL GLITCH — cause and fix.
+   These layers were `position:fixed; inset:0`, which sizes them to the VISUAL viewport.
+   On the first scroll Android collapses the address bar, the viewport grows ~120px, the
+   layer resizes, and background-size:cover re-solves against the new height — the skyline
+   snaps to a different crop. That is the "it switches to another version" jump.
+   Fix: pin to the LARGE viewport (100lvh — the height with the bar already hidden) so the
+   layer never changes size. The plate simply sits under the bar while it is shown.
+   Do not put `bottom:0` or `inset:0` back on any of these four.
+   ============================================================================ */
+.skybg,.skytod,.skyscrim,.skydim{
+  position:fixed;top:0;left:0;right:0;
+  height:100vh;height:100lvh;   /* lvh is the constant; vh is the pre-lvh fallback */
+  transform:translateZ(0);      /* own compositor layer — no repaint during scroll */
+  backface-visibility:hidden;
+}
+.skybg{z-index:0;background:#06202b url('./Hero-night.webp') center bottom/cover no-repeat;filter:saturate(.9) contrast(.87) brightness(.96);will-change:transform}
 /* wide screens (unfolded Fold, tablets): the portrait plate would crop to a thin band with cover.
    Fit by width and anchor the skyline low so it stays whole; extra height reads as sky. */
 @media (min-aspect-ratio: 3/4){
@@ -37,9 +53,9 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 @media (min-aspect-ratio: 1/1){
   .skybg{background-size:100% auto;background-position:center 88%}
 }
-.skytod{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
-.skyscrim{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(5,10,13,.52) 0%,rgba(5,10,13,.14) 22%,rgba(5,10,13,0) 42%,rgba(5,10,13,0) 60%,rgba(5,10,13,.42) 100%)}
-.skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
+.skytod{z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
+.skyscrim{z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(5,10,13,.52) 0%,rgba(5,10,13,.14) 22%,rgba(5,10,13,0) 42%,rgba(5,10,13,0) 60%,rgba(5,10,13,.42) 100%)}
+.skydim{z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
 
 /* ============================================================================
    STEP 1 — the city moves with you. Native scroll-driven, compositor only.
@@ -280,14 +296,23 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   }
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=31';
+  import { mountCityHero } from './city-hero.js?v=32';
   import { mountAreaRail } from './area-rail.js?v=7';
   import { getCityState } from './city-state.js';
+  import { mountTilt } from './tilt.js?v=1';
+  import { tap } from './haptics.js?v=1';
   const B='https://where2hang.ae/images/';
 
   // ---- device budget (Spec v2 §3): skip WebGL on data-saver / low-memory devices ----
   const conn = navigator.connection || {};
   const LOW_POWER = !!conn.saveData || (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory < 4);
+
+  // ---- Step 3: device tilt. Gated on the hero being onscreen, so the sensor is detached
+  //      for most of the session. iOS needs a gesture to grant; Android just works. ----
+  const tilt = mountTilt({ enabled: !LOW_POWER });
+  if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+    window.addEventListener('pointerdown', function once(){ window.removeEventListener('pointerdown', once); tilt.request(); }, { once:true });
+  }
 
   // ---- time of day: greeting + tint (getCityState reads the real clock) ----
   const TINT={dawn:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)",day:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)",sunset:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)",night:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)"};
@@ -334,7 +359,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   function setDot(el,i){[...el.children].forEach((d,k)=>d.classList.toggle('on',k===i));}
   function caption(v,i,dots){eb.textContent=v.anchor?(evening?"Trending tonight":"Trending now"):(evening?"Tonight in Abu Dhabi":"Today in Abu Dhabi");nm.textContent=v.name;sb.textContent=v.sub;if(dots)setDot(herodots,i);}
 
-  let heroH=null, flat=LOW_POWER;
+  let heroH=null, flat=LOW_POWER, settled=false;
+  // no haptic for the mount's own first onFront — feedback only for changes the user caused
+  setTimeout(()=>{ settled=true; }, 900);
+  new IntersectionObserver(es=>es.forEach(e=>{ tilt.setEnabled(e.isIntersecting && !LOW_POWER); if(e.isIntersecting) tilt.recentre(); }),{threshold:0.05}).observe(stage);
   // Static path: no WebGL. The plate is already the city, so the stage simply reads as sky and
   // the caption still works. Step 10 replaces this with the CSS glass-card fallback.
   function mountFlat(w){
@@ -350,14 +378,15 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     stage.classList.remove('flat');
     buildDots(herodots,vs.length);
     heroH=mountCityHero(document.getElementById('gl'),{venues:vs,getState:()=>getCityState(vs.length),
-      onFront:(i,v)=>caption(v,i,true),
+      getTilt:()=>tilt.get(),
+      onFront:(i,v)=>{ caption(v,i,true); if(settled) tap('snap'); },
       onSelect:()=>{},
       onDowngrade:()=>{ flat=true; console.warn('[hero] frame budget exceeded — falling back to static city'); mountFlat(current); }});
   }
   let current='eat';
   document.querySelectorAll('.lensbtn').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.lensbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
-    current=b.dataset.world; mountWorld(current);
+    current=b.dataset.world; mountWorld(current); tap('commit');
   }));
   try{ mountWorld('eat'); }catch(e){document.getElementById('fb').style.display='grid';console.error(e);}
 
@@ -372,7 +401,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   const an=document.getElementById('areaname'),ac=document.getElementById('areacount'),areadots=document.getElementById('areadots');
   buildDots(areadots,AREAS.length);
   try{ mountAreaRail(document.getElementById('arearail'),{areas:AREAS,
-    onFront:(i,a)=>{an.textContent=a.name;ac.textContent=a.count;setDot(areadots,i);},onSelect:()=>{}});
+    onFront:(i,a)=>{an.textContent=a.name;ac.textContent=a.count;setDot(areadots,i);if(settled)tap('snap');},onSelect:()=>{}});
   }catch(e){console.error(e);}
 </script>
 </body>

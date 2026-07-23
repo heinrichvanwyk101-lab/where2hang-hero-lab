@@ -31,6 +31,7 @@ export function mountCityHero(canvas, opts) {
   const onFront = opts.onFront || (() => {});
   const onSelect = opts.onSelect || (() => {});
   const onDowngrade = opts.onDowngrade || (() => {});
+  const getTilt = opts.getTilt || (() => ({ x: 0, y: 0 }));   // Step 3 — smoothed device tilt, [-1,1]
   if (!venues.length) return { destroy() {}, pause() {}, resume() {} };
 
   const N = venues.length;
@@ -176,7 +177,17 @@ export function mountCityHero(canvas, opts) {
   canvas.addEventListener("pointercancel", up_);
   window.addEventListener("pointerup", up_);
 
-  function onResize() { W = canvas.clientWidth; H = canvas.clientHeight || 1; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); fit(); kick(); }
+  // v3.1 — mobile URL-bar collapse fires a HEIGHT-ONLY resize on the first scroll. Re-fitting
+  // on that re-solves the camera and the whole stage visibly jumps mid-scroll. Ignore height
+  // changes smaller than a toolbar; a real rotation or fold always changes the width too.
+  const BAR_PX = 160;
+  let lastW = W, lastH = H;
+  function onResize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight || 1;
+    if (w === lastW && Math.abs(h - lastH) < BAR_PX) return;
+    lastW = w; lastH = h; W = w; H = h;
+    renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); fit(); kick();
+  }
   window.addEventListener("resize", onResize);
 
   // ---- loop lifecycle (Spec v2 §3.1/§3.2) — cancel the loop, do not idle-spin it ----
@@ -247,8 +258,10 @@ export function mountCityHero(canvas, opts) {
     if (!REDUCE) stars.forEach((s) => { s.material.opacity = s.userData.base * (0.45 + 0.55 * Math.sin(t * s.userData.sp + s.userData.ph)); });
 
     // cinematic drift as a pure DOLLY: translate the camera AND its look-at together (no rotation)
-    const dxx = REDUCE ? 0 : Math.sin(t * 0.16) * 0.55;
-    const dyy = REDUCE ? 0 : Math.sin(t * 0.22) * 0.18;
+    // Step 3: tilt rides on the same dolly — still pure translation, never rotation.
+    const T = REDUCE ? { x: 0, y: 0 } : getTilt();
+    const dxx = (REDUCE ? 0 : Math.sin(t * 0.16) * 0.55) + T.x * 0.42;
+    const dyy = (REDUCE ? 0 : Math.sin(t * 0.22) * 0.18) + T.y * 0.20;
     const dzz = REDUCE ? 0 : Math.cos(t * 0.16) * 0.22;
     camera.position.set(bx + dxx, by + dyy, bz + dzz);
     camera.lookAt(dxx, 1.25 + dyy, dzz);
