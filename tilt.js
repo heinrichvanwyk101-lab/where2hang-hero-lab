@@ -52,6 +52,7 @@ export function mountTilt(opts = {}) {
   // settled by holding the phone, not by reasoning. Flip it here if it ever feels backwards.
   // ---------------------------------------------------------------------------------
   const SIGN_YAW   = opts.signYaw   ?? 1;
+  const onDebug    = opts.onDebug || null;
   const SIGN_PITCH = opts.signPitch ?? -1;
 
   let yaw = 0, pitch = 0;      // integrated degrees
@@ -77,6 +78,7 @@ export function mountTilt(opts = {}) {
 
     yaw   = Math.max(-YAW_RANGE,   Math.min(YAW_RANGE,   yaw   + SIGN_YAW   * gy * dt));
     pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, pitch + SIGN_PITCH * bt * dt));
+    if (onDebug) onDebug({ rate: r.gamma || 0, yaw: yaw, sign: SIGN_YAW });
   }
 
   // Fallback for devices with no gyroscope: gravity gives roll and pitch but never yaw, so
