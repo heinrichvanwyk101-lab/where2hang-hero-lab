@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v20. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v21. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,12 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v21 — calibrated to the measured gesture. v20 was stable and returned correctly, but both
+     axes pinned at the rail: yaw 16/16 and pitch 7/7 at a normal turn, with travel capping at
+     150px so the sweep never reached the ends of the panorama. Ranges now match what the
+     handset actually does — about 40 degrees of turn each way and 15 of aim — and travel is
+     opened up so a full turn crosses most of the file. Drag still covers the remainder.
+
      v20 — ABSOLUTE AIM. The debug build showed yaw sitting at 15.5, 12.5, 10.5 and -14.9
      against a range of 16: pinned at the rail, which is why the city stopped responding.
      Integrating a gyroscope RATE gives an angle with no absolute reference — it accumulates
@@ -549,7 +555,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=20';
+import { mountTilt } from './tilt.js?v=21';
 import { tap } from './haptics.js?v=2';
 
 const B='https://where2hang.ae/images/';
@@ -605,8 +611,8 @@ const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
 // the panorama is calibrated in tilt.js (yawRange / pitchRange = how far you must turn).
 //   turn RIGHT -> reveal the RIGHT of the panorama -> the image travels LEFT
 // ---------------------------------------------------------------------------------
-const LOOK_X_PX = 150;
-const LOOK_Y_PX = 38;
+const LOOK_X_PX = 780;
+const LOOK_Y_PX = 95;
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
@@ -778,8 +784,8 @@ function loop(){
     hud.textContent =
       'heading   ' + (d.heading!=null ? d.heading.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
       'elevation ' + (d.elev!=null ? d.elev.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
-      'yaw       ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '  n/a') + ' / 16\n' +
-      'pitch     ' + (d.pitch!=null ? d.pitch.toFixed(1).padStart(7) : '  n/a') + ' / 7\n' +
+      'yaw       ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '  n/a') + ' / 40\n' +
+      'pitch     ' + (d.pitch!=null ? d.pitch.toFixed(1).padStart(7) : '  n/a') + ' / 15\n' +
       'T.x  T.y  ' + T.x.toFixed(2).padStart(6) + T.y.toFixed(2).padStart(6) + '\n' +
       'image dx  ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +
       'absolute  ' + (d.abs ? '    yes' : '     no') + '\n' +
