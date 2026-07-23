@@ -43,12 +43,15 @@ export function mountTilt(opts = {}) {
   // 60fps. A distant city has mass: it eases toward where you are looking and keeps easing
   // briefly after the phone stops. Following the handset exactly is what reads as digital.
   const TAU         = opts.tau ?? 0.24;
-  // A directional gyro's compass card turns OPPOSITE to the aircraft, because the card is
-  // fixed to the earth. That is the aviation instrument feel, and it is wrong here: turning
-  // right must reveal what is to your right, which means the scene slides LEFT. Sign is
-  // therefore applied once, at source, so `x` reads plainly as "how far right you turned".
-  // If a device reports the opposite convention, flip these two and nothing else.
-  const SIGN_YAW   = opts.signYaw   ?? -1;
+  // ---------------------------------------------------------------------------------
+  // DIRECTION. This is the only switch that controls which way the city moves. Change the
+  // number, nothing else. +1 and -1 are the only valid values.
+  //   SIGN_YAW = +1  turning the handset LEFT sweeps the view left across the city
+  //   SIGN_YAW = -1  turning the handset LEFT sweeps the view right
+  // Both conventions exist in the wild and gyroscope axis signs vary by device, so this is
+  // settled by holding the phone, not by reasoning. Flip it here if it ever feels backwards.
+  // ---------------------------------------------------------------------------------
+  const SIGN_YAW   = opts.signYaw   ?? 1;
   const SIGN_PITCH = opts.signPitch ?? -1;
 
   let yaw = 0, pitch = 0;      // integrated degrees
