@@ -21,12 +21,13 @@
 
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const RANGE_X = opts.rangeX ?? 9;      // degrees of gamma mapped to full deflection
-  const RANGE_Y = opts.rangeY ?? 7;      // degrees of beta
-  // 22/16 was wrong: nobody rotates a phone that far while reading it. Real handling is
-  // plus or minus 4-6 degrees, which only reached a quarter of the range and read as
-  // "nothing is moving". 9/7 puts normal handling across most of the deflection.
-  const STIFF = opts.stiffness ?? 0.10; // spring constant per 60fps frame
+  const RANGE_X = opts.rangeX ?? 14;     // degrees of gamma mapped to full deflection
+  const RANGE_Y = opts.rangeY ?? 11;     // degrees of beta
+  // Calibration history: 22/16 was dead (nobody rotates a phone that far while reading).
+  // 9/7 overshot the other way — hand tremor is a degree or two, so it became visible and
+  // the image jittered. 14/11 sits between: intentional tilt reads, tremor does not.
+  const DEAD = opts.deadzone ?? 0.045;   // ignore sub-tremor deflection entirely
+  const STIFF = opts.stiffness ?? 0.070; // spring constant per 60fps frame
   const HZ = 1000 / 30;
 
   let tx = 0, ty = 0;      // target, clamped [-1,1]
@@ -45,8 +46,9 @@ export function mountTilt(opts = {}) {
     const b = e.beta, g = e.gamma;
     if (b == null || g == null) return;
     if (baseB === null) { baseB = b; baseG = g; return; }   // recentre on first real reading
-    tx = clamp((g - baseG) / RANGE_X);
-    ty = clamp((b - baseB) / RANGE_Y);
+    const nx = clamp((g - baseG) / RANGE_X), ny = clamp((b - baseB) / RANGE_Y);
+    tx = Math.abs(nx) < DEAD ? 0 : nx;
+    ty = Math.abs(ny) < DEAD ? 0 : ny;
   }
 
   // spring toward the target on its own light loop, so the consumer can read get() any time
