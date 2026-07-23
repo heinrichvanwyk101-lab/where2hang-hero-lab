@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v2. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -30,6 +30,18 @@
 
      PROGRESSIVE REVEAL: no Home controls above the fold. Scrolling tilts the pane away and
      the functional modules rise from behind it. Everything below is unchanged from home.html.
+
+     v2 — HIERARCHY PASS. v1 had seven text elements in the first viewport, five of them
+     inside the one glass object: the overcrowding problem in miniature. Removed the tagline,
+     the kicker and the five pips. What remains reads in one order: CITY, then the glass,
+     then one action.
+
+     THE PANE IS SEARCH. Rather than adding a search field above the fold and breaking the
+     no-controls rule, tapping the pane turns the intention line into a live input. You speak
+     to the window. This also removes the duplicate Wasta bar that sat in the reveal.
+
+     RICHNESS BUILDS. The reveal no longer arrives all at once — modules stagger in as they
+     are reached, so the page gets denser as you go rather than peaking on load.
 
      Reuses tilt.js, haptics.js, area-rail.js, city-state.js. Does NOT use city-hero.js. -->
 <html lang="en">
@@ -95,14 +107,22 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
 
 /* content inside the glass */
 .panein{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:22px 20px 24px;z-index:2}
-.kicker{font-size:9.5px;font-weight:800;letter-spacing:2.2px;text-transform:uppercase;color:var(--teal2);opacity:.9;margin-bottom:9px}
-.intent{font-size:27px;font-weight:800;letter-spacing:-.9px;line-height:1.06;text-shadow:0 4px 26px rgba(0,0,0,.6);min-height:2.2em}
-.answer{margin-top:12px;font-size:12.5px;color:#cfdcda;line-height:1.45;opacity:0;transform:translateY(6px);transition:.5s var(--ease)}
+.intent{font-size:28px;font-weight:800;letter-spacing:-.95px;line-height:1.05;text-shadow:0 4px 26px rgba(0,0,0,.6);min-height:2.1em;display:flex;align-items:flex-end}
+.askin{display:none;width:100%;background:none;border:none;outline:none;color:var(--text);font:inherit;font-size:26px;font-weight:800;letter-spacing:-.9px;caret-color:var(--teal2)}
+.askin::placeholder{color:rgba(200,220,218,.42)}
+.pane.asking .intent{display:none}
+.pane.asking .askin{display:block}
+.answer{margin-top:11px;font-size:12.5px;color:#cfdcda;line-height:1.45;opacity:0;transform:translateY(6px);transition:.5s var(--ease)}
 .answer.on{opacity:1;transform:none}
 .answer b{color:var(--text);font-weight:700}
-.pips{display:flex;gap:6px;margin-top:16px}
-.pips i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.26);transition:.35s var(--ease)}
-.pips i.on{width:16px;border-radius:3px;background:var(--teal2);box-shadow:0 0 8px rgba(0,194,168,.55)}
+/* progress reads as a hairline, not five competing dots */
+.prog{position:relative;height:1.5px;margin-top:18px;background:rgba(255,255,255,.13);border-radius:2px;overflow:hidden}
+.prog i{position:absolute;top:0;bottom:0;width:20%;background:var(--teal2);border-radius:2px;box-shadow:0 0 8px rgba(0,194,168,.6);transition:transform .45s var(--ease)}
+/* the pane IS the search surface — this is the Search slot in the hierarchy */
+.askrow{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:11.5px;font-weight:600;color:var(--sub);opacity:.9}
+.askrow svg{color:var(--gold);flex:0 0 auto}
+.pane.asking .askrow{color:var(--teal2)}
+.pane.asking .prog{opacity:0}
 
 /* --- FOREGROUND: the sill. Occludes the pane. This is the depth cue that cannot be faked. --- */
 .sill{position:absolute;left:-8%;right:-8%;bottom:-2px;height:23vh;z-index:5;pointer-events:none;
@@ -114,9 +134,14 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
 /* minimal branding only */
 .mark{position:absolute;top:calc(16px + env(safe-area-inset-top));left:20px;z-index:7;font-weight:800;font-size:15px;letter-spacing:-.3px;opacity:.86;text-shadow:0 2px 14px rgba(0,0,0,.8)}
 .mark i{color:var(--teal);font-style:normal}
-.mark small{display:block;font-size:8px;font-weight:700;letter-spacing:2.4px;color:var(--sub);margin-top:2px}
 
 /* the invitation — one line, gone after first touch */
+.featured{position:absolute;left:50%;transform:translate(-50%,8px);bottom:calc(8.5vh + env(safe-area-inset-bottom));z-index:7;
+  display:flex;align-items:center;gap:9px;padding:10px 18px;border-radius:24px;white-space:nowrap;
+  background:rgba(10,22,26,.5);border:1px solid rgba(120,220,210,.24);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  font-size:13px;font-weight:700;opacity:0;pointer-events:none;transition:.55s var(--ease)}
+.featured.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.featured svg{color:var(--gold)}
 .hint{position:absolute;left:0;right:0;bottom:calc(9vh + env(safe-area-inset-bottom));z-index:7;text-align:center;
       font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--sub);transition:.45s var(--ease)}
 .hint.gone{opacity:0;transform:translateY(6px)}
@@ -128,6 +153,13 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
    =========================================================================== */
 .reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.86) 0%,#05080b 12%);padding:8px 18px 130px;margin-top:-6vh}
 .pull{text-align:center;padding:2px 0 18px;color:var(--sub);font-size:11px;letter-spacing:1.4px}
+/* richness builds on the way down — modules arrive as they are reached, never all at once */
+@media (prefers-reduced-motion: no-preference){
+  @supports (animation-timeline: view()){
+    .rise{animation:rise .01s linear both;animation-timeline:view();animation-range:entry 4% entry 42%}
+    @keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+  }
+}
 
 .wasta{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;
   background:linear-gradient(180deg,rgba(28,44,48,.5),rgba(13,24,28,.56));
@@ -204,68 +236,70 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
     <div class="tint" id="tint"></div>
     <div class="haze" id="haze"></div>
 
-    <div class="mark">Where<i>2</i>Hang<small>KNOW WHERE TO GO</small></div>
+    <div class="mark">Where<i>2</i>Hang</div>
 
     <div class="panewrap" id="panewrap">
       <div class="paneedge"></div>
       <div class="pane" id="pane">
         <div class="panein">
-          <div class="kicker" id="kicker">Abu Dhabi · this evening</div>
           <div class="intent" id="intent">Somewhere with a view</div>
+          <input class="askin" id="askin" type="text" placeholder="Ask for anything" autocomplete="off" enterkeyhint="search">
           <div class="answer" id="answer"></div>
-          <div class="pips" id="pips"></div>
+          <div class="prog"><i id="prog"></i></div>
+          <div class="askrow" id="askrow">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg>
+            <span id="asklabel">Ask for something else</span>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="sillrail"></div>
     <div class="sill"></div>
+    <button class="featured" id="featured">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h4"/></svg>
+      Plan the whole day
+    </button>
     <div class="hint" id="hint"><b>Drag</b> the glass</div>
   </div>
 </div>
 
 <section class="reveal" id="reveal">
-  <div class="pull">Or just ask</div>
+  <div class="pull">Narrow it down</div>
 
-  <div class="wasta">
-    <svg class="ic" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg>
-    <span class="q">"padel, then lunch nearby"</span>
-    <span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-  </div>
-
-  <div class="lens">
+  <div class="lens rise">
     <button class="lensbtn on" data-world="eat">Eat &amp; Drink</button>
     <button class="lensbtn" data-world="do">Activities</button>
     <button class="lensbtn" data-world="see">Entertainment</button>
   </div>
-  <div class="acts">
+  <div class="acts rise">
     <div class="act2"><span class="i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><span><b>Find My Spot</b><small>Nearest to you</small></span></div>
     <div class="act2 g"><span class="i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h4"/></svg></span><span><b>Plan a day</b><small>Multi-stop route</small></span></div>
   </div>
 
   <!-- everything below is unchanged from home.html -->
-  <div class="sec"><h4>Areas</h4><span class="va">View all</span></div>
+  <div class="sec rise"><h4>Areas</h4><span class="va">View all</span></div>
   <div class="arearail"><canvas id="arearail" aria-label="Explore Abu Dhabi by area"></canvas></div>
   <div class="areacap">Drag to explore · <b id="areaname">Corniche</b> · <span id="areacount">112 venues</span></div>
   <div class="dots" id="areadots"></div>
 
-  <div class="sec"><h4>On today</h4><span class="va">View all</span></div>
-  <div class="board">
+  <div class="sec rise"><h4>On today</h4><span class="va">View all</span></div>
+  <div class="board rise">
     <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-mcgettigans.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">The Brewhouse</div><div class="tg"><span class="live">LIVE</span><span class="rec">Premier League · all day</span></div></div><div class="dist">1.2 km</div></div>
     <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-coya.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">Coya Abu Dhabi</div><div class="tg"><span class="rec">Business lunch · 12–3pm</span></div></div><div class="dist">2.1 km</div></div>
     <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-iris.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">Iris Yas Bay</div><div class="tg"><span class="live">LIVE</span><span class="rec">Ladies' night · from 8pm</span></div></div><div class="dist">3.4 km</div></div>
   </div>
 
-  <div class="sec"><h4>By experience</h4></div>
-  <div class="chips">
+  <div class="sec rise"><h4>By experience</h4></div>
+  <div class="chips rise">
     <span class="chip">Brunch</span><span class="chip">Live Music</span><span class="chip">Beach Day</span><span class="chip">Date Night</span><span class="chip">Padel</span><span class="chip">Sunset Spots</span>
   </div>
 
-  <div class="sec"><h4>Reading</h4></div>
+  <div class="sec rise"><h4>Reading</h4></div>
   <div class="edi"><span class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6"/></svg></span><span class="t"><span>Grazia Middle East</span> · Where to be seen this weekend</span><span class="c">&rsaquo;</span></div>
 
-  <div class="sec"><h4>Browse all</h4></div>
-  <div class="cats"><a>Restaurants</a><a>Bars</a><a>Cafés</a><a>Beaches</a><a>Parks</a><a>Padel</a><a>Cinemas</a><a>Rooftops</a><a>Museums</a><a>Nightlife</a></div>
+  <div class="sec rise"><h4>Browse all</h4></div>
+  <div class="cats rise"><a>Restaurants</a><a>Bars</a><a>Cafés</a><a>Beaches</a><a>Parks</a><a>Padel</a><a>Cinemas</a><a>Rooftops</a><a>Museums</a><a>Nightlife</a></div>
 </section>
 
 <nav class="navbar" id="navbar">
@@ -313,8 +347,9 @@ const MOODS = [
 const stage=document.getElementById('stage'), panewrap=document.getElementById('panewrap');
 const skyA=document.getElementById('skyA'), skyB=document.getElementById('skyB');
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
-const intentEl=document.getElementById('intent'), kickerEl=document.getElementById('kicker');
-const answerEl=document.getElementById('answer'), pipsEl=document.getElementById('pips');
+const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
+const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
+const askrow=document.getElementById('askrow'), asklabel=document.getElementById('asklabel'), featured=document.getElementById('featured');
 const hint=document.getElementById('hint'), navbar=document.getElementById('navbar');
 const pane=document.getElementById('pane');
 
@@ -323,7 +358,7 @@ const tod=getCityState().tod;
 let idx = tod==='dawn'?1 : tod==='day'?4 : tod==='sunset'?0 : 2;
 let front=true;   // which sky layer is showing
 
-MOODS.forEach((_,i)=>{const d=document.createElement('i');pipsEl.appendChild(d);});
+prog.style.width=(100/MOODS.length)+'%';
 
 function applyMood(i,{silent=false}={}){
   const m=MOODS[i];
@@ -333,16 +368,33 @@ function applyMood(i,{silent=false}={}){
   tintEl.style.background=m.tint;
   hazeEl.style.setProperty('--haze',m.haze);
   document.documentElement.style.setProperty('--haze',m.haze);
-  kickerEl.textContent=m.kicker;
   intentEl.textContent=m.intent;
   answerEl.classList.remove('on');
   clearTimeout(applyMood._t);
   applyMood._t=setTimeout(()=>{answerEl.innerHTML=m.answer;answerEl.classList.add('on');},520);
-  [...pipsEl.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+  prog.style.transform='translateX('+(i*100)+'%)';
   if(!silent) tap('commit');
 }
 skyA.style.backgroundImage=`url('${MOODS[idx].plate}')`;
 applyMood(idx,{silent:true});
+
+/* --- the pane as the search surface. Tap the row, speak to the window. --- */
+let asking=false;
+function setAsking(v){
+  asking=v; pane.classList.toggle('asking',v);
+  asklabel.textContent = v ? 'Press enter' : 'Ask for something else';
+  if(v){ answerEl.classList.remove('on'); askin.value=''; askin.focus(); }
+}
+askrow.addEventListener('click',e=>{e.stopPropagation();setAsking(!asking);tap('commit');});
+askin.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  const q=askin.value.trim(); if(!q){setAsking(false);return;}
+  intentEl.textContent=q; setAsking(false); tap('confirm');
+  answerEl.classList.remove('on');
+  setTimeout(()=>{answerEl.innerHTML='<b>Wasta is reading the city</b> — in the live app this returns real venues, open now, ranked by distance.';answerEl.classList.add('on');},420);
+});
+askin.addEventListener('blur',()=>{ if(asking && !askin.value.trim()) setAsking(false); });
+featured.addEventListener('click',()=>tap('commit'));
 
 /* ---------------------------------------------------------------------------
    THE DRAG. Horizontal only — vertical is left to the page so scrolling still
@@ -355,9 +407,9 @@ if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.request
 new IntersectionObserver(es=>es.forEach(e=>tilt.setEnabled(e.isIntersecting&&!REDUCE)),{threshold:.05}).observe(stage);
 
 let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
-function onDown(e){down=true;sx=e.clientX;panewrap.setPointerCapture&&panewrap.setPointerCapture(e.pointerId);
-  if(!touched){touched=true;hint.classList.add('gone');}}
-function onMove(e){ if(!down)return; dragX=(e.clientX-sx)/ (window.innerWidth*0.5); dragX=Math.max(-1.3,Math.min(1.3,dragX)); }
+function onDown(e){ if(asking)return; down=true;sx=e.clientX;panewrap.setPointerCapture&&panewrap.setPointerCapture(e.pointerId);
+  if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);}}
+function onMove(e){ if(!down||asking)return; dragX=(e.clientX-sx)/ (window.innerWidth*0.5); dragX=Math.max(-1.3,Math.min(1.3,dragX)); }
 function onUp(){ if(!down)return; down=false;
   if(Math.abs(dragX)>0.34){ idx=(idx + (dragX<0?1:-1) + MOODS.length)%MOODS.length; applyMood(idx); }
   dragX=0;
