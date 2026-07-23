@@ -34,9 +34,16 @@ export function mountTilt(opts = {}) {
 
   const YAW_RANGE   = opts.yawRange   ?? 32;   // degrees of turn for full sweep
   const PITCH_RANGE = opts.pitchRange ?? 20;   // degrees of nod for full vertical
-  const RATE_DEAD   = opts.rateDeadband ?? 0.8;  // deg/sec below which nothing is integrated
-  const RECENTRE    = opts.recentre ?? 0.00075;  // fraction pulled back to zero per frame
-  const SMOOTH      = opts.smooth ?? 0.28;     // light only — a panorama must not lag the hand
+  const RATE_DEAD   = opts.rateDeadband ?? 0.45; // deg/sec below which nothing is integrated
+  const RECENTRE    = opts.recentre ?? 0.0003;   // fraction pulled back to zero per frame
+  const SMOOTH      = opts.smooth ?? 0.45;     // light only — a panorama must not lag the hand
+  // A directional gyro's compass card turns OPPOSITE to the aircraft, because the card is
+  // fixed to the earth. That is the aviation instrument feel, and it is wrong here: turning
+  // right must reveal what is to your right, which means the scene slides LEFT. Sign is
+  // therefore applied once, at source, so `x` reads plainly as "how far right you turned".
+  // If a device reports the opposite convention, flip these two and nothing else.
+  const SIGN_YAW   = opts.signYaw   ?? -1;
+  const SIGN_PITCH = opts.signPitch ?? -1;
 
   let yaw = 0, pitch = 0;      // integrated degrees
   let cx = 0, cy = 0;          // lightly smoothed output
@@ -60,8 +67,8 @@ export function mountTilt(opts = {}) {
     if (Math.abs(gy) < RATE_DEAD) gy = 0;         // never integrate noise
     if (Math.abs(bt) < RATE_DEAD) bt = 0;
 
-    yaw   = Math.max(-YAW_RANGE,   Math.min(YAW_RANGE,   yaw   + gy * dt));
-    pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, pitch + bt * dt));
+    yaw   = Math.max(-YAW_RANGE,   Math.min(YAW_RANGE,   yaw   + SIGN_YAW   * gy * dt));
+    pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, pitch + SIGN_PITCH * bt * dt));
   }
 
   // Fallback for devices with no gyroscope: gravity gives roll and pitch but never yaw, so
@@ -74,8 +81,8 @@ export function mountTilt(opts = {}) {
     if (!primed) { lgx = g.x || 0; lgy = g.y || 0; primed = true; }
     else { lgx = lgx * 0.9 + (g.x || 0) * 0.1; lgy = lgy * 0.9 + (g.y || 0) * 0.1; }
     if (gx0 === null) { gx0 = lgx; gy0 = lgy; return; }
-    yaw   = Math.max(-YAW_RANGE,   Math.min(YAW_RANGE,   (lgx - gx0) * 6));
-    pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, (lgy - gy0) * 5));
+    yaw   = Math.max(-YAW_RANGE,   Math.min(YAW_RANGE,   SIGN_YAW   * (lgx - gx0) * 6));
+    pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, SIGN_PITCH * (lgy - gy0) * 5));
   }
 
   function tick() {

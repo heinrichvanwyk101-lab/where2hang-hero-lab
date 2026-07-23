@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v14. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v15. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,13 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v15 — direction inverted. Turning right was sliding the scene right, so you were shown
+     what was to your LEFT. That is the directional-gyro instrument feel: a compass card is
+     fixed to the earth and turns opposite to the aircraft. A panorama is the other way round.
+     Sign now applied once at source in tilt.js. Also: deadband down (slow turns were dead
+     before catching up), smoothing up (less trailing), and the drift correction slowed by
+     more than half, since a steady bleed back to centre reads exactly like gyro precession.
+
      v14 — THE PANORAMA MODEL. The reference is a phone panorama viewer: turn the handset and
      sweep across the scene. That gesture is YAW, and neither gravity nor deviceorientation
      gamma can see yaw — rotating about the gravity vector leaves gravity unchanged by
