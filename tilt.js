@@ -32,11 +32,17 @@
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-  const YAW_RANGE   = opts.yawRange   ?? 32;   // degrees of turn for full sweep
-  const PITCH_RANGE = opts.pitchRange ?? 20;   // degrees of nod for full vertical
-  const RATE_DEAD   = opts.rateDeadband ?? 0.45; // deg/sec below which nothing is integrated
+  const YAW_RANGE   = opts.yawRange   ?? 46;   // degrees of turn for full sweep
+  const PITCH_RANGE = opts.pitchRange ?? 30;   // degrees of nod for full vertical
+  // SOFT deadband. A hard one (zero below the threshold) removes tremor but creates a
+  // dead-then-jump as a slow turn crosses it. Subtracting the threshold instead is continuous:
+  // tremor vanishes, and a deliberate turn starts from zero and builds smoothly.
+  const RATE_DEAD   = opts.rateDeadband ?? 1.3;  // deg/sec of hand tremor to subtract
   const RECENTRE    = opts.recentre ?? 0.0003;   // fraction pulled back to zero per frame
-  const SMOOTH      = opts.smooth ?? 0.45;     // light only — a panorama must not lag the hand
+  // Time constant, in seconds, not a per-frame fraction — so it behaves the same at 30fps and
+  // 60fps. A distant city has mass: it eases toward where you are looking and keeps easing
+  // briefly after the phone stops. Following the handset exactly is what reads as digital.
+  const TAU         = opts.tau ?? 0.24;
   // A directional gyro's compass card turns OPPOSITE to the aircraft, because the card is
   // fixed to the earth. That is the aviation instrument feel, and it is wrong here: turning
   // right must reveal what is to your right, which means the scene slides LEFT. Sign is
@@ -63,9 +69,8 @@ export function mountTilt(opts = {}) {
     lastT = now;
     if (!(dt > 0) || dt > 0.2) dt = 1 / 60;      // ignore absurd gaps after a background pause
 
-    let gy = r.gamma || 0, bt = r.beta || 0;
-    if (Math.abs(gy) < RATE_DEAD) gy = 0;         // never integrate noise
-    if (Math.abs(bt) < RATE_DEAD) bt = 0;
+    const soft = (v) => { const a = Math.abs(v) - RATE_DEAD; return a <= 0 ? 0 : Math.sign(v) * a; };
+    const gy = soft(r.gamma || 0), bt = soft(r.beta || 0);
 
     yaw   = Math.max(-YAW_RANGE,   Math.min(YAW_RANGE,   yaw   + SIGN_YAW   * gy * dt));
     pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, pitch + SIGN_PITCH * bt * dt));
@@ -85,15 +90,20 @@ export function mountTilt(opts = {}) {
     pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, SIGN_PITCH * (lgy - gy0) * 5));
   }
 
-  function tick() {
+  let tickT = 0;
+  function tick(now) {
     if (!alive) { raf = 0; return; }
     raf = requestAnimationFrame(tick);
-    if (!enabled) { cx += (0 - cx) * 0.06; cy += (0 - cy) * 0.06; return; }
+    let dt = tickT ? (now - tickT) / 1000 : 1 / 60;
+    tickT = now;
+    if (!(dt > 0) || dt > 0.2) dt = 1 / 60;
+    const k = 1 - Math.exp(-dt / TAU);          // frame-rate independent easing
+    if (!enabled) { cx += (0 - cx) * k; cy += (0 - cy) * k; return; }
     // slow bleed back to centre — corrects gyroscope drift without being felt
     yaw   -= yaw   * RECENTRE;
     pitch -= pitch * RECENTRE;
-    cx += (clamp(yaw / YAW_RANGE)     - cx) * SMOOTH;
-    cy += (clamp(pitch / PITCH_RANGE) - cy) * SMOOTH;
+    cx += (clamp(yaw / YAW_RANGE)     - cx) * k;
+    cy += (clamp(pitch / PITCH_RANGE) - cy) * k;
   }
 
   function attach() {
