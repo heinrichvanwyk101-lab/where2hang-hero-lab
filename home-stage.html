@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v16. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v17. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,20 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v17 — two faults from v16:
+       1. THE GHOSTED SKYLINE. v16 applied depth as a RATE MULTIPLIER on the whole pan. That
+          is fine when the pan is a few pixels, which is what it was when the idea was framed
+          — but the pan is now the full width of the file. At full look-around the sky layer
+          sat 800px across and the water 1260px, so inside the mask overlaps two copies of the
+          city were drawn 460px apart at partial opacity. Hence the doubled towers.
+          Depth is now a small FIXED PIXEL OFFSET on top of a shared base pan: every layer
+          travels together, and separates by at most eight pixels. Real differential parallax,
+          no possibility of a ghost.
+       2. MOVEMENT DIED ONCE SCROLLED. Tilt was gated on the stage being onscreen, which was
+          right when the city lived inside the stage. It has been a page-wide fixed backdrop
+          since v6, so the gate was freezing a city that was still perfectly visible. Tilt now
+          runs for the whole page and stops only when the tab is hidden.
+
      v16 — motion physics, and DEPTH FROM ONE FLAT IMAGE.
        Sensitivity down about 30%, a SOFT deadband so tremor vanishes without a dead-then-jump,
        and easing on a 240ms time constant rather than a per-frame fraction — so the city keeps
@@ -545,7 +559,10 @@ const stage=document.getElementById('stage'), panewrap=document.getElementById('
 const slotA=document.getElementById('slotA'), slotB=document.getElementById('slotB');
 const imgsA=[...slotA.querySelectorAll('img')], imgsB=[...slotB.querySelectorAll('img')];
 const skyA=imgsA[1], skyB=imgsB[1];                 // the skyline band is the reference layer
-const DEPTH=[0.80,1.00,1.26];                       // sky, skyline, water
+// Depth as a small FIXED OFFSET, never a rate. All three bands share the base pan exactly,
+// then separate by a handful of pixels according to how far you have looked. Sky sits back,
+// water sits forward. Eight pixels is beneath conscious notice and cannot ghost.
+const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
@@ -607,7 +624,8 @@ const tilt=mountTilt({enabled:!REDUCE});
 if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
   window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
 }
-new IntersectionObserver(es=>es.forEach(e=>tilt.setEnabled(e.isIntersecting&&!REDUCE)),{threshold:.05}).observe(stage);
+// No visibility gate: the city is a page-wide fixed backdrop, so it must keep responding
+// all the way down. tilt.js already detaches its listener when the tab is hidden.
 
 let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
 /* looking around: an offset in PIXELS applied to the city plane, clamped to whatever the
@@ -699,11 +717,10 @@ function loop(){
   curPanY += ((panY+aimY) - curPanY)*0.075;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
   const cy2=Math.max(-room.down,Math.min(room.up,curPanY - pageP*stage.clientHeight*0.14));
-  // three bands, three rates. The differences are single-digit pixels; nobody sees layers,
-  // they just stop reading it as a flat photograph.
   for(let i=0;i<3;i++){
-    const d=DEPTH[i];
-    const tf=`translate3d(calc(-50% + ${(cx2*d).toFixed(2)}px),${(cy2*d).toFixed(2)}px,0)`;
+    const dx = cx2 + T.x*DEPTH_PX[i];
+    const dy = cy2 + T.y*DEPTH_PX[i]*0.5;
+    const tf=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`;
     imgsA[i].style.transform=tf; imgsB[i].style.transform=tf;
   }
 
