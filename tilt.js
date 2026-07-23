@@ -21,9 +21,12 @@
 
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const RANGE_X = opts.rangeX ?? 22;     // degrees of gamma mapped to full deflection
-  const RANGE_Y = opts.rangeY ?? 16;     // degrees of beta
-  const STIFF = opts.stiffness ?? 0.085; // spring constant per 60fps frame
+  const RANGE_X = opts.rangeX ?? 9;      // degrees of gamma mapped to full deflection
+  const RANGE_Y = opts.rangeY ?? 7;      // degrees of beta
+  // 22/16 was wrong: nobody rotates a phone that far while reading it. Real handling is
+  // plus or minus 4-6 degrees, which only reached a quarter of the range and read as
+  // "nothing is moving". 9/7 puts normal handling across most of the deflection.
+  const STIFF = opts.stiffness ?? 0.10; // spring constant per 60fps frame
   const HZ = 1000 / 30;
 
   let tx = 0, ty = 0;      // target, clamped [-1,1]

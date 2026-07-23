@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v4. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v6. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -59,6 +59,33 @@
      your head rather than scrolling a picture.
      Every mood keeps its portrait plate as an automatic fallback if a pano is missing.
 
+     v5 — three fixes, from testing on the Fold:
+       1. PANNING WAS INVISIBLE. Two causes. The tilt range asked for 22 degrees of rotation
+          for full deflection, which nobody does while reading a phone, so normal handling
+          reached a quarter of it. And .stage had no touch-action, so Android claimed
+          horizontal drags for scrolling and the pointermove events never arrived.
+          Now: tilt calibrated to 9 degrees, touch-action:pan-y so horizontal belongs to us,
+          and the tilt gain raised to a full viewport width at full deflection.
+       2. THE GLASS WAS COVERING THE SKYLINE. The pane sat dead centre, exactly over the
+          towers — the only interesting part of the image. The city only looked good once
+          the pane faded on scroll, which is backwards. The pane now sits low, over the
+          water, with the skyline clear above it and refracting through its upper half.
+          This is also the physically sensible arrangement and it is easier to reach.
+       3. The drag hint and featured action stayed pinned over the reveal once scrolling
+          started, because the stage is sticky. Both now clear as soon as you move.
+
+     v6 — the city stays, and the glass comes back when you touch it:
+       1. THE CITY WAS LEAVING. It lived inside the sticky stage, so once act one ended it
+          scrolled away and the reveal covered it with an opaque panel. That breaks
+          constitution rule one — ONE CONTINUOUS CITY BACKDROP, NEVER BLACK. The city plane
+          is now FIXED behind the entire page and stays there to the last section. The
+          reveal is transparent; legibility comes from a dim layer that ramps with scroll,
+          so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+       2. A HALF-FADED PANE WAS STILL DRAGGABLE. Three scroll steps in, the glass was ghosted
+          and rotated away but still accepted a swipe, so you were operating something you
+          could barely see. Touching it now brings it back: the page returns to the top and
+          the pane comes forward. It only drags once it is actually present.
+
      v3 also cuts the scroll distance. v1/v2 held the stage for two full viewport heights
      before the reveal began, which is three or four thumb swipes of nothing happening.
      Now the pane is gone by ~0.55 of a viewport and act one ends at 1.3.
@@ -80,22 +107,26 @@
   --haze:rgba(9,26,34,.55);
 }
 html{scroll-behavior:auto}
-body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{background:#05080b;background-attachment:fixed;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
 /* ===========================================================================
    ACT 1 — the stage. Sticky for two viewport heights so the scroll drives the
    reveal while the city stays put. All sky layers pinned to 100lvh so the
    Android URL-bar collapse can never resize them (the old crop-jump bug).
    =========================================================================== */
-.act1{position:relative;height:130lvh}
-.stage{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden;perspective:1150px;perspective-origin:50% 44%}
+.act1{position:relative;height:130lvh;z-index:1}
+.stage{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden;perspective:1150px;perspective-origin:50% 58%;touch-action:pan-y}
+/* THE CITY IS THE PAGE'S BACKDROP, not the stage's. Fixed, behind everything, to the bottom. */
+.skysheet{position:fixed;top:0;left:0;right:0;height:100vh;height:100lvh;z-index:0;overflow:hidden;pointer-events:none}
+/* the city recedes as you descend instead of being covered over */
+.citydim{position:fixed;top:0;left:0;right:0;height:100vh;height:100lvh;z-index:1;pointer-events:none;opacity:0;
+  background:linear-gradient(180deg,rgba(4,9,12,.62) 0%,rgba(4,9,12,.88) 55%,rgba(4,9,12,.93) 100%)}
 
 /* --- BACKGROUND: two plates, crossfaded when the intention changes --- */
 /* THE CITY PLANE. Deliberately larger than the viewport in both axes so there is somewhere
    to look. height:132% gives vertical range; a wide image gives horizontal range. With a
    portrait plate the horizontal range is small — that is the asset limitation, not a bug. */
-.skywrap{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;overflow:hidden}
-.sky{position:absolute;top:-52%;left:50%;height:155%;width:auto;max-width:none;
+.sky{position:absolute;top:-71%;left:50%;height:162%;width:auto;max-width:none;
      filter:saturate(.86) contrast(.88) brightness(.9);transition:opacity 1.1s var(--ease);
      will-change:transform;transform:translate3d(-50%,0,0)}
 #skyA{opacity:1}#skyB{opacity:0}
@@ -107,7 +138,7 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
                  linear-gradient(180deg,rgba(4,10,14,.62) 0%,rgba(4,10,14,.06) 26%,rgba(4,10,14,0) 48%,rgba(4,10,14,.5) 100%)}
 
 /* --- MIDGROUND: the one physical object --- */
-.panewrap{position:absolute;left:50%;top:44%;width:78vw;max-width:340px;aspect-ratio:3/4.05;
+.panewrap{position:absolute;left:50%;top:58%;width:72vw;max-width:310px;aspect-ratio:3/3.6;
           transform-style:preserve-3d;will-change:transform;touch-action:pan-y;cursor:grab}
 .panewrap:active{cursor:grabbing}
 .pane{position:absolute;inset:0;border-radius:26px;overflow:hidden;transform-style:preserve-3d;
@@ -132,8 +163,8 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
 
 /* content inside the glass */
 .panein{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:22px 20px 24px;z-index:2}
-.intent{font-size:28px;font-weight:800;letter-spacing:-.95px;line-height:1.05;text-shadow:0 4px 26px rgba(0,0,0,.6);min-height:2.1em;display:flex;align-items:flex-end}
-.askin{display:none;width:100%;background:none;border:none;outline:none;color:var(--text);font:inherit;font-size:26px;font-weight:800;letter-spacing:-.9px;caret-color:var(--teal2)}
+.intent{font-size:26px;font-weight:800;letter-spacing:-.95px;line-height:1.05;text-shadow:0 4px 26px rgba(0,0,0,.6);min-height:2.1em;display:flex;align-items:flex-end}
+.askin{display:none;width:100%;background:none;border:none;outline:none;color:var(--text);font:inherit;font-size:24px;font-weight:800;letter-spacing:-.9px;caret-color:var(--teal2)}
 .askin::placeholder{color:rgba(200,220,218,.42)}
 .pane.asking .intent{display:none}
 .pane.asking .askin{display:block}
@@ -151,7 +182,7 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
 
 /* --- FOREGROUND: the sill. Occludes the pane. This is the depth cue that cannot be faked. --- */
 .sill{position:absolute;left:-8%;right:-8%;bottom:-2px;height:23vh;z-index:5;pointer-events:none;
-  background:linear-gradient(180deg,rgba(3,8,11,0) 0%,rgba(3,8,11,.72) 34%,rgba(3,8,11,.97) 62%,#05080b 100%);
+  background:linear-gradient(180deg,rgba(3,8,11,0) 0%,rgba(3,8,11,.66) 34%,rgba(3,8,11,.9) 62%,rgba(3,8,11,.96) 100%);
   filter:blur(3px)}   /* near-plane depth of field. Blurring the FOREGROUND is legitimate; blurring the city is not. */
 .sillrail{position:absolute;left:-10%;right:-10%;bottom:15.5vh;height:10px;z-index:6;pointer-events:none;
   background:linear-gradient(180deg,rgba(150,215,210,.16),rgba(2,8,10,.9));filter:blur(2.5px);opacity:.85}
@@ -176,7 +207,7 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
    ACT 2 — the reveal. Nothing here is above the fold. It rises from behind
    the glass as you continue, and it is deliberately flatter than the stage.
    =========================================================================== */
-.reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.86) 0%,#05080b 12%);padding:8px 18px 130px;margin-top:-12vh}
+.reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.55) 0%,rgba(5,8,11,.12) 9%,rgba(5,8,11,0) 18%);padding:8px 18px 130px;margin-top:-12vh}
 .pull{text-align:center;padding:2px 0 18px;color:var(--sub);font-size:11px;letter-spacing:1.4px}
 /* richness builds on the way down — modules arrive as they are reached, never all at once */
 @media (prefers-reduced-motion: no-preference){
@@ -254,12 +285,14 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
 </head>
 <body>
 
+<div class="skysheet">
+  <img class="sky" id="skyA" alt="">
+  <img class="sky" id="skyB" alt="">
+</div>
+<div class="citydim" id="citydim"></div>
+
 <div class="act1">
   <div class="stage" id="stage">
-    <div class="skywrap">
-      <img class="sky" id="skyA" alt="">
-      <img class="sky" id="skyB" alt="">
-    </div>
     <div class="tint" id="tint"></div>
     <div class="haze" id="haze"></div>
 
@@ -381,7 +414,7 @@ const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('ha
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
 const askrow=document.getElementById('askrow'), asklabel=document.getElementById('asklabel'), featured=document.getElementById('featured');
-const hint=document.getElementById('hint'), navbar=document.getElementById('navbar');
+const hint=document.getElementById('hint'), navbar=document.getElementById('navbar'), citydim=document.getElementById('citydim');
 const pane=document.getElementById('pane');
 
 /* start on the mood that matches the real clock, so it is already YOUR Abu Dhabi */
@@ -442,7 +475,7 @@ let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
    image actually has spare. Dragging the background holds where you put it — snapping back
    would undo the feeling of having looked somewhere. */
 let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;
-const SKY_SCALE=1.55, SKY_TOP=-0.52;
+const SKY_SCALE=1.62, SKY_TOP=-0.71;
 function skyRoom(){
   const img=skyA.naturalWidth?skyA:skyB, V=stage.clientHeight, VW=stage.clientWidth;
   const h=V*SKY_SCALE;
@@ -451,11 +484,16 @@ function skyRoom(){
   // above and very little below. Clamping to the real figures is what stops an edge showing.
   return { x:Math.max(0,(w-VW)/2), up:Math.max(0,-SKY_TOP*V), down:Math.max(0,(h+SKY_TOP*V)-V) };
 }
+// Past this scroll point the pane is ghosted and turned away. Touching it should RECALL it,
+// not drag it — operating something you can barely see is worse than it not responding.
+const PRESENT = 0.12;
+function recall(){ window.scrollTo({top:0,behavior:'smooth'}); tap('commit'); }
 function bgDown(e){ if(e.target.closest('.panewrap,.featured,.askrow'))return;
+  if(scrollP > PRESENT){ recall(); return; }
   pdown=true; psx=e.clientX; psy=e.clientY; pbx=panX; pby=panY;
   if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);} }
 function bgMove(e){ if(!pdown)return; const r=skyRoom();
-  panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*1.15));
+  panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*1.6));
   panY=Math.max(-r.down,Math.min(r.up, pby+(e.clientY-psy)*0.5)); }
 function bgUp(){ pdown=false; }
 stage.addEventListener('pointerdown',bgDown);
@@ -463,7 +501,9 @@ stage.addEventListener('pointermove',bgMove);
 stage.addEventListener('pointerup',bgUp);
 stage.addEventListener('pointercancel',bgUp);
 window.addEventListener('pointerup',bgUp);
-function onDown(e){ if(asking)return; down=true;sx=e.clientX;panewrap.setPointerCapture&&panewrap.setPointerCapture(e.pointerId);
+function onDown(e){ if(asking)return;
+  if(scrollP > PRESENT){ recall(); return; }
+  down=true;sx=e.clientX;panewrap.setPointerCapture&&panewrap.setPointerCapture(e.pointerId);
   if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);}}
 function onMove(e){ if(!down||asking)return; dragX=(e.clientX-sx)/ (window.innerWidth*0.5); dragX=Math.max(-1.3,Math.min(1.3,dragX)); }
 function onUp(){ if(!down)return; down=false;
@@ -480,6 +520,10 @@ window.addEventListener('pointerup',onUp);
 let scrollP=0;
 addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max(0,scrollY/(h*0.55)));
   if(scrollY>h*0.30) navbar.classList.add('on'); else navbar.classList.remove('on');
+  citydim.style.opacity = Math.min(0.94, Math.max(0,(scrollY - h*0.30)/(h*0.85)));
+  const moving = scrollY > h*0.06;
+  hint.classList.toggle('gone', moving || touched);
+  featured.classList.toggle('on', touched && !moving);
 },{passive:true});
 
 function loop(){
@@ -493,8 +537,9 @@ function loop(){
   const tz = -scrollP*260;
   const ty = scrollP*70;
   const op = 1-scrollP*0.92;
-  panewrap.style.transform=`translate(-50%,-46%) translate3d(${curX*16+T.x*10}px,${ty}px,${tz}px) rotateY(${ry}deg) rotateX(${rx}deg)`;
+  panewrap.style.transform=`translate(-50%,-50%) translate3d(${curX*16+T.x*10}px,${ty}px,${tz}px) rotateY(${ry}deg) rotateX(${rx}deg)`;
   panewrap.style.opacity=op;
+  panewrap.style.pointerEvents = scrollP>0.85 ? 'none' : 'auto';
 
   /* LOOKING AROUND. Tilt aims the view; drag holds it. Clamped to real image overflow so
      an edge can never appear. The city moves LESS than the glass — that gap is the depth. */
@@ -502,8 +547,8 @@ function loop(){
   // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
   // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
   // Tilt moves your head; the drag moves your feet.
-  const aimX = T.x*Math.min(room.x, stage.clientWidth*0.55);
-  const aimY = T.y*Math.min(room.up, stage.clientHeight*0.09);
+  const aimX = T.x*Math.min(room.x, stage.clientWidth*1.05);
+  const aimY = T.y*Math.min(room.up, stage.clientHeight*0.11);
   curPanX += ((panX+aimX) - curPanX)*0.10;
   curPanY += ((panY+aimY) - curPanY)*0.10;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
