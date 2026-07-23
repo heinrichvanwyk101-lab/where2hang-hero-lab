@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v3. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v4. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -49,9 +49,15 @@
      pans further. The pane moves more than the city, so the gap between them reads as
      distance. This is the difference between a backdrop and a place.
 
-     ASSET REQUIRED — see PANO below. The mechanism ships now and works with the existing
-     portrait plates at reduced range; it only becomes properly immersive once a WIDE plate
-     exists, because a portrait plate has almost nothing to pan to.
+     v4 — PANORAMAS LANDED (2172x724, 3.00:1). Framing re-solved for them.
+     The delivered horizon sits at 77% of image height, not the 58-60% specified, so the
+     plates are 77% sky and 23% water. Rather than crop them, the scale and offset below are
+     solved so the TOWERS land where the pane needs them (about 35-70% of the viewport) and a
+     band of water still reads above the sill. Consequence: the view is tight — roughly three
+     towers across a phone. That is deliberate. It is close to what a person actually sees
+     looking at the Corniche from across the water, and it is why panning feels like moving
+     your head rather than scrolling a picture.
+     Every mood keeps its portrait plate as an automatic fallback if a pano is missing.
 
      v3 also cuts the scroll distance. v1/v2 held the stage for two full viewport heights
      before the reveal began, which is three or four thumb swipes of nothing happening.
@@ -89,7 +95,7 @@ body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif
    to look. height:132% gives vertical range; a wide image gives horizontal range. With a
    portrait plate the horizontal range is small — that is the asset limitation, not a bug. */
 .skywrap{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;overflow:hidden}
-.sky{position:absolute;top:-16%;left:50%;height:132%;width:auto;max-width:none;
+.sky{position:absolute;top:-52%;left:50%;height:155%;width:auto;max-width:none;
      filter:saturate(.86) contrast(.88) brightness(.9);transition:opacity 1.1s var(--ease);
      will-change:transform;transform:translate3d(-50%,0,0)}
 #skyA{opacity:1}#skyB{opacity:0}
@@ -347,38 +353,25 @@ const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
    moment, and it costs three CSS property writes.
    Temporary assets: the three existing tod plates, reused as moods.
 --------------------------------------------------------------------------- */
-/* PANO — the asset this feature actually needs.
-   Generate to the same UI spec as the existing plates (Spec v2 §5: horizon ~58-60%, dark
-   upper band, dark water lower band, brand palette, no foreground clutter, static) but at
-   roughly 3:1, e.g. 3072x1024. Drop them in the lab root as:
-       Hero-pano-night.webp / Hero-pano-morning.webp / Hero-pano-afternoon.webp
-   Until they exist every mood silently falls back to its portrait plate and the horizontal
-   range collapses to almost nothing. The mechanism is identical either way. */
-const PANO = { "./Hero-night.webp":"./Hero-pano-night.webp",
-               "./Hero-morning.webp":"./Hero-pano-morning.webp",
-               "./Hero-afternoon.webp":"./Hero-pano-afternoon.webp" };
-function plateFor(src, img){
-  const wide = PANO[src];
-  if(!wide) return src;
-  img.onerror = () => { img.onerror=null; img.src = src; };   // no pano yet -> portrait
-  return wide;
-}
+/* Each mood carries a wide pano and a portrait fallback. If a pano 404s the portrait loads
+   in its place and only the horizontal range suffers — nothing breaks. */
+function plateFor(m, img){ img.onerror = () => { img.onerror=null; img.src = m.plate; }; return m.pano || m.plate; }
 
 const MOODS = [
   { intent:"Somewhere with a view",   kicker:"Abu Dhabi · golden hour",
-    plate:"./Hero-afternoon.webp", tint:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)", haze:"rgba(40,26,20,.5)",
+    plate:"./Hero-afternoon.webp", pano:"./Hero-pano-sunset.webp", tint:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)", haze:"rgba(40,26,20,.46)",
     answer:"<b>Iris, Yas Bay</b> — west-facing terrace, the sun drops behind the marina at 19:04." },
   { intent:"Brunch, outside",         kicker:"Abu Dhabi · late morning",
-    plate:"./Hero-morning.webp",   tint:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)", haze:"rgba(30,44,52,.44)",
+    plate:"./Hero-morning.webp",   pano:"./Hero-pano-day.webp",    tint:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)", haze:"rgba(24,38,46,.60)",
     answer:"<b>Mamsha Al Saadiyat</b> — shaded tables on the promenade, sea breeze until about 11:30." },
   { intent:"Late and loud",           kicker:"Abu Dhabi · after dark",
-    plate:"./Hero-night.webp",     tint:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)", haze:"rgba(9,26,34,.6)",
+    plate:"./Hero-night.webp",     pano:"./Hero-pano-night.webp",  tint:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)", haze:"rgba(9,26,34,.55)",
     answer:"<b>Yas Bay waterfront</b> — four venues still filling, live sets from 22:00." },
   { intent:"Quiet, near the water",   kicker:"Abu Dhabi · this evening",
-    plate:"./Hero-night.webp",     tint:"linear-gradient(180deg,#0a1c2c,#123642 50%,#16414a)", haze:"rgba(10,30,40,.55)",
+    plate:"./Hero-night.webp",     pano:"./Hero-pano-night.webp",  tint:"linear-gradient(180deg,#0a1c2c,#123642 50%,#16414a)", haze:"rgba(10,30,40,.52)",
     answer:"<b>Eastern Mangroves</b> — boardwalk is empty after 20:00, water is glass." },
   { intent:"Take the kids",           kicker:"Abu Dhabi · today",
-    plate:"./Hero-afternoon.webp", tint:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)", haze:"rgba(46,70,80,.4)",
+    plate:"./Hero-afternoon.webp", pano:"./Hero-pano-day.webp",    tint:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)", haze:"rgba(30,48,58,.58)",
     answer:"<b>Umm Al Emarat Park</b> — shade, animals and a splash area. Busiest after 16:30." },
 ];
 
@@ -401,7 +394,7 @@ prog.style.width=(100/MOODS.length)+'%';
 function applyMood(i,{silent=false}={}){
   const m=MOODS[i];
   const show = front ? skyB : skyA, hide = front ? skyA : skyB;
-  show.src = plateFor(m.plate, show);
+  show.src = plateFor(m, show);
   requestAnimationFrame(()=>{ show.style.opacity=1; hide.style.opacity=0; front=!front; });
   tintEl.style.background=m.tint;
   hazeEl.style.setProperty('--haze',m.haze);
@@ -413,7 +406,7 @@ function applyMood(i,{silent=false}={}){
   prog.style.transform='translateX('+(i*100)+'%)';
   if(!silent) tap('commit');
 }
-skyA.src = plateFor(MOODS[idx].plate, skyA);
+skyA.src = plateFor(MOODS[idx], skyA);
 applyMood(idx,{silent:true});
 
 /* --- the pane as the search surface. Tap the row, speak to the window. --- */
@@ -449,18 +442,21 @@ let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
    image actually has spare. Dragging the background holds where you put it — snapping back
    would undo the feeling of having looked somewhere. */
 let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;
+const SKY_SCALE=1.55, SKY_TOP=-0.52;
 function skyRoom(){
-  const img=skyA.naturalWidth?skyA:skyB;
-  const h=stage.clientHeight*1.32;
-  const w=img.naturalWidth ? h*(img.naturalWidth/img.naturalHeight) : stage.clientWidth;
-  return { x:Math.max(0,(w-stage.clientWidth)/2), y:Math.max(0,(h-stage.clientHeight)/2) };
+  const img=skyA.naturalWidth?skyA:skyB, V=stage.clientHeight, VW=stage.clientWidth;
+  const h=V*SKY_SCALE;
+  const w=img.naturalWidth ? h*(img.naturalWidth/img.naturalHeight) : VW;
+  // vertical room is ASYMMETRIC: the plate is pulled well up, so there is a lot of headroom
+  // above and very little below. Clamping to the real figures is what stops an edge showing.
+  return { x:Math.max(0,(w-VW)/2), up:Math.max(0,-SKY_TOP*V), down:Math.max(0,(h+SKY_TOP*V)-V) };
 }
 function bgDown(e){ if(e.target.closest('.panewrap,.featured,.askrow'))return;
   pdown=true; psx=e.clientX; psy=e.clientY; pbx=panX; pby=panY;
   if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);} }
 function bgMove(e){ if(!pdown)return; const r=skyRoom();
   panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*1.15));
-  panY=Math.max(-r.y,Math.min(r.y, pby+(e.clientY-psy)*0.55)); }
+  panY=Math.max(-r.down,Math.min(r.up, pby+(e.clientY-psy)*0.5)); }
 function bgUp(){ pdown=false; }
 stage.addEventListener('pointerdown',bgDown);
 stage.addEventListener('pointermove',bgMove);
@@ -503,11 +499,15 @@ function loop(){
   /* LOOKING AROUND. Tilt aims the view; drag holds it. Clamped to real image overflow so
      an edge can never appear. The city moves LESS than the glass — that gap is the depth. */
   const room=skyRoom();
-  const aimX = T.x*room.x*0.62, aimY = T.y*room.y*0.55;
+  // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
+  // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
+  // Tilt moves your head; the drag moves your feet.
+  const aimX = T.x*Math.min(room.x, stage.clientWidth*0.55);
+  const aimY = T.y*Math.min(room.up, stage.clientHeight*0.09);
   curPanX += ((panX+aimX) - curPanX)*0.10;
   curPanY += ((panY+aimY) - curPanY)*0.10;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
-  const cy2=Math.max(-room.y,Math.min(room.y,curPanY - scrollP*30));
+  const cy2=Math.max(-room.down,Math.min(room.up,curPanY - scrollP*30));
   const tf=`translate3d(calc(-50% + ${cx2}px),${cy2}px,0)`;
   skyA.style.transform=tf; skyB.style.transform=tf;
 
