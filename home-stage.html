@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v9. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v10. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,17 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v10 — pan range opened up, lower surfaces lifted:
+       1. USE THE FILE. The panos have well over a thousand pixels of travel each side and
+          tilt was only borrowing about 200 of them, which is why it felt limited however
+          much the calibration moved. Tilt now reaches most of the real range, and a drag
+          crosses the city in two swipes rather than five.
+       2. The erratic component was never gain — see the note at the top of tilt.js. Gamma
+          gimbal-locks when a phone is held upright, so the INPUT was unstable. Orientation
+          now comes from the gravity vector, which has no singularity at any attitude.
+       3. Surfaces below the fold were sitting on near-black and reading as murky. Chips,
+          lens buttons and action cards lifted, and the row rules brightened.
+
      v9 — two corrections:
        1. THE DIM OVERSHOT. v7 was 58% dark and the city argued with the text; v8 went to 93%
           and killed it entirely by the bottom. Now capped so the city holds at roughly a
@@ -258,10 +269,10 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 
 .lens{display:flex;gap:8px;margin-top:12px}
 .lensbtn{flex:1;padding:10px 6px;border-radius:13px;font-size:12px;font-weight:700;color:var(--sub);
-  background:rgba(20,28,32,.55);border:1px solid rgba(120,220,210,.16);transition:.28s var(--ease)}
-.lensbtn.on{color:var(--text);border-color:rgba(120,220,210,.5);background:rgba(0,84,76,.28)}
+  background:rgba(32,44,50,.66);border:1px solid rgba(120,220,210,.24);transition:.28s var(--ease)}
+.lensbtn.on{color:var(--text);border-color:rgba(120,220,210,.62);background:rgba(0,96,86,.40)}
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-.act2{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:13px;background:rgba(20,28,32,.5);border:1px solid rgba(120,220,210,.14)}
+.act2{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:13px;background:rgba(32,44,50,.62);border:1px solid rgba(120,220,210,.22)}
 .act2 .i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.12);color:var(--teal2)}
 .act2.g .i{background:rgba(232,181,71,.13);color:var(--gold)}
 .act2 b{font-size:13.5px}.act2 small{display:block;color:var(--sub);font-size:10.5px}
@@ -280,7 +291,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 
 .board{margin-top:6px}
 .row{display:flex;align-items:center;gap:13px;padding:14px 4px}
-.row + .row{border-top:1px solid rgba(150,200,195,.07)}
+.row + .row{border-top:1px solid rgba(150,200,195,.14)}
 .row .th{width:52px;height:52px;border-radius:12px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5)}
 .row .th img{width:100%;height:100%;object-fit:cover}
 .row .info{flex:1;min-width:0}
@@ -291,14 +302,14 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .row .dist{font-family:var(--mono);font-size:12px;color:var(--sub);flex:0 0 auto}
 
 .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
-.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:rgba(20,28,32,.62);border:1px solid rgba(0,194,168,.3)}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#eef7f5;background:rgba(34,46,52,.72);border:1px solid rgba(0,194,168,.36)}
 .chip.on{background:linear-gradient(180deg,var(--teal2),var(--teal));color:#04120f;border-color:transparent}
 .edi{display:flex;align-items:center;gap:12px;margin-top:6px;padding:10px 2px}
-.edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.12);border:1px solid rgba(120,220,210,.3)}
+.edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.2);border:1px solid rgba(120,220,210,.4)}
 .edi .t{flex:1;font-size:13.5px;font-weight:600}.edi .t span{color:var(--teal2)}
 .edi .c{color:var(--sub)}
 .cats{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px 16px}
-.cats a{font-size:13px;color:var(--sub);font-weight:500}
+.cats a{font-size:13px;color:#c2d0ce;font-weight:500}
 
 /* navigation stays out of the way until the stage has done its job */
 .navbar{position:fixed;left:12px;right:12px;bottom:16px;z-index:30;display:flex;justify-content:space-around;padding:7px 6px;border-radius:20px;
@@ -527,7 +538,7 @@ function bgDown(e){ if(e.target.closest('.panewrap,.featured,.askrow'))return;
   pdown=true; psx=e.clientX; psy=e.clientY; pbx=panX; pby=panY;
   if(!touched){touched=true;hint.classList.add('gone');setTimeout(()=>featured.classList.add('on'),380);} }
 function bgMove(e){ if(!pdown)return; const r=skyRoom();
-  panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*1.25));
+  panX=Math.max(-r.x,Math.min(r.x, pbx+(e.clientX-psx)*2.4));
   panY=Math.max(-r.down,Math.min(r.up, pby+(e.clientY-psy)*0.5)); }
 function bgUp(){ pdown=false; }
 stage.addEventListener('pointerdown',bgDown);
@@ -588,8 +599,8 @@ function loop(){
   // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
   // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
   // Tilt moves your head; the drag moves your feet.
-  const aimX = T.x*Math.min(room.x, stage.clientWidth*0.5);
-  const aimY = T.y*Math.min(room.up, stage.clientHeight*0.055);
+  const aimX = T.x*Math.min(room.x, stage.clientWidth*1.7);
+  const aimY = T.y*Math.min(room.up, stage.clientHeight*0.085);
   curPanX += ((panX+aimX) - curPanX)*0.075;
   curPanY += ((panY+aimY) - curPanY)*0.075;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
