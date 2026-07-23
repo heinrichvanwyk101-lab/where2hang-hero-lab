@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
+     Where2Hang — IMMERSIVE MOBILE STAGE. Fork of home.html for the first viewport only.
+     Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
+
+     THE CONCEPT — the intelligent window.
+     You are not looking AT Abu Dhabi. You are standing somewhere in it, looking THROUGH a
+     single pane of glass. The pane is the one dominant physical object on screen and it is
+     also Wasta — you do not put a search box next to the window, the window is the thing
+     you speak to.
+
+     DEPTH — built from four real planes, not from scale:
+       BACKGROUND  the city plate, pushed back, parallaxing slowly
+       HAZE        atmosphere between you and the city
+       MIDGROUND   the glass pane: thickness, refraction, cast shadow, specular rake
+       FOREGROUND  a sill that OCCLUDES the bottom of the pane. Occlusion is what sells it —
+                   something passing in front of something else is the only depth cue a
+                   6-inch screen cannot fake with scale.
+
+     WHY CSS 3D AND NOT WebGL:
+     One pane with perspective, backdrop-filter and transforms is native, compositor-driven
+     and nearly free. Reaching for three.js here would be the desktop-scene-in-portrait
+     mistake expressed as an engine choice.
+
+     THE INTERACTION — the city responds, without a single fake car:
+     Drag the pane sideways to move through INTENTIONS ("somewhere with a view", "late and
+     loud"), not venues. Each intention re-lights Abu Dhabi behind the glass — plate, tint
+     and haze all change. Light is the living city. This stays inside the frozen decision
+     that 3D life cannot be anchored to a 2D photograph.
+
+     PROGRESSIVE REVEAL: no Home controls above the fold. Scrolling tilts the pane away and
+     the functional modules rise from behind it. Everything below is unchanged from home.html.
+
+     Reuses tilt.js, haptics.js, area-rail.js, city-state.js. Does NOT use city-hero.js. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Where2Hang — Stage</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+:root{
+  --teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1);
+  --tint:linear-gradient(180deg,#061420,#0a2530 48%,#0d3238);
+  --haze:rgba(9,26,34,.55);
+}
+html{scroll-behavior:auto}
+body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+/* ===========================================================================
+   ACT 1 — the stage. Sticky for two viewport heights so the scroll drives the
+   reveal while the city stays put. All sky layers pinned to 100lvh so the
+   Android URL-bar collapse can never resize them (the old crop-jump bug).
+   =========================================================================== */
+.act1{position:relative;height:200lvh}
+.stage{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden;perspective:1150px;perspective-origin:50% 44%}
+
+/* --- BACKGROUND: two plates, crossfaded when the intention changes --- */
+.sky{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background-position:center bottom;background-size:cover;background-repeat:no-repeat;
+     filter:saturate(.86) contrast(.88) brightness(.9);transform:translateZ(0) scale(1.12);transition:opacity 1.1s var(--ease);will-change:transform,opacity}
+#skyA{opacity:1}#skyB{opacity:0}
+.tint{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background:var(--tint);opacity:.34;mix-blend-mode:soft-light;transition:background 1.1s var(--ease);pointer-events:none}
+/* HAZE: atmosphere sitting between the city and the glass. This is the plane that makes the
+   pane read as NEAR rather than pasted on. */
+.haze{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;pointer-events:none;transition:background 1.1s var(--ease);
+      background:radial-gradient(120% 70% at 50% 62%,transparent 0%,var(--haze) 78%),
+                 linear-gradient(180deg,rgba(4,10,14,.62) 0%,rgba(4,10,14,.06) 26%,rgba(4,10,14,0) 48%,rgba(4,10,14,.5) 100%)}
+
+/* --- MIDGROUND: the one physical object --- */
+.panewrap{position:absolute;left:50%;top:44%;width:78vw;max-width:340px;aspect-ratio:3/4.05;
+          transform-style:preserve-3d;will-change:transform;touch-action:pan-y;cursor:grab}
+.panewrap:active{cursor:grabbing}
+.pane{position:absolute;inset:0;border-radius:26px;overflow:hidden;transform-style:preserve-3d;
+      backdrop-filter:blur(13px) saturate(1.4) brightness(1.06);-webkit-backdrop-filter:blur(13px) saturate(1.4) brightness(1.06);
+      background:linear-gradient(158deg,rgba(46,78,86,.30),rgba(10,24,30,.42) 52%,rgba(6,18,24,.5));
+      box-shadow:
+        0 1px 0 rgba(205,255,250,.60) inset,        /* lit top rim — the glass has thickness */
+        0 -1px 0 rgba(0,0,0,.55) inset,             /* dark bottom edge */
+        1px 0 0 rgba(150,235,225,.22) inset,
+        -1px 0 0 rgba(0,0,0,.35) inset,
+        0 46px 90px rgba(0,0,0,.66),                /* cast into the haze */
+        0 10px 26px rgba(0,0,0,.45),
+        0 0 40px rgba(0,194,168,.13)}
+/* specular rake — driven by tilt and by drag. Light is what makes glass read as glass. */
+.pane::after{content:"";position:absolute;inset:-40%;pointer-events:none;
+  background:linear-gradient(102deg,transparent 34%,rgba(190,255,250,.16) 46%,rgba(255,255,255,.05) 52%,transparent 62%);
+  transform:translateX(var(--sheen,0%));will-change:transform}
+/* the pane's own edge thickness, drawn as a second face slightly behind */
+.paneedge{position:absolute;inset:0;border-radius:26px;pointer-events:none;
+  transform:translateZ(-9px) scale(.995);background:rgba(3,10,14,.55);
+  box-shadow:0 0 0 1px rgba(120,200,195,.16)}
+
+/* content inside the glass */
+.panein{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:22px 20px 24px;z-index:2}
+.kicker{font-size:9.5px;font-weight:800;letter-spacing:2.2px;text-transform:uppercase;color:var(--teal2);opacity:.9;margin-bottom:9px}
+.intent{font-size:27px;font-weight:800;letter-spacing:-.9px;line-height:1.06;text-shadow:0 4px 26px rgba(0,0,0,.6);min-height:2.2em}
+.answer{margin-top:12px;font-size:12.5px;color:#cfdcda;line-height:1.45;opacity:0;transform:translateY(6px);transition:.5s var(--ease)}
+.answer.on{opacity:1;transform:none}
+.answer b{color:var(--text);font-weight:700}
+.pips{display:flex;gap:6px;margin-top:16px}
+.pips i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.26);transition:.35s var(--ease)}
+.pips i.on{width:16px;border-radius:3px;background:var(--teal2);box-shadow:0 0 8px rgba(0,194,168,.55)}
+
+/* --- FOREGROUND: the sill. Occludes the pane. This is the depth cue that cannot be faked. --- */
+.sill{position:absolute;left:-8%;right:-8%;bottom:-2px;height:23vh;z-index:5;pointer-events:none;
+  background:linear-gradient(180deg,rgba(3,8,11,0) 0%,rgba(3,8,11,.72) 34%,rgba(3,8,11,.97) 62%,#05080b 100%);
+  filter:blur(3px)}   /* near-plane depth of field. Blurring the FOREGROUND is legitimate; blurring the city is not. */
+.sillrail{position:absolute;left:-10%;right:-10%;bottom:15.5vh;height:10px;z-index:6;pointer-events:none;
+  background:linear-gradient(180deg,rgba(150,215,210,.16),rgba(2,8,10,.9));filter:blur(2.5px);opacity:.85}
+
+/* minimal branding only */
+.mark{position:absolute;top:calc(16px + env(safe-area-inset-top));left:20px;z-index:7;font-weight:800;font-size:15px;letter-spacing:-.3px;opacity:.86;text-shadow:0 2px 14px rgba(0,0,0,.8)}
+.mark i{color:var(--teal);font-style:normal}
+.mark small{display:block;font-size:8px;font-weight:700;letter-spacing:2.4px;color:var(--sub);margin-top:2px}
+
+/* the invitation — one line, gone after first touch */
+.hint{position:absolute;left:0;right:0;bottom:calc(9vh + env(safe-area-inset-bottom));z-index:7;text-align:center;
+      font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--sub);transition:.45s var(--ease)}
+.hint.gone{opacity:0;transform:translateY(6px)}
+.hint b{color:var(--teal2);font-weight:700}
+
+/* ===========================================================================
+   ACT 2 — the reveal. Nothing here is above the fold. It rises from behind
+   the glass as you continue, and it is deliberately flatter than the stage.
+   =========================================================================== */
+.reveal{position:relative;z-index:8;background:linear-gradient(180deg,rgba(5,8,11,.86) 0%,#05080b 12%);padding:8px 18px 130px;margin-top:-6vh}
+.pull{text-align:center;padding:2px 0 18px;color:var(--sub);font-size:11px;letter-spacing:1.4px}
+
+.wasta{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;
+  background:linear-gradient(180deg,rgba(28,44,48,.5),rgba(13,24,28,.56));
+  border:1px solid rgba(120,220,210,.26);box-shadow:0 14px 34px rgba(0,0,0,.5),0 1px 0 rgba(180,255,246,.2) inset}
+.wasta .ic{color:var(--gold);flex:0 0 auto}
+.wasta .q{flex:1;color:#c7d3d1;font-size:13.5px;font-weight:500}
+.wasta .go{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:#04120f;background:linear-gradient(180deg,var(--teal2),var(--teal));box-shadow:0 4px 12px rgba(0,194,168,.3)}
+
+.lens{display:flex;gap:8px;margin-top:12px}
+.lensbtn{flex:1;padding:10px 6px;border-radius:13px;font-size:12px;font-weight:700;color:var(--sub);
+  background:rgba(20,28,32,.55);border:1px solid rgba(120,220,210,.16);transition:.28s var(--ease)}
+.lensbtn.on{color:var(--text);border-color:rgba(120,220,210,.5);background:rgba(0,84,76,.28)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.act2{display:flex;align-items:center;gap:10px;padding:10px 13px;border-radius:13px;background:rgba(20,28,32,.5);border:1px solid rgba(120,220,210,.14)}
+.act2 .i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;background:rgba(0,194,168,.12);color:var(--teal2)}
+.act2.g .i{background:rgba(232,181,71,.13);color:var(--gold)}
+.act2 b{font-size:13.5px}.act2 small{display:block;color:var(--sub);font-size:10.5px}
+
+.sec{display:flex;align-items:baseline;justify-content:space-between;margin:30px 4px 12px}
+.sec h4{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#dbe7e5}
+.sec .va{color:var(--teal2);font-size:12px;font-weight:600}
+
+.arearail{position:relative;height:200px;margin:2px -18px 0}
+.arearail canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+.areacap{text-align:center;margin-top:2px;color:var(--sub);font-size:11.5px}
+.areacap b{color:var(--text);font-weight:700}
+.dots{display:flex;gap:7px;justify-content:center;margin-top:9px}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.28);transition:.3s var(--ease)}
+.dots i.on{width:18px;border-radius:3px;background:var(--teal2)}
+
+.board{margin-top:6px}
+.row{display:flex;align-items:center;gap:13px;padding:14px 4px}
+.row + .row{border-top:1px solid rgba(150,200,195,.07)}
+.row .th{width:52px;height:52px;border-radius:12px;flex:0 0 auto;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.5)}
+.row .th img{width:100%;height:100%;object-fit:cover}
+.row .info{flex:1;min-width:0}
+.row .nm{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .tg{display:flex;align-items:center;gap:8px;margin-top:3px}
+.row .live{font-size:9.5px;font-weight:800;letter-spacing:.6px;color:#04120f;background:var(--teal2);padding:2px 6px;border-radius:5px}
+.row .rec{font-size:12px;color:var(--gold);font-weight:600}
+.row .dist{font-family:var(--mono);font-size:12px;color:var(--sub);flex:0 0 auto}
+
+.chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:6px}
+.chip{padding:11px 15px;border-radius:22px;font-size:13px;font-weight:600;color:#e6f2f0;background:rgba(20,28,32,.62);border:1px solid rgba(0,194,168,.3)}
+.chip.on{background:linear-gradient(180deg,var(--teal2),var(--teal));color:#04120f;border-color:transparent}
+.edi{display:flex;align-items:center;gap:12px;margin-top:6px;padding:10px 2px}
+.edi .i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;color:var(--teal2);background:rgba(0,194,168,.12);border:1px solid rgba(120,220,210,.3)}
+.edi .t{flex:1;font-size:13.5px;font-weight:600}.edi .t span{color:var(--teal2)}
+.edi .c{color:var(--sub)}
+.cats{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px 16px}
+.cats a{font-size:13px;color:var(--sub);font-weight:500}
+
+/* navigation stays out of the way until the stage has done its job */
+.navbar{position:fixed;left:12px;right:12px;bottom:16px;z-index:30;display:flex;justify-content:space-around;padding:7px 6px;border-radius:20px;
+  background:linear-gradient(180deg,rgba(30,46,50,.5),rgba(14,26,30,.58));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid rgba(120,220,210,.22);opacity:0;transform:translateY(14px);transition:.6s var(--ease);pointer-events:none}
+.navbar.on{opacity:1;transform:none;pointer-events:auto}
+.navbar a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--sub);font-size:10px;font-weight:600}
+.navbar a.on{color:var(--teal2)}
+.labflag{position:fixed;left:0;right:0;bottom:0;z-index:40;text-align:center;font-size:10.5px;color:#0a0d0e;background:var(--gold);padding:5px;font-weight:700}
+
+@media (prefers-reduced-motion: reduce){
+  .sky,.pane::after{transition:none}
+  .panewrap{transform:none !important}
+}
+</style>
+</head>
+<body>
+
+<div class="act1">
+  <div class="stage" id="stage">
+    <div class="sky" id="skyA"></div>
+    <div class="sky" id="skyB"></div>
+    <div class="tint" id="tint"></div>
+    <div class="haze" id="haze"></div>
+
+    <div class="mark">Where<i>2</i>Hang<small>KNOW WHERE TO GO</small></div>
+
+    <div class="panewrap" id="panewrap">
+      <div class="paneedge"></div>
+      <div class="pane" id="pane">
+        <div class="panein">
+          <div class="kicker" id="kicker">Abu Dhabi · this evening</div>
+          <div class="intent" id="intent">Somewhere with a view</div>
+          <div class="answer" id="answer"></div>
+          <div class="pips" id="pips"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sillrail"></div>
+    <div class="sill"></div>
+    <div class="hint" id="hint"><b>Drag</b> the glass</div>
+  </div>
+</div>
+
+<section class="reveal" id="reveal">
+  <div class="pull">Or just ask</div>
+
+  <div class="wasta">
+    <svg class="ic" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg>
+    <span class="q">"padel, then lunch nearby"</span>
+    <span class="go"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  </div>
+
+  <div class="lens">
+    <button class="lensbtn on" data-world="eat">Eat &amp; Drink</button>
+    <button class="lensbtn" data-world="do">Activities</button>
+    <button class="lensbtn" data-world="see">Entertainment</button>
+  </div>
+  <div class="acts">
+    <div class="act2"><span class="i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><span><b>Find My Spot</b><small>Nearest to you</small></span></div>
+    <div class="act2 g"><span class="i"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h4"/></svg></span><span><b>Plan a day</b><small>Multi-stop route</small></span></div>
+  </div>
+
+  <!-- everything below is unchanged from home.html -->
+  <div class="sec"><h4>Areas</h4><span class="va">View all</span></div>
+  <div class="arearail"><canvas id="arearail" aria-label="Explore Abu Dhabi by area"></canvas></div>
+  <div class="areacap">Drag to explore · <b id="areaname">Corniche</b> · <span id="areacount">112 venues</span></div>
+  <div class="dots" id="areadots"></div>
+
+  <div class="sec"><h4>On today</h4><span class="va">View all</span></div>
+  <div class="board">
+    <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-mcgettigans.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">The Brewhouse</div><div class="tg"><span class="live">LIVE</span><span class="rec">Premier League · all day</span></div></div><div class="dist">1.2 km</div></div>
+    <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-coya.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">Coya Abu Dhabi</div><div class="tg"><span class="rec">Business lunch · 12–3pm</span></div></div><div class="dist">2.1 km</div></div>
+    <div class="row"><div class="th"><img src="https://where2hang.ae/images/Venue-iris.webp" onerror="this.src='https://where2hang.ae/images/Hero-skyline.webp'" alt=""></div><div class="info"><div class="nm">Iris Yas Bay</div><div class="tg"><span class="live">LIVE</span><span class="rec">Ladies' night · from 8pm</span></div></div><div class="dist">3.4 km</div></div>
+  </div>
+
+  <div class="sec"><h4>By experience</h4></div>
+  <div class="chips">
+    <span class="chip">Brunch</span><span class="chip">Live Music</span><span class="chip">Beach Day</span><span class="chip">Date Night</span><span class="chip">Padel</span><span class="chip">Sunset Spots</span>
+  </div>
+
+  <div class="sec"><h4>Reading</h4></div>
+  <div class="edi"><span class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6"/></svg></span><span class="t"><span>Grazia Middle East</span> · Where to be seen this weekend</span><span class="c">&rsaquo;</span></div>
+
+  <div class="sec"><h4>Browse all</h4></div>
+  <div class="cats"><a>Restaurants</a><a>Bars</a><a>Cafés</a><a>Beaches</a><a>Parks</a><a>Padel</a><a>Cinemas</a><a>Rooftops</a><a>Museums</a><a>Nightlife</a></div>
+</section>
+
+<nav class="navbar" id="navbar">
+  <a class="on"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg>Home</a>
+  <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Search</a>
+  <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Events</a>
+  <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/></svg>Map</a>
+  <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</a>
+</nav>
+<div class="labflag">LAB · STAGE EXPERIMENT · one glass object · city responds to intention</div>
+
+<script type="module">
+import { mountAreaRail } from './area-rail.js?v=7';
+import { getCityState } from './city-state.js';
+import { mountTilt } from './tilt.js?v=1';
+import { tap } from './haptics.js?v=1';
+
+const B='https://where2hang.ae/images/';
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------------------------------------------------------------------
+   INTENTIONS, not venues. Each one re-lights Abu Dhabi. The plate, the tint and
+   the haze all move together — that coordinated change is the "city responds"
+   moment, and it costs three CSS property writes.
+   Temporary assets: the three existing tod plates, reused as moods.
+--------------------------------------------------------------------------- */
+const MOODS = [
+  { intent:"Somewhere with a view",   kicker:"Abu Dhabi · golden hour",
+    plate:"./Hero-afternoon.webp", tint:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)", haze:"rgba(40,26,20,.5)",
+    answer:"<b>Iris, Yas Bay</b> — west-facing terrace, the sun drops behind the marina at 19:04." },
+  { intent:"Brunch, outside",         kicker:"Abu Dhabi · late morning",
+    plate:"./Hero-morning.webp",   tint:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)", haze:"rgba(30,44,52,.44)",
+    answer:"<b>Mamsha Al Saadiyat</b> — shaded tables on the promenade, sea breeze until about 11:30." },
+  { intent:"Late and loud",           kicker:"Abu Dhabi · after dark",
+    plate:"./Hero-night.webp",     tint:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)", haze:"rgba(9,26,34,.6)",
+    answer:"<b>Yas Bay waterfront</b> — four venues still filling, live sets from 22:00." },
+  { intent:"Quiet, near the water",   kicker:"Abu Dhabi · this evening",
+    plate:"./Hero-night.webp",     tint:"linear-gradient(180deg,#0a1c2c,#123642 50%,#16414a)", haze:"rgba(10,30,40,.55)",
+    answer:"<b>Eastern Mangroves</b> — boardwalk is empty after 20:00, water is glass." },
+  { intent:"Take the kids",           kicker:"Abu Dhabi · today",
+    plate:"./Hero-afternoon.webp", tint:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)", haze:"rgba(46,70,80,.4)",
+    answer:"<b>Umm Al Emarat Park</b> — shade, animals and a splash area. Busiest after 16:30." },
+];
+
+const stage=document.getElementById('stage'), panewrap=document.getElementById('panewrap');
+const skyA=document.getElementById('skyA'), skyB=document.getElementById('skyB');
+const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
+const intentEl=document.getElementById('intent'), kickerEl=document.getElementById('kicker');
+const answerEl=document.getElementById('answer'), pipsEl=document.getElementById('pips');
+const hint=document.getElementById('hint'), navbar=document.getElementById('navbar');
+const pane=document.getElementById('pane');
+
+/* start on the mood that matches the real clock, so it is already YOUR Abu Dhabi */
+const tod=getCityState().tod;
+let idx = tod==='dawn'?1 : tod==='day'?4 : tod==='sunset'?0 : 2;
+let front=true;   // which sky layer is showing
+
+MOODS.forEach((_,i)=>{const d=document.createElement('i');pipsEl.appendChild(d);});
+
+function applyMood(i,{silent=false}={}){
+  const m=MOODS[i];
+  const show = front ? skyB : skyA, hide = front ? skyA : skyB;
+  show.style.backgroundImage=`url('${m.plate}')`;
+  requestAnimationFrame(()=>{ show.style.opacity=1; hide.style.opacity=0; front=!front; });
+  tintEl.style.background=m.tint;
+  hazeEl.style.setProperty('--haze',m.haze);
+  document.documentElement.style.setProperty('--haze',m.haze);
+  kickerEl.textContent=m.kicker;
+  intentEl.textContent=m.intent;
+  answerEl.classList.remove('on');
+  clearTimeout(applyMood._t);
+  applyMood._t=setTimeout(()=>{answerEl.innerHTML=m.answer;answerEl.classList.add('on');},520);
+  [...pipsEl.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+  if(!silent) tap('commit');
+}
+skyA.style.backgroundImage=`url('${MOODS[idx].plate}')`;
+applyMood(idx,{silent:true});
+
+/* ---------------------------------------------------------------------------
+   THE DRAG. Horizontal only — vertical is left to the page so scrolling still
+   works. Rotation is small and springs back; the pane has mass.
+--------------------------------------------------------------------------- */
+const tilt=mountTilt({enabled:!REDUCE});
+if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
+  window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
+}
+new IntersectionObserver(es=>es.forEach(e=>tilt.setEnabled(e.isIntersecting&&!REDUCE)),{threshold:.05}).observe(stage);
+
+let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
+function onDown(e){down=true;sx=e.clientX;panewrap.setPointerCapture&&panewrap.setPointerCapture(e.pointerId);
+  if(!touched){touched=true;hint.classList.add('gone');}}
+function onMove(e){ if(!down)return; dragX=(e.clientX-sx)/ (window.innerWidth*0.5); dragX=Math.max(-1.3,Math.min(1.3,dragX)); }
+function onUp(){ if(!down)return; down=false;
+  if(Math.abs(dragX)>0.34){ idx=(idx + (dragX<0?1:-1) + MOODS.length)%MOODS.length; applyMood(idx); }
+  dragX=0;
+}
+panewrap.addEventListener('pointerdown',onDown);
+panewrap.addEventListener('pointermove',onMove);
+panewrap.addEventListener('pointerup',onUp);
+panewrap.addEventListener('pointercancel',onUp);
+window.addEventListener('pointerup',onUp);
+
+/* scroll drives the pane away — the reveal is earned, not shown */
+let scrollP=0;
+addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max(0,scrollY/(h*0.95)));
+  if(scrollY>h*0.45) navbar.classList.add('on'); else navbar.classList.remove('on');
+},{passive:true});
+
+function loop(){
+  raf=requestAnimationFrame(loop);
+  const T = REDUCE ? {x:0,y:0} : tilt.get();
+  curX += (dragX-curX)*0.12;
+
+  /* the pane: drag rotates it, tilt nudges it, scroll pushes it back and down */
+  const ry = curX*17 + T.x*5.5;
+  const rx = -T.y*4.2 + scrollP*13;
+  const tz = -scrollP*260;
+  const ty = scrollP*70;
+  const op = 1-scrollP*0.92;
+  panewrap.style.transform=`translate(-50%,-46%) translate3d(${curX*16+T.x*10}px,${ty}px,${tz}px) rotateY(${ry}deg) rotateX(${rx}deg)`;
+  panewrap.style.opacity=op;
+
+  /* the city moves LESS than the glass — that difference is the depth */
+  const sx2 = T.x*11 + curX*7;
+  const sy2 = T.y*7 - scrollP*26;
+  skyA.style.transform=skyB.style.transform=`translate3d(${sx2}px,${sy2}px,0) scale(1.12)`;
+
+  /* light rakes across the glass as it turns */
+  pane.style.setProperty('--sheen', (curX*46 + T.x*30) + '%');
+}
+if(!REDUCE) loop();
+
+/* one-time nudge at 1.4s: the glass breathes so you know it is holdable */
+setTimeout(()=>{ if(touched) return;
+  let t0=performance.now();
+  (function nudge(now){ const p=(now-t0)/620; if(p>=1||touched){dragX=0;return;}
+    dragX=Math.sin(p*Math.PI*2)*0.11*(1-p); requestAnimationFrame(nudge); })(performance.now());
+}, 1400);
+
+/* lens + chips are inert in this prototype */
+document.querySelectorAll('.lensbtn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.lensbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on');tap('commit');}));
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}));
+
+/* Areas rail unchanged */
+const AREAS=[
+  {name:"Corniche",count:"112 venues",img:B+"Area-corniche.png",fallback:B+"venue-plate-1-teal.webp"},
+  {name:"Saadiyat Island",count:"64 venues",img:B+"Area-saadiyat.png",fallback:B+"venue-plate-1-teal.webp"},
+  {name:"Yas Marina",count:"89 venues",img:B+"Area-yasmerina.png",fallback:B+"venue-plate-1-teal.webp"},
+  {name:"Al Maryah",count:"41 venues",img:B+"Area-almaryah.png",fallback:B+"venue-plate-1-teal.webp"},
+  {name:"Al Reem",count:"38 venues",img:B+"Area-alreem.png",fallback:B+"venue-plate-1-teal.webp"},
+];
+const an=document.getElementById('areaname'),ac=document.getElementById('areacount'),areadots=document.getElementById('areadots');
+AREAS.forEach((_,i)=>{const d=document.createElement('i');if(i===0)d.className='on';areadots.appendChild(d);});
+try{ mountAreaRail(document.getElementById('arearail'),{areas:AREAS,
+  onFront:(i,a)=>{an.textContent=a.name;ac.textContent=a.count;[...areadots.children].forEach((d,k)=>d.classList.toggle('on',k===i));tap('snap');},
+  onSelect:()=>{}});
+}catch(e){console.error(e);}
+</script>
+</body>
+</html>
