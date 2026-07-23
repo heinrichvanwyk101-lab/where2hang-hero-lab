@@ -1,18 +1,27 @@
-// PASTE TARGET: where2hang-hero-lab/city-hero.js  (byte-identical to the app's lib/cityHero.js)
-// Where2Hang — city hero LEAF (v2 · "Living Abu Dhabi"). Framework-agnostic WebGL.
+// PASTE TARGET: where2hang-hero-lab/city-hero.js  (replaces previous · v3)
+// Where2Hang — city hero LEAF (v3 · "Living Abu Dhabi"). Framework-agnostic WebGL.
 // British spelling, no emojis. Requires the "three" dependency.
 //
-// The featured venue FLOATS over the water — no ring, no platform. A soft pool of light
-// and a contact shadow sit beneath it. Only three cards ever show: previous, current, next.
-// The camera drifts slowly around the stage (cinematic) while the front card holds focus;
-// swipe to change venue, tap the front card to open it. Real photos load as textures
-// (same-origin in the app), falling back to world art, then a drawn placeholder.
+// v3 changes (Spec v2 §3 — performance and battery budget). Nothing visual changed:
+//   1. TRUE loop shutdown. v2 kept calling requestAnimationFrame forever and merely skipped
+//      the work when offscreen, so the tick never idled. v3 cancels the loop and restarts it
+//      with kick() — the same pattern area-rail.js already uses.
+//   2. 30fps limiter when idle, 60fps while a finger is down. Drift and float are
+//      indistinguishable at 30; touch is where the difference is felt.
+//   3. Frame-rate-independent easing. The old `cur += (target-cur)*0.12` was per-frame, so at
+//      30fps the carousel would have settled at half speed. Now driven by dt.
+//   4. prefers-reduced-motion: no drift, no float, no twinkle. Static stage.
+//   5. Frame-time watchdog -> opts.onDowngrade() after 60 consecutive expensive frames.
+//   6. MSAA only below DPR 2 (at 2x the rounded card edges resolve fine without it).
+//   7. pause() / resume() exported.
 //
-// API:  const h = mountCityHero(canvas, { venues, getState, onFront, onSelect }); h.destroy();
+// API:  const h = mountCityHero(canvas, { venues, getState, onFront, onSelect, onDowngrade });
+//       h.pause(); h.resume(); h.destroy();
 //   venues:  [{ name, sub, img, fallback, href, anchor }]
 //   getState: () => ({ tod, busyness, hotIndex })
 //   onFront:  (index, venue) => void
 //   onSelect: (index, venue) => void
+//   onDowngrade: () => void        // fires once if the device cannot hold the frame budget
 
 import * as THREE from "three";
 
@@ -21,15 +30,27 @@ export function mountCityHero(canvas, opts) {
   const getState = opts.getState || (() => ({ tod: "night", busyness: 0.4, hotIndex: -1 }));
   const onFront = opts.onFront || (() => {});
   const onSelect = opts.onSelect || (() => {});
-  if (!venues.length) return { destroy() {} };
+  const onDowngrade = opts.onDowngrade || (() => {});
+  if (!venues.length) return { destroy() {}, pause() {}, resume() {} };
 
   const N = venues.length;
   const CW = 2.5, CH = 2.78, CHALF = CH / 2;
   const SPACING = 2.2, SIDE_ANGLE = 0.55, FLOAT = 0.55;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  // ---- budget constants (Spec v2 §3) ----
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);          // §3.3 cap DPR at 2
+  const MIN_MS_IDLE = 1000 / 30;                                  // §3.4 30fps when ambient
+  const MIN_MS_TOUCH = 0;                                         //      unthrottled while dragging
+  const SLOW_FRAME_MS = 25, SLOW_FRAME_RUN = 60;                  //      watchdog threshold
+  const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas, alpha: true,
+    antialias: DPR < 2,            // at 2x the card edges resolve without MSAA — real saving
+    powerPreference: "low-power",
+  });
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(DPR);
   let W = canvas.clientWidth, H = canvas.clientHeight || 1;
   renderer.setSize(W, H, false);
 
@@ -56,7 +77,7 @@ export function mountCityHero(canvas, opts) {
   }
   const loader = new THREE.TextureLoader(); loader.crossOrigin = "anonymous";
   function loadPhoto(mat, v) {
-    const set = (tex) => { tex.anisotropy = 4; mat.map = tex; mat.needsUpdate = true; };
+    const set = (tex) => { tex.anisotropy = 4; mat.map = tex; mat.needsUpdate = true; kick(); };
     const tryFb = () => { if (v.fallback) loader.load(v.fallback, set, undefined, () => {}); };
     if (v.img) loader.load(v.img, set, undefined, tryFb); else tryFb();
   }
@@ -75,27 +96,23 @@ export function mountCityHero(canvas, opts) {
     new THREE.MeshBasicMaterial({ map: radialTex("rgba(0,194,168,.16)", "rgba(0,40,44,.03)"), transparent: true, opacity: .32, depthWrite: false, blending: THREE.AdditiveBlending }));
   water.position.set(0, -1.6, -6); water.rotation.x = -0.2; scene.add(water);
 
-  // The skyline PLATE now supplies the real sky, stars and water. We keep only a few faint
+  // The skyline PLATE supplies the real sky, stars and water. We keep only a few faint
   // twinkles welded to the camera (so they never slide) — no traffic, no planes, no boats.
   const ambient = new THREE.Group(); camera.add(ambient); if (!scene.children.includes(camera)) scene.add(camera);
   const stars = [];
   for (let i = 0; i < 5; i++) {
     const s = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16), new THREE.MeshBasicMaterial({ map: radialTex("rgba(220,240,255,.9)", "rgba(180,210,255,0)"), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    // camera-local placement: up in the view, a little ahead
     s.position.set(-2.2 + Math.random() * 4.4, 1.4 + Math.random() * 1.6, -6);
     s.userData = { base: .16 + Math.random() * .16, ph: Math.random() * 6.28, sp: .5 + Math.random() * .6 };
     ambient.add(s); stars.push(s);
   }
 
-  // window overlay (inner shadow + frame lip + top light-catch) and a soft cast shadow — drawn once, shared
+  // window overlay (vignette + bottom scrim + top light-catch) and a soft cast shadow — drawn once, shared
   function frameTex() {
     const W2 = 512, H2 = 569, cv = document.createElement("canvas"); cv.width = W2; cv.height = H2; const c = cv.getContext("2d");
-    // gentle all-round vignette (soft, not a frame)
     let rg = c.createRadialGradient(W2 / 2, H2 / 2, H2 * 0.34, W2 / 2, H2 / 2, H2 * 0.66);
     rg.addColorStop(0, "transparent"); rg.addColorStop(1, "rgba(0,0,0,.26)"); c.fillStyle = rg; c.fillRect(0, 0, W2, H2);
-    // bottom scrim (caption legibility only)
     let g = c.createLinearGradient(0, H2, 0, H2 - 165); g.addColorStop(0, "rgba(0,0,0,.55)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(0, H2 - 165, W2, 165);
-    // whisper of light along the very top edge (no border)
     g = c.createLinearGradient(0, 2, 0, 30); g.addColorStop(0, "rgba(220,255,251,.32)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(16, 2, W2 - 32, 28);
     return new THREE.CanvasTexture(cv);
   }
@@ -145,12 +162,13 @@ export function mountCityHero(canvas, opts) {
   // ---- interaction: swipe changes venue (prev/next); tap opens ----
   let target = 0, cur = 0, down = false, moved = false, sx = 0, st = 0, dt0 = 0;
   function frontIndex() { return ((Math.round(cur)) % N + N) % N; }
-  function down_(e) { down = true; moved = false; sx = e.clientX; st = target; dt0 = performance.now(); canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); }
+  function down_(e) { down = true; moved = false; sx = e.clientX; st = target; dt0 = performance.now(); canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); kick(); }
   function move_(e) { if (!down) return; const dx = e.clientX - sx; if (Math.abs(dx) > 6) moved = true; target = st - dx / 150; }
   function up_() {
     if (!down) return; down = false;
     if (!moved && performance.now() - dt0 < 300) { const i = frontIndex(); onSelect(i, venues[i]); return; }
     target = Math.round(target);
+    kick();
   }
   canvas.addEventListener("pointerdown", down_);
   canvas.addEventListener("pointermove", move_);
@@ -158,30 +176,49 @@ export function mountCityHero(canvas, opts) {
   canvas.addEventListener("pointercancel", up_);
   window.addEventListener("pointerup", up_);
 
-  function onResize() { W = canvas.clientWidth; H = canvas.clientHeight || 1; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); fit(); }
+  function onResize() { W = canvas.clientWidth; H = canvas.clientHeight || 1; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); fit(); kick(); }
   window.addEventListener("resize", onResize);
 
-  let running = true;
-  const onVis = () => { running = !document.hidden; };
+  // ---- loop lifecycle (Spec v2 §3.1/§3.2) — cancel the loop, do not idle-spin it ----
+  let alive = true, visible = true, onscreen = true, raf = 0, lastT = 0;
+  let slowRun = 0, downgraded = false;
+  const t0 = performance.now(); let lastIdx = -1, hintStart = -1;
+
+  function shouldRun() { return alive && visible && onscreen; }
+  function kick() { if (!raf && shouldRun()) { lastT = 0; raf = requestAnimationFrame(frame); } }
+  function halt() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+  function sync() { if (shouldRun()) kick(); else halt(); }
+
+  const onVis = () => { visible = !document.hidden; sync(); };
   document.addEventListener("visibilitychange", onVis);
-  const io = new IntersectionObserver((es) => es.forEach((e) => (running = e.isIntersecting)), { threshold: 0.05 });
+  const io = new IntersectionObserver((es) => es.forEach((e) => { onscreen = e.isIntersecting; sync(); }), { threshold: 0.05 });
   io.observe(canvas);
 
-  // ambient scheduler: one rare event every 18–32s
-  const t0 = performance.now(); let lastIdx = -1, raf = 0, hintStart = -1;
-  function frame() {
-    raf = requestAnimationFrame(frame); if (!running) return;
-    const t = (performance.now() - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
+  function frame(now) {
+    if (!shouldRun()) { raf = 0; return; }
+    raf = requestAnimationFrame(frame);
 
-    cur += (target - cur) * 0.12;
+    // frame limiter: 30fps ambient, uncapped while a finger is down
+    const minMs = down ? MIN_MS_TOUCH : MIN_MS_IDLE;
+    if (lastT && now - lastT < minMs - 0.5) return;
+    const dt = lastT ? Math.min((now - lastT) / 1000, 0.1) : 1 / 60;
+    lastT = now;
+    const work0 = performance.now();
+
+    const t = (work0 - t0) / 1000; const S = getState(); const busy = S.busyness ?? 0.4;
+
+    // frame-rate-independent easing (was a fixed 0.12 per frame)
+    cur += (target - cur) * (1 - Math.pow(1 - 0.12, dt * 60));
     if (!down) { while (cur >= N) { cur -= N; target -= N; } while (cur < 0) { cur += N; target += N; } }  // keep small forever (invisible shift) -> no nth-round blank
-    const idx = frontIndex(); const hot = idx === S.hotIndex; const pulse = hot ? (0.5 + 0.5 * Math.sin(t * 3)) : 0;
+    const idx = frontIndex(); const hot = idx === S.hotIndex; const pulse = (hot && !REDUCE) ? (0.5 + 0.5 * Math.sin(t * 3)) : 0;
 
     // gentle one-time nudge ~1s after load, to say "I'm swipeable"
     if (hintStart < 0 && t > 1.1) hintStart = t;
     let hintOff = 0;
-    if (hintStart > 0 && t - hintStart < 0.8) { const p = t - hintStart; hintOff = Math.sin(p * 8) * 0.1 * (1 - p / 0.8); }
+    if (!REDUCE && hintStart > 0 && t - hintStart < 0.8) { const p = t - hintStart; hintOff = Math.sin(p * 8) * 0.1 * (1 - p / 0.8); }
     const ec = cur + hintOff;
+    const bob = REDUCE ? 0 : Math.sin(t * 1.1) * 0.05;
+
     // prev / current / next — the sides PEEK at the edges (not hidden) so the carousel is discoverable
     cards.forEach((g, i) => {
       let off = (i - ec) % N; if (off > N / 2) off -= N; if (off < -N / 2) off += N;
@@ -193,7 +230,7 @@ export function mountCityHero(canvas, opts) {
       g.scale.set(s, s, s);
       g.position.x = Math.sign(off) * SPACING * Math.pow(a, 1.7) * (1 + a * 0.08);  // ease toward centre mid-swipe -> no empty gap; full peek at rest
       g.position.z = -a * 1.5;
-      g.position.y = CHALF + FLOAT * (0.2 + centre * 0.4) + Math.sin(t * 1.1) * 0.05 * centre;  // sit closer to the water
+      g.position.y = CHALF + FLOAT * (0.2 + centre * 0.4) + bob * centre;  // sit closer to the water
       g.rotation.y = -off * SIDE_ANGLE;
       const op = Math.max(0, 1 - a * 0.45);                 // side cards ~55%
       g.userData.photo.material.opacity = op;
@@ -204,13 +241,15 @@ export function mountCityHero(canvas, opts) {
     // stage lighting follows the floating centre card
     pool.material.opacity = 0.4 + busy * 0.1 + pulse * 0.25;
     shadow.material.opacity = 0.5 - Math.abs(cur - Math.round(cur)) * 0.2;      // firm when settled, softer mid-swipe
-    backGlow.material.opacity = 0.26 + 0.08 * Math.sin(t * 1.4) + pulse * 0.2;
-    backGlow.position.y = CHALF + FLOAT + Math.sin(t * 1.1) * 0.05;
-    water.material.opacity = 0.28 + busy * 0.12 + Math.sin(t * 0.7) * 0.03;
-    stars.forEach((s) => { s.material.opacity = s.userData.base * (0.45 + 0.55 * Math.sin(t * s.userData.sp + s.userData.ph)); });
+    backGlow.material.opacity = 0.26 + (REDUCE ? 0 : 0.08 * Math.sin(t * 1.4)) + pulse * 0.2;
+    backGlow.position.y = CHALF + FLOAT + bob;
+    water.material.opacity = 0.28 + busy * 0.12 + (REDUCE ? 0 : Math.sin(t * 0.7) * 0.03);
+    if (!REDUCE) stars.forEach((s) => { s.material.opacity = s.userData.base * (0.45 + 0.55 * Math.sin(t * s.userData.sp + s.userData.ph)); });
 
     // cinematic drift as a pure DOLLY: translate the camera AND its look-at together (no rotation)
-    const dxx = Math.sin(t * 0.16) * 0.55, dyy = Math.sin(t * 0.22) * 0.18, dzz = Math.cos(t * 0.16) * 0.22;
+    const dxx = REDUCE ? 0 : Math.sin(t * 0.16) * 0.55;
+    const dyy = REDUCE ? 0 : Math.sin(t * 0.22) * 0.18;
+    const dzz = REDUCE ? 0 : Math.cos(t * 0.16) * 0.22;
     camera.position.set(bx + dxx, by + dyy, bz + dzz);
     camera.lookAt(dxx, 1.25 + dyy, dzz);
     // ambient translates with the camera -> screen-locked to the static skyline, no slide, no parallax
@@ -218,16 +257,29 @@ export function mountCityHero(canvas, opts) {
 
     if (idx !== lastIdx) { lastIdx = idx; onFront(idx, venues[idx]); }
     renderer.render(scene, camera);
+
+    // watchdog: sustained expensive frames -> tell the host to fall back (Spec v2 §3)
+    if (!downgraded) {
+      slowRun = (performance.now() - work0) > SLOW_FRAME_MS ? slowRun + 1 : 0;
+      if (slowRun >= SLOW_FRAME_RUN) { downgraded = true; try { onDowngrade(); } catch (e) {} }
+    }
+
+    // settled and idle: stop the loop entirely until something wakes it
+    if (REDUCE && !down && Math.abs(target - cur) < 0.0004) { cur = target; renderer.render(scene, camera); halt(); }
   }
-  frame();
+  kick();
 
   return {
+    pause() { alive = false; halt(); },
+    resume() { alive = true; sync(); },
     destroy() {
-      cancelAnimationFrame(raf);
+      alive = false; halt();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointerup", up_);
       document.removeEventListener("visibilitychange", onVis);
       io.disconnect();
+      cards.forEach((g) => { g.userData.photo.material.map && g.userData.photo.material.map.dispose(); g.userData.photo.material.dispose(); g.userData.fr.material.dispose(); g.userData.sh.material.dispose(); });
+      geo.dispose(); shadowGeo.dispose(); frameT.dispose(); shadowT.dispose();
       renderer.dispose();
     },
   };

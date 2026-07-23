@@ -1,11 +1,22 @@
 <!DOCTYPE html>
-<!-- PASTE TARGET: where2hang-hero-lab/home.html  (replaces previous)
+<!-- PASTE TARGET: where2hang-hero-lab/home.html  (replaces previous · Spec v2 Step 1)
      FULL HOME · one environment, richness DESCENDS down the page.
      Hero 5* (living 3D) -> Explore by Area 4* (convex WebGL rail) -> On Today 3* (calm
      departure-board rows, not cards) -> Experiences 2* (chips) -> Editorial 2* (one strip)
-     -> Categories 1* (plain text). Same Living City / Glass Cockpit world throughout, but
-     each module is treated by importance, not identically. Reuses city-hero.js, area-rail.js,
-     city-state.js. Prototype. British spelling, no emojis. -->
+     -> Categories 1* (plain text). Same Living City / Glass Cockpit world throughout.
+     Reuses city-hero.js (v3), area-rail.js, city-state.js. British spelling, no emojis.
+
+     Spec v2 Step 1 — CONTINUOUS BACKDROP:
+       · The plate was already fixed behind the whole page, but it was WALLPAPER: it never
+         moved, so it read as flat. It now parallaxes and the tint ramps down the scroll,
+         which is what makes "one city" true rather than claimed.
+       · All three sky layers are driven by NATIVE scroll-driven CSS (animation-timeline).
+         Compositor-only: no scroll listener, no JS, no jank, no battery cost.
+       · The old JS scroll handler survives only as a fallback where the API is unsupported.
+       · prefers-reduced-motion: parallax and tint ramp off; the dim ramp stays (legibility,
+         not decoration).
+       · Low-power devices (saveData / deviceMemory < 4) skip WebGL entirely and get the
+         static city with a live caption. Same for the hero's own frame-time watchdog. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -17,7 +28,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
 :root{--teal:#00C2A8;--teal2:#3DE9CD;--gold:#E8B547;--text:#F3F8F7;--sub:#AAB8B6;--mono:ui-monospace,"SF Mono",Menlo,monospace;--ease:cubic-bezier(.4,0,.2,1)}
 html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('./Hero-night.webp') center bottom/cover no-repeat;filter:saturate(.9) contrast(.87) brightness(.96)}
+.skybg{position:fixed;inset:0;z-index:0;background:#06202b url('./Hero-night.webp') center bottom/cover no-repeat;filter:saturate(.9) contrast(.87) brightness(.96);will-change:transform}
 /* wide screens (unfolded Fold, tablets): the portrait plate would crop to a thin band with cover.
    Fit by width and anchor the skyline low so it stays whole; extra height reads as sky. */
 @media (min-aspect-ratio: 3/4){
@@ -29,6 +40,42 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .skytod{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.25;transition:background 1.4s ease}
 .skyscrim{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(5,10,13,.52) 0%,rgba(5,10,13,.14) 22%,rgba(5,10,13,0) 42%,rgba(5,10,13,0) 60%,rgba(5,10,13,.42) 100%)}
 .skydim{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .12s linear;background:linear-gradient(180deg,rgba(5,10,14,0),rgba(5,10,14,.5) 55%,rgba(5,10,14,.72))}
+
+/* ============================================================================
+   STEP 1 — the city moves with you. Native scroll-driven, compositor only.
+   animation-range on skydim (40vh -> 110vh) reproduces the old JS ramp exactly.
+   ============================================================================ */
+@supports (animation-timeline: scroll()){
+  .skydim{
+    transition:none;
+    animation:dimup linear both;
+    animation-timeline:scroll(root block);
+    animation-range:40vh 110vh;
+  }
+  @keyframes dimup{from{opacity:0}to{opacity:1}}
+
+  @media (prefers-reduced-motion: no-preference){
+    /* the plate drifts up as you descend — the parallax that turns wallpaper into depth.
+       scale(1.1) gives the headroom so the translate never exposes an edge. */
+    .skybg{
+      animation:skyrise linear both;
+      animation-timeline:scroll(root block);
+      animation-range:0 320vh;
+    }
+    @keyframes skyrise{
+      from{transform:translate3d(0,0,0) scale(1.1)}
+      to  {transform:translate3d(0,-4%,0) scale(1.1)}
+    }
+    /* time-of-day colour recedes as the body takes over — you are moving away from the sky */
+    .skytod{
+      animation:tintfade linear both;
+      animation-timeline:scroll(root block);
+      animation-range:0 220vh;
+    }
+    @keyframes tintfade{from{opacity:.25}to{opacity:.09}}
+  }
+}
+
 .dots{display:flex;gap:7px;justify-content:center;margin-top:9px}
 .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.28);transition:.3s var(--ease)}
 .dots i.on{width:18px;border-radius:3px;background:var(--teal2);box-shadow:0 0 8px rgba(0,194,168,.5)}
@@ -59,6 +106,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .search .wchip .o{width:7px;height:7px;border-radius:50%;background:var(--teal2);box-shadow:0 0 8px var(--teal2)}
 .stage{position:relative;flex:1;min-height:168px;margin:6px -18px 0}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab}
+.stage.flat canvas{display:none}
 .cap{position:relative;z-index:3;text-align:center;margin-top:-44px;padding:6px 16px 2px;pointer-events:none}
 .cap::before{content:"";position:absolute;left:50%;transform:translateX(-50%);top:-8px;width:min(94%,470px);height:140px;z-index:-1;pointer-events:none;background:radial-gradient(120% 80% at 50% 46%,rgba(5,10,13,.6),rgba(5,10,13,0) 70%)}
 .cap .eb{font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal2);margin-bottom:2px}
@@ -118,7 +166,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .edi .c{color:var(--sub)}
 
 /* CATEGORIES 1* — plainest */
-.cats{margin-top:14px;display:flex;flex-wrap:wrap;gap:x;gap:8px 16px}
+.cats{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px 16px}
 .cats a{font-size:13px;color:var(--sub);font-weight:500}
 .cats a:active{color:var(--teal2)}
 
@@ -127,6 +175,10 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 .navbar a.on{color:var(--teal2)}.navbar a.on svg{filter:drop-shadow(0 0 8px rgba(0,194,168,.5))}
 .labflag{position:fixed;left:0;right:0;bottom:0;z-index:40;text-align:center;font-size:10.5px;letter-spacing:.4px;color:#0a0d0e;background:var(--gold);padding:5px;font-weight:700}
 .fb{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:30px;color:var(--sub);font-size:13px}
+
+@media (prefers-reduced-motion: reduce){
+  .online .d,.scrollcue span{animation:none}
+}
 </style>
 </head>
 <body>
@@ -153,7 +205,7 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
       </div>
       <div class="wchip"><span class="o"></span>Wasta online</div>
     </div>
-    <div class="stage"><canvas id="gl" aria-label="Tonight in Abu Dhabi"></canvas>
+    <div class="stage" id="stage"><canvas id="gl" aria-label="Tonight in Abu Dhabi"></canvas>
       <div class="fb" id="fb">Couldn't load the 3D engine from the CDN.</div>
     </div>
     <div class="cap"><div class="eb" id="eb">Tonight in Abu Dhabi</div><h3 id="nm">Iris</h3><p id="sb">Eat &amp; Drink · Yas Bay</p><div class="dots" id="herodots"></div></div>
@@ -215,15 +267,27 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
 
 <script>
   document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}));
-  const skydim=document.getElementById('skydim');
-  function onScroll(){const h=window.innerHeight;skydim.style.opacity=Math.min(1,Math.max(0,(window.scrollY-h*0.4)/(h*0.7)));}
-  window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+
+  // Scroll-driven CSS handles the sky layers natively (compositor, no JS). This listener is a
+  // FALLBACK ONLY — it attaches where animation-timeline is unsupported, and drives the dim
+  // ramp alone. Parallax is deliberately not polyfilled: a JS scroll parallax is exactly the
+  // kind of main-thread work Spec v2 §3 exists to prevent.
+  var SDA = !!(window.CSS && CSS.supports && CSS.supports('animation-timeline','scroll()'));
+  if(!SDA){
+    var skydim=document.getElementById('skydim');
+    var onScroll=function(){var h=window.innerHeight;skydim.style.opacity=Math.min(1,Math.max(0,(window.scrollY-h*0.4)/(h*0.7)));};
+    window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  }
 </script>
 <script type="module">
-  import { mountCityHero } from './city-hero.js?v=30';
+  import { mountCityHero } from './city-hero.js?v=31';
   import { mountAreaRail } from './area-rail.js?v=7';
   import { getCityState } from './city-state.js';
   const B='https://where2hang.ae/images/';
+
+  // ---- device budget (Spec v2 §3): skip WebGL on data-saver / low-memory devices ----
+  const conn = navigator.connection || {};
+  const LOW_POWER = !!conn.saveData || (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory < 4);
 
   // ---- time of day: greeting + tint (getCityState reads the real clock) ----
   const TINT={dawn:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)",day:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)",sunset:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)",night:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)"};
@@ -237,7 +301,9 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
   const PLATE={dawn:"Hero-morning.webp",day:"Hero-afternoon.webp",sunset:"Hero-night.webp",night:"Hero-night.webp"};
   document.getElementById('skybg').style.backgroundImage="url('./"+(PLATE[tod]||"Hero-night.webp")+"')";
 
-  // ---- lens worlds: each lens drives BOTH the hero venues AND the backdrop art ----
+  // ---- lens worlds: each lens drives the hero venues. The `bg` values below are currently
+  //      DEAD — the lens->backdrop wiring was dropped when the tod plates landed, and stays
+  //      parked until Hero-do.webp and Hero-see.webp exist (Spec v2 §5, open item). ----
   const WORLDS={
     eat:{bg:"Hero-skyline.webp",venues:[
       {name:"Iris",sub:"Eat & Drink · Yas Bay",img:B+"Venue-iris.webp",anchor:true},
@@ -262,23 +328,36 @@ html,body{background:#05080b;color:var(--text);font-family:Inter,system-ui,sans-
     ]},
   };
 
+  const stage=document.getElementById('stage');
   const eb=document.getElementById('eb'),nm=document.getElementById('nm'),sb=document.getElementById('sb'),herodots=document.getElementById('herodots');
   function buildDots(el,n){el.innerHTML='';for(let i=0;i<n;i++){const d=document.createElement('i');if(i===0)d.className='on';el.appendChild(d);}}
   function setDot(el,i){[...el.children].forEach((d,k)=>d.classList.toggle('on',k===i));}
+  function caption(v,i,dots){eb.textContent=v.anchor?(evening?"Trending tonight":"Trending now"):(evening?"Tonight in Abu Dhabi":"Today in Abu Dhabi");nm.textContent=v.name;sb.textContent=v.sub;if(dots)setDot(herodots,i);}
 
-  let heroH=null;
+  let heroH=null, flat=LOW_POWER;
+  // Static path: no WebGL. The plate is already the city, so the stage simply reads as sky and
+  // the caption still works. Step 10 replaces this with the CSS glass-card fallback.
+  function mountFlat(w){
+    if(heroH){heroH.destroy();heroH=null;}
+    stage.classList.add('flat');
+    const vs=WORLDS[w].venues; buildDots(herodots,vs.length); caption(vs[0],0,true);
+  }
   function mountWorld(w){
+    if(flat) return mountFlat(w);
     const world=WORLDS[w];
     const vs=world.venues.map(v=>({...v,fallback:"./Hero-night.webp",href:B}));
     if(heroH)heroH.destroy();
+    stage.classList.remove('flat');
     buildDots(herodots,vs.length);
     heroH=mountCityHero(document.getElementById('gl'),{venues:vs,getState:()=>getCityState(vs.length),
-      onFront:(i,v)=>{eb.textContent=v.anchor?(evening?"Trending tonight":"Trending now"):(evening?"Tonight in Abu Dhabi":"Today in Abu Dhabi");nm.textContent=v.name;sb.textContent=v.sub;setDot(herodots,i);},
-      onSelect:()=>{}});
+      onFront:(i,v)=>caption(v,i,true),
+      onSelect:()=>{},
+      onDowngrade:()=>{ flat=true; console.warn('[hero] frame budget exceeded — falling back to static city'); mountFlat(current); }});
   }
+  let current='eat';
   document.querySelectorAll('.lensbtn').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.lensbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
-    mountWorld(b.dataset.world);
+    current=b.dataset.world; mountWorld(current);
   }));
   try{ mountWorld('eat'); }catch(e){document.getElementById('fb').style.display='grid';console.error(e);}
 
