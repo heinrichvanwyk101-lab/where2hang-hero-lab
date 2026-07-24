@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v24. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v25. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,17 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v25 — two corrections to the stitch:
+       1. PANEL ORDER WAS REVERSED. I joined the panels west-to-east, which put Emirates
+          Palace on the LEFT. Every previous plate had it on the right, and that is also the
+          real view from the water. Re-stitched east-to-west: Al Maryah, central, Palace.
+       2. IMAGES WERE NOT CACHE-BUSTED. tilt.js and the scripts carry a version string but the
+          plates never did, so a ten-minute Pages cache could serve the OLD 3:1 file against
+          the NEW framing constants — which produces exactly the symptom of the view sitting
+          off to one side with nothing on the other. All plate URLs now carry ?v, and it must
+          be bumped whenever a plate is regenerated.
+       Also added LOOK_CENTRE_PX: the neutral view no longer has to be the middle of the file.
+
      v24 — THE STITCHED PANORAMA. Three separately generated Corniche panels — west (Etihad
      and Emirates Palace), central, and Al Maryah/Al Reem — aligned, colour-matched and joined
      with 200px feathered seams into one 4922x887 master at 5.55:1. Measured seam energy is
@@ -630,7 +641,11 @@ const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* Each mood carries a wide pano and a portrait fallback. If a pano 404s the portrait loads
    in its place and only the horizontal range suffers — nothing breaks. */
-function plateFor(m, img){ img.onerror = () => { img.onerror=null; img.src = m.plate; }; return m.pano || m.plate; }
+const IMG_V = '?v=25';   // BUMP WHENEVER A PLATE IS REGENERATED
+function plateFor(m, img){
+  img.onerror = () => { img.onerror=null; img.src = m.plate + IMG_V; };
+  return (m.pano || m.plate) + IMG_V;
+}
 
 const MOODS = [
   { intent:"Somewhere with a view",   kicker:"Abu Dhabi · golden hour",
@@ -667,6 +682,10 @@ const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
 // ---------------------------------------------------------------------------------
 const LOOK_X_PX = 1500;
 const LOOK_Y_PX = 70;
+// Where the view rests when you are not looking around. 0 is the middle of the file; negative
+// shifts the resting view toward the left of the panorama, positive toward the right. Use this
+// to sit the neutral view on the best stretch of city rather than on whatever the centre is.
+const LOOK_CENTRE_PX = 0;
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
@@ -825,7 +844,7 @@ function loop(now){
   // Tilt gain is deliberately small. The pano is roughly ten viewports wide, so mapping full
   // tilt to full room would fly kilometres across the city on a wrist twitch and feel unstable.
   // Tilt moves your head; the drag moves your feet.
-  const aimX = -T.x*Math.min(room.x, LOOK_X_PX);   // turn right -> image goes left
+  const aimX = LOOK_CENTRE_PX - T.x*Math.min(room.x, LOOK_X_PX);   // turn right -> image goes left
   const aimY =  T.y*Math.min(room.up, LOOK_Y_PX);  // point up -> reveal more sky
   curPanX += ((panX+aimX) - curPanX)*0.075;
   curPanY += ((panY+aimY) - curPanY)*0.075;
