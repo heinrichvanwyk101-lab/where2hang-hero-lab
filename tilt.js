@@ -47,14 +47,17 @@ export function mountTilt(opts = {}) {
   const RATE_DEAD   = opts.rateDeadband ?? 2.2; // deg/sec of tremor, subtracted not zeroed
   const BIAS_ADAPT  = opts.biasAdapt ?? 0.015;  // how fast the zero-rate offset is learned
   const DEAD_DEG    = opts.deadDeg ?? 0.35;
-  const TAU         = opts.tau ?? 0.30;         // easing time constant, seconds
+  const TAU         = opts.tau ?? 0.42;         // easing time constant, seconds
   //   CURVE       response shape. 1 is linear. Higher makes SMALL turns calm while a large
   //               deliberate turn still reaches the far end of the panorama. This is the dial
   //               for "over-sensitive" once the range is already wide — a linear map cannot be
   //               both calm at 5 degrees and reach 1500px at 40, but a curve can.
   //               At 2.0:  5deg -> 23px,  10deg -> 94px,  20deg -> 375px,  40deg -> 1500px.
   const CURVE       = opts.curve ?? 2.0;
-  const BLEED       = opts.bleed ?? 0.0016;     // recentre per event when no compass to trust
+  // With no compass to anchor it, integrated yaw walks to the rail after a few small movements
+  // and simply stays there — which is why the sweep felt enormous without a large gesture.
+  // A firmer bleed makes the neutral view mean something: it eases back to where you are facing.
+  const BLEED       = opts.bleed ?? 0.005;      // recentre per event when no compass to trust
   const FUSE        = opts.fuse ?? 0.09;        // pull toward the compass when it is alive
 
   // DIRECTION. The only two switches. +1 or -1.

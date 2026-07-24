@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v49. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v50. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,19 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v50 — a window, not a dragged image. Two faults, both fair:
+       1. TOO SENSITIVE, and the mechanism is specific. Integrated yaw ACCUMULATES, and with no
+          compass to anchor it a few small movements walk it to the rail where it stays — so the
+          far end of a 1500px sweep is reached without a large gesture. Travel is now 600px,
+          which is also only 36% of the 1652px available, so the edge of the panorama is never
+          approached. Easing is heavier and the bleed back to centre firmer, so the neutral view
+          means something again.
+       2. FLAT AS ONE LAYER — and that one is mine. After the ghosting incident I set depth to a
+          FIXED 14px offset across 1500px of travel, which is invisible. It is now
+          PROPORTIONAL to the pan (sky 0.93x, water 1.09x) but hard-capped at 22px of total
+          divergence, so it grows with movement where it can be felt and can never reach the
+          hundreds of pixels that caused the doubling.
+
      v49 — THE BISECT ANSWERED. With tilt-absolute.js there is no horizontal movement at all on
      this device, so the compass path is not viable here and the gyroscope rewrite was correct
      after all. tilt-absolute.js can be deleted.
@@ -887,7 +900,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=45';
+import { mountTilt } from './tilt.js?v=50';
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
@@ -940,7 +953,11 @@ const skyA=imgsA[1], skyB=imgsB[1];                 // the skyline band is the r
 // Depth as a small FIXED OFFSET, never a rate. All three bands share the base pan exactly,
 // then separate by a handful of pixels according to how far you have looked. Sky sits back,
 // water sits forward. Eight pixels is beneath conscious notice and cannot ghost.
-const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
+// Depth as a PROPORTION of the pan, capped. Fixed offsets are invisible; uncapped rates
+// diverge by hundreds of pixels at full pan and the city visibly doubles inside the mask
+// overlaps. Proportional-and-capped is felt at every pan size and cannot ghost.
+const DEPTH_RATE=[0.93,1.00,1.09];                  // sky, skyline, water
+const DEPTH_CAP=22;                                  // px, maximum divergence from the skyline
 
 // Targets, in fractions of the viewport. Towers begin here, waterline sits here. Everything
 // else — scale, offset, the three mask bands — is solved from the plate's own measured
@@ -956,8 +973,8 @@ let plateGeom = { tt:0.323, wl:0.765 };
 // the panorama is calibrated in tilt.js (yawRange / pitchRange = how far you must turn).
 //   turn RIGHT -> reveal the RIGHT of the panorama -> the image travels LEFT
 // ---------------------------------------------------------------------------------
-const LOOK_X_PX = 1500;
-const LOOK_Y_PX = 70;
+const LOOK_X_PX = 600;
+const LOOK_Y_PX = 40;
 // Where the view rests when you are not looking around. 0 is the middle of the file; negative
 // shifts the resting view toward the left of the panorama, positive toward the right. Use this
 // to sit the neutral view on the best stretch of city rather than on whatever the centre is.
@@ -1236,8 +1253,9 @@ function loop(now){
   const cx2 = heldX;
   const cy2=Math.max(-room.down,Math.min(room.up,curPanY - pageP*stage.clientHeight*0.14));
   for(let i=0;i<3;i++){
-    const dx = cx2 + T.x*DEPTH_PX[i] + BX[i]*LIFE;
-    const dy = cy2 + T.y*DEPTH_PX[i]*0.5 + BY[i]*LIFE;
+    const off = Math.max(-DEPTH_CAP, Math.min(DEPTH_CAP, cx2*(DEPTH_RATE[i]-1)));
+    const dx = cx2 + off + BX[i]*LIFE;
+    const dy = cy2 + off*0.35 + BY[i]*LIFE;
     const tf=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`
            + (i===2 ? ` scaleY(${SWELL.toFixed(4)})` : '');
     imgsA[i].style.transform=tf; imgsB[i].style.transform=tf;
