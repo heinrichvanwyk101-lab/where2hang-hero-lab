@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v33. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v34. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,17 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v34 — SUNSET AND DAY STITCHED, and framing made SELF-CALIBRATING.
+     All three moods now run on three-panel 5.55:1 panoramas, so travel is the same everywhere
+     instead of night having twice the range of the others.
+     The important change is that the framing is no longer a pair of hard-coded numbers. The
+     three plates do not share a geometry — measured tower tops sit at 32%, 27% and 41% of the
+     image and waterlines at 76%, 68% and 70% — so a single scale and offset would have framed
+     two of them wrongly. Each mood now carries its own `tt` and `wl`, and the scale, offset and
+     the three depth masks are all derived from them, targeting towers at 12% of the viewport
+     and the waterline at 46%. Re-measure and update those two numbers if a plate is replaced;
+     nothing else needs touching.
+
      v33 — debug instrumentation removed. The readout did its job: it found the inverted
      frontImg(), proved the absolute-orientation rewrite, and settled which plate was being
      served when inference had failed three times. tilt.js keeps its onDebug hook, which costs
@@ -703,7 +714,7 @@ import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
 import { mountTilt } from './tilt.js?v=24';
 import { tap } from './haptics.js?v=2';
-import { mountWater } from './water.js?v=32';
+import { mountWater } from './water.js?v=34';
 
 const B='https://where2hang.ae/images/';
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -723,7 +734,7 @@ const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* Each mood carries a wide pano and a portrait fallback. If a pano 404s the portrait loads
    in its place and only the horizontal range suffers — nothing breaks. */
-const IMG_V = '?v=25';   // BUMP WHENEVER A PLATE IS REGENERATED
+const IMG_V = '?v=34';   // BUMP WHENEVER A PLATE IS REGENERATED
 function plateFor(m, img){
   img.onerror = () => { img.onerror=null; img.src = m.plate + IMG_V; };
   return (m.pano || m.plate) + IMG_V;
@@ -731,19 +742,19 @@ function plateFor(m, img){
 
 const MOODS = [
   { intent:"Somewhere with a view",   kicker:"Abu Dhabi · golden hour",
-    plate:"./Hero-afternoon.webp", pano:"./Hero-pano-sunset.webp", sheet:"linear-gradient(180deg,#132033 0%,#24304a 22%,#3a3040 48%,#141a24 62%,#05080b 100%)", tint:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)", haze:"rgba(40,26,20,.46)",
+    plate:"./Hero-afternoon.webp", pano:"./Hero-pano-sunset.webp", tt:0.268, wl:0.678, sheet:"linear-gradient(180deg,#132033 0%,#24304a 22%,#3a3040 48%,#141a24 62%,#05080b 100%)", tint:"linear-gradient(180deg,#1f2f4c,#8a4a3a 52%,#f2b06a)", haze:"rgba(40,26,20,.46)",
     answer:"<b>Iris, Yas Bay</b> — west-facing terrace, the sun drops behind the marina at 19:04." },
   { intent:"Brunch, outside",         kicker:"Abu Dhabi · late morning",
-    plate:"./Hero-morning.webp",   pano:"./Hero-pano-day.webp", sheet:"linear-gradient(180deg,#163348 0%,#274f68 26%,#2b4e5e 48%,#101d26 64%,#05080b 100%)", tint:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)", haze:"rgba(24,38,46,.60)",
+    plate:"./Hero-morning.webp",   pano:"./Hero-pano-day.webp", tt:0.408, wl:0.7, sheet:"linear-gradient(180deg,#163348 0%,#274f68 26%,#2b4e5e 48%,#101d26 64%,#05080b 100%)", tint:"linear-gradient(180deg,#13324a,#3d5164 42%,#caa46a)", haze:"rgba(24,38,46,.60)",
     answer:"<b>Mamsha Al Saadiyat</b> — shaded tables on the promenade, sea breeze until about 11:30." },
   { intent:"Late and loud",           kicker:"Abu Dhabi · after dark",
-    plate:"./Hero-night.webp",     pano:"./Hero-pano-night.webp", sheet:"linear-gradient(180deg,#050f18 0%,#08202c 28%,#07202a 50%,#061218 64%,#05080b 100%)", tint:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)", haze:"rgba(9,26,34,.55)",
+    plate:"./Hero-night.webp",     pano:"./Hero-pano-night.webp", tt:0.323, wl:0.765, sheet:"linear-gradient(180deg,#050f18 0%,#08202c 28%,#07202a 50%,#061218 64%,#05080b 100%)", tint:"linear-gradient(180deg,#061420,#0a2530 48%,#0d3238)", haze:"rgba(9,26,34,.55)",
     answer:"<b>Yas Bay waterfront</b> — four venues still filling, live sets from 22:00." },
   { intent:"Quiet, near the water",   kicker:"Abu Dhabi · this evening",
-    plate:"./Hero-night.webp",     pano:"./Hero-pano-night.webp", sheet:"linear-gradient(180deg,#071824 0%,#0b2c38 28%,#0a2a34 50%,#07181f 64%,#05080b 100%)", tint:"linear-gradient(180deg,#0a1c2c,#123642 50%,#16414a)", haze:"rgba(10,30,40,.52)",
+    plate:"./Hero-night.webp",     pano:"./Hero-pano-night.webp", tt:0.323, wl:0.765, sheet:"linear-gradient(180deg,#071824 0%,#0b2c38 28%,#0a2a34 50%,#07181f 64%,#05080b 100%)", tint:"linear-gradient(180deg,#0a1c2c,#123642 50%,#16414a)", haze:"rgba(10,30,40,.52)",
     answer:"<b>Eastern Mangroves</b> — boardwalk is empty after 20:00, water is glass." },
   { intent:"Take the kids",           kicker:"Abu Dhabi · today",
-    plate:"./Hero-afternoon.webp", pano:"./Hero-pano-day.webp", sheet:"linear-gradient(180deg,#1b3d55 0%,#31607a 26%,#33586a 48%,#121f28 64%,#05080b 100%)", tint:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)", haze:"rgba(30,48,58,.58)",
+    plate:"./Hero-afternoon.webp", pano:"./Hero-pano-day.webp", tt:0.408, wl:0.7, sheet:"linear-gradient(180deg,#1b3d55 0%,#31607a 26%,#33586a 48%,#121f28 64%,#05080b 100%)", tint:"linear-gradient(180deg,#2b6a86,#6fa3b8 45%,#cfe0e6)", haze:"rgba(30,48,58,.58)",
     answer:"<b>Umm Al Emarat Park</b> — shade, animals and a splash area. Busiest after 16:30." },
 ];
 
@@ -804,6 +815,7 @@ function applyMood(i,{silent=false}={}){
   requestAnimationFrame(()=>{ showSlot.style.opacity=1; hideSlot.style.opacity=0; front=!front; });
   tintEl.style.background=m.tint;
   hazeEl.style.setProperty('--haze',m.haze);
+  if(m.tt && m.wl){ plateGeom={tt:m.tt,wl:m.wl}; applyMasks(); applySkyFrame(); }
   if(m.sheet) document.querySelector('.skysheet').style.background=m.sheet;
   document.documentElement.style.setProperty('--haze',m.haze);
   intentEl.textContent=m.intent;
@@ -855,15 +867,35 @@ let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=
 // Framing, solved separately for each orientation and applied from JS so that the CSS and the
 // travel arithmetic cannot drift apart. Portrait puts the towers at 12-46% of the viewport;
 // landscape needs a much larger scale simply to cover the width, which puts them at 15-70%.
+// Targets, in fractions of the viewport. Towers begin here, waterline sits here. Everything
+// else — scale, offset, the three mask bands — is solved from the plate's own measured
+// geometry, so replacing a plate means updating tt and wl on its mood and nothing more.
+const AIM = { portrait:{ tower:0.12, water:0.46 }, landscape:{ tower:0.06, water:0.62 } };
+let plateGeom = { tt:0.323, wl:0.765 };
 function skyFrame(){
   const land = stage.clientWidth > stage.clientHeight;
-  return land ? { scale:1.20, top:-0.21 } : { scale:0.74, top:-0.102 };
+  const a = land ? AIM.landscape : AIM.portrait;
+  const span = Math.max(0.05, plateGeom.wl - plateGeom.tt);
+  const scale = (a.water - a.tower) / span;
+  return { scale, top: a.tower - plateGeom.tt*scale };
+}
+// The depth bands are the plate's own sky / towers / water boundaries, with wide feathering so
+// nothing shows when the layers separate.
+function applyMasks(){
+  const tt=plateGeom.tt, wl=plateGeom.wl, pc=v=>(v*100).toFixed(1)+'%';
+  const m=[
+    `linear-gradient(180deg,#000 0%,#000 ${pc(tt*0.7)},transparent ${pc(tt+0.06)})`,
+    `linear-gradient(180deg,transparent ${pc(tt-0.05)},#000 ${pc(tt+0.05)},#000 ${pc(wl-0.05)},transparent ${pc(wl+0.10)})`,
+    `linear-gradient(180deg,transparent ${pc(wl-0.08)},#000 ${pc(wl+0.05)},#000 97%,transparent 100%)`,
+  ];
+  [imgsA,imgsB].forEach(set=>set.forEach((im,i)=>{ im.style.webkitMaskImage=m[i]; im.style.maskImage=m[i]; }));
+  imgsA[2].style.transformOrigin=imgsB[2].style.transformOrigin='50% '+pc(wl);
 }
 function applySkyFrame(){
   const f=skyFrame();
   [...imgsA,...imgsB].forEach(im=>{ im.style.height=(f.scale*100).toFixed(2)+'%'; im.style.top=(f.top*100).toFixed(2)+'%'; });
 }
-applySkyFrame();
+applyMasks(); applySkyFrame();
 addEventListener('resize',applySkyFrame,{passive:true});
 addEventListener('orientationchange',()=>{ setTimeout(()=>{ applySkyFrame(); tilt.recentre(); },250); });
 function frontImg(){
