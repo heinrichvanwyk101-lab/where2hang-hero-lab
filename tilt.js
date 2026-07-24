@@ -30,11 +30,23 @@
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-  const YAW_RANGE   = opts.yawRange   ?? 25;    // degrees of turn for a full horizontal sweep
-  const PITCH_RANGE = opts.pitchRange ?? 15;    // degrees of aim for full vertical
-  const RATE_DEAD   = opts.rateDeadband ?? 1.1; // deg/sec of tremor, subtracted not zeroed
+  // ---------------------------------------------------------------------------------
+  // SENSITIVITY. Three dials, in the order worth reaching for:
+  //   YAW_RANGE   how far you must TURN for a full sweep. Higher = less sensitive. This is
+  //               the main one: it divides everything, so it changes feel without changing
+  //               how far the city can ultimately travel.
+  //   TAU         easing time constant in seconds. Higher = heavier, more lag, calmer.
+  //   RATE_DEAD   deg/sec of hand tremor subtracted before anything is integrated.
+  // Travel itself is NOT set here — that is LOOK_X_PX in home-stage.html.
+  // 25 was carried over from the absolute-heading version. Integrated gyro accumulates rather
+  // than tracking an anchor, so the same number reads as far more sensitive; 40 matches the
+  // comfortable seated turn measured on the Fold.
+  // ---------------------------------------------------------------------------------
+  const YAW_RANGE   = opts.yawRange   ?? 40;    // degrees of turn for a full horizontal sweep
+  const PITCH_RANGE = opts.pitchRange ?? 18;    // degrees of aim for full vertical
+  const RATE_DEAD   = opts.rateDeadband ?? 1.4; // deg/sec of tremor, subtracted not zeroed
   const DEAD_DEG    = opts.deadDeg ?? 0.35;
-  const TAU         = opts.tau ?? 0.24;         // easing time constant, seconds
+  const TAU         = opts.tau ?? 0.30;         // easing time constant, seconds
   const BLEED       = opts.bleed ?? 0.0016;     // recentre per event when no compass to trust
   const FUSE        = opts.fuse ?? 0.02;        // pull toward the compass when it is alive
 

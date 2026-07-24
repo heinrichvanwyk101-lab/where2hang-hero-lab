@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v42. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v43. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,13 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v43 — sensitivity. Integrated gyro accumulates rather than tracking an absolute anchor, so
+     the yaw range carried over from the compass version read as far too twitchy at the same
+     number. 25 -> 40 degrees for a full sweep, which is the comfortable seated turn measured
+     on the Fold; pitch 15 -> 18; easing 0.24 -> 0.30s; tremor deadband 1.1 -> 1.4 deg/s.
+     Total travel is unchanged at 1500px — this alters how far you must turn to reach it, not
+     how far the city can go.
+
      v42 — yaw no longer depends on the compass. Heading was being taken from `alpha`, which is
      the magnetometer channel; pitch comes from gravity and needs no compass at all. On devices
      where alpha is null or frozen — common on Android when the magnetometer is uncalibrated or
@@ -815,7 +822,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=42';
+import { mountTilt } from './tilt.js?v=43';
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
@@ -1178,7 +1185,7 @@ function loop(now){
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
       'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
       'yawRate '+(tiltDbg? tiltDbg.rate.toFixed(2):'n/a')+' deg/s\n'+
-      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 25\n'+
+      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 40\n'+
       'compass '+(tiltDbg? (tiltDbg.compass?'live':'dead — gyro only'):'n/a')+'\n'+
       'imageDx '+cx2.toFixed(0)+' px\n'+
       '\nturn the phone: T.x must move,\nthen imageDx must follow.';
