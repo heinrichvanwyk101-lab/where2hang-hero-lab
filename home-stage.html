@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v32. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v33. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,12 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v33 — debug instrumentation removed. The readout did its job: it found the inverted
+     frontImg(), proved the absolute-orientation rewrite, and settled which plate was being
+     served when inference had failed three times. tilt.js keeps its onDebug hook, which costs
+     nothing when unused, so the overlay can be reinstated from this file alone if needed.
+     All working constants are now recorded in WHERE2HANG_REDESIGN_SPEC_v3.md, not only here.
+
      v32 — REAL WATER. CSS had reached its ceiling: transforms can only move a band as a rigid
      whole, and water displaces per pixel. water.js samples the plate and offsets the texture
      coordinates in the water region with two scrolling noise fields, so the reflections
@@ -582,10 +588,6 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .navbar.on{opacity:1;transform:none;pointer-events:auto}
 .navbar a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--sub);font-size:10px;font-weight:600}
 .navbar a.on{color:var(--teal2)}
-.hud{position:fixed;left:8px;top:calc(52px + env(safe-area-inset-top));z-index:99;display:none;
-  font-family:var(--mono);font-size:11px;line-height:1.5;color:#9effe8;background:rgba(0,0,0,.78);
-  border:1px solid rgba(0,194,168,.5);border-radius:8px;padding:8px 10px;white-space:pre;pointer-events:none}
-.hud.on{display:block}
 .labflag{position:fixed;left:0;right:0;bottom:0;z-index:40;text-align:center;font-size:10.5px;color:#0a0d0e;background:var(--gold);padding:5px;font-weight:700}
 
 /* LANDSCAPE. A tall-viewport layout rotated is not a landscape layout: the glass is sized
@@ -694,7 +696,6 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
   <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/></svg>Map</a>
   <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</a>
 </nav>
-<div class="hud" id="hud"></div>
 <div class="labflag">LAB · STAGE EXPERIMENT · one glass object · city responds to intention</div>
 
 <script type="module">
@@ -839,11 +840,7 @@ featured.addEventListener('click',()=>tap('commit'));
    THE DRAG. Horizontal only — vertical is left to the page so scrolling still
    works. Rotation is small and springs back; the pane has mass.
 --------------------------------------------------------------------------- */
-const DEBUG = location.hash.indexOf('debug') >= 0;
-const hud = document.getElementById('hud');
-if(DEBUG) hud.classList.add('on');
-const tilt=mountTilt({enabled:!REDUCE, onDebug: DEBUG ? (d)=>{ dbg=d; } : null});
-let dbg=null, dbgDx=0;
+const tilt=mountTilt({enabled:!REDUCE});
 if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
   window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
 }
@@ -973,7 +970,6 @@ function loop(now){
   curPanY += ((panY+aimY) - curPanY)*0.075;
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
   const cy2=Math.max(-room.down,Math.min(room.up,curPanY - pageP*stage.clientHeight*0.14));
-  dbgDx = cx2;
   for(let i=0;i<3;i++){
     const dx = cx2 + T.x*DEPTH_PX[i] + BX[i]*LIFE;
     const dy = cy2 + T.y*DEPTH_PX[i]*0.5 + BY[i]*LIFE;
@@ -986,22 +982,6 @@ function loop(now){
       const ih=V*f.scale, iw=ih*(frontImg().naturalWidth/frontImg().naturalHeight);
       water.draw({ imgX:(VW-iw)/2+dx, imgY:f.top*V+dy, imgW:iw, imgH:ih, time:t, fade:1 });
     }
-  }
-
-  if(DEBUG && hud){
-    const d = dbg || {};
-    hud.textContent =
-      'heading   ' + (d.heading!=null ? d.heading.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
-      'elevation ' + (d.elev!=null ? d.elev.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
-      'yaw       ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '  n/a') + ' / 25\n' +
-      'pitch     ' + (d.pitch!=null ? d.pitch.toFixed(1).padStart(7) : '  n/a') + ' / 15\n' +
-      'T.x  T.y  ' + T.x.toFixed(2).padStart(6) + T.y.toFixed(2).padStart(6) + '\n' +
-      'image dx  ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +
-      'absolute  ' + (d.abs ? '    yes' : '     no') + '\n' +
-      'plate w   ' + (frontImg().naturalWidth||0).toString().padStart(7) + '\n' +
-      'aspect    ' + (frontImg().naturalWidth ? (frontImg().naturalWidth/frontImg().naturalHeight).toFixed(2) : '0').padStart(7) + ':1\n' +
-      'room.x    ' + skyRoom().x.toFixed(0).padStart(7) + ' px\n' +
-      '\nheading must RETURN to 0\nwhen you face the same way.\nBANK: heading must not move.';
   }
 
   /* moving light. The glint crawls one way across the water, the haze slides the other way
