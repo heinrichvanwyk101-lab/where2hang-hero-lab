@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v30. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v31. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,17 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v31 — WATER MOVES ALONG THE REFLECTIONS, NOT ACROSS THEM.
+     The reflections in these plates are vertical streaks running down from the towers. The
+     water band was being drifted SIDEWAYS, which slides those streaks across the frame — the
+     most photograph-like motion available, and v28 made it worse by raising the amplitude to
+     7.5px. Real swell moves a reflection along its own length and stretches it.
+     So: lateral drift on the water is now the same as the skyline, meaning no sideways slide
+     relative to the city at all. Instead the band breathes VERTICALLY and stretches about the
+     shoreline — transform-origin sits on the waterline, so the reflections lengthen away from
+     their source the way they actually do. About eight pixels of stretch at the bottom edge.
+     The glint is also slower and fainter; it was carrying too much of the effect on its own.
+
      v30 — the dim was overlapping the hero. It began ramping at 0.15 of a viewport while the
      pane does not finish receding until 0.55, so the city darkened underneath the glass while
      the glass was still the subject. The dim is a device for making the REVEAL legible; it
@@ -389,7 +400,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 /* LIGHT THAT MOVES. Nothing here is an object — it is a highlight on water and haze in air,
    which is why it cannot look pasted onto a photograph the way a fake boat would. */
 .glint{position:absolute;left:-70%;right:-70%;top:34%;height:30%;z-index:1;pointer-events:none;
-  opacity:.55;mix-blend-mode:screen;will-change:transform;
+  opacity:.38;mix-blend-mode:screen;will-change:transform;
   background:linear-gradient(101deg,transparent 32%,rgba(185,238,255,.11) 46%,rgba(255,255,255,.055) 52%,transparent 67%);
   -webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 34%,#000 66%,transparent 100%);
   mask-image:linear-gradient(180deg,transparent 0%,#000 34%,#000 66%,transparent 100%)}
@@ -412,7 +423,9 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .sky.d2{-webkit-mask-image:linear-gradient(180deg,transparent 21%,#000 34%,#000 72%,transparent 85%);
         mask-image:linear-gradient(180deg,transparent 21%,#000 34%,#000 72%,transparent 85%)}
 .sky.d3{-webkit-mask-image:linear-gradient(180deg,transparent 70%,#000 80%,#000 97%,transparent 100%);
-        mask-image:linear-gradient(180deg,transparent 70%,#000 80%,#000 97%,transparent 100%)}
+        mask-image:linear-gradient(180deg,transparent 70%,#000 80%,#000 97%,transparent 100%);
+        /* stretch about the shoreline, so reflections lengthen away from what casts them */
+        transform-origin:50% 76%}
 .tint{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background:var(--tint);opacity:.34;mix-blend-mode:soft-light;transition:background 1.1s var(--ease);pointer-events:none}
 /* HAZE: atmosphere sitting between the city and the glass. This is the plane that makes the
    pane read as NEAR rather than pasted on. */
@@ -896,8 +909,11 @@ function loop(now){
   // Idle life. Periods are deliberately incommensurate — 0.085, 0.13, 0.31 and so on share no
   // common multiple, so the bands never resynchronise and the motion never reads as a loop.
   const t = (now||0)/1000, LIFE = REDUCE ? 0 : 1;
-  const BX = [Math.sin(t*0.085)*7.0, Math.sin(t*0.130)*2.0, Math.sin(t*0.310)*7.5];
-  const BY = [Math.sin(t*0.061)*2.6, Math.sin(t*0.110)*0.8, Math.sin(t*0.470)*3.0];
+  const BX = [Math.sin(t*0.085)*7.0, Math.sin(t*0.130)*2.0, Math.sin(t*0.130)*2.0];
+  const BY = [Math.sin(t*0.061)*2.6, Math.sin(t*0.110)*0.8, Math.sin(t*0.240)*2.4];
+  // swell: a slow lengthening of the reflections, two incommensurate periods so it never
+  // pulses. Roughly 1.2% at the far edge of the band, which is a few pixels on screen.
+  const SWELL = 1 + (Math.sin(t*0.190)*0.008 + Math.sin(t*0.077)*0.005)*LIFE;
   const T = REDUCE ? {x:0,y:0} : tilt.get();
   curX += (dragX-curX)*0.12;
 
@@ -934,7 +950,8 @@ function loop(now){
   for(let i=0;i<3;i++){
     const dx = cx2 + T.x*DEPTH_PX[i] + BX[i]*LIFE;
     const dy = cy2 + T.y*DEPTH_PX[i]*0.5 + BY[i]*LIFE;
-    const tf=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`;
+    const tf=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`
+           + (i===2 ? ` scaleY(${SWELL.toFixed(4)})` : '');
     imgsA[i].style.transform=tf; imgsB[i].style.transform=tf;
   }
 
@@ -957,7 +974,7 @@ function loop(now){
   /* moving light. The glint crawls one way across the water, the haze slides the other way
      over the skyline — two layers disagreeing is what stops a scene reading as flat. */
   if(LIFE){
-    glint.style.transform   = `translate3d(${(cx2*1.15 + Math.sin(t*0.043)*46).toFixed(1)}px,${(Math.sin(t*0.29)*2.2).toFixed(1)}px,0)`;
+    glint.style.transform   = `translate3d(${(cx2*1.15 + Math.sin(t*0.026)*38).toFixed(1)}px,${(Math.sin(t*0.21)*1.6).toFixed(1)}px,0)`;
     airhaze.style.transform = `translate3d(${(cx2*0.72 - Math.sin(t*0.031)*38).toFixed(1)}px,${(Math.sin(t*0.052)*5).toFixed(1)}px,0)`;
   }
 
