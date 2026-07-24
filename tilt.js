@@ -1,147 +1,162 @@
-// PASTE TARGET: where2hang-hero-lab/tilt.js   (replaces previous · absolute aim)
+// PASTE TARGET: where2hang-hero-lab/tilt.js   (replaces previous · complementary filter)
 // Where2Hang — panoramic look-around LEAF. No dependencies. British spelling, no emojis.
 //
-// WHY THE PREVIOUS VERSION FAILED, FROM ITS OWN DEBUG OUTPUT.
-// It integrated the gyroscope's angular RATE to get an angle. Four live readings showed yaw
-// at 15.5, 12.5, 10.5 and -14.9 degrees against a range of plus or minus 16 — pinned at the
-// rail nearly all the time, so the image sat at one edge and stopped responding. Integrating
-// a rate gives a free-floating angle with no absolute reference: it accumulates, it drifts,
-// and it jams against the clamp. No amount of deadbanding or bleed-back fixes that, because
-// the quantity itself is unanchored.
-// A panorama viewer uses ABSOLUTE orientation. Return the handset to where it was and the
-// view returns with it, every time, with no memory of the path taken.
+// WHY THE PREVIOUS VERSION PANNED VERTICALLY BUT NOT HORIZONTALLY.
+// It took heading from the rotation matrix, which means it took heading from `alpha` — the
+// COMPASS channel. Pitch does not depend on alpha at all; it comes from the gravity direction.
+// On many Android devices alpha is null, or pinned to a constant, when the magnetometer is
+// uncalibrated or simply not exposed to the browser. Constant alpha means constant heading, so
+// yaw settles on one value at startup and never moves again, while pitch carries on working.
+// The reported symptom was exactly that: "it shifts after refresh then only up and down".
 //
-// HOW THIS WORKS.
-// DeviceOrientationEvent gives alpha, beta, gamma — a ZXY Euler triple. Rather than using any
-// one of them (each is ill-conditioned somewhere, which is what gimbal lock means), build the
-// full rotation matrix and ask a question that is well-posed everywhere:
-//     WHERE IS THE PHONE AIMED?
-// That is the device's -Z axis expressed in world coordinates. From that single vector:
-//     heading   = atan2(v.x, v.y)     which way it points around the horizon
-//     elevation = asin(v.z)           how far up or down it points
-// Roll drops out entirely — banking the handset about its viewing axis does not change where
-// it is aimed, so it cannot move the city. That is a property of the geometry, not a filter.
+// THE FIX — a complementary filter, which is the standard answer to this and uses both
+// sensors for what each is actually good at:
+//   YAW   integrated from the GYROSCOPE, which every phone has and which needs no compass.
+//         Projected onto world vertical using gravity, so banking the handset contributes
+//         nothing: rotation about the viewing axis is perpendicular to gravity.
+//         Gyro integration drifts, so it is corrected two ways —
+//           - slowly toward the compass heading IF the compass is genuinely moving
+//           - otherwise by a gentle bleed back to centre, which bounds the error
+//   PITCH taken from GRAVITY, which is absolute and cannot drift. No compass involved.
 //
-// Neutral is captured on the first good reading, and both angles are taken relative to it, so
-// the panorama starts centred however the phone happens to be held.
+// The compass is therefore an optional improvement rather than a requirement. Where it works
+// the view returns exactly when you turn back; where it does not, the gyro still pans and the
+// only loss is a slow recentre. Nothing silently stops working.
 //
-// API:  const t = mountTilt({ enabled: true });
-//       t.get() -> { x, y }   x: +1 aimed right of neutral   y: +1 aimed above neutral
+// API:  const t = mountTilt({ enabled: true, onDebug: fn });
+//       t.get() -> { x, y }   x: +1 turned right   y: +1 aimed up
 //       t.setEnabled(bool);  t.recentre();  t.request() -> Promise<boolean>;  t.destroy();
 
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-  // 40 degrees was the measured comfortable turn, and mapping the full sweep to it worked —
-  // but a smaller physical movement mapped to a wider panorama reads as more travel for less
-  // effort. Now that the plate is 5.55:1 there is enough room to do that, so the range is
-  // tightened to 25 while the travel it drives more than doubles.
-  const YAW_RANGE   = opts.yawRange   ?? 25;   // degrees of turn for full horizontal sweep
-  const PITCH_RANGE = opts.pitchRange ?? 15;   // degrees of aim for full vertical
-  const DEAD_DEG    = opts.deadDeg ?? 0.35;    // hand tremor, in degrees, subtracted
-  const TAU         = opts.tau ?? 0.24;        // easing time constant, seconds
-  const DRIFT       = opts.drift ?? 0.0006;    // neutral creeps toward where you actually hold it
+  const YAW_RANGE   = opts.yawRange   ?? 25;    // degrees of turn for a full horizontal sweep
+  const PITCH_RANGE = opts.pitchRange ?? 15;    // degrees of aim for full vertical
+  const RATE_DEAD   = opts.rateDeadband ?? 1.1; // deg/sec of tremor, subtracted not zeroed
+  const DEAD_DEG    = opts.deadDeg ?? 0.35;
+  const TAU         = opts.tau ?? 0.24;         // easing time constant, seconds
+  const BLEED       = opts.bleed ?? 0.0016;     // recentre per event when no compass to trust
+  const FUSE        = opts.fuse ?? 0.02;        // pull toward the compass when it is alive
 
   // DIRECTION. The only two switches. +1 or -1.
-  //   SIGN_YAW   = +1  aim RIGHT of neutral gives x = +1
-  //   SIGN_PITCH = +1  aim ABOVE neutral gives y = +1
   const SIGN_YAW   = opts.signYaw   ?? 1;
   const SIGN_PITCH = opts.signPitch ?? 1;
-
   const onDebug = opts.onDebug || null;
   const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 
-  let head0 = null, elev0 = 0;       // neutral
-  let yaw = 0, pitch = 0;            // degrees relative to neutral
-  let cx = 0, cy = 0;                // eased output
+  let yaw = 0, pitch = 0, cx = 0, cy = 0;
+  let gx = 0, gy = 0, gz = 0, primed = false;   // low-passed gravity, device frame
+  let elev0 = null;                              // neutral pitch
+  let head = null, head0 = null, headPrev = null, headMoved = 0;  // compass, and whether it lives
   let enabled = opts.enabled !== false && !REDUCE;
-  let alive = true, raf = 0, tickT = 0, haveAbs = false;
+  let alive = true, raf = 0, lastT = 0, tickT = 0;
 
   const clamp = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
-  const dead = (deg) => { const a = Math.abs(deg) - DEAD_DEG; return a <= 0 ? 0 : Math.sign(deg) * a; };
-  // shortest signed difference between two headings, so 359 -> 1 is +2 and never -358
-  const wrap = (d) => { d %= 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; };
+  const dead  = (d) => { const a = Math.abs(d) - DEAD_DEG; return a <= 0 ? 0 : Math.sign(d) * a; };
+  const soft  = (v) => { const a = Math.abs(v) - RATE_DEAD; return a <= 0 ? 0 : Math.sign(v) * a; };
+  const wrap  = (d) => { d %= 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; };
 
-  function handle(e, absolute) {
+  // ---- gyroscope + gravity. This is the channel that always works. ----
+  function onMotion(e) {
     if (!enabled || !alive) return;
-    if (absolute) haveAbs = true;
-    else if (haveAbs) return;                       // prefer the absolute stream if it exists
-    if (e.alpha == null || e.beta == null || e.gamma == null) return;
+    const r = e.rotationRate, g = e.accelerationIncludingGravity;
+    if (!r || (r.alpha == null && r.beta == null && r.gamma == null)) return;
 
-    const a = e.alpha * D2R, b = e.beta * D2R, g = e.gamma * D2R;
-    const cA = Math.cos(a), sA = Math.sin(a);
-    const cB = Math.cos(b), sB = Math.sin(b);
-    const cG = Math.cos(g), sG = Math.sin(g);
+    const now = performance.now();
+    let dt = e.interval ? e.interval / 1000 : (lastT ? (now - lastT) / 1000 : 1 / 60);
+    lastT = now;
+    if (!(dt > 0) || dt > 0.2) dt = 1 / 60;
 
-    // R = Rz(alpha) Rx(beta) Ry(gamma), third column only — that is all we need.
-    const r13 = cA * sG + cG * sA * sB;
-    const r23 = sA * sG - cA * cG * sB;
-    const r33 = cB * cG;
-
-    // where the phone is aimed: the device -Z axis, in world coordinates (x east, y north, z up)
-    const vx = -r13, vy = -r23, vz = -r33;
-
-    // Aimed almost straight up or down: heading is genuinely undefined there, so hold the last
-    // value rather than letting it spin.
-    const horiz = Math.hypot(vx, vy);
-    if (horiz > 0.15) {
-      const heading = Math.atan2(vx, vy) * R2D;
-      if (head0 === null) { head0 = heading; elev0 = Math.asin(clamp(vz)) * R2D; return; }
-      head0 += wrap(heading - head0) * DRIFT;       // neutral follows how you actually hold it
-      yaw = Math.max(-YAW_RANGE, Math.min(YAW_RANGE, dead(wrap(heading - head0))));
+    // gravity direction, low-passed. Android reports the reaction force, so this points UP.
+    if (g && (g.x != null || g.y != null)) {
+      if (!primed) { gx = g.x || 0; gy = g.y || 0; gz = g.z || 0; primed = true; }
+      else { gx = gx*0.88 + (g.x||0)*0.12; gy = gy*0.88 + (g.y||0)*0.12; gz = gz*0.88 + (g.z||0)*0.12; }
     }
-    const elevation = Math.asin(clamp(vz)) * R2D;
-    if (head0 === null) return;
-    elev0 += (elevation - elev0) * DRIFT;
-    pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, dead(elevation - elev0)));
+    const m = Math.hypot(gx, gy, gz) || 1;
+    const ux = gx/m, uy = gy/m, uz = gz/m;        // unit vector, world UP in device coords
 
-    if (onDebug) onDebug({ heading: head0 === null ? 0 : wrap(Math.atan2(vx, vy) * R2D - head0), elev: elevation - elev0, yaw, pitch, abs: haveAbs });
+    // YAW: angular velocity projected onto world vertical. Turning right is clockwise seen
+    // from above, so the rotation vector points DOWN — hence the negative sign.
+    const wx = r.beta || 0, wy = r.gamma || 0, wz = r.alpha || 0;
+    const yawRate = -(wx*ux + wy*uy + wz*uz);
+    yaw = Math.max(-YAW_RANGE, Math.min(YAW_RANGE, yaw + SIGN_YAW * soft(yawRate) * dt));
+
+    // PITCH: absolute, straight from gravity. Cannot drift, needs no compass.
+    const elev = Math.asin(clamp(-uz)) * R2D;     // -uz: how far the screen normal is above level
+    if (elev0 === null) elev0 = elev;
+    elev0 += (elev - elev0) * 0.0006;             // neutral creeps to how it is actually held
+    pitch = Math.max(-PITCH_RANGE, Math.min(PITCH_RANGE, SIGN_PITCH * dead(elev - elev0)));
+
+    // Correct the integrated yaw. If the compass is genuinely moving, trust it slowly.
+    // If it is dead or frozen, bleed toward centre instead so the drift stays bounded.
+    if (head != null && headMoved > 4) {
+      if (head0 === null) head0 = head;
+      const target = Math.max(-YAW_RANGE, Math.min(YAW_RANGE, wrap(head - head0) * SIGN_YAW));
+      yaw += (target - yaw) * FUSE;
+    } else {
+      yaw -= yaw * BLEED;
+    }
+
+    if (onDebug) onDebug({ yaw, pitch, rate: yawRate, compass: headMoved > 4, head: head });
   }
 
-  const onAbs = (e) => handle(e, true);
-  const onRel = (e) => handle(e, false);
+  // ---- compass, optional. Only ever used to correct drift, never as the primary source. ----
+  function onOrient(e) {
+    if (!enabled || !alive || e.alpha == null) return;
+    const a = e.alpha * D2R, b = (e.beta || 0) * D2R, g = (e.gamma || 0) * D2R;
+    const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
+    const vx = -(cA*sG + cG*sA*sB), vy = -(sA*sG - cA*cG*sB);
+    if (Math.hypot(vx, vy) < 0.15) return;        // aimed too near vertical for a heading
+    const h = Math.atan2(vx, vy) * R2D;
+    if (headPrev != null && Math.abs(wrap(h - headPrev)) > 0.6) headMoved = Math.min(20, headMoved + 1);
+    headPrev = h; head = h;
+  }
 
   function tick(now) {
     if (!alive) { raf = 0; return; }
     raf = requestAnimationFrame(tick);
-    let dt = tickT ? (now - tickT) / 1000 : 1 / 60;
+    let dt = tickT ? (now - tickT) / 1000 : 1/60;
     tickT = now;
-    if (!(dt > 0) || dt > 0.2) dt = 1 / 60;
-    const k = 1 - Math.exp(-dt / TAU);            // frame-rate independent easing
-    const tx = enabled ? SIGN_YAW   * clamp(yaw   / YAW_RANGE)   : 0;
-    const ty = enabled ? SIGN_PITCH * clamp(pitch / PITCH_RANGE) : 0;
+    if (!(dt > 0) || dt > 0.2) dt = 1/60;
+    const k = 1 - Math.exp(-dt / TAU);
+    const tx = enabled ? clamp(yaw / YAW_RANGE) : 0;
+    const ty = enabled ? clamp(pitch / PITCH_RANGE) : 0;
     cx += (tx - cx) * k;
     cy += (ty - cy) * k;
   }
 
   function attach() {
-    window.addEventListener("deviceorientationabsolute", onAbs, { passive: true });
-    window.addEventListener("deviceorientation", onRel, { passive: true });
+    window.addEventListener("devicemotion", onMotion, { passive: true });
+    window.addEventListener("deviceorientationabsolute", onOrient, { passive: true });
+    window.addEventListener("deviceorientation", onOrient, { passive: true });
   }
   function detach() {
-    window.removeEventListener("deviceorientationabsolute", onAbs);
-    window.removeEventListener("deviceorientation", onRel);
+    window.removeEventListener("devicemotion", onMotion);
+    window.removeEventListener("deviceorientationabsolute", onOrient);
+    window.removeEventListener("deviceorientation", onOrient);
   }
 
-  const onVis = () => { if (document.hidden) detach(); else if (enabled) attach(); };
+  const onVis = () => { if (document.hidden) detach(); else if (enabled) { lastT = 0; attach(); } };
   document.addEventListener("visibilitychange", onVis);
 
   function request() {
-    const DO = window.DeviceOrientationEvent;
-    if (!DO || typeof DO.requestPermission !== "function") { attach(); return Promise.resolve(true); }
-    return DO.requestPermission()
-      .then((s) => { const ok = s === "granted"; if (ok) attach(); return ok; })
-      .catch(() => false);
+    const DM = window.DeviceMotionEvent, DO = window.DeviceOrientationEvent;
+    const gated = (DM && typeof DM.requestPermission === "function") || (DO && typeof DO.requestPermission === "function");
+    if (!gated) { attach(); return Promise.resolve(true); }
+    const asks = [];
+    if (DM && DM.requestPermission) asks.push(DM.requestPermission().catch(() => "denied"));
+    if (DO && DO.requestPermission) asks.push(DO.requestPermission().catch(() => "denied"));
+    return Promise.all(asks).then(r => { const ok = r.some(s => s === "granted"); if (ok) attach(); return ok; });
   }
 
-  const gated = window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === "function";
+  const gated = window.DeviceMotionEvent && typeof window.DeviceMotionEvent.requestPermission === "function";
   if (enabled && !gated) attach();
   raf = requestAnimationFrame(tick);
 
   return {
     get() { return { x: cx, y: cy }; },
-    setEnabled(v) { enabled = !!v && !REDUCE; if (enabled) attach(); else detach(); },
-    recentre() { head0 = null; yaw = 0; pitch = 0; },
+    setEnabled(v) { enabled = !!v && !REDUCE; if (enabled) { lastT = 0; attach(); } else detach(); },
+    recentre() { yaw = 0; head0 = head; elev0 = null; },
     request,
     destroy() {
       alive = false; if (raf) cancelAnimationFrame(raf); raf = 0;

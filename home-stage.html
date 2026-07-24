@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v41. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v42. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,16 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v42 — yaw no longer depends on the compass. Heading was being taken from `alpha`, which is
+     the magnetometer channel; pitch comes from gravity and needs no compass at all. On devices
+     where alpha is null or frozen — common on Android when the magnetometer is uncalibrated or
+     simply not exposed — heading is constant, so yaw lands on one value at startup and never
+     moves while pitch keeps working. "It shifts after refresh then only up and down."
+     tilt.js is now a complementary filter: yaw is integrated from the GYROSCOPE, which every
+     phone has, projected onto world vertical using gravity so roll contributes nothing. The
+     compass, where it is alive, only corrects the drift. Pitch stays absolute from gravity.
+     The readout gains a `compass` line so it is visible which source is doing the work.
+
      v41 — a missing measurement must never silently disable a feature.
      skyRoom() fell back to w = VW whenever naturalWidth read 0, which makes horizontal room
      exactly zero — no panning left or right — while vertical room, which never touches
@@ -805,7 +815,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=24';
+import { mountTilt } from './tilt.js?v=42';
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
@@ -983,7 +993,8 @@ featured.addEventListener('click',()=>tap('commit'));
 const DEBUG = location.hash.indexOf('debug') >= 0;
 const dbgBox = document.getElementById('dbg');
 if(DEBUG) dbgBox.classList.add('on');
-const tilt=mountTilt({enabled:!REDUCE});
+let tiltDbg=null;
+const tilt=mountTilt({enabled:!REDUCE, onDebug: DEBUG ? (d)=>{ tiltDbg=d; } : null});
 if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
   window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
 }
@@ -1165,7 +1176,10 @@ function loop(now){
       'aspect  '+plateAspect().toFixed(2)+':1\n'+
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
-      'T.x     '+T.x.toFixed(3)+'\n'+
+      'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
+      'yawRate '+(tiltDbg? tiltDbg.rate.toFixed(2):'n/a')+' deg/s\n'+
+      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 25\n'+
+      'compass '+(tiltDbg? (tiltDbg.compass?'live':'dead — gyro only'):'n/a')+'\n'+
       'imageDx '+cx2.toFixed(0)+' px\n'+
       '\nturn the phone: T.x must move,\nthen imageDx must follow.';
   }
