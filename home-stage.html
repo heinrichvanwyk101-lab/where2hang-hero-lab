@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v34. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v35. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,13 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v35 — v34 threw on load. `applyMood()` runs during module init and now touches plateGeom,
+     which was declared 40 lines further down: `let` and `const` are in the temporal dead zone
+     until their declaration, so that is a ReferenceError, the module dies, and nothing runs.
+     The visible symptom was the glass losing its centring transform and sitting with left:50%
+     top:58% as its top-LEFT corner, because the render loop that applies that transform never
+     started. Function declarations hoist and were fine; only the two bindings had to move.
+
      v34 — SUNSET AND DAY STITCHED, and framing made SELF-CALIBRATING.
      All three moods now run on three-panel 5.55:1 panoramas, so travel is the same everywhere
      instead of night having twice the range of the others.
@@ -767,6 +774,14 @@ const skyA=imgsA[1], skyB=imgsB[1];                 // the skyline band is the r
 // water sits forward. Eight pixels is beneath conscious notice and cannot ghost.
 const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
 
+// Targets, in fractions of the viewport. Towers begin here, waterline sits here. Everything
+// else — scale, offset, the three mask bands — is solved from the plate's own measured
+// geometry, so replacing a plate means updating tt and wl on its mood and nothing more.
+const AIM = { portrait:{ tower:0.12, water:0.46 }, landscape:{ tower:0.06, water:0.62 } };
+let plateGeom = { tt:0.323, wl:0.765 };
+// NOTE: these two bindings must stay ABOVE the first applyMood() call. Moving them below
+// it is a temporal-dead-zone ReferenceError that kills the module silently.
+
 // ---------------------------------------------------------------------------------
 // LOOK-AROUND TRAVEL. How far the city moves at the end of the viewing range. These are the
 // two numbers to change if the movement feels too much or too little. Everything else about
@@ -867,11 +882,6 @@ let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=
 // Framing, solved separately for each orientation and applied from JS so that the CSS and the
 // travel arithmetic cannot drift apart. Portrait puts the towers at 12-46% of the viewport;
 // landscape needs a much larger scale simply to cover the width, which puts them at 15-70%.
-// Targets, in fractions of the viewport. Towers begin here, waterline sits here. Everything
-// else — scale, offset, the three mask bands — is solved from the plate's own measured
-// geometry, so replacing a plate means updating tt and wl on its mood and nothing more.
-const AIM = { portrait:{ tower:0.12, water:0.46 }, landscape:{ tower:0.06, water:0.62 } };
-let plateGeom = { tt:0.323, wl:0.765 };
 function skyFrame(){
   const land = stage.clientWidth > stage.clientHeight;
   const a = land ? AIM.landscape : AIM.portrait;
