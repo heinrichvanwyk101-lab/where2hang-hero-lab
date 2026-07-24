@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v38. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v40. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,28 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v40 — the readout is back, permanently, behind #debug. Stripping it in v33 was premature:
+     it has since been rebuilt twice under pressure, and every time it appeared it settled a
+     question in one reload that inference had failed at over several rounds. It costs nothing
+     when the hash is absent — no element, no listener, no work in the loop.
+     Append #debug to the URL for plate width, aspect, room.x, T.x and image dx: between them
+     those five numbers explain every panning fault seen so far.
+
+     v39 — the trap answered it, and the answer was not an exception.
+     Reported: plate 7875x1419 loaded, no error, css height 116.44%, top -35.51%. So the black
+     screen was a STALE ASSET, and the pipeline was intact the whole time.
+     What the numbers did expose is a real design fault in v34's self-calibrating framing. It
+     solved for tower-top AND waterline exactly, so scale = 0.34 / (wl - tt). Day's measured
+     tower-top is 41% against night's 32%, which compresses the span to 0.292 and blows the
+     scale up to 1.164 — a plate wider than five viewports, hugely zoomed and correspondingly
+     dark. Chasing both targets exactly was over-constrained.
+     Now: the WATERLINE is matched exactly, because that is what governs whether the water sits
+     under the sill, and the scale is CLAMPED to 0.70-0.95. The tower top lands where it lands —
+     12% on night and sunset, 18% on day — which is a far better failure mode than a plate that
+     doubles in size because one measurement came out low.
+     Also eased the haze, which was tuned against a different framing and was compounding it.
+     The error trap is removed.
+
      v38 — a temporary error trap. The plate stopped rendering after v36/v37 while the module
      itself clearly still runs, and declaration order checks out, so guessing further is not
      worth another round. A red bar now reports any uncaught error or failed plate fetch with
@@ -515,7 +537,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
    pane read as NEAR rather than pasted on. */
 .haze{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;pointer-events:none;transition:background 1.1s var(--ease);
       background:radial-gradient(120% 70% at 50% 62%,transparent 0%,var(--haze) 78%),
-                 linear-gradient(180deg,rgba(4,10,14,.62) 0%,rgba(4,10,14,.06) 26%,rgba(4,10,14,0) 48%,rgba(4,10,14,.5) 100%)}
+                 linear-gradient(180deg,rgba(4,10,14,.40) 0%,rgba(4,10,14,.04) 26%,rgba(4,10,14,0) 48%,rgba(4,10,14,.38) 100%)}
 
 /* --- MIDGROUND: the one physical object --- */
 .panewrap{position:absolute;left:50%;top:58%;width:72vw;max-width:310px;aspect-ratio:3/3.6;
@@ -655,8 +677,10 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .navbar.on{opacity:1;transform:none;pointer-events:auto}
 .navbar a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--sub);font-size:10px;font-weight:600}
 .navbar a.on{color:var(--teal2)}
-#err{position:fixed;left:0;right:0;top:0;z-index:200;display:none;background:#7a1414;color:#fff;
-  font-family:var(--mono);font-size:11px;line-height:1.45;padding:8px 10px;white-space:pre-wrap}
+#dbg{position:fixed;left:8px;top:calc(52px + env(safe-area-inset-top));z-index:120;display:none;
+  font-family:var(--mono);font-size:11px;line-height:1.5;color:#9effe8;background:rgba(0,0,0,.8);
+  border:1px solid rgba(0,194,168,.5);border-radius:8px;padding:8px 10px;white-space:pre;pointer-events:none}
+#dbg.on{display:block}
 .labflag{position:fixed;left:0;right:0;bottom:0;z-index:40;text-align:center;font-size:10.5px;color:#0a0d0e;background:var(--gold);padding:5px;font-weight:700}
 
 /* LANDSCAPE. A tall-viewport layout rotated is not a landscape layout: the glass is sized
@@ -766,23 +790,9 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
   <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/></svg>Map</a>
   <a><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</a>
 </nav>
-<div id="err"></div>
+<div id="dbg"></div>
 <div class="labflag">LAB · STAGE EXPERIMENT · one glass object · city responds to intention</div>
 
-<script>
-  // TEMPORARY — see v38 note. Reports what actually failed instead of inviting another guess.
-  (function(){
-    var box=document.getElementById('err');
-    function show(t){ if(!box) box=document.getElementById('err'); if(!box) return;
-      box.style.display='block'; box.textContent=(box.textContent?box.textContent+'\n':'')+t; }
-    window.addEventListener('error', function(e){
-      if(e.target && e.target.tagName==='IMG'){ show('IMG FAILED: '+e.target.getAttribute('src')); return; }
-      show('ERR: '+(e.message||e.error)+'  @'+String(e.filename||'').split('/').pop()+':'+e.lineno);
-    }, true);
-    window.addEventListener('unhandledrejection', function(e){ show('PROMISE: '+(e.reason && e.reason.message || e.reason)); });
-    window.__w2hShow = show;
-  })();
-</script>
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
@@ -935,13 +945,6 @@ function applyMood(i,{silent=false}={}){
   if(!silent) tap('commit');
 }
 imgsA.forEach(im => { im.src = plateFor(MOODS[idx], im); });
-imgsA[1].addEventListener('load', ()=>{ if(window.__w2hShow && !imgsA[1].naturalWidth) window.__w2hShow('plate loaded but 0 wide'); }, {once:true});
-setTimeout(()=>{ const im=frontImg();
-  if(window.__w2hShow) window.__w2hShow('plate: '+(im.currentSrc||im.src||'none').split('/').pop()
-    +'  natural '+im.naturalWidth+'x'+im.naturalHeight
-    +'  css h '+im.style.height+' top '+im.style.top
-    +'  mask '+(im.style.maskImage||'none').slice(0,60));
-}, 1500);
 { const lead=imgsA[2], use=()=>waterUsePlate(lead);
   if(lead.decode) lead.decode().then(use).catch(use); else lead.addEventListener('load',use,{once:true}); }
 applyMood(idx,{silent:true});
@@ -968,6 +971,9 @@ featured.addEventListener('click',()=>tap('commit'));
    THE DRAG. Horizontal only — vertical is left to the page so scrolling still
    works. Rotation is small and springs back; the pane has mass.
 --------------------------------------------------------------------------- */
+const DEBUG = location.hash.indexOf('debug') >= 0;
+const dbgBox = document.getElementById('dbg');
+if(DEBUG) dbgBox.classList.add('on');
 const tilt=mountTilt({enabled:!REDUCE});
 if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
   window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
@@ -986,9 +992,12 @@ let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=
 function skyFrame(){
   const land = stage.clientWidth > stage.clientHeight;
   const a = land ? AIM.landscape : AIM.portrait;
+  // Chasing tower-top and waterline exactly is over-constrained: one low measurement sends
+  // the scale through the roof. Match the WATERLINE, which decides whether the water clears
+  // the sill, and clamp the zoom. The towers then land wherever they land.
   const span = Math.max(0.05, plateGeom.wl - plateGeom.tt);
-  const scale = (a.water - a.tower) / span;
-  return { scale, top: a.tower - plateGeom.tt*scale };
+  const scale = Math.min(0.95, Math.max(0.70, (a.water - a.tower) / span));
+  return { scale, top: a.water - plateGeom.wl*scale };
 }
 // The depth bands are the plate's own sky / towers / water boundaries, with wide feathering so
 // nothing shows when the layers separate.
@@ -1128,6 +1137,18 @@ function loop(now){
       const ih=V*f.scale, iw=ih*(frontImg().naturalWidth/frontImg().naturalHeight);
       water.draw({ imgX:(VW-iw)/2+dx, imgY:f.top*V+dy, imgW:iw, imgH:ih, time:t, fade:1 });
     }
+  }
+
+  if(DEBUG){
+    const im=frontImg(), r=skyRoom(), f=skyFrame();
+    dbgBox.textContent =
+      'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'\n'+
+      'aspect  '+(im.naturalWidth? (im.naturalWidth/im.naturalHeight).toFixed(2):'0')+':1\n'+
+      'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
+      'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
+      'T.x     '+T.x.toFixed(3)+'\n'+
+      'imageDx '+cx2.toFixed(0)+' px\n'+
+      '\nturn the phone: T.x must move,\nthen imageDx must follow.';
   }
 
   /* moving light. The glint crawls one way across the water, the haze slides the other way
