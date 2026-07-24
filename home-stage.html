@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v25. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v26. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,16 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v26 — a real bug, and a way to stop guessing which file is loaded:
+       1. skyRoom() always measured skyA, the image in slot A, even when slot B was the one
+          showing. Travel is derived from the image WIDTH, and the two plates no longer share
+          an aspect — 5.55:1 stitched night against 3:1 for the other moods — so after any
+          mood change the clamp could be computed from the wrong file entirely. It now
+          measures whichever slot is actually in front.
+       2. The debug readout now prints the loaded plate's NATURAL WIDTH and its aspect. 4922
+          wide means the stitched panorama; 2172 means an old 3:1 plate is still being served.
+          That single number settles what is loaded without inference.
+
      v25 — two corrections to the stitch:
        1. PANEL ORDER WAS REVERSED. I joined the panels west-to-east, which put Emirates
           Palace on the LEFT. Every previous plate had it on the right, and that is also the
@@ -761,8 +771,14 @@ let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
    would undo the feeling of having looked somewhere. */
 let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;
 const SKY_SCALE=0.74, SKY_TOP=-0.102;   // stitched plate: towers 30-76%, waterline 76%
+function frontImg(){
+  // whichever slot is showing. `front` flips AFTER the crossfade is scheduled, so the visible
+  // slot is B when front is true. Getting this wrong derives travel from the other plate.
+  const a=front?skyB:skyA;
+  return a.naturalWidth ? a : (skyA.naturalWidth ? skyA : skyB);
+}
 function skyRoom(){
-  const img=skyA.naturalWidth?skyA:skyB, V=stage.clientHeight, VW=stage.clientWidth;
+  const img=frontImg(), V=stage.clientHeight, VW=stage.clientWidth;
   const h=V*SKY_SCALE;
   const w=img.naturalWidth ? h*(img.naturalWidth/img.naturalHeight) : VW;
   // vertical room is ASYMMETRIC: the plate is pulled well up, so there is a lot of headroom
@@ -868,6 +884,9 @@ function loop(now){
       'T.x  T.y  ' + T.x.toFixed(2).padStart(6) + T.y.toFixed(2).padStart(6) + '\n' +
       'image dx  ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +
       'absolute  ' + (d.abs ? '    yes' : '     no') + '\n' +
+      'plate w   ' + (frontImg().naturalWidth||0).toString().padStart(7) + '\n' +
+      'aspect    ' + (frontImg().naturalWidth ? (frontImg().naturalWidth/frontImg().naturalHeight).toFixed(2) : '0').padStart(7) + ':1\n' +
+      'room.x    ' + skyRoom().x.toFixed(0).padStart(7) + ' px\n' +
       '\nheading must RETURN to 0\nwhen you face the same way.\nBANK: heading must not move.';
   }
 
