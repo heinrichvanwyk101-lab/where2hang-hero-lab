@@ -44,7 +44,8 @@ export function mountTilt(opts = {}) {
   // ---------------------------------------------------------------------------------
   const YAW_RANGE   = opts.yawRange   ?? 40;    // degrees of turn for a full horizontal sweep
   const PITCH_RANGE = opts.pitchRange ?? 18;    // degrees of aim for full vertical
-  const RATE_DEAD   = opts.rateDeadband ?? 1.4; // deg/sec of tremor, subtracted not zeroed
+  const RATE_DEAD   = opts.rateDeadband ?? 2.2; // deg/sec of tremor, subtracted not zeroed
+  const BIAS_ADAPT  = opts.biasAdapt ?? 0.015;  // how fast the zero-rate offset is learned
   const DEAD_DEG    = opts.deadDeg ?? 0.35;
   const TAU         = opts.tau ?? 0.30;         // easing time constant, seconds
   //   CURVE       response shape. 1 is linear. Higher makes SMALL turns calm while a large
@@ -54,7 +55,7 @@ export function mountTilt(opts = {}) {
   //               At 2.0:  5deg -> 23px,  10deg -> 94px,  20deg -> 375px,  40deg -> 1500px.
   const CURVE       = opts.curve ?? 2.0;
   const BLEED       = opts.bleed ?? 0.0016;     // recentre per event when no compass to trust
-  const FUSE        = opts.fuse ?? 0.02;        // pull toward the compass when it is alive
+  const FUSE        = opts.fuse ?? 0.09;        // pull toward the compass when it is alive
 
   // DIRECTION. The only two switches. +1 or -1.
   const SIGN_YAW   = opts.signYaw   ?? 1;
@@ -64,6 +65,7 @@ export function mountTilt(opts = {}) {
 
   let yaw = 0, pitch = 0, cx = 0, cy = 0;
   let gx = 0, gy = 0, gz = 0, primed = false;   // low-passed gravity, device frame
+  let bias = 0, biasReady = 0;                  // gyroscope zero-rate offset
   let elev0 = null;                              // neutral pitch
   let head = null, head0 = null, headPrev = null, headMoved = 0;  // compass, and whether it lives
   let enabled = opts.enabled !== false && !REDUCE;
@@ -96,7 +98,15 @@ export function mountTilt(opts = {}) {
     // YAW: angular velocity projected onto world vertical. Turning right is clockwise seen
     // from above, so the rotation vector points DOWN — hence the negative sign.
     const wx = r.beta || 0, wy = r.gamma || 0, wz = r.alpha || 0;
-    const yawRate = -(wx*ux + wy*uy + wz*uz);
+    const raw = -(wx*ux + wy*uy + wz*uz);
+
+    // ZERO-RATE BIAS. A gyroscope at rest does not report zero — it reports a small constant
+    // offset, different per device and drifting with temperature. Integrating that offset IS
+    // the drift: eight readings taken while holding still showed a persistent -2.5 deg/s and
+    // twelve degrees of wander. So learn the offset whenever the reading is small enough to be
+    // plausibly at rest, and subtract it before anything is integrated.
+    if (Math.abs(raw - bias) < 4.0) { bias += (raw - bias) * BIAS_ADAPT; biasReady = Math.min(60, biasReady + 1); }
+    const yawRate = raw - bias;
     yaw = Math.max(-YAW_RANGE, Math.min(YAW_RANGE, yaw + SIGN_YAW * soft(yawRate) * dt));
 
     // PITCH: absolute, straight from gravity. Cannot drift, needs no compass.
@@ -115,7 +125,7 @@ export function mountTilt(opts = {}) {
       yaw -= yaw * BLEED;
     }
 
-    if (onDebug) onDebug({ yaw, pitch, rate: yawRate, compass: headMoved > 4, head: head });
+    if (onDebug) onDebug({ yaw, pitch, rate: yawRate, raw, bias, compass: headMoved > 4, head: head });
   }
 
   // ---- compass, optional. Only ever used to correct drift, never as the primary source. ----
@@ -126,8 +136,11 @@ export function mountTilt(opts = {}) {
     const vx = -(cA*sG + cG*sA*sB), vy = -(sA*sG - cA*cG*sB);
     if (Math.hypot(vx, vy) < 0.15) return;        // aimed too near vertical for a heading
     const h = Math.atan2(vx, vy) * R2D;
-    if (headPrev != null && Math.abs(wrap(h - headPrev)) > 0.6) headMoved = Math.min(20, headMoved + 1);
-    headPrev = h; head = h;
+    if (headPrev != null && Math.abs(wrap(h - headPrev)) > 1.5) headMoved = Math.min(20, headMoved + 1);
+    headPrev = h;
+    // low pass: the magnetometer is absolute but noisy, and feeding its jitter into the fusion
+    // just trades one kind of wander for another.
+    head = (head == null) ? h : head + wrap(h - head) * 0.15;
   }
 
   function tick(now) {

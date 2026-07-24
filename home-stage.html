@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v48. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v49. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,16 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v49 — THE BISECT ANSWERED. With tilt-absolute.js there is no horizontal movement at all on
+     this device, so the compass path is not viable here and the gyroscope rewrite was correct
+     after all. tilt-absolute.js can be deleted.
+     Back to tilt.js, the complementary filter, which works either way: gyroscope for the
+     motion, compass for drift correction IF it happens to be alive. Its two faults are both
+     already fixed but were never in the same build — zero-rate bias estimation landed in v45,
+     and the soft position deadband only landed in v48, by which point the import had been
+     switched to the sensor that does not work. This is the first build with both.
+     Expected: horizontal pans, no drift while still, and no stick-slip.
+
      v48 — the hysteresis was stick-slip, which is worse than the jitter it removed. A HARD
      deadband holds until the error crosses the threshold and then releases all of it at once,
      so the city sat still, jumped fourteen pixels, sat still, jumped. That is quantisation,
@@ -877,7 +887,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt-absolute.js?v=1';
+import { mountTilt } from './tilt.js?v=45';
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
@@ -1248,9 +1258,9 @@ function loop(now){
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
       'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
-      'heading '+(tiltDbg && tiltDbg.head!=null ? tiltDbg.head.toFixed(1):'n/a')+' deg\n'+
-      'horiz   '+(tiltDbg && tiltDbg.horiz!=null ? tiltDbg.horiz.toFixed(2):'n/a')+'   (>0.15 needed)\n'+
-      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 25\n'+
+      'yawRate '+(tiltDbg? tiltDbg.rate.toFixed(2):'n/a')+'  raw '+(tiltDbg? tiltDbg.raw.toFixed(2):'n/a')+'\n'+
+      'bias    '+(tiltDbg? tiltDbg.bias.toFixed(2):'n/a')+' deg/s\n'+
+      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 40\n'+
       'compass '+(tiltDbg? (tiltDbg.compass?'live':'dead — gyro only'):'n/a')+'\n'+
       'imageDx '+cx2.toFixed(0)+' px\n'+
       '\nturn the phone: T.x must move,\nthen imageDx must follow.';
