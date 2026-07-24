@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v23. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v24. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,21 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v24 — THE STITCHED PANORAMA. Three separately generated Corniche panels — west (Etihad
+     and Emirates Palace), central, and Al Maryah/Al Reem — aligned, colour-matched and joined
+     with 200px feathered seams into one 4922x887 master at 5.55:1. Measured seam energy is
+     LOWER than the surrounding image, so the joins are not merely hidden, they are absent.
+     This was the right lever. The constraint was never resolution — a 6144x2048 plate is
+     still 3:1 and would have given identical travel, just sharper. It was ASPECT:
+         old 3:1     scale 0.80    862 px of travel each side
+         new 5.55:1  scale 0.74   1621 px, across three times as much unique city
+     Framing re-solved for the new proportions: these panels carry far more sky, so the towers
+     occupy 30-76% of the plate rather than 58-80%. Scale 0.80 -> 0.74, offset -26.4% -> -10.2%,
+     masks moved to the measured bands. yawRange also drops 40 -> 25: a smaller turn now covers
+     a much wider city, which is more travel for less effort.
+     NOTE: only NIGHT is stitched. Sunset and day still use the old 3:1 plates and degrade
+     gracefully — their travel simply clamps to what their narrower file allows.
+
      v23 — new plates, framing re-solved.
        RESOLUTION IS UNCHANGED. The regenerated files came back at 2172x724, exactly as
        before, not the 6144x2048 requested — the generator is evidently capped. So the
@@ -331,18 +346,18 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 @media (prefers-reduced-motion: reduce){ .glint,.airhaze{display:none} }
 .skyslot{position:absolute;inset:0;transition:opacity 1.1s var(--ease)}
 #slotA{opacity:1}#slotB{opacity:0}
-.sky{position:absolute;top:-26.4%;left:50%;height:80%;width:auto;max-width:none;
+.sky{position:absolute;top:-10.2%;left:50%;height:74%;width:auto;max-width:none;
      filter:saturate(.96) contrast(.97) brightness(.96);
      will-change:transform;transform:translate3d(-50%,0,0)}
-/* Bands, in image-relative terms: sky 0-58%, towers 58-80%, water 80-100%. Measured, not
-   guessed. The overlaps are deliberately wide — a hard boundary would show the moment the
-   layers diverge. Re-measure and shift these if the plates are ever regenerated. */
-.sky.d1{-webkit-mask-image:linear-gradient(180deg,#000 0%,#000 50%,transparent 64%);
-        mask-image:linear-gradient(180deg,#000 0%,#000 50%,transparent 64%)}
-.sky.d2{-webkit-mask-image:linear-gradient(180deg,transparent 46%,#000 61%,#000 78%,transparent 89%);
-        mask-image:linear-gradient(180deg,transparent 46%,#000 61%,#000 78%,transparent 89%)}
-.sky.d3{-webkit-mask-image:linear-gradient(180deg,transparent 73%,#000 84%,#000 97%,transparent 100%);
-        mask-image:linear-gradient(180deg,transparent 73%,#000 84%,#000 97%,transparent 100%)}
+/* Bands, in image-relative terms for the STITCHED plate: sky 0-30%, towers 30-76%,
+   water 76-100%. Measured, not guessed. Overlaps are wide — a hard boundary would show the
+   moment the layers diverge. Re-measure and shift these if the plates are regenerated. */
+.sky.d1{-webkit-mask-image:linear-gradient(180deg,#000 0%,#000 22%,transparent 36%);
+        mask-image:linear-gradient(180deg,#000 0%,#000 22%,transparent 36%)}
+.sky.d2{-webkit-mask-image:linear-gradient(180deg,transparent 21%,#000 34%,#000 72%,transparent 85%);
+        mask-image:linear-gradient(180deg,transparent 21%,#000 34%,#000 72%,transparent 85%)}
+.sky.d3{-webkit-mask-image:linear-gradient(180deg,transparent 70%,#000 80%,#000 97%,transparent 100%);
+        mask-image:linear-gradient(180deg,transparent 70%,#000 80%,#000 97%,transparent 100%)}
 .tint{position:absolute;top:0;left:0;right:0;height:100vh;height:100lvh;background:var(--tint);opacity:.34;mix-blend-mode:soft-light;transition:background 1.1s var(--ease);pointer-events:none}
 /* HAZE: atmosphere sitting between the city and the glass. This is the plane that makes the
    pane read as NEAR rather than pasted on. */
@@ -594,7 +609,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=21';
+import { mountTilt } from './tilt.js?v=24';
 import { tap } from './haptics.js?v=2';
 
 const B='https://where2hang.ae/images/';
@@ -650,8 +665,8 @@ const DEPTH_PX=[-6,0,8];                            // sky, skyline, water
 // the panorama is calibrated in tilt.js (yawRange / pitchRange = how far you must turn).
 //   turn RIGHT -> reveal the RIGHT of the panorama -> the image travels LEFT
 // ---------------------------------------------------------------------------------
-const LOOK_X_PX = 780;
-const LOOK_Y_PX = 95;
+const LOOK_X_PX = 1500;
+const LOOK_Y_PX = 70;
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
@@ -726,7 +741,7 @@ let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
    image actually has spare. Dragging the background holds where you put it — snapping back
    would undo the feeling of having looked somewhere. */
 let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;
-const SKY_SCALE=0.80, SKY_TOP=-0.264;   // solved for a waterline at 80.5% of the plate
+const SKY_SCALE=0.74, SKY_TOP=-0.102;   // stitched plate: towers 30-76%, waterline 76%
 function skyRoom(){
   const img=skyA.naturalWidth?skyA:skyB, V=stage.clientHeight, VW=stage.clientWidth;
   const h=V*SKY_SCALE;
@@ -829,7 +844,7 @@ function loop(now){
     hud.textContent =
       'heading   ' + (d.heading!=null ? d.heading.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
       'elevation ' + (d.elev!=null ? d.elev.toFixed(1).padStart(7) : '  n/a') + ' deg\n' +
-      'yaw       ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '  n/a') + ' / 40\n' +
+      'yaw       ' + (d.yaw!=null ? d.yaw.toFixed(1).padStart(7) : '  n/a') + ' / 25\n' +
       'pitch     ' + (d.pitch!=null ? d.pitch.toFixed(1).padStart(7) : '  n/a') + ' / 15\n' +
       'T.x  T.y  ' + T.x.toFixed(2).padStart(6) + T.y.toFixed(2).padStart(6) + '\n' +
       'image dx  ' + dbgDx.toFixed(0).padStart(7) + ' px\n' +

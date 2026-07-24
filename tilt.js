@@ -32,10 +32,11 @@
 export function mountTilt(opts = {}) {
   const REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-  // Calibrated against measured handling on a Z Fold: a comfortable seated turn is roughly
-  // 40 degrees each way, and the aim rises and falls about 15. Setting the ranges to the
-  // MEASURED gesture is what stops the readouts pinning at the rail.
-  const YAW_RANGE   = opts.yawRange   ?? 40;   // degrees of turn for full horizontal sweep
+  // 40 degrees was the measured comfortable turn, and mapping the full sweep to it worked —
+  // but a smaller physical movement mapped to a wider panorama reads as more travel for less
+  // effort. Now that the plate is 5.55:1 there is enough room to do that, so the range is
+  // tightened to 25 while the travel it drives more than doubles.
+  const YAW_RANGE   = opts.yawRange   ?? 25;   // degrees of turn for full horizontal sweep
   const PITCH_RANGE = opts.pitchRange ?? 15;   // degrees of aim for full vertical
   const DEAD_DEG    = opts.deadDeg ?? 0.35;    // hand tremor, in degrees, subtracted
   const TAU         = opts.tau ?? 0.24;        // easing time constant, seconds
