@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v47. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v48. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,18 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v48 — the hysteresis was stick-slip, which is worse than the jitter it removed. A HARD
+     deadband holds until the error crosses the threshold and then releases all of it at once,
+     so the city sat still, jumped fourteen pixels, sat still, jumped. That is quantisation,
+     not damping.
+     Replaced with a SOFT deadband: the threshold is SUBTRACTED from the error rather than
+     acting as a gate, so response begins at exactly zero as the error crosses it and grows
+     continuously from there. Tremor below the threshold still produces nothing at all; a real
+     turn moves smoothly with no step anywhere. Same idea as the rate deadband in the sensor,
+     applied to position — and the reason it works is that a soft deadband is continuous while
+     a hard one has a discontinuity built into it.
+     Threshold also down to 8px, since a soft one does not need to be as wide to be effective.
+
      v47 — beacons floating in open sky, and residual jitter.
        1. BEACON VALIDATION WAS TOO WEAK. It checked only that something existed below the
           candidate and sky above, which a bright patch of cloud or a compression artefact can
@@ -1152,6 +1164,7 @@ window.addEventListener('pointerup',onUp);
 /* scroll drives the pane away — the reveal is earned, not shown */
 let scrollP=0;
 let pageP=0, heldX=0;
+const PAN_DEAD = 8;   // px of tremor ignored. Soft, so it never produces a step.
 addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max(0,scrollY/(h*0.55)));
   const span=Math.max(1,document.documentElement.scrollHeight-h);
   pageP=Math.min(1,Math.max(0,scrollY/span));
@@ -1202,12 +1215,15 @@ function loop(now){
   const aimY =  T.y*Math.min(room.up, LOOK_Y_PX);  // point up -> reveal more sky
   curPanX += ((panX+aimX) - curPanX)*0.075;
   curPanY += ((panY+aimY) - curPanY)*0.075;
-  let cx2=Math.max(-room.x,Math.min(room.x,curPanX));
-  // HYSTERESIS. A hand at rest never truly stops, so any filter responsive enough to follow a
-  // deliberate turn also passes a little of the tremor. Damping the input further would make
-  // real turns sluggish; ignoring sub-14px changes at the OUTPUT costs nothing and holds the
-  // city dead still until there is something worth following.
-  if (Math.abs(cx2 - heldX) < 14) cx2 = heldX; else heldX = cx2;
+  const rawX=Math.max(-room.x,Math.min(room.x,curPanX));
+  // SOFT DEADBAND. Subtracting the threshold rather than gating on it is what avoids
+  // stick-slip: at the moment the error crosses PAN_DEAD the applied movement is exactly zero
+  // and grows continuously from there, so there is no step to see. A hard gate releases the
+  // whole threshold at once, which is what made it look glitchy.
+  const errX = rawX - heldX;
+  const mag  = Math.abs(errX) - PAN_DEAD;
+  if (mag > 0) heldX += Math.sign(errX) * mag * 0.22;
+  const cx2 = heldX;
   const cy2=Math.max(-room.down,Math.min(room.up,curPanY - pageP*stage.clientHeight*0.14));
   for(let i=0;i<3;i++){
     const dx = cx2 + T.x*DEPTH_PX[i] + BX[i]*LIFE;
