@@ -47,6 +47,12 @@ export function mountTilt(opts = {}) {
   const RATE_DEAD   = opts.rateDeadband ?? 1.4; // deg/sec of tremor, subtracted not zeroed
   const DEAD_DEG    = opts.deadDeg ?? 0.35;
   const TAU         = opts.tau ?? 0.30;         // easing time constant, seconds
+  //   CURVE       response shape. 1 is linear. Higher makes SMALL turns calm while a large
+  //               deliberate turn still reaches the far end of the panorama. This is the dial
+  //               for "over-sensitive" once the range is already wide — a linear map cannot be
+  //               both calm at 5 degrees and reach 1500px at 40, but a curve can.
+  //               At 2.0:  5deg -> 23px,  10deg -> 94px,  20deg -> 375px,  40deg -> 1500px.
+  const CURVE       = opts.curve ?? 2.0;
   const BLEED       = opts.bleed ?? 0.0016;     // recentre per event when no compass to trust
   const FUSE        = opts.fuse ?? 0.02;        // pull toward the compass when it is alive
 
@@ -131,8 +137,9 @@ export function mountTilt(opts = {}) {
     tickT = now;
     if (!(dt > 0) || dt > 0.2) dt = 1/60;
     const k = 1 - Math.exp(-dt / TAU);
-    const tx = enabled ? clamp(yaw / YAW_RANGE) : 0;
-    const ty = enabled ? clamp(pitch / PITCH_RANGE) : 0;
+    const shape = (v) => Math.sign(v) * Math.pow(Math.abs(v), CURVE);
+    const tx = enabled ? shape(clamp(yaw / YAW_RANGE)) : 0;
+    const ty = enabled ? shape(clamp(pitch / PITCH_RANGE)) : 0;
     cx += (tx - cx) * k;
     cy += (ty - cy) * k;
   }

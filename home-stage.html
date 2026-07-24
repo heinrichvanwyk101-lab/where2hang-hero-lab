@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v43. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v44. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,15 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v44 — the response is now a CURVE, not a straight line. Wanting a turn to cross a wide
+     panorama AND wanting small movements to stay calm cannot both be satisfied by a linear
+     map: 1500px over 40 degrees is 37px per degree, so even a 5 degree drift shifts the city
+     190px. Squaring the response fixes it without giving up any range —
+         5 deg -> 23px    10 deg -> 94px    20 deg -> 375px    40 deg -> 1500px
+     Small movements almost vanish, a deliberate turn still reaches the end of the file. The
+     dial is `curve` in tilt.js; raise it to calm the middle further, drop it toward 1 for the
+     old linear feel.
+
      v43 — sensitivity. Integrated gyro accumulates rather than tracking an absolute anchor, so
      the yaw range carried over from the compass version read as far too twitchy at the same
      number. 25 -> 40 degrees for a full sweep, which is the comfortable seated turn measured
@@ -822,7 +831,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=43';
+import { mountTilt } from './tilt.js?v=44';
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
