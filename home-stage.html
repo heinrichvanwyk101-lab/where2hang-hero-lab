@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v40. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v41. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,15 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v41 — a missing measurement must never silently disable a feature.
+     skyRoom() fell back to w = VW whenever naturalWidth read 0, which makes horizontal room
+     exactly zero — no panning left or right — while vertical room, which never touches
+     naturalWidth, carried on working. That is precisely the reported symptom, and it can
+     happen transiently while a plate decodes or if the visible slot is briefly misidentified.
+     Now: the aspect ratio is cached the first time ANY of the six images reports one, all six
+     are consulted rather than two, and the last known good value is used if none can be read.
+     The plates are all 5.55:1, so the fallback is right even on the very first frame.
+
      v40 — the readout is back, permanently, behind #debug. Stripping it in v33 was premature:
      it has since been rebuilt twice under pressure, and every time it appeared it settled a
      question in one reload that inference had failed at over several rounds. It costs nothing
@@ -1029,10 +1038,20 @@ function frontImg(){
   const a=front?skyA:skyB;
   return a.naturalWidth ? a : (skyA.naturalWidth ? skyA : skyB);
 }
+// The aspect of whichever plate is loaded, remembered. Falling back to "no width" was the
+// bug: it zeroed horizontal travel while leaving vertical untouched. Every plate is 5.55:1,
+// so even the very first frame has a correct value to work from.
+let lastAspect = 5.55;
+function plateAspect(){
+  for (const im of [...imgsA, ...imgsB]) {
+    if (im.naturalWidth && im.naturalHeight) { lastAspect = im.naturalWidth / im.naturalHeight; break; }
+  }
+  return lastAspect;
+}
 function skyRoom(){
-  const img=frontImg(), V=stage.clientHeight, VW=stage.clientWidth, f=skyFrame();
+  const V=stage.clientHeight, VW=stage.clientWidth, f=skyFrame();
   const h=V*f.scale;
-  const w=img.naturalWidth ? h*(img.naturalWidth/img.naturalHeight) : VW;
+  const w=h*plateAspect();
   // vertical room is ASYMMETRIC: the plate is pulled well up, so there is a lot of headroom
   // above and very little below. Clamping to the real figures is what stops an edge showing.
   return { x:Math.max(0,(w-VW)/2), up:Math.max(0,-f.top*V*0.8), down:V*0.10 };
@@ -1143,7 +1162,7 @@ function loop(now){
     const im=frontImg(), r=skyRoom(), f=skyFrame();
     dbgBox.textContent =
       'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'\n'+
-      'aspect  '+(im.naturalWidth? (im.naturalWidth/im.naturalHeight).toFixed(2):'0')+':1\n'+
+      'aspect  '+plateAspect().toFixed(2)+':1\n'+
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
       'T.x     '+T.x.toFixed(3)+'\n'+
