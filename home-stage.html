@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v44. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v46. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,28 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v46 — REVERTED TO THE ABSOLUTE SENSOR. tilt.js was NOT touched by the panoramas, the
+     per-plate framing, the beacons or the windows — it was unchanged from v24 through v41. So
+     whatever stopped horizontal panning was in THIS file, and rewriting the sensor as a
+     gyroscope treated the symptom by replacing a component that was not at fault. It also cost
+     several rounds re-deciding direction, sensitivity and drift, all of which were settled in
+     the absolute version and none of which it suffers from: an integrated gyro drifts by
+     nature, an absolute angle does not.
+     This file now imports tilt-absolute.js, which is the v24 sensor with its calibration
+     intact. If horizontal works, tilt.js is deleted. If it does not, the fault is here and
+     gets found here.
+
+     v45 — GYROSCOPE ZERO-RATE BIAS. Eight readings taken while deliberately holding still
+     showed yaw wandering 12.6 degrees — about 600px of unwanted travel — and yawRate sitting
+     at a persistent -2.5 deg/s. A gyroscope at rest does not report zero; it reports a small
+     constant offset that varies by device and with temperature, and integrating that offset is
+     precisely what drift is. It was never estimated.
+     Now: the offset is learned whenever the reading is small enough to be plausibly at rest,
+     and subtracted before anything is integrated. Tremor deadband 1.4 -> 2.2 deg/s, compass
+     fusion 0.02 -> 0.09 so the absolute reference actually asserts itself, and the compass
+     heading is low-passed so its own jitter is not simply traded in for the gyro's.
+     The readout now shows raw rate and the learned bias side by side.
+
      v44 — the response is now a CURVE, not a straight line. Wanting a turn to cross a wide
      panorama AND wanting small movements to stay calm cannot both be satisfied by a linear
      map: 1500px over 40 degrees is 37px per degree, so even a 5 degree drift shifts the city
@@ -831,7 +853,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=44';
+import { mountTilt } from './tilt-absolute.js?v=1';
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
@@ -1193,8 +1215,9 @@ function loop(now){
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
       'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
-      'yawRate '+(tiltDbg? tiltDbg.rate.toFixed(2):'n/a')+' deg/s\n'+
-      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 40\n'+
+      'heading '+(tiltDbg && tiltDbg.head!=null ? tiltDbg.head.toFixed(1):'n/a')+' deg\n'+
+      'horiz   '+(tiltDbg && tiltDbg.horiz!=null ? tiltDbg.horiz.toFixed(2):'n/a')+'   (>0.15 needed)\n'+
+      'yaw     '+(tiltDbg? tiltDbg.yaw.toFixed(1):'n/a')+' / 25\n'+
       'compass '+(tiltDbg? (tiltDbg.compass?'live':'dead — gyro only'):'n/a')+'\n'+
       'imageDx '+cx2.toFixed(0)+' px\n'+
       '\nturn the phone: T.x must move,\nthen imageDx must follow.';
