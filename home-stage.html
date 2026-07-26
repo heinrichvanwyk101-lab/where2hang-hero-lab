@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v50. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v51. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,16 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v51 — the water went smooth because v50's depth offset desynced the shader from its band.
+     Nothing was removed: the shader, the swell and the idle drift are all still here. But v50
+     added the depth `off` into the water band's dx, and that same dx is handed to water.draw —
+     so the WebGL distortion was being computed for a rectangle a few pixels away from where the
+     CSS water actually sat. Misaligned, the ripple lands on the wrong pixels and averages out
+     to nothing. Fixes: the shader is now fed the water band's OWN position without the depth
+     offset, and the CSS scaleY swell is dropped ON THE BAND THE SHADER OWNS — the shader is
+     already displacing those pixels per-pixel, and a whole-band stretch on top just smears its
+     result. The swell stays only as the CSS fallback when WebGL is absent.
+
      v50 — a window, not a dragged image. Two faults, both fair:
        1. TOO SENSITIVE, and the mechanism is specific. Integrated yaw ACCUMULATES, and with no
           compass to anchor it a few small movements walk it to the rail where it stays — so the
@@ -1256,15 +1266,19 @@ function loop(now){
     const off = Math.max(-DEPTH_CAP, Math.min(DEPTH_CAP, cx2*(DEPTH_RATE[i]-1)));
     const dx = cx2 + off + BX[i]*LIFE;
     const dy = cy2 + off*0.35 + BY[i]*LIFE;
-    const tf=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`
-           + (i===2 ? ` scaleY(${SWELL.toFixed(4)})` : '');
+    // the shader owns the water band's per-pixel motion; a CSS scaleY on top just smears it,
+    // so the swell is applied ONLY when the shader is not running (the fallback path).
+    const swell = (i===2 && !(water && water.ready)) ? ` scaleY(${SWELL.toFixed(4)})` : '';
+    const tf=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`+swell;
     imgsA[i].style.transform=tf; imgsB[i].style.transform=tf;
     if(i===1) beaconWrap.style.transform=`translate3d(calc(-50% + ${dx.toFixed(2)}px),${dy.toFixed(2)}px,0)`;
     if(i===2 && water && water.ready){
       // same rect the CSS band occupies, handed to the shader in CSS px
       const f=skyFrame(), V=stage.clientHeight, VW=stage.clientWidth;
       const ih=V*f.scale, iw=ih*(frontImg().naturalWidth/frontImg().naturalHeight);
-      water.draw({ imgX:(VW-iw)/2+dx, imgY:f.top*V+dy, imgW:iw, imgH:ih, time:t, fade:1 });
+      // the plate's true position: base pan only, no depth offset and no idle drift, so the
+      // ripple lands exactly on the water the viewer sees.
+      water.draw({ imgX:(VW-iw)/2+cx2, imgY:f.top*V+cy2, imgW:iw, imgH:ih, time:t, fade:1 });
     }
   }
 
