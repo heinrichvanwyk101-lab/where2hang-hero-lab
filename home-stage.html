@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- PASTE TARGET: where2hang-hero-lab/home-stage.html  (NEW FILE · experiment fork)
-     Where2Hang — IMMERSIVE MOBILE STAGE v51. Fork of home.html for the first viewport only.
+     Where2Hang — IMMERSIVE MOBILE STAGE v52. Fork of home.html for the first viewport only.
      Designed for the CLOSED Z Fold first (~360-400 CSS px wide). British spelling, no emojis.
 
      THE CONCEPT — the intelligent window.
@@ -81,6 +81,17 @@
           is now FIXED behind the entire page and stays there to the last section. The
           reveal is transparent; legibility comes from a dim layer that ramps with scroll,
           so the city recedes rather than disappears. Tilt keeps panning it all the way down.
+     v52 — framing stops chasing two moving targets. The self-calibrating scale kept pushing
+     day to the 0.95 clamp — day's tower band is genuinely shallow, so solving scale from
+     (waterline - towertop) blew it up — which is why day showed a huge empty water slab with
+     the glass in a void. Every attempt to re-derive it just moved the clamp onto another plate.
+     The three plates share aspect and pipeline; only the measured split differs. So: ONE scale
+     of 0.82 for all three, and a per-plate TOP offset that lands each waterline at 68% of the
+     viewport. Towers then sit at 32/34/44% — day is honestly shallower — but the water is never
+     a void and nothing clamps. tt/wl stay only for the depth masks, which do want per-plate
+     boundaries. The sensor readout (bias -0.14, yawRate ~0 at rest) confirms the drift work is
+     done; this is purely the plate framing.
+
      v51 — the water went smooth because v50's depth offset desynced the shader from its band.
      Nothing was removed: the shader, the swell and the idle drift are all still here. But v50
      added the depth `off` into the water band's dx, and that same dx is handed to water.draw —
@@ -910,7 +921,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <script type="module">
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
-import { mountTilt } from './tilt.js?v=50';
+import { mountTilt } from './tilt.js?v=50';   // sensor unchanged
 import { tap } from './haptics.js?v=2';
 import { mountWater } from './water.js?v=34';
 
@@ -972,7 +983,12 @@ const DEPTH_CAP=22;                                  // px, maximum divergence f
 // Targets, in fractions of the viewport. Towers begin here, waterline sits here. Everything
 // else — scale, offset, the three mask bands — is solved from the plate's own measured
 // geometry, so replacing a plate means updating tt and wl on its mood and nothing more.
-const AIM = { portrait:{ tower:0.12, water:0.46 }, landscape:{ tower:0.06, water:0.62 } };
+// One scale for every plate; the waterline is landed at a fixed viewport fraction by a
+// per-plate top offset. This stops the old scheme sending day to the clamp because its tower
+// band is shallow. tt/wl are still carried per mood — the depth masks want them — but they no
+// longer drive the zoom.
+const WATER_AT = { portrait: 0.68, landscape: 0.80 };
+const STAGE_SCALE = { portrait: 0.82, landscape: 1.20 };
 let plateGeom = { tt:0.323, wl:0.765 };
 // NOTE: these two bindings must stay ABOVE the first applyMood() call. Moving them below
 // it is a temporal-dead-zone ReferenceError that kills the module silently.
