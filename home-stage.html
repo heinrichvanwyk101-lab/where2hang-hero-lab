@@ -883,6 +883,16 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <div class="labflag">LAB · STAGE EXPERIMENT · one glass object · city responds to intention</div>
 
 <script type="module">
+// v53.2 — imports hoisted above the error trap. Static import is only legal at the top level
+// of a module; nesting these three inside the try{} of v53.1 was a parse-time SyntaxError, so
+// the whole module never executed — black plate, pane at CSS default, no readout under #debug.
+// Do not move these back inside the try. A static import cannot be caught there in any case:
+// it is resolved before the module body runs. If a tilt module needs trapping, make it a
+// dynamic await import() inside the try, the way area-rail is handled at the foot of the file.
+import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=53';
+import { mountTilt as mountTiltGyro } from './tilt.js?v=53';
+import { tap } from './haptics.js?v=2';
+
 // v53.1 — whole-module error trap. A throw ANYWHERE, including before the loop starts, now
 // paints to this box instead of dying to a black screen. The box is made first, outside the
 // try, so it can always report.
@@ -894,10 +904,6 @@ function __fail(where, e){
     (e && e.stack ? e.stack.split('\n').slice(0,5).join('\n') : '');
 }
 try {
-
-import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=53';
-import { mountTilt as mountTiltGyro } from './tilt.js?v=53';
-import { tap } from './haptics.js?v=2';
 
 // ============================================================================
 // v53 RESTORE — back to the state after the panorama stitch, before the alive-
