@@ -895,8 +895,6 @@ function __fail(where, e){
 }
 try {
 
-import { mountAreaRail } from './area-rail.js?v=7';
-import { getCityState } from './city-state.js';
 import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=53';
 import { mountTilt as mountTiltGyro } from './tilt.js?v=53';
 import { tap } from './haptics.js?v=2';
@@ -967,7 +965,9 @@ const hint=document.getElementById('hint'), navbar=document.getElementById('navb
 const pane=document.getElementById('pane'), panein=document.querySelector('.panein');
 const sill=document.querySelector('.sill'), sillrail=document.querySelector('.sillrail');
 
-const tod=getCityState().tod;
+// inlined from city-state.js so the module cannot fail to resolve that import
+const __h=new Date().getHours();
+const tod = __h<7?'night' : __h<11?'dawn' : __h<16?'day' : __h<19?'sunset' : 'night';
 let idx = tod==='dawn'?1 : tod==='day'?4 : tod==='sunset'?0 : 2;
 let front=true;
 
@@ -1203,10 +1203,13 @@ const AREAS=[
 ];
 const an=document.getElementById('areaname'),ac=document.getElementById('areacount'),areadots=document.getElementById('areadots');
 AREAS.forEach((_,i)=>{const d=document.createElement('i');if(i===0)d.className='on';areadots.appendChild(d);});
-try{ mountAreaRail(document.getElementById('arearail'),{areas:AREAS,
-  onFront:(i,a)=>{an.textContent=a.name;ac.textContent=a.count;[...areadots.children].forEach((d,k)=>d.classList.toggle('on',k===i));tap('snap');},
-  onSelect:()=>{}});
-}catch(e){console.error(e);}
+// area-rail loaded dynamically: if that file is stale or missing it must not take the whole
+// hero down with it. A rejected dynamic import is catchable; a failed static import is not.
+import('./area-rail.js?v=8').then(({mountAreaRail})=>{
+  mountAreaRail(document.getElementById('arearail'),{areas:AREAS,
+    onFront:(i,a)=>{an.textContent=a.name;ac.textContent=a.count;[...areadots.children].forEach((d,k)=>d.classList.toggle('on',k===i));tap('snap');},
+    onSelect:()=>{}});
+}).catch(e=>{ if(__dbg){__dbg.classList.add('on');__dbg.textContent='area-rail failed (non-fatal):\n'+(e&&e.message||e);} });
 
 } catch(e){ __fail('module top level', e); }
 </script>
