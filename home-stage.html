@@ -598,7 +598,11 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .act1{position:relative;height:130lvh;z-index:1}
 .stage{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden;perspective:1150px;perspective-origin:50% 58%;touch-action:pan-y}
 /* THE CITY IS THE PAGE'S BACKDROP, not the stage's. Fixed, behind everything, to the bottom. */
+/* PERSPECTIVE. The slots live here, not in .stage, so .stage's perspective never reached them.
+   Matched to .stage's 1150px / 50% 58% so the city and the glass share one camera. overflow
+   is already hidden, which clips anything the rotation swings past the viewport edge. */
 .skysheet{position:fixed;top:0;left:0;right:0;height:100vh;height:100lvh;z-index:0;overflow:hidden;pointer-events:none;
+  perspective:1150px;perspective-origin:50% 58%;
   background:var(--sheet,linear-gradient(180deg,#0a1a24 0%,#0b2029 30%,#07161d 58%,#05080b 100%));transition:background 1.1s var(--ease)}
 /* the city recedes as you descend instead of being covered over */
 .citydim{position:fixed;top:0;left:0;right:0;height:100vh;height:100lvh;z-index:1;pointer-events:none;opacity:0;
@@ -611,7 +615,8 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 /* long dark, quick fade up, long lit, quick fade down — somebody flicking a switch */
 @keyframes windowlit{ 0%{opacity:0} 4%{opacity:.9} 34%{opacity:.9} 39%{opacity:0} 100%{opacity:0} }
 @keyframes beacon{ 0%{opacity:0} 3%{opacity:1} 11%{opacity:1} 19%{opacity:0} 100%{opacity:0} }
-.skyslot{position:absolute;inset:0;transition:opacity 1.1s var(--ease)}
+.skyslot{position:absolute;inset:0;transition:opacity 1.1s var(--ease);
+  transform-origin:50% 58%;backface-visibility:hidden;will-change:transform}
 #slotA{opacity:1}#slotB{opacity:0}
 .sky{position:absolute;top:-10.2%;left:50%;height:74%;min-height:74%;width:auto;max-width:none;
      filter:saturate(.96) contrast(.97) brightness(.96);
@@ -980,6 +985,23 @@ const LOOK_X_PX = 1500;
 const LOOK_Y_PX = 70;
 const LOOK_CENTRE_PX = 0;
 
+/* PERSPECTIVE YAW — the cue that was missing.
+   The three .sky layers are horizontal BANDS, not depth planes: sky above, towers in the
+   middle, water below. They never overlap spatially, so moving them at different rates cannot
+   produce occlusion. It produces shear between bands, which at 460px read as visible doubling
+   (Spec v3 §4). That architecture can express shear but never volume.
+   Under a real head turn a scene does not translate uniformly — it shears in PERSPECTIVE: the
+   side you turn toward compresses, the far side stretches. That is the signal the brain reads
+   as "I turned", and it was absent. A rotateY on the whole slot produces it, coherently across
+   all three bands, so it cannot cause the doubling that a rate differential does.
+   ROT_MAX_DEG: degrees of plate yaw at full pan. Small is correct — this cue lands far below
+   the threshold at which it looks like a gimmick. 3-4 is the working range.
+   PLATE_GUARD: over-scale. room.x is computed in JS from the untransformed geometry, so the
+   rotation would otherwise swing an edge inside the viewport at full pan, where the margin is
+   already zero. 1.06 buys roughly 3% each side, comfortably more than the rotation consumes. */
+const ROT_MAX_DEG = 3.5;
+const PLATE_GUARD = 1.06;
+
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
 const intentEl=document.getElementById('intent'), askin=document.getElementById('askin');
 const answerEl=document.getElementById('answer'), prog=document.getElementById('prog');
@@ -1193,6 +1215,13 @@ function loop(now){
   const cx2=Math.max(-room.x,Math.min(room.x,curPanX));
   const cy2=Math.max(-room.down,Math.min(room.up,curPanY - pageP*stage.clientHeight*0.14));
 
+  // Whole-plate yaw. Negative because a camera yawing right is the world rotating left about
+  // the vertical: the right edge comes toward the viewer, which is CSS rotateY negative.
+  // Applied to BOTH slots so a crossfade cannot show two differently-angled cities.
+  const rotY = REDUCE ? 0 : -T.x * ROT_MAX_DEG;
+  const slotTf = 'scale('+PLATE_GUARD+') rotateY('+rotY.toFixed(3)+'deg)';
+  slotA.style.transform = slotTf; slotB.style.transform = slotTf;
+
   for(let i=0;i<3;i++){
     const dx = cx2 + T.x*DEPTH_PX[i] + BX[i]*LIFE;
     const dy = cy2 + T.y*DEPTH_PX[i]*0.5 + BY[i]*LIFE;
@@ -1206,6 +1235,7 @@ function loop(now){
       'sensor  '+SENSOR+(tiltDbg&&tiltDbg.src?' -> '+tiltDbg.src:' -> waiting')+'\n'+
       'travel  abs '+(tiltDbg?tiltDbg.absTravel:0)+'   rel '+(tiltDbg?tiltDbg.relTravel:0)+'   locked '+(tiltDbg?tiltDbg.decided:false)+'\n'+
       'sign    yaw '+SIGN_YAW+'   pitch '+SIGN_PITCH+'\n'+
+      'rotY    '+(-T.x*ROT_MAX_DEG).toFixed(2)+' deg   guard '+PLATE_GUARD+'\n'+
       'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'\n'+
       'aspect  '+plateAspect().toFixed(2)+':1\n'+
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
