@@ -1114,6 +1114,20 @@ addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max
 function loop(now){
   raf=requestAnimationFrame(loop);
   try {
+    if(DEBUG && __dbg){
+      const im = (front?skyA:skyB);
+      let sf='?'; try{ sf=JSON.stringify(skyFrame()); }catch(e){ sf='skyFrame THREW: '+e.message; }
+      __dbg.classList.add('on');
+      __dbg.textContent =
+        'sensor  '+SENSOR+'\n'+
+        'imgA nat '+(imgsA[1].naturalWidth||0)+'x'+(imgsA[1].naturalHeight||0)+'\n'+
+        'imgB nat '+(imgsB[1].naturalWidth||0)+'x'+(imgsB[1].naturalHeight||0)+'\n'+
+        'front   '+front+'\n'+
+        'plateGeom '+JSON.stringify(plateGeom)+'\n'+
+        'skyFrame '+sf+'\n'+
+        'aspect  '+plateAspect().toFixed(3)+'\n'+
+        'tilt.x  '+(tilt.get().x).toFixed(3);
+    }
   const t = (now||0)/1000, LIFE = REDUCE ? 0 : 1;
   // gentle drift-based water: the whole scene breathes very slightly, water most of all.
   // This is the simple movement that existed before the shader — no per-pixel ripple.
