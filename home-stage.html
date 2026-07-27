@@ -970,6 +970,10 @@ const skyA=imgsA[1], skyB=imgsB[1];
 const DEPTH_PX=[-6,0,8];
 
 let plateGeom = { tt:0.323, wl:0.765 };
+// Declared here, not with the rest of the drag state further down: applyMood() runs during
+// module init and resets these, and a `let` further down the file is in its temporal dead zone
+// at that point. This is the same trap recorded in the v35 note above.
+let panX = 0, panY = 0;
 
 // SPEC v3 §3 travel constants.
 const LOOK_X_PX = 1500;
@@ -1097,7 +1101,7 @@ if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.request
 
 /* --- drag the background to look around; drag the pane to change mood --- */
 let dragX=0, curX=0, down=false, sx=0, touched=false, raf=0;
-let panX=0, panY=0, curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;
+let curPanX=0, curPanY=0, pdown=false, psx=0, psy=0, pbx=0, pby=0;   // panX/panY declared above
 const PRESENT = 0.12;
 function recall(){ window.scrollTo({top:0,behavior:'smooth'}); tap('commit'); }
 function bgDown(e){ if(e.target.closest('.panewrap,.featured,.askrow'))return;
