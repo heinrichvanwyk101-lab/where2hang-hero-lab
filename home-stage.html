@@ -889,7 +889,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 // Do not move these back inside the try. A static import cannot be caught there in any case:
 // it is resolved before the module body runs. If a tilt module needs trapping, make it a
 // dynamic await import() inside the try, the way area-rail is handled at the foot of the file.
-import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=54';
+import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=55';
 import { mountTilt as mountTiltGyro } from './tilt.js?v=53';
 import { tap } from './haptics.js?v=2';
 
@@ -919,8 +919,15 @@ try {
 //   'absolute' — compass only. Yaw is dead on the Fold: alpha does not move.
 //   'gyro'     — integrated rotationRate. Spec v3 §4 says never. Last resort only.
 // The debug readout prints the live source after the arrow, e.g. "sensor  auto -> rel".
+//
+// SIGN_YAW / SIGN_PITCH: direction of travel. Only +1 and -1 are valid.
+// Turn the phone right; the view must move right. Confirmed correct at +1 on the relative
+// stream, matching the value recorded in Spec v3 §3. Exposed here so it is one character to
+// flip and never has to be hunted for again.
 // ============================================================================
 const SENSOR = 'auto';
+const SIGN_YAW = 1;
+const SIGN_PITCH = 1;
 
 const B='https://where2hang.ae/images/';
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1025,6 +1032,10 @@ function applyMood(i,{silent=false}={}){
   clearTimeout(applyMood._t);
   applyMood._t=setTimeout(()=>{answerEl.innerHTML=m.answer;answerEl.classList.add('on');},520);
   prog.style.transform='translateX('+(i*100)+'%)';
+  // The neutral view is the centre of the NEW plate. A drag offset carried over from the
+  // previous mood was clamped against the previous room.x, so on a narrower plate it pinned
+  // against the edge. Easing in the loop glides this back rather than snapping it.
+  panX = 0; panY = 0;
   if(!silent) tap('commit');
 }
 imgsA.forEach(im => { im.src = plateFor(MOODS[idx], im); });
@@ -1039,7 +1050,12 @@ function frontImg(){
 }
 let lastAspect = 5.55;
 function plateAspect(){
-  for (const im of [...imgsA, ...imgsB]) {
+  // Measure the set that is actually in FRONT, falling back to the other only while the new
+  // plate is still decoding. Reading imgsA unconditionally meant that after a swap onto imgsB
+  // the aspect came from the previous mood — and with night stitched at 5.55:1 while sunset and
+  // day are single 3:1 plates, room.x was wrong by nearly half and the view jumped.
+  const order = front ? [...imgsA, ...imgsB] : [...imgsB, ...imgsA];
+  for (const im of order) {
     if (im.naturalWidth && im.naturalHeight) { lastAspect = im.naturalWidth / im.naturalHeight; break; }
   }
   return lastAspect;
@@ -1074,7 +1090,7 @@ const dbgBox = document.getElementById('dbg');
 if(DEBUG) dbgBox.classList.add('on');
 let tiltDbg=null;
 const mount = (SENSOR==='gyro') ? mountTiltGyro : mountTiltAbs;
-const tilt = mount({enabled:!REDUCE, source: SENSOR, onDebug: DEBUG ? (d)=>{ tiltDbg=d; } : null});
+const tilt = mount({enabled:!REDUCE, source: SENSOR, signYaw: SIGN_YAW, signPitch: SIGN_PITCH, onDebug: DEBUG ? (d)=>{ tiltDbg=d; } : null});
 if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
   window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
 }
@@ -1161,6 +1177,11 @@ function loop(now){
   sill.style.opacity = sillOp; sillrail.style.opacity = sillOp*0.85;
 
   const room=skyRoom();
+  // Re-clamp the stored drag against the CURRENT plate. room.x shrinks when a mood with a
+  // narrower plate comes forward, and a value left over from a wider one would hold the view
+  // hard against the edge for as long as it took DRIFT to unwind it.
+  if(panX >  room.x) panX =  room.x;
+  if(panX < -room.x) panX = -room.x;
   const aimX = LOOK_CENTRE_PX - T.x*Math.min(room.x, LOOK_X_PX);
   const aimY =  T.y*Math.min(room.up, LOOK_Y_PX);
   curPanX += ((panX+aimX) - curPanX)*0.075;
@@ -1180,13 +1201,14 @@ function loop(now){
     dbgBox.textContent =
       'sensor  '+SENSOR+(tiltDbg&&tiltDbg.src?' -> '+tiltDbg.src:' -> waiting')+'\n'+
       'travel  abs '+(tiltDbg?tiltDbg.absTravel:0)+'   rel '+(tiltDbg?tiltDbg.relTravel:0)+'   locked '+(tiltDbg?tiltDbg.decided:false)+'\n'+
+      'sign    yaw '+SIGN_YAW+'   pitch '+SIGN_PITCH+'\n'+
       'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'\n'+
       'aspect  '+plateAspect().toFixed(2)+':1\n'+
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
       'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
       'imageDx '+cx2.toFixed(0)+' px\n'+
-      '\nturn the phone: T.x must move,\nthen imageDx must follow.\nif dead, set SENSOR = relative';
+      '\nturn the phone: T.x must move,\nthen imageDx must follow.\nif dead, set SENSOR = relative.\nif backwards, flip SIGN_YAW.';
   }
 
   pane.style.setProperty('--sheen', (curX*46 + T.x*34 + Math.sin(t*0.068)*9*LIFE) + '%');

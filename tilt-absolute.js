@@ -1,5 +1,5 @@
 // PASTE TARGET: where2hang-hero-lab/tilt-absolute.js
-// Where2Hang — the ABSOLUTE-ORIENTATION look-around.  v2.
+// Where2Hang — the ABSOLUTE-ORIENTATION look-around.  v3.
 //
 // WHY THIS FILE EXISTS.
 // This is the v24 sensor code — the version that was calibrated and confirmed working, before
@@ -33,6 +33,23 @@
 //   'absolute' — v1 behaviour. Compass only. Dead yaw on this device.
 //   'relative' — game rotation vector only. Deterministic, no detection, no switch mid-session.
 //
+// WHAT CHANGED IN v3, AND WHY.
+// v2 latched the neutral heading from the FIRST usable reading. The game rotation vector needs
+// a moment to converge after the listener attaches, so whichever sample happened to arrive
+// first became the origin — and on a slow load that sample is still settling. Symptom: the
+// look-around opens skewed hard left or hard right, at random, on an unchanged build, and a
+// plain refresh "fixes" it. DRIFT 0.0006 only creeps the error out over several minutes, so the
+// whole session sits crooked. Nothing that depends on the code can differ between two refreshes
+// of the same build; only something that depends on timing can.
+//
+// v3 gates the latch: head0 is not committed until SETTLE_N consecutive readings agree within
+// SETTLE_TOL degrees, and it latches on their mean rather than on one sample. If nothing settles
+// within SETTLE_MS the last reading is taken anyway — a slightly crooked look-around is a far
+// smaller fault than a dead one, and this path must never be able to leave the pan unlatched.
+// The same gate runs on the auto-demotion relatch and on recentre(), which had identical
+// exposure: a mid-session switch to the relative stream could go crooked on a load that
+// started clean.
+//
 // Constants are exactly as they were when the behaviour was signed off.
 
 export function mountTilt(opts = {}) {
@@ -53,6 +70,13 @@ export function mountTilt(opts = {}) {
   // ABS_LIVE: absolute has moved enough to prove the compass works — decision locked to 'abs'.
   // REL_LIVE: relative has moved this far while absolute stayed under ABS_LIVE — compass frozen.
   const ABS_LIVE = 2, REL_LIVE = 10;
+
+  // Origin settle gate. SETTLE_N consecutive readings must agree within SETTLE_TOL degrees
+  // before the neutral heading is committed; SETTLE_MS is the hard deadline after which the
+  // latest reading is taken regardless, so the look-around can never be left unlatched.
+  const SETTLE_N = 5, SETTLE_TOL = 1.2, SETTLE_MS = 1000;
+  let settleBuf = [], settleT0 = 0;
+  const resetSettle = () => { settleBuf = []; settleT0 = 0; };
 
   let head0 = null, elev0 = 0;
   let yaw = 0, pitch = 0, cx = 0, cy = 0;
@@ -111,7 +135,7 @@ export function mountTilt(opts = {}) {
       decided = true;                       // compass is genuinely reporting — keep it
     } else if (relTravel >= REL_LIVE) {
       decided = true; mode = "rel";         // compass frozen, game rotation vector alive
-      head0 = null;                         // relatch the origin on the new stream
+      head0 = null; resetSettle();          // relatch the origin, through the settle gate
     }
   }
 
@@ -136,7 +160,31 @@ export function mountTilt(opts = {}) {
     if (mode === "abs" && !sawAbs) return;
 
     if (A.heading !== null) {
-      if (head0 === null) { head0 = A.heading; elev0 = A.elevation; return; }
+      if (head0 === null) {
+        const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        if (!settleT0) settleT0 = now;
+        settleBuf.push({ h: A.heading, e: A.elevation });
+        if (settleBuf.length > SETTLE_N) settleBuf.shift();
+
+        // Spread measured relative to the oldest kept sample, so the wrap at +-180 is handled.
+        let agreed = false;
+        if (settleBuf.length === SETTLE_N) {
+          const base = settleBuf[0].h;
+          let lo = 0, hi = 0;
+          for (const smp of settleBuf) { const d = wrap(smp.h - base); if (d < lo) lo = d; if (d > hi) hi = d; }
+          agreed = (hi - lo) <= SETTLE_TOL;
+        }
+        if (!agreed && (now - settleT0) < SETTLE_MS) return;
+
+        // Latch on the mean of the window, not on a single sample.
+        const base = settleBuf[0].h;
+        let sumH = 0, sumE = 0;
+        for (const smp of settleBuf) { sumH += wrap(smp.h - base); sumE += smp.e; }
+        head0 = wrap(base + sumH / settleBuf.length);
+        elev0 = sumE / settleBuf.length;
+        resetSettle();
+        return;
+      }
       head0 += wrap(A.heading - head0) * DRIFT;
       yaw = Math.max(-YAW_RANGE, Math.min(YAW_RANGE, dead(wrap(A.heading - head0))));
     }
@@ -146,7 +194,7 @@ export function mountTilt(opts = {}) {
 
     if (onDebug) onDebug({
       yaw, pitch, rate: 0, raw: 0, bias: 0,
-      compass: mode === "abs", src: mode, decided,
+      compass: mode === "abs", src: mode, decided, settling: head0 === null,
       absTravel: Math.round(absTravel), relTravel: Math.round(relTravel),
       head: A.heading, horiz: A.horiz,
     });
@@ -192,7 +240,7 @@ export function mountTilt(opts = {}) {
     get() { return { x: cx, y: cy }; },
     source() { return mode; },
     setEnabled(v) { enabled = !!v && !REDUCE; if (enabled) attach(); else detach(); },
-    recentre() { head0 = null; yaw = 0; pitch = 0; },
+    recentre() { head0 = null; resetSettle(); yaw = 0; pitch = 0; },
     request,
     destroy() {
       alive = false; if (raf) cancelAnimationFrame(raf); raf = 0;
