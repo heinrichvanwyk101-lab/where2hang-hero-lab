@@ -889,7 +889,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 // Do not move these back inside the try. A static import cannot be caught there in any case:
 // it is resolved before the module body runs. If a tilt module needs trapping, make it a
 // dynamic await import() inside the try, the way area-rail is handled at the foot of the file.
-import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=53';
+import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=54';
 import { mountTilt as mountTiltGyro } from './tilt.js?v=53';
 import { tap } from './haptics.js?v=2';
 
@@ -911,10 +911,16 @@ try {
 // Constants are the SPEC v3 values, verified against the recorded specification.
 //
 // SENSOR: the one switch that matters on this device.
-//   'absolute' — spec-correct, panorama-photo feel, needs the compass. DEFAULT.
-//   'gyro'     — works without a compass; use only if tilt is dead on 'absolute'.
+//   'auto'     — DEFAULT. Absolute orientation, preferring the compass, falling back to the
+//                game rotation vector only on proof that the compass heading is frozen.
+//                Obeys Spec v3 §4: rotation matrix, never integrated rate.
+//   'relative' — game rotation vector only. Deterministic. Same maths, no north reference.
+//                This is the mechanism the camera's panorama mode uses.
+//   'absolute' — compass only. Yaw is dead on the Fold: alpha does not move.
+//   'gyro'     — integrated rotationRate. Spec v3 §4 says never. Last resort only.
+// The debug readout prints the live source after the arrow, e.g. "sensor  auto -> rel".
 // ============================================================================
-const SENSOR = 'absolute';
+const SENSOR = 'auto';
 
 const B='https://where2hang.ae/images/';
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1068,7 +1074,7 @@ const dbgBox = document.getElementById('dbg');
 if(DEBUG) dbgBox.classList.add('on');
 let tiltDbg=null;
 const mount = (SENSOR==='gyro') ? mountTiltGyro : mountTiltAbs;
-const tilt = mount({enabled:!REDUCE, onDebug: DEBUG ? (d)=>{ tiltDbg=d; } : null});
+const tilt = mount({enabled:!REDUCE, source: SENSOR, onDebug: DEBUG ? (d)=>{ tiltDbg=d; } : null});
 if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
   window.addEventListener('pointerdown',function once(){window.removeEventListener('pointerdown',once);tilt.request();},{once:true});
 }
@@ -1125,7 +1131,7 @@ function loop(now){
       let sf='?'; try{ sf=JSON.stringify(skyFrame()); }catch(e){ sf='skyFrame THREW: '+e.message; }
       __dbg.classList.add('on');
       __dbg.textContent =
-        'sensor  '+SENSOR+'\n'+
+        'sensor  '+SENSOR+(tiltDbg&&tiltDbg.src?' -> '+tiltDbg.src:' -> waiting')+'\n'+
         'imgA nat '+(imgsA[1].naturalWidth||0)+'x'+(imgsA[1].naturalHeight||0)+'\n'+
         'imgB nat '+(imgsB[1].naturalWidth||0)+'x'+(imgsB[1].naturalHeight||0)+'\n'+
         'front   '+front+'\n'+
@@ -1172,14 +1178,15 @@ function loop(now){
   if(DEBUG){
     const im=frontImg(), r=skyRoom(), f=skyFrame();
     dbgBox.textContent =
-      'sensor  '+SENSOR+'\n'+
+      'sensor  '+SENSOR+(tiltDbg&&tiltDbg.src?' -> '+tiltDbg.src:' -> waiting')+'\n'+
+      'travel  abs '+(tiltDbg?tiltDbg.absTravel:0)+'   rel '+(tiltDbg?tiltDbg.relTravel:0)+'   locked '+(tiltDbg?tiltDbg.decided:false)+'\n'+
       'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'\n'+
       'aspect  '+plateAspect().toFixed(2)+':1\n'+
       'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
       'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
       'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
       'imageDx '+cx2.toFixed(0)+' px\n'+
-      '\nturn the phone: T.x must move,\nthen imageDx must follow.\nif dead, set SENSOR = gyro';
+      '\nturn the phone: T.x must move,\nthen imageDx must follow.\nif dead, set SENSOR = relative';
   }
 
   pane.style.setProperty('--sheen', (curX*46 + T.x*34 + Math.sin(t*0.068)*9*LIFE) + '%');
