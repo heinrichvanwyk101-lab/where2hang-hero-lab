@@ -613,7 +613,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 @keyframes beacon{ 0%{opacity:0} 3%{opacity:1} 11%{opacity:1} 19%{opacity:0} 100%{opacity:0} }
 .skyslot{position:absolute;inset:0;transition:opacity 1.1s var(--ease)}
 #slotA{opacity:1}#slotB{opacity:0}
-.sky{position:absolute;top:-10.2%;left:50%;height:74%;width:auto;max-width:none;
+.sky{position:absolute;top:-10.2%;left:50%;height:74%;min-height:74%;width:auto;max-width:none;
      filter:saturate(.96) contrast(.97) brightness(.96);
      will-change:transform;transform:translate3d(-50%,0,0)}
 /* Bands, in image-relative terms for the STITCHED plate: sky 0-30%, towers 30-76%,
@@ -1101,6 +1101,7 @@ addEventListener('scroll',()=>{ const h=innerHeight; scrollP=Math.min(1,Math.max
 
 function loop(now){
   raf=requestAnimationFrame(loop);
+  try {
   const t = (now||0)/1000, LIFE = REDUCE ? 0 : 1;
   // gentle drift-based water: the whole scene breathes very slightly, water most of all.
   // This is the simple movement that existed before the shader — no per-pixel ripple.
@@ -1160,6 +1161,9 @@ if dead, set SENSOR = gyro';
   }
 
   pane.style.setProperty('--sheen', (curX*46 + T.x*34 + Math.sin(t*0.068)*9*LIFE) + '%');
+  } catch(err) {
+    if(dbgBox){ dbgBox.classList.add('on'); dbgBox.textContent = 'LOOP ERROR:\n'+(err && err.message || err)+'\n\n'+(err && err.stack ? err.stack.split('\n').slice(0,4).join('\n') : ''); }
+  }
 }
 if(!REDUCE) loop();
 
