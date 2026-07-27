@@ -883,6 +883,18 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 <div class="labflag">LAB · STAGE EXPERIMENT · one glass object · city responds to intention</div>
 
 <script type="module">
+// v53.1 — whole-module error trap. A throw ANYWHERE, including before the loop starts, now
+// paints to this box instead of dying to a black screen. The box is made first, outside the
+// try, so it can always report.
+const __dbg = document.getElementById('dbg');
+function __fail(where, e){
+  if(!__dbg) return;
+  __dbg.classList.add('on');
+  __dbg.textContent = 'FAILED @ '+where+'\n'+(e && e.message || e)+'\n\n'+
+    (e && e.stack ? e.stack.split('\n').slice(0,5).join('\n') : '');
+}
+try {
+
 import { mountAreaRail } from './area-rail.js?v=7';
 import { getCityState } from './city-state.js';
 import { mountTilt as mountTiltAbs } from './tilt-absolute.js?v=53';
@@ -1140,24 +1152,14 @@ function loop(now){
   if(DEBUG){
     const im=frontImg(), r=skyRoom(), f=skyFrame();
     dbgBox.textContent =
-      'sensor  '+SENSOR+'
-'+
-      'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'
-'+
-      'aspect  '+plateAspect().toFixed(2)+':1
-'+
-      'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'
-'+
-      'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'
-'+
-      'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'
-'+
-      'imageDx '+cx2.toFixed(0)+' px
-'+
-      '
-turn the phone: T.x must move,
-then imageDx must follow.
-if dead, set SENSOR = gyro';
+      'sensor  '+SENSOR+'\n'+
+      'plate   '+(im.naturalWidth||0)+' x '+(im.naturalHeight||0)+'\n'+
+      'aspect  '+plateAspect().toFixed(2)+':1\n'+
+      'scale   '+f.scale.toFixed(3)+'   top '+f.top.toFixed(3)+'\n'+
+      'room.x  '+r.x.toFixed(0)+' px   cap '+LOOK_X_PX+'\n'+
+      'T.x     '+T.x.toFixed(3)+'   T.y '+T.y.toFixed(3)+'\n'+
+      'imageDx '+cx2.toFixed(0)+' px\n'+
+      '\nturn the phone: T.x must move,\nthen imageDx must follow.\nif dead, set SENSOR = gyro';
   }
 
   pane.style.setProperty('--sheen', (curX*46 + T.x*34 + Math.sin(t*0.068)*9*LIFE) + '%');
@@ -1191,6 +1193,8 @@ try{ mountAreaRail(document.getElementById('arearail'),{areas:AREAS,
   onFront:(i,a)=>{an.textContent=a.name;ac.textContent=a.count;[...areadots.children].forEach((d,k)=>d.classList.toggle('on',k===i));tap('snap');},
   onSelect:()=>{}});
 }catch(e){console.error(e);}
+
+} catch(e){ __fail('module top level', e); }
 </script>
 </body>
 </html>
