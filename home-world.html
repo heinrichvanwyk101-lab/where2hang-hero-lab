@@ -139,16 +139,27 @@ if (DEBUG) __dbg.classList.add('on');
    =========================================================================== */
 let   ORBIT_DEG = 12;
 const ELEV_DEG  = 4.5;
-const ORBIT_R   = 165;
-const CAM_Y     = 26;
-const TARGET    = new THREE.Vector3(0, 12, -50);
+const ORBIT_R   = 330;
+const CAM_Y     = 30;
+const TARGET    = new THREE.Vector3(0, 14, -10);
+const FOV       = 55;
 
-/* FRAMING, CHECKED RATHER THAN GUESSED. Camera sits at (0, 26, 115) and looks down about 5deg.
-   With a 42deg vertical field that puts the visible band between -26deg and +16deg. Anything
-   below -26deg is off the bottom of the screen. The first pass put the palms 18 units from the
-   camera, which placed them at -45deg — the entire near field rendered below the frame, and the
-   only near object left in shot was the reflection plane. Every foreground element must now be
-   checked against that -26deg floor before it is placed. */
+/* FRAMING. THE HORIZONTAL FIELD IS THE BINDING CONSTRAINT, NOT THE VERTICAL.
+   A phone in portrait is about 0.45 wide for every 1 tall. Vertical FOV therefore buys almost
+   nothing horizontally: at 42deg vertical the horizontal field was 19deg, plus or minus 9.5deg
+   from centre. The district spanned x from -300 to +300 at 100 to 350 units out — plus or minus
+   60deg — so over three quarters of the city was off screen at all times and Emirates Palace at
+   x=-72 sat at -40deg, permanently outside the frame. The composition was never once visible.
+
+   The fix is distance plus a wider lens plus lateral compression, all three:
+     ORBIT_R 330   at this range a district of +/-77 units fits the horizontal field
+     FOV 55        horizontal half-angle becomes atan(tan(27.5) * 0.45) = 13.2deg
+     x in [-80,80] everything is authored inside that envelope
+
+   Vertical: camera (0, 30, 320) aiming at y=14 pitches down 2.8deg, so the visible band runs
+   -30deg to +25deg. The near field sits at 90 to 120 units, which puts it near -21deg — inside
+   the frame, and close enough that a 12deg orbit sweeps it about 25deg against the skyline.
+   CHECK BOTH AXES BEFORE PLACING ANYTHING. The horizontal one is the one that bites. */
 const TAU       = 0.24;
 
 /* Palette. Straight from the app tokens — no purple, no neon, no Vegas. */
@@ -173,9 +184,11 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(C.night);
 // Aerial perspective. This is what makes a small model read as a large city: distant masses
 // lose contrast and dissolve into the sky, exactly as haze does over a bay.
-scene.fog = new THREE.FogExp2(C.night, 0.0042);
+// At 0.0042 over 360 units this erased about 90% of the far city — there was no skyline left
+// behind the heroes. Distances roughly doubled with the pull-back, so the coefficient halves.
+scene.fog = new THREE.FogExp2(C.night, 0.0018);
 
-const camera = new THREE.PerspectiveCamera(42, 1, 1, 2000);
+const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 3000);
 
 /* ---------- lighting ----------
    Restrained. The city is lit mostly by its own windows; the lights here only shape the masses
@@ -216,8 +229,10 @@ function windowTexture(cols, rows, litChance, warm){
   t.magFilter = THREE.LinearFilter;
   return t;
 }
-const TEX_TOWER = windowTexture(14, 46, 0.34, false);
-const TEX_BLOCK = windowTexture(18, 14, 0.42, true);
+// Sparser and dimmer. At 0.34/0.42 every tower glittered evenly and read as scribble rather
+// than as a lit building; a night skyline is mostly dark with pockets of light.
+const TEX_TOWER = windowTexture(14, 46, 0.17, false);
+const TEX_BLOCK = windowTexture(18, 14, 0.22, true);
 
 // repX/repY are TILE COUNTS, and getting them wrong is not a cosmetic error. The first pass
 // used h/1.5, putting roughly 1,150 window rows on a 380m tower: far below one pixel per row at
@@ -295,14 +310,16 @@ function roundedSlab(w, d, h, r, seg){
 function etihadTowers(x0, z0){
   const g = new THREE.Group();
   const spec = [
-    { dx:-11.5, dz: 4.0, h:33.5, r:2.05, lean: 1.5, shear: 2.2 },
-    { dx: -4.5, dz:-1.5, h:37.0, r:2.20, lean: 1.7, shear: 2.6 },
-    { dx:  3.0, dz: 3.0, h:31.5, r:1.95, lean: 1.4, shear: 2.1 },
-    { dx: 10.0, dz:-2.5, h:28.0, r:1.80, lean: 1.2, shear: 1.9 },
-    { dx: 16.5, dz: 3.5, h:25.0, r:1.70, lean: 1.1, shear: 1.7 },
+    { dx:-10.0, dz: 3.5, h:30.0, r:2.30, lean: 0.9, shear: 1.1 },
+    { dx: -3.5, dz:-1.5, h:33.0, r:2.45, lean: 1.0, shear: 1.3 },
+    { dx:  3.0, dz: 2.5, h:28.0, r:2.20, lean: 0.8, shear: 1.0 },
+    { dx:  9.0, dz:-2.0, h:25.0, r:2.05, lean: 0.7, shear: 0.9 },
+    { dx: 14.5, dz: 3.0, h:23.0, r:1.95, lean: 0.6, shear: 0.8 },
   ];
   spec.forEach((s, i) => {
-    const geo = curvedTower(s.h, s.r, s.r * 0.42, 0.13, s.lean, s.shear, 0.66, 26);
+    // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
+    // they are broad curved slabs, and the width is as much of the signature as the lean.
+    const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 26);
     const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/16)), 0.90));
     m.position.set(x0 + s.dx, s.h/2, z0 + s.dz);
     m.rotation.y = 0.10 + i * 0.06;
@@ -461,17 +478,17 @@ const land = new THREE.Mesh(
   new THREE.BoxGeometry(700, 1.2, 300),
   new THREE.MeshStandardMaterial({ color:0x0C1218, roughness:0.95, metalness:0 })
 );
-land.position.set(0, -0.25, -175);          // top at +0.35, clear of the wave displacement
+land.position.set(0, -0.25, -190);          // top at +0.35, clear of the wave displacement
 world.add(land);
 
 // Western headland. Emirates Palace moves onto it, roughly 650m from the camera against a
 // skyline at 1.5-2km. Geographically compressed, which is the licence a miniature grants —
 // landmarks right, relationships intuitive, distances honest fiction.
 const headland = new THREE.Mesh(
-  new THREE.BoxGeometry(170, 1.2, 110),
+  new THREE.BoxGeometry(120, 1.2, 70),
   new THREE.MeshStandardMaterial({ color:0x0C1218, roughness:0.95, metalness:0 })
 );
-headland.position.set(-78, -0.25, 8);
+headland.position.set(-46, -0.25, 8);
 headland.rotation.y = 0.14;
 world.add(headland);
 
@@ -482,7 +499,7 @@ const water = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color:0x0E1C26, roughness:0.42, metalness:0.10 })
 );
 water.rotation.x = -Math.PI / 2;
-water.position.set(0, 0, 60);
+water.position.set(0, 0, 140);
 world.add(water);
 const waterPos = water.geometry.attributes.position;
 const waterBase = Float32Array.from(waterPos.array);
@@ -518,12 +535,12 @@ const reflTex = reflectionTexture();
 // depth cue in the scene. Tiled at 8, a streak is about 0.2 units: a thin light on the water.
 reflTex.repeat.set(8, 1);
 const refl = new THREE.Mesh(
-  new THREE.PlaneGeometry(620, 78),
+  new THREE.PlaneGeometry(300, 60),
   new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.30,
     blending:THREE.AdditiveBlending, depthWrite:false })
 );
 refl.rotation.x = -Math.PI / 2;
-refl.position.set(0, 0.05, -34);
+refl.position.set(0, 0.05, -8);
 world.add(refl);
 
 /* ---------- foreground: the near field the photograph never had ----------
@@ -566,25 +583,25 @@ function nearBlock(x, z, w, h, d, rot){
   m.position.set(x, h/2, z); m.rotation.y = rot;
   return m;
 }
-// Left flank
-[[-96,58,9,16,7],[-80,64,7,11,6],[-66,56,8,13.5,6.5],[-52,66,6,8.5,5]].forEach(b =>
+// Left flank, at about 100 units from the camera and inside the 13.2deg horizontal half-field.
+[[-44,222,9,15,7],[-33,232,7,10,6],[-24,218,8,12.5,6.5],[-15,236,6,8,5]].forEach(b =>
   fg.add(nearBlock(b[0], b[1], b[2], b[3], b[4], (rnd()-0.5)*0.4)));
 // Right flank
-[[50,64,7,9.5,6],[64,57,8.5,14,7],[80,65,7,12,6],[96,58,9,17,7.5]].forEach(b =>
+[[16,234,7,9,6],[25,220,8.5,13,7],[35,231,7,11,6],[46,221,9,16,7.5]].forEach(b =>
   fg.add(nearBlock(b[0], b[1], b[2], b[3], b[4], (rnd()-0.5)*0.4)));
 
 // Quay across the open centre, with palms along it. These sit at about -24deg, just inside the
 // bottom of the frame, which is exactly where a foreground edge should sit.
-const quay = new THREE.Mesh(new THREE.BoxGeometry(120, 1.4, 5), quayMat);
-quay.position.set(0, 0.7, 68); quay.rotation.y = 0.04;
+const quay = new THREE.Mesh(new THREE.BoxGeometry(150, 1.4, 6), quayMat);
+quay.position.set(0, 0.7, 240); quay.rotation.y = 0.03;
 fg.add(quay);
-for (let i = 0; i < 13; i++){
-  const x = -54 + i * 9 + (rnd() - 0.5) * 3;
-  fg.add(palm(x, 64.5 + (rnd() - 0.5) * 2.5, 2.4 + rnd() * 1.1, (rnd() - 0.5) * 0.14));
+for (let i = 0; i < 15; i++){
+  const x = -42 + i * 6 + (rnd() - 0.5) * 2.5;
+  fg.add(palm(x, 236 + (rnd() - 0.5) * 3, 2.6 + rnd() * 1.2, (rnd() - 0.5) * 0.14));
 }
 for (let i = 0; i < 11; i++){
   const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 1.4, 8), quayMat);
-  b.position.set(-50 + i * 10, 2.1, 66.4);
+  b.position.set(-40 + i * 8, 2.1, 238);
   fg.add(b);
 }
 world.add(fg);
@@ -594,16 +611,18 @@ world.add(fg);
 // about 1.1:1, so no orbit could ever separate them. Now roughly 65 / 150 / 215 units from the
 // camera: 3.3:1 across the district. This is the change that should make the clusters read as
 // objects at different distances rather than as one skyline.
-world.add(emiratesPalace(-72, 30));    // near, on the headland — the wide low counterweight
-world.add(etihadTowers(-16, -42));     // mid — the hero cluster
-world.add(adnocHQ(62, -108));          // far — the eastern anchor
+// EVERYTHING INSIDE THE +/-80 ENVELOPE. Outside it, at this range, a landmark is simply not on
+// screen — which is what happened to Emirates Palace for the whole of the last build.
+world.add(emiratesPalace(-44, 12));    // west, near — the wide low counterweight
+world.add(etihadTowers(-6, -30));      // centre — the hero cluster
+world.add(adnocHQ(42, -62));           // east — the anchor
 
 // HIERARCHY. Emissive falls away with distance so the eye lands on the heroes first, then the
 // supporting skyline, then a background mass that is barely more than a silhouette in haze.
-world.add(lowRise(30, -150, 160, -18, 7, 0.55));                        // villas at the edge
-world.add(cityRow(24, -135, 155, -48, 9, 3.5, 17, 0.62, 0.42, 0.18));   // corniche, receding east
-world.add(cityRow(28, -205, 215, -152, 20, 5, 27, 0.44, 0.34, 0.22));   // mid distance
-world.add(cityRow(32, -295, 315, -252, 26, 4, 21, 0.26, 0.22, 0.28));   // far, nearly silhouette
+world.add(lowRise(26, -78, 80, 22, 6, 0.55));                          // villas at the water
+world.add(cityRow(20, -76, 80, -44, 8, 3.5, 17, 0.62, 0.30, 0.20));    // corniche behind
+world.add(cityRow(24, -80, 82, -110, 14, 5, 26, 0.42, 0.24, 0.24));    // mid distance
+world.add(cityRow(28, -84, 86, -190, 20, 4, 20, 0.24, 0.16, 0.30));    // far, nearly silhouette
 
 /* ===========================================================================
    CAMERA DRIVE. Tilt sets a target point on the arc; the camera eases toward it and always
@@ -639,6 +658,10 @@ function resize(){
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
+  // Portrait phones are about 0.45 wide per 1 tall, so the horizontal field is roughly a
+  // quarter of the vertical. Widen the lens further on very narrow screens rather than let the
+  // district fall off the sides.
+  camera.fov = (camera.aspect < 0.55) ? FOV + (0.55 - camera.aspect) * 40 : FOV;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -690,7 +713,7 @@ function frame(now){
       'fps     ' + fps.toFixed(0) + '\n' +
       'tris    ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
       'geo     ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n\n' +
-      'turn the phone: the near quay must\nsweep across a nearly still skyline.\nif the quay is not visible at all,\nit has fallen below the frustum.';
+      'the whole district must fit the frame.\nif a landmark is never visible, it is\noutside the 13deg horizontal half-field,\nnot below the frustum.';
   }
 }
 requestAnimationFrame(frame);
@@ -718,7 +741,7 @@ document.getElementById('sil').addEventListener('click', () => {
   silhouette = !silhouette;
   document.getElementById('sil').setAttribute('aria-pressed', String(silhouette));
   scene.background = new THREE.Color(silhouette ? 0xC8D8DF : C.night);
-  scene.fog = silhouette ? null : new THREE.FogExp2(C.night, 0.0042);
+  scene.fog = silhouette ? null : new THREE.FogExp2(C.night, 0.0018);
   refl.visible = !silhouette;
   world.traverse(o => {
     if (!o.isMesh) return;
