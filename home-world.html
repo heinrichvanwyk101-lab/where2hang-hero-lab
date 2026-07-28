@@ -190,13 +190,42 @@ scene.fog = new THREE.FogExp2(C.night, 0.0018);
 
 const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 3000);
 
+/* ---------- environment: what the water reflects ----------
+   The Gulf at night is not lit, it REFLECTS. A flat plane with an upward normal returns almost
+   nothing from a directional light placed behind the city, which is why the bay rendered black
+   however the material was tuned. Give the scene a sky to reflect and the water appears by
+   itself — and the same environment puts a soft sheen on every glass face in the district.
+   A 64px gradient is plenty: it is only ever seen blurred in a reflection. */
+function skyEnvTexture(){
+  const cv = document.createElement('canvas');
+  cv.width = 32; cv.height = 128;
+  const g = cv.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 128);
+  grd.addColorStop(0.00, '#04080C');   // zenith, deep navy
+  grd.addColorStop(0.40, '#0B1A24');
+  grd.addColorStop(0.485,'#1E333E');   // the pale band just above the horizon
+  grd.addColorStop(0.515,'#2A2317');   // warm city glow just below it
+  grd.addColorStop(0.70, '#080D12');
+  grd.addColorStop(1.00, '#03060A');
+  g.fillStyle = grd; g.fillRect(0, 0, 32, 128);
+  const t = new THREE.CanvasTexture(cv);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envMap = pmrem.fromEquirectangular(skyEnvTexture()).texture;
+scene.environment = envMap;
+
 /* ---------- lighting ----------
    Restrained. The city is lit mostly by its own windows; the lights here only shape the masses
    so silhouettes stay readable against the haze. */
 scene.add(new THREE.HemisphereLight(0x16303d, 0x04070a, 0.55));
 
-const moon = new THREE.DirectionalLight(0x9fc4d8, 0.55);
-moon.position.set(-90, 70, -40);
+// Placed low and beyond the city so its mirror image falls between the shore and the camera:
+// on a rippled surface that scatters into a glitter path rather than a single highlight.
+const moon = new THREE.DirectionalLight(0xA8C8DA, 0.75);
+moon.position.set(-130, 46, -190);
 scene.add(moon);
 
 // One teal rim from the seaward side. Used sparingly — it is the brand colour, not a wash.
@@ -508,9 +537,11 @@ world.add(headland);
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(1400, 900, 160, 90),
-  // High metalness with no environment map gives a black void, which is what the first pass
-  // rendered. Dielectric and moderately rough reads as water under a night sky.
-  new THREE.MeshStandardMaterial({ color:0x0E1C26, roughness:0.42, metalness:0.10 })
+  // NOW that there is an environment to reflect, metalness is correct — it was only wrong
+  // before because there was nothing to mirror. Roughness at 0.20 breaks the mirror just enough
+  // that the ripple reads as movement rather than as a sheet of glass.
+  new THREE.MeshStandardMaterial({ color:0x060D13, roughness:0.20, metalness:0.92,
+    envMapIntensity:1.15 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.set(0, 0, 140);
@@ -718,9 +749,11 @@ function frame(now){
     const t = now * 0.00042;
     for (let i = 0; i < waterPos.count; i++){
       const x = waterBase[i*3], y = waterBase[i*3+1];
-      waterPos.array[i*3+2] = Math.sin(x*0.055 + t*2.1) * 0.16 + Math.sin(y*0.041 - t*1.6) * 0.13;
+      waterPos.array[i*3+2] = Math.sin(x*0.055 + t*2.1) * 0.22 + Math.sin(y*0.041 - t*1.6) * 0.17
+                            + Math.sin((x+y)*0.021 + t*0.9) * 0.10;
     }
     waterPos.needsUpdate = true;
+    water.geometry.computeVertexNormals();   // without this the ripple never catches the light
     reflTex.offset.y = (t * 0.018) % 1;
   }
 
@@ -764,6 +797,7 @@ document.getElementById('sil').addEventListener('click', () => {
   document.getElementById('sil').setAttribute('aria-pressed', String(silhouette));
   scene.background = new THREE.Color(silhouette ? 0xC8D8DF : C.night);
   scene.fog = silhouette ? null : new THREE.FogExp2(C.night, 0.0018);
+  scene.environment = silhouette ? null : envMap;
   refl.visible = !silhouette;
   world.traverse(o => {
     if (!o.isMesh) return;
