@@ -322,7 +322,10 @@ scene.add(new THREE.HemisphereLight(0x16303d, 0x04070a, 0.55));
 
 // Placed low and beyond the city so its mirror image falls between the shore and the camera:
 // on a rippled surface that scatters into a glitter path rather than a single highlight.
-const moon = new THREE.DirectionalLight(0xA8C8DA, 0.75);
+// Intensity cut from 0.75 with the water roughness change. This costs nothing on the buildings'
+// lit windows — those are EMISSIVE and ignore scene lighting entirely — so the only thing it
+// touches is the specular sheet on the bay, which is exactly the thing that was blowing out.
+const moon = new THREE.DirectionalLight(0xA8C8DA, 0.55);
 moon.position.set(-130, 46, -190);
 scene.add(moon);
 
@@ -654,8 +657,15 @@ const water = new THREE.Mesh(
   // NOW that there is an environment to reflect, metalness is correct — it was only wrong
   // before because there was nothing to mirror. Roughness at 0.20 breaks the mirror just enough
   // that the ripple reads as movement rather than as a sheet of glass.
-  new THREE.MeshStandardMaterial({ color:0x060D13, roughness:0.20, metalness:0.92,
-    envMapIntensity:1.15 })
+  // ROUGHNESS 0.20 WAS A MIRROR, AND BLOOM DOES NOT FORGIVE MIRRORS. At 0.20 the specular lobe
+  // is tight and intense, so at the far end of the orbit the moon's reflected highlight crossed
+  // the bloom threshold across a large area of a 1400x900 plane and flooded half the frame with
+  // white. Pre-bloom that same value read as the intended glitter path, which is why it only
+  // became a fault once post-processing landed — and only at one camera angle.
+  // 0.36 spreads the same energy over a wider, dimmer lobe: still a glitter path, no blowout.
+  // envMapIntensity down with it, for the same reason at the horizon band.
+  new THREE.MeshStandardMaterial({ color:0x060D13, roughness:0.36, metalness:0.92,
+    envMapIntensity:0.85 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.set(0, 0, 140);
