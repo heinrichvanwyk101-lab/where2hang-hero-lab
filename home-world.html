@@ -281,6 +281,13 @@ const smaaPass = POST.smaa
   : null;
 if (smaaPass) composer.addPass(smaaPass);
 
+// renderer.info RESETS ON EVERY render() CALL, and the composer makes several per frame. Left
+// on auto, the debug overlay reports only the last pass — a single fullscreen triangle — so
+// tris and calls both read 1 and the scene statistics vanish exactly when post-processing makes
+// them worth watching. Reset manually once per frame instead and the counts accumulate across
+// the whole chain. The passes add a handful of calls; the rest is genuinely the city.
+renderer.info.autoReset = false;
+
 /* ---------- environment: what the water reflects ----------
    The Gulf at night is not lit, it REFLECTS. A flat plane with an upward normal returns almost
    nothing from a directional light placed behind the city, which is why the bay rendered black
@@ -692,21 +699,22 @@ const reflTex = reflectionTexture();
 // That is fine, but it means the WATER has to carry the lower half of the picture, and a small
 // dim strip left it dead black. The band now runs from the shoreline most of the way to the
 // camera, so the district is answered by its own reflection.
-// TWO FAULTS FIXED HERE, and neither was texture filtering.
+// TWO FAULTS, and the first one I got wrong on the previous pass — corrected here.
 //
-// 1. THE STREAKS WERE STRETCHED 260 UNITS DEEP. repeat was (5, 1): five tiles across, ONE down.
-//    The texture is 128px tall and the plane is 260 world units deep, so a single 46-to-128px
-//    streak gradient was smeared across the entire depth of the bay and then viewed nearly
-//    edge-on. That is the long radial smearing — a geometry-to-texture ratio problem, not a
-//    minification one. Anisotropy above helps the sampling; only the repeat fixes the stretch.
-//    At (5, 6) a streak spans about 43 units, which reads as a reflection rather than a rail.
+// 1. repeat.y MUST BE 1. This texture is NOT tileable vertically. Each streak is a gradient
+//    running from opaque at the top of the canvas to fully transparent at the bottom, so the
+//    image is a single band meant to run ONCE from the shoreline to the camera. Setting
+//    repeat.y to 6 put a hard bright-to-transparent seam at every tile boundary: six stacked
+//    gold rails across the bay, which is far worse than the smear it was meant to cure.
+//    The horizontal repeat of 5 is fine — the streaks ARE distributed across x and wrap
+//    cleanly. If the band still reads too strong, the dial is opacity, not repeat.
 //
 // 2. THE WAVES WERE CUTTING THROUGH IT. The band sat at y=0.05 while the water displacement
-//    reaches 0.22+0.17+0.10 = 0.49 at a crest. So across most of the surface the water was
-//    ABOVE the reflection band and occluded it — depthWrite:false stops it writing depth, but
-//    it does not stop it being depth-TESTED against the water. That is the irregular dark
-//    blotching through the middle of the bay. Lifted clear of the maximum crest.
-reflTex.repeat.set(5, 6);
+//    reaches 0.22+0.17+0.10 = 0.49 at a crest, so across most of the surface the water rose
+//    ABOVE the band and occluded it — depthWrite:false stops it WRITING depth, it does not
+//    stop it being depth-TESTED. That was the irregular dark blotching through the bay.
+//    Lifted clear of the maximum crest. At 1km this costs no perceptible parallax.
+reflTex.repeat.set(5, 1);
 const refl = new THREE.Mesh(
   new THREE.PlaneGeometry(420, 260),
   new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.42,
@@ -903,6 +911,7 @@ function frame(now){
     reflTex.offset.y = (t * 0.018) % 1;
   }
 
+  renderer.info.reset();
   composer.render();
 
   if (DEBUG){
