@@ -138,9 +138,16 @@ if (DEBUG) __dbg.classList.add('on');
    =========================================================================== */
 let   ORBIT_DEG = 12;
 const ELEV_DEG  = 4.5;
-const ORBIT_R   = 150;
-const CAM_Y     = 20;
-const TARGET    = new THREE.Vector3(0, 7, -40);
+const ORBIT_R   = 165;
+const CAM_Y     = 26;
+const TARGET    = new THREE.Vector3(0, 12, -50);
+
+/* FRAMING, CHECKED RATHER THAN GUESSED. Camera sits at (0, 26, 115) and looks down about 5deg.
+   With a 42deg vertical field that puts the visible band between -26deg and +16deg. Anything
+   below -26deg is off the bottom of the screen. The first pass put the palms 18 units from the
+   camera, which placed them at -45deg — the entire near field rendered below the frame, and the
+   only near object left in shot was the reflection plane. Every foreground element must now be
+   checked against that -26deg floor before it is placed. */
 const TAU       = 0.24;
 
 /* Palette. Straight from the app tokens — no purple, no neon, no Vegas. */
@@ -211,6 +218,10 @@ function windowTexture(cols, rows, litChance, warm){
 const TEX_TOWER = windowTexture(14, 46, 0.34, false);
 const TEX_BLOCK = windowTexture(18, 14, 0.42, true);
 
+// repX/repY are TILE COUNTS, and getting them wrong is not a cosmetic error. The first pass
+// used h/1.5, putting roughly 1,150 window rows on a 380m tower: far below one pixel per row at
+// this distance, so every building aliased into wire wool. One texture row is 46 windows, a
+// floor is about 4m, so a tower of h units wants about h/16 tiles.
 function cityMaterial(tex, repX, repY, emissive, colour){
   const t = tex.clone(); t.needsUpdate = true; t.repeat.set(repX, repY);
   return new THREE.MeshStandardMaterial({
@@ -246,7 +257,7 @@ function etihadTowers(x0, z0){
   spec.forEach((s, i) => {
     // Taper is what makes these read as Etihad rather than as generic slabs.
     const geo = new THREE.CylinderGeometry(s.r * 0.58, s.r, s.h, 22, 1);
-    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 3, Math.round(s.h / 1.5), 0.85));
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h / 16)), 0.85));
     m.position.set(x0 + s.dx, s.h / 2, z0 + s.dz);
     m.scale.z = 0.68;                       // elliptical footprint
     m.rotation.y = i * 0.22;
@@ -267,12 +278,14 @@ function etihadTowers(x0, z0){
    The horizontality against the vertical towers is the whole point of including it. */
 function emiratesPalace(x0, z0){
   const g = new THREE.Group();
+  // Restrained. At 0.16/0.42 this rendered as a flat saturated yellow slab — the brightest thing
+  // on screen and the least detailed, which is the worst combination.
   const stone = new THREE.MeshStandardMaterial({
-    color: C.masswarm, roughness: 0.86, metalness: 0.05,
-    emissive: C.gold, emissiveIntensity: 0.16,
+    color: 0x1C1811, roughness: 0.9, metalness: 0.04,
+    emissive: C.gold, emissiveIntensity: 0.07,
   });
   const glow = new THREE.MeshStandardMaterial({
-    color: C.masswarm, roughness: 0.7, emissive: C.gold, emissiveIntensity: 0.42,
+    color: 0x241E15, roughness: 0.75, emissive: C.gold, emissiveIntensity: 0.20,
   });
 
   const main = new THREE.Mesh(new THREE.BoxGeometry(17, 3.4, 5.5), stone);
@@ -302,7 +315,7 @@ function emiratesPalace(x0, z0){
 function adnocHQ(x0, z0){
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(4.8, 44, 4.8),
-    cityMaterial(TEX_TOWER, 3, 30, 0.80));
+    cityMaterial(TEX_TOWER, 2, 3, 0.80));
   body.position.set(x0, 22, z0); body.rotation.y = 0.18; g.add(body);
   const cap = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.8, 5.2),
     new THREE.MeshStandardMaterial({ color:0x1a2228, emissive:C.teal, emissiveIntensity:0.5, roughness:0.4 }));
@@ -328,7 +341,7 @@ function cityRow(count, xMin, xMax, z, zJit, hMin, hMax, emissive, zSlope){
     const d = 2.2 + rnd() * 3.0;
     const m = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
-      cityMaterial(h > 9 ? TEX_TOWER : TEX_BLOCK, Math.max(1, Math.round(w/1.6)), Math.max(2, Math.round(h/1.5)), emissive)
+      cityMaterial(h > 9 ? TEX_TOWER : TEX_BLOCK, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), emissive)
     );
     const px = xMin + (xMax - xMin) * (i / (count - 1)) + (rnd() - 0.5) * 3;
     m.position.set(px, h/2, z + (px - xMid) * -slope + (rnd() - 0.5) * zJit);
@@ -359,7 +372,9 @@ world.add(headland);
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(1400, 900, 160, 90),
-  new THREE.MeshStandardMaterial({ color:C.water, roughness:0.26, metalness:0.72 })
+  // High metalness with no environment map gives a black void, which is what the first pass
+  // rendered. Dielectric and moderately rough reads as water under a night sky.
+  new THREE.MeshStandardMaterial({ color:0x0E1C26, roughness:0.42, metalness:0.10 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.set(0, 0, 60);
@@ -393,13 +408,17 @@ const reflTex = reflectionTexture();
 // Deliberately subordinate. At 0.5 opacity and 30 units from the camera this was the brightest,
 // nearest, fastest-moving thing on screen — it proved the parallax works while stealing the eye
 // from the landmarks it was meant to support. Dimmed, pushed back toward the shore, and slowed.
+// The streak texture MUST be tiled. Stretching 512px across 620 world units made each streak
+// one to three units wide — the striped slab that dominated the frame and read as the strongest
+// depth cue in the scene. Tiled at 8, a streak is about 0.2 units: a thin light on the water.
+reflTex.repeat.set(8, 1);
 const refl = new THREE.Mesh(
-  new THREE.PlaneGeometry(620, 96),
-  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.20,
+  new THREE.PlaneGeometry(620, 78),
+  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.30,
     blending:THREE.AdditiveBlending, depthWrite:false })
 );
 refl.rotation.x = -Math.PI / 2;
-refl.position.set(0, 0.42, -58);
+refl.position.set(0, 0.05, -34);
 world.add(refl);
 
 /* ---------- foreground: the near field the photograph never had ----------
@@ -424,19 +443,43 @@ function palm(x, z, h, lean){
   g.rotation.z = lean;
   return g;
 }
+/* THE NEAR FIELD, REBUILT.
+   About 55 units from the camera against Etihad at 157 and the far rows beyond 300. Only 2.9:1,
+   far less than the 10:1 the first pass aimed at — but the first pass put its near field off the
+   bottom of the screen, so its ratio was worth nothing. What matters is the relative angular
+   sweep, and at 12 degrees of orbit the camera translates 34 units, which moves these against
+   Etihad by roughly 23 degrees. That is not subtle.
+
+   Composed as two flanking groups with the centre left open, so they frame the skyline instead
+   of hiding it. Near-black on purpose: they are here to occlude, not to be looked at. */
 const fg = new THREE.Group();
-for (let i = 0; i < 11; i++){
-  const x = -34 + i * 6.8 + (rnd() - 0.5) * 2.4;
-  fg.add(palm(x, 92 + (rnd() - 0.5) * 5, 1.5 + rnd() * 0.9, (rnd() - 0.5) * 0.14));
+const quayMat = new THREE.MeshStandardMaterial({ color:0x080B0E, roughness:1, metalness:0 });
+
+function nearBlock(x, z, w, h, d, rot){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+    cityMaterial(TEX_BLOCK, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), 0.30, 0x090C10));
+  m.position.set(x, h/2, z); m.rotation.y = rot;
+  return m;
 }
-// Jetty and bollards, nearer still. Strong horizontal occluder low in the frame.
-const jettyMat = new THREE.MeshStandardMaterial({ color:0x080B0E, roughness:1 });
-const jetty = new THREE.Mesh(new THREE.BoxGeometry(58, 0.8, 3.2), jettyMat);
-jetty.position.set(-6, 0.4, 99); jetty.rotation.y = 0.06;
-fg.add(jetty);
-for (let i = 0; i < 9; i++){
-  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1.0, 8), jettyMat);
-  b.position.set(-32 + i * 6.6, 1.1, 97.6);
+// Left flank
+[[-96,58,9,16,7],[-80,64,7,11,6],[-66,56,8,13.5,6.5],[-52,66,6,8.5,5]].forEach(b =>
+  fg.add(nearBlock(b[0], b[1], b[2], b[3], b[4], (rnd()-0.5)*0.4)));
+// Right flank
+[[50,64,7,9.5,6],[64,57,8.5,14,7],[80,65,7,12,6],[96,58,9,17,7.5]].forEach(b =>
+  fg.add(nearBlock(b[0], b[1], b[2], b[3], b[4], (rnd()-0.5)*0.4)));
+
+// Quay across the open centre, with palms along it. These sit at about -24deg, just inside the
+// bottom of the frame, which is exactly where a foreground edge should sit.
+const quay = new THREE.Mesh(new THREE.BoxGeometry(120, 1.4, 5), quayMat);
+quay.position.set(0, 0.7, 68); quay.rotation.y = 0.04;
+fg.add(quay);
+for (let i = 0; i < 13; i++){
+  const x = -54 + i * 9 + (rnd() - 0.5) * 3;
+  fg.add(palm(x, 64.5 + (rnd() - 0.5) * 2.5, 2.4 + rnd() * 1.1, (rnd() - 0.5) * 0.14));
+}
+for (let i = 0; i < 11; i++){
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 1.4, 8), quayMat);
+  b.position.set(-50 + i * 10, 2.1, 66.4);
   fg.add(b);
 }
 world.add(fg);
@@ -538,7 +581,7 @@ function frame(now){
       'fps     ' + fps.toFixed(0) + '\n' +
       'tris    ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
       'geo     ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n\n' +
-      'turn the phone: the palms must sweep\nacross a nearly still skyline.\nif they do not, the near field is too far.';
+      'turn the phone: the near quay must\nsweep across a nearly still skyline.\nif the quay is not visible at all,\nit has fallen below the frustum.';
   }
 }
 requestAnimationFrame(frame);
