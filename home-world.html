@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Where2Hang — Corniche miniature</title>
+<!--
+  PASTE TARGET: where2hang-hero-lab/home-world.html
+
+  WHAT THIS IS, AND WHAT IT IS FOR.
+  A bounded proof of concept for the miniature world. It does not touch home-stage.html, which
+  remains the control. The question this file exists to answer is narrow:
+
+      does a 10-15 degree camera ORBIT around a small model make you feel you are
+      peering around a living place?
+
+  Nothing else. Not whether Abu Dhabi can be modelled, not whether this is shippable. If the
+  parallax is not immediately obvious in the hand, without anyone pointing at it, this direction
+  is wrong and the photographic hero stays.
+
+  WHY A MODEL AND NOT A PHOTOGRAPH.
+  Hero-pano-night.webp is shot from across the water. Every tower on it stands on a near-straight
+  shoreline kilometres away. Parallax scales with baseline over distance, so at a phone-scale
+  viewpoint change two towers at 2km and 4km displace by a fraction of a pixel relative to each
+  other. There is no depth in that image to recover, which is why perspective yaw, DEPTH_PX and
+  depth-map displacement all fail on it. The fix is not a better technique. It is a near field.
+
+  WHY AN ORBIT AND NOT A TURN.
+  Standing at the centre and turning is a ROTATION, and rotation produces no parallax at all —
+  near and far move together. That is exactly what the panorama does, and a centre-mounted camera
+  in a real 3D scene would fail the same way with better lighting. The camera must TRANSLATE.
+  Here it moves along a shallow arc while continuously aiming at a fixed focal point.
+
+  THE DEPTH RATIO IS THE WHOLE TRICK.
+  Palms and jetty sit about 140m from the camera. The towers are about 1.5km away. Roughly 10:1,
+  so a small orbit swings the foreground hard across a nearly static skyline. That ratio is the
+  measurement that matters — if the effect is weak, move the foreground closer before touching
+  the orbit angle.
+
+  SCALE: 1 unit = 10 metres throughout.
+
+  ZERO COST BY CONSTRUCTION. All geometry is defined in code. No API, no licensing, no binary
+  assets, nothing to host. Landmarks are recognised by silhouette, proportion and relative
+  placement, not by surface detail — which is how games have made cities legible for decades.
+-->
+<style>
+  :root{
+    --bg:#111315; --card:#1B1E22; --teal:#00C2A8; --teal-hi:#3DE9CD; --gold:#E8B547;
+    --ink:#EAF2F1; --muted:#8FA3A0;
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;overscroll-behavior:none}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  .wordmark{position:fixed;top:max(14px,env(safe-area-inset-top));left:18px;z-index:5;
+    font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--ink);
+    text-shadow:0 2px 14px rgba(0,0,0,.6);pointer-events:none}
+  .wordmark span{color:var(--teal-hi)}
+
+  .lab{position:fixed;left:0;right:0;bottom:0;z-index:5;
+    background:var(--gold);color:#241a00;font-size:12px;font-weight:700;letter-spacing:.01em;
+    padding:9px 14px calc(9px + env(safe-area-inset-bottom));text-align:center}
+
+  .chips{position:fixed;left:0;right:0;bottom:calc(46px + env(safe-area-inset-bottom));z-index:5;
+    display:flex;gap:8px;justify-content:center;padding:0 14px;flex-wrap:wrap}
+  .chip{appearance:none;border:1px solid rgba(255,255,255,.14);background:rgba(27,30,34,.82);
+    color:var(--muted);font:inherit;font-size:12.5px;font-weight:600;letter-spacing:.01em;
+    padding:8px 13px;border-radius:999px;backdrop-filter:blur(9px);
+    transition:color .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease)}
+  .chip[aria-pressed="true"]{color:#04120f;background:var(--teal);border-color:var(--teal)}
+
+  #dbg{position:fixed;top:max(48px,calc(env(safe-area-inset-top) + 38px));left:14px;right:14px;
+    z-index:6;display:none;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:12.5px;line-height:1.5;color:var(--teal-hi);background:rgba(5,10,12,.86);
+    border:1px solid rgba(0,194,168,.34);border-radius:12px;padding:11px 13px}
+  #dbg.on{display:block}
+
+  #fail{position:fixed;inset:auto 14px 90px 14px;z-index:7;display:none;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.5;
+    white-space:pre-wrap;color:#ffd2cf;background:rgba(40,8,8,.92);
+    border:1px solid rgba(255,120,110,.45);border-radius:12px;padding:12px 13px}
+  #fail.on{display:block}
+
+  @media (prefers-reduced-motion:reduce){ .chip{transition:none} }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="wordmark">Where<span>2</span>Hang</div>
+<pre id="dbg"></pre>
+<pre id="fail"></pre>
+
+<div class="chips">
+  <button class="chip" id="o8"  aria-pressed="false">Orbit 8</button>
+  <button class="chip" id="o12" aria-pressed="true">Orbit 12</button>
+  <button class="chip" id="o18" aria-pressed="false">Orbit 18</button>
+  <button class="chip" id="rec" aria-pressed="false">Recentre</button>
+</div>
+<div class="lab">LAB · MINIATURE · does the orbit read as peering around a place</div>
+
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
+<script type="module">
+// Static imports at the top level, above everything. A whole-module try{} wrapped around these
+// is a parse-time SyntaxError and the module never runs. Spec v3 section 5b.
+import * as THREE from 'three';
+import { mountTilt } from './tilt-absolute.js?v=55';
+
+const __dbg  = document.getElementById('dbg');
+const __fail = document.getElementById('fail');
+function fail(where, e){
+  __fail.classList.add('on');
+  __fail.textContent = 'FAILED @ ' + where + '\n' + (e && e.message ? e.message : String(e))
+    + '\n\n' + ((e && e.stack) ? e.stack : '');
+}
+
+try {
+
+const REDUCE = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DEBUG  = location.hash.indexOf('debug') >= 0;
+if (DEBUG) __dbg.classList.add('on');
+
+/* ===========================================================================
+   CAMERA CONSTANTS — the only numbers worth tuning first.
+
+   ORBIT_DEG   half-angle of the arc the camera sweeps. 12 is the working default; the chips
+               switch it live so it can be judged in the hand rather than argued about.
+   ELEV_DEG    vertical travel. Deliberately small. Pitching a miniature reads as tipping the
+               table, which breaks the illusion faster than too little movement does.
+   ORBIT_R     horizontal distance from camera to focal point, in units of 10m. 150 = 1.5km.
+   CAM_Y       camera height. 20 = 200m. Low enough that the foreground palms sit against the
+               skyline rather than being looked down upon — that overlap IS the occlusion cue.
+   TARGET      the focal point the camera keeps aiming at through the whole orbit.
+   TAU         damping. Matches the hero so the two feel like the same product.
+   =========================================================================== */
+let   ORBIT_DEG = 12;
+const ELEV_DEG  = 4.5;
+const ORBIT_R   = 150;
+const CAM_Y     = 20;
+const TARGET    = new THREE.Vector3(0, 7, -40);
+const TAU       = 0.24;
+
+/* Palette. Straight from the app tokens — no purple, no neon, no Vegas. */
+const C = {
+  night:   0x0B1620,   // fog and clear colour, the haze the far skyline dissolves into
+  mass:    0x151A1F,   // building masses, barely above the page background
+  masswarm:0x241E17,   // Emirates Palace stone, warm against the cool city
+  gold:    0xE8B547,
+  teal:    0x00C2A8,
+  water:   0x0A141B,
+};
+
+/* ---------- renderer ---------- */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(C.night);
+// Aerial perspective. This is what makes a small model read as a large city: distant masses
+// lose contrast and dissolve into the sky, exactly as haze does over a bay.
+scene.fog = new THREE.FogExp2(C.night, 0.0042);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 1, 2000);
+
+/* ---------- lighting ----------
+   Restrained. The city is lit mostly by its own windows; the lights here only shape the masses
+   so silhouettes stay readable against the haze. */
+scene.add(new THREE.HemisphereLight(0x16303d, 0x04070a, 0.55));
+
+const moon = new THREE.DirectionalLight(0x9fc4d8, 0.55);
+moon.position.set(-90, 70, -40);
+scene.add(moon);
+
+// One teal rim from the seaward side. Used sparingly — it is the brand colour, not a wash.
+const rim = new THREE.DirectionalLight(C.teal, 0.30);
+rim.position.set(120, 26, 130);
+scene.add(rim);
+
+/* ---------- window texture ----------
+   Lit windows are what make a dark mass read as inhabited. Generated on a canvas so there is no
+   asset to ship. Density varies by building class: towers are sparse and vertical, low blocks
+   are denser and warmer. */
+function windowTexture(cols, rows, litChance, warm){
+  const cv = document.createElement('canvas');
+  cv.width = cols * 4; cv.height = rows * 4;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#05080b'; g.fillRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < rows; y++){
+    for (let x = 0; x < cols; x++){
+      if (Math.random() > litChance) continue;
+      const a = 0.45 + Math.random() * 0.55;
+      g.fillStyle = warm
+        ? 'rgba(232,181,71,' + a.toFixed(2) + ')'
+        : 'rgba(214,226,232,' + (a * 0.82).toFixed(2) + ')';
+      g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+}
+const TEX_TOWER = windowTexture(14, 46, 0.34, false);
+const TEX_BLOCK = windowTexture(18, 14, 0.42, true);
+
+function cityMaterial(tex, repX, repY, emissive, colour){
+  const t = tex.clone(); t.needsUpdate = true; t.repeat.set(repX, repY);
+  return new THREE.MeshStandardMaterial({
+    color: colour === undefined ? C.mass : colour,
+    roughness: 0.72, metalness: 0.14,
+    emissive: 0xffffff, emissiveMap: t, emissiveIntensity: emissive,
+  });
+}
+
+const world = new THREE.Group();
+scene.add(world);
+
+/* ===========================================================================
+   LANDMARKS. Proxy geometry, deliberately simplified. Recognition comes from silhouette and
+   proportion — the number of towers, their taper, their relative heights and spacing.
+   Real heights in metres are noted; divide by 10 for units.
+   =========================================================================== */
+
+/* ETIHAD TOWERS — five tapered elliptical towers, unequal heights, tight cluster.
+   Real: 277, 305, 260, 234, 218 m. The stagger is the recognisable part. */
+function etihadTowers(x0, z0){
+  const g = new THREE.Group();
+  const spec = [
+    { dx:-11, dz: 3.5, h:27.7, r:2.5 },
+    { dx: -4, dz:-1.5, h:30.5, r:2.7 },
+    { dx:  4, dz: 2.5, h:26.0, r:2.4 },
+    { dx: 11, dz:-2.0, h:23.4, r:2.2 },
+    { dx: 18, dz: 3.0, h:21.8, r:2.1 },
+  ];
+  spec.forEach((s, i) => {
+    // Taper is what makes these read as Etihad rather than as generic slabs.
+    const geo = new THREE.CylinderGeometry(s.r * 0.58, s.r, s.h, 22, 1);
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 3, Math.round(s.h / 1.5), 0.85));
+    m.position.set(x0 + s.dx, s.h / 2, z0 + s.dz);
+    m.scale.z = 0.68;                       // elliptical footprint
+    m.rotation.y = i * 0.22;
+    g.add(m);
+    // Crown: a thin bright band. Reads as the lit top without modelling one.
+    const crown = new THREE.Mesh(
+      new THREE.CylinderGeometry(s.r * 0.60, s.r * 0.58, 0.5, 22, 1),
+      new THREE.MeshStandardMaterial({ color:0x1a2228, emissive:C.teal, emissiveIntensity:0.55, roughness:0.4 })
+    );
+    crown.position.set(x0 + s.dx, s.h + 0.2, z0 + s.dz);
+    crown.scale.z = 0.68; crown.rotation.y = i * 0.22;
+    g.add(crown);
+  });
+  return g;
+}
+
+/* EMIRATES PALACE — long low symmetric mass, central dome, flanking domes, warm stone.
+   The horizontality against the vertical towers is the whole point of including it. */
+function emiratesPalace(x0, z0){
+  const g = new THREE.Group();
+  const stone = new THREE.MeshStandardMaterial({
+    color: C.masswarm, roughness: 0.86, metalness: 0.05,
+    emissive: C.gold, emissiveIntensity: 0.16,
+  });
+  const glow = new THREE.MeshStandardMaterial({
+    color: C.masswarm, roughness: 0.7, emissive: C.gold, emissiveIntensity: 0.42,
+  });
+
+  const main = new THREE.Mesh(new THREE.BoxGeometry(17, 3.4, 5.5), stone);
+  main.position.set(x0, 1.7, z0); g.add(main);
+
+  [-11.5, 11.5].forEach(dx => {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(8, 2.6, 4.6), stone);
+    w.position.set(x0 + dx, 1.3, z0 + 0.6); g.add(w);
+  });
+
+  function dome(dx, r, hy){
+    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI*2, 0, Math.PI/2), glow);
+    d.position.set(x0 + dx, hy, z0); g.add(d);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.92, r*0.92, 0.7, 20), stone);
+    drum.position.set(x0 + dx, hy - 0.35, z0); g.add(drum);
+  }
+  dome(0, 2.5, 3.4);
+  dome(-7.5, 1.35, 2.9); dome(7.5, 1.35, 2.9);
+  dome(-14, 1.0, 2.5);   dome(14, 1.0, 2.5);
+  return g;
+}
+
+/* ADNOC HQ — a single tall slab east of the cluster. Skyline anchor: it gives the eye something
+   to measure the orbit against on the far side. Real: 342 m. */
+function adnocHQ(x0, z0){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(5.6, 34, 5.6),
+    cityMaterial(TEX_TOWER, 3, 24, 0.80));
+  body.position.set(x0, 17, z0); body.rotation.y = 0.18; g.add(body);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.7, 6.0),
+    new THREE.MeshStandardMaterial({ color:0x1a2228, emissive:C.teal, emissiveIntensity:0.5, roughness:0.4 }));
+  cap.position.set(x0, 34.3, z0); cap.rotation.y = 0.18; g.add(cap);
+  return g;
+}
+
+/* SUPPORTING CITY — deterministic pseudo-random so the skyline is identical on every load.
+   A shifting skyline between refreshes would make it impossible to judge anything. */
+let seed = 20260728;
+function rnd(){ seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+
+function cityRow(count, xMin, xMax, z, zJit, hMin, hMax, emissive){
+  const g = new THREE.Group();
+  for (let i = 0; i < count; i++){
+    const h = hMin + rnd() * (hMax - hMin);
+    const w = 2.2 + rnd() * 3.4;
+    const d = 2.2 + rnd() * 3.0;
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      cityMaterial(h > 9 ? TEX_TOWER : TEX_BLOCK, Math.max(1, Math.round(w/1.6)), Math.max(2, Math.round(h/1.5)), emissive)
+    );
+    m.position.set(xMin + (xMax - xMin) * (i / (count - 1)) + (rnd() - 0.5) * 3, h/2, z + (rnd() - 0.5) * zJit);
+    m.rotation.y = (rnd() - 0.5) * 0.5;
+    g.add(m);
+  }
+  return g;
+}
+
+/* ---------- land and water ---------- */
+const land = new THREE.Mesh(
+  new THREE.BoxGeometry(700, 1.2, 300),
+  new THREE.MeshStandardMaterial({ color:0x0C1218, roughness:0.95, metalness:0 })
+);
+land.position.set(0, -0.6, -175);
+world.add(land);
+
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(1400, 900, 160, 90),
+  new THREE.MeshStandardMaterial({ color:C.water, roughness:0.26, metalness:0.72 })
+);
+water.rotation.x = -Math.PI / 2;
+water.position.set(0, 0, 60);
+world.add(water);
+const waterPos = water.geometry.attributes.position;
+const waterBase = Float32Array.from(waterPos.array);
+
+/* Reflection band. Real reflections cost a render target; this is a scrolling additive strip
+   under the lit shoreline, which at this distance is indistinguishable and nearly free. */
+function reflectionTexture(){
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, 512, 128);
+  for (let i = 0; i < 190; i++){
+    const x = Math.random() * 512;
+    const w = 1 + Math.random() * 2.5;
+    const h = 30 + Math.random() * 96;
+    const warm = Math.random() < 0.72;
+    const grd = g.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0, warm ? 'rgba(232,181,71,.85)' : 'rgba(180,214,226,.6)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.fillRect(x, 0, w, h);
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const reflTex = reflectionTexture();
+const refl = new THREE.Mesh(
+  new THREE.PlaneGeometry(620, 150),
+  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.5,
+    blending:THREE.AdditiveBlending, depthWrite:false })
+);
+refl.rotation.x = -Math.PI / 2;
+refl.position.set(0, 0.06, -32);
+world.add(refl);
+
+/* ---------- foreground: the near field the photograph never had ----------
+   About 140m from the camera against a skyline at 1.5km. Roughly 10:1, and that ratio is why
+   the orbit produces visible parallax at all. These are near-black silhouettes on purpose:
+   they are here to occlude, not to be looked at. */
+function palm(x, z, h, lean){
+  const g = new THREE.Group();
+  const dark = new THREE.MeshStandardMaterial({ color:0x070A0C, roughness:1, metalness:0 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.085, h, 7), dark);
+  trunk.position.y = h / 2; g.add(trunk);
+  const n = 8;
+  for (let i = 0; i < n; i++){
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.5, 5), dark);
+    const a = (i / n) * Math.PI * 2;
+    f.position.set(Math.cos(a) * 0.52, h + 0.12, Math.sin(a) * 0.52);
+    f.rotation.z = Math.cos(a) * 1.16;
+    f.rotation.x = -Math.sin(a) * 1.16;
+    g.add(f);
+  }
+  g.position.set(x, 0, z);
+  g.rotation.z = lean;
+  return g;
+}
+const fg = new THREE.Group();
+for (let i = 0; i < 11; i++){
+  const x = -34 + i * 6.8 + (rnd() - 0.5) * 2.4;
+  fg.add(palm(x, 92 + (rnd() - 0.5) * 5, 1.5 + rnd() * 0.9, (rnd() - 0.5) * 0.14));
+}
+// Jetty and bollards, nearer still. Strong horizontal occluder low in the frame.
+const jettyMat = new THREE.MeshStandardMaterial({ color:0x080B0E, roughness:1 });
+const jetty = new THREE.Mesh(new THREE.BoxGeometry(58, 0.8, 3.2), jettyMat);
+jetty.position.set(-6, 0.4, 99); jetty.rotation.y = 0.06;
+fg.add(jetty);
+for (let i = 0; i < 9; i++){
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1.0, 8), jettyMat);
+  b.position.set(-32 + i * 6.6, 1.1, 97.6);
+  fg.add(b);
+}
+world.add(fg);
+
+/* ---------- assemble the district ---------- */
+world.add(emiratesPalace(-52, -38));
+world.add(etihadTowers(-20, -46));
+world.add(adnocHQ(46, -52));
+world.add(cityRow(26, -120, 130, -60, 9, 3.5, 15, 0.75));   // corniche behind the landmarks
+world.add(cityRow(30, -190, 200, -150, 20, 5, 26, 0.62));   // mid distance
+world.add(cityRow(34, -280, 300, -250, 26, 4, 20, 0.45));   // far haze layer
+
+/* ===========================================================================
+   CAMERA DRIVE. Tilt sets a target point on the arc; the camera eases toward it and always
+   looks at TARGET. drift is 0 here: the world must stay where you left it, with no autonomous
+   recentring. On the absolute stream the compass supplies the reference, so nothing is needed.
+   =========================================================================== */
+// Declared BEFORE mountTilt: the onDebug closure captures it, and a `let` below the call sits
+// in its temporal dead zone. Spec v3 section 5b, third time this pattern has come up.
+let tiltDbg = null;
+const tilt = mountTilt({
+  enabled: !REDUCE,
+  source: 'auto',
+  drift: 0,
+  onDebug: DEBUG ? (d) => { tiltDbg = d; } : null,
+});
+
+// Pointer drag, so this can be judged on a desktop too.
+let dragX = 0, dragY = 0, down = false, sx = 0, sy = 0, bx = 0, by = 0;
+canvas.addEventListener('pointerdown', e => { down = true; sx = e.clientX; sy = e.clientY; bx = dragX; by = dragY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if (!down) return;
+  dragX = Math.max(-1, Math.min(1, bx + (e.clientX - sx) / (window.innerWidth * 0.42)));
+  dragY = Math.max(-1, Math.min(1, by + (e.clientY - sy) / (window.innerHeight * 0.55)));
+});
+const up = () => { down = false; };
+canvas.addEventListener('pointerup', up);
+canvas.addEventListener('pointercancel', up);
+
+let az = 0, el = 0;          // eased camera angles, degrees
+let last = 0, fps = 60;
+
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = last ? (now - last) / 1000 : 1/60;
+  last = now;
+  if (!(dt > 0) || dt > 0.2) dt = 1/60;
+  fps += ((1 / dt) - fps) * 0.08;
+
+  const T = tilt.get();
+  const wantAz = Math.max(-1, Math.min(1, T.x + dragX)) * ORBIT_DEG;
+  const wantEl = Math.max(-1, Math.min(1, T.y + dragY)) * ELEV_DEG;
+
+  const k = 1 - Math.exp(-dt / TAU);
+  az += (wantAz - az) * k;
+  el += (wantEl - el) * k;
+
+  // TRANSLATION along the arc. This, not a rotation, is what produces parallax.
+  const a = az * Math.PI / 180;
+  camera.position.set(
+    TARGET.x + Math.sin(a) * ORBIT_R,
+    CAM_Y + el * 1.5,
+    TARGET.z + Math.cos(a) * ORBIT_R
+  );
+  camera.lookAt(TARGET);
+
+  // Water: a slow travelling swell, plus the reflection band scrolling against it.
+  if (!REDUCE){
+    const t = now * 0.00042;
+    for (let i = 0; i < waterPos.count; i++){
+      const x = waterBase[i*3], y = waterBase[i*3+1];
+      waterPos.array[i*3+2] = Math.sin(x*0.055 + t*2.1) * 0.16 + Math.sin(y*0.041 - t*1.6) * 0.13;
+    }
+    waterPos.needsUpdate = true;
+    reflTex.offset.y = (t * 0.05) % 1;
+  }
+
+  renderer.render(scene, camera);
+
+  if (DEBUG){
+    const info = renderer.info;
+    __dbg.textContent =
+      'orbit   ' + ORBIT_DEG + ' deg   az ' + az.toFixed(2) + '   el ' + el.toFixed(2) + '\n' +
+      'sensor  ' + (tiltDbg && tiltDbg.src ? tiltDbg.src : 'waiting') +
+        '   T.x ' + T.x.toFixed(3) + '   T.y ' + T.y.toFixed(3) + '\n' +
+      'fps     ' + fps.toFixed(0) + '\n' +
+      'tris    ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
+      'geo     ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n\n' +
+      'turn the phone: the palms must sweep\nacross a nearly still skyline.\nif they do not, the near field is too far.';
+  }
+}
+requestAnimationFrame(frame);
+
+/* ---------- chips ---------- */
+const chips = { o8:8, o12:12, o18:18 };
+Object.keys(chips).forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    ORBIT_DEG = chips[id];
+    Object.keys(chips).forEach(k =>
+      document.getElementById(k).setAttribute('aria-pressed', String(k === id)));
+  });
+});
+document.getElementById('rec').addEventListener('click', () => {
+  tilt.recentre(); dragX = 0; dragY = 0;
+});
+
+// Permission gate for iOS. Android attaches on mount and this is a no-op.
+canvas.addEventListener('click', function once(){
+  if (tilt.request) tilt.request();
+  canvas.removeEventListener('click', once);
+});
+
+} catch(e){ fail('module top level', e); }
+</script>
+</body>
+</html>
