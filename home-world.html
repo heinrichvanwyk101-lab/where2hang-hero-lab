@@ -657,15 +657,17 @@ const water = new THREE.Mesh(
   // NOW that there is an environment to reflect, metalness is correct — it was only wrong
   // before because there was nothing to mirror. Roughness at 0.20 breaks the mirror just enough
   // that the ripple reads as movement rather than as a sheet of glass.
-  // ROUGHNESS 0.20 WAS A MIRROR, AND BLOOM DOES NOT FORGIVE MIRRORS. At 0.20 the specular lobe
-  // is tight and intense, so at the far end of the orbit the moon's reflected highlight crossed
-  // the bloom threshold across a large area of a 1400x900 plane and flooded half the frame with
-  // white. Pre-bloom that same value read as the intended glitter path, which is why it only
-  // became a fault once post-processing landed — and only at one camera angle.
-  // 0.36 spreads the same energy over a wider, dimmer lobe: still a glitter path, no blowout.
-  // envMapIntensity down with it, for the same reason at the horizon band.
-  new THREE.MeshStandardMaterial({ color:0x060D13, roughness:0.36, metalness:0.92,
-    envMapIntensity:0.85 })
+  /* WATER IS A DIELECTRIC, NOT A METAL, and metalness 0.92 was the whole bug.
+     A metal reflects its environment at close to full strength across the entire surface and
+     has no diffuse term at all. That is why the bay was mirroring the env map's pale horizon
+     band everywhere, and why the moon's reflected lobe went nuclear the moment bloom arrived.
+     It is also why raising roughness barely helped: roughness BLURS a reflection, it does not
+     DIM one, and at grazing incidence the Fresnel term climbs toward 1 regardless of it.
+     At metalness 0.05 the physically based Fresnel curve does the work instead — near-black
+     looking down into the water, bright only where the view really does graze the surface.
+     That is both correct and self-limiting, so no camera angle can blow out. */
+  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.22, metalness:0.05,
+    envMapIntensity:0.95 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.set(0, 0, 140);
@@ -951,7 +953,13 @@ function frame(now){
       'post    bloom ' + (bloomPass.enabled ? POST.strength.toFixed(2) : 'off') +
         '   thr ' + POST.threshold.toFixed(2) +
         '   smaa ' + (smaaPass ? 'on' : 'off') +
-        '   aniso ' + MAX_ANISO + '\n\n' +
+        '   aniso ' + MAX_ANISO + '\n' +
+      // Reads live off the material, so it confirms which build is actually running rather than
+      // what the source says. Cache and a stale deploy look identical from the outside.
+      'water   metal ' + water.material.metalness.toFixed(2) +
+        '   rough ' + water.material.roughness.toFixed(2) +
+        '   env ' + water.material.envMapIntensity.toFixed(2) +
+        '   moon ' + moon.intensity.toFixed(2) + '\n\n' +
       'the whole district must fit the frame.\nif a landmark is never visible, it is\noutside the 13deg horizontal half-field,\nnot below the frustum.';
   }
 }
