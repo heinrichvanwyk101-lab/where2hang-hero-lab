@@ -238,13 +238,22 @@ const TEX_BLOCK = windowTexture(18, 14, 0.22, true);
 // used h/1.5, putting roughly 1,150 window rows on a 380m tower: far below one pixel per row at
 // this distance, so every building aliased into wire wool. One texture row is 46 windows, a
 // floor is about 4m, so a tower of h units wants about h/16 tiles.
+// Cached. Every building was cloning its own texture and material, which took draw calls from
+// 44 to 240. Repeats are quantised so near-identical buildings share one material.
+const matCache = new Map();
 function cityMaterial(tex, repX, repY, emissive, colour){
+  const key = (tex === TEX_TOWER ? 'T' : 'B') + repX + '_' + repY + '_' +
+              emissive.toFixed(2) + '_' + (colour === undefined ? 'd' : colour);
+  const hit = matCache.get(key);
+  if (hit) return hit;
   const t = tex.clone(); t.needsUpdate = true; t.repeat.set(repX, repY);
-  return new THREE.MeshStandardMaterial({
+  const m = new THREE.MeshStandardMaterial({
     color: colour === undefined ? C.mass : colour,
     roughness: 0.72, metalness: 0.14,
     emissive: 0xffffff, emissiveMap: t, emissiveIntensity: emissive,
   });
+  matCache.set(key, m);
+  return m;
 }
 
 const world = new THREE.Group();
@@ -335,10 +344,15 @@ function etihadTowers(x0, z0){
    contrast the brief asks for, built into the composition. */
 function emiratesPalace(x0, z0){
   const g = new THREE.Group();
+  // Three tones, not one. At a single emissive the body, wings and arcade fused into a
+  // continuous gold bar and the dome rhythm — the only thing that identifies this building —
+  // disappeared into it. The masses go dark and the domes carry the light.
   const stone = new THREE.MeshStandardMaterial({
-    color:0x1C1811, roughness:0.9, metalness:0.04, emissive:C.gold, emissiveIntensity:0.07 });
+    color:0x14110C, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
+  const arch = new THREE.MeshStandardMaterial({
+    color:0x1A150E, roughness:0.9, emissive:C.gold, emissiveIntensity:0.10 });
   const glow = new THREE.MeshStandardMaterial({
-    color:0x241E15, roughness:0.75, emissive:C.gold, emissiveIntensity:0.20 });
+    color:0x2A2216, roughness:0.7, emissive:C.gold, emissiveIntensity:0.34 });
 
   const W = 46;
   const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 3.0, 6.5), stone);
@@ -352,7 +366,7 @@ function emiratesPalace(x0, z0){
 
   // Arcade along the front. Reads as a colonnade in silhouette, costs almost nothing.
   for (let i = 0; i < 26; i++){
-    const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.15, 0.55), stone);
+    const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.15, 0.55), arch);
     a.position.set(x0 - W*0.46 + i * (W*0.92/25), 0.58, z0 + 3.7); g.add(a);
   }
 
@@ -387,8 +401,8 @@ function adnocHQ(x0, z0){
   body.userData.hero = true; g.add(body);
   // Crown: inset and slightly narrower, then a thin lit band. Softens the top without a cap.
   const crown = new THREE.Mesh(roundedSlab(8.4, 4.6, 3.2, 2.0, 7),
-    new THREE.MeshStandardMaterial({ color:0x141A1F, roughness:0.5,
-      emissive:0xBFD6DE, emissiveIntensity:0.22 }));
+    new THREE.MeshStandardMaterial({ color:0x101519, roughness:0.55,
+      emissive:0x9FBDC8, emissiveIntensity:0.07 }));
   crown.position.set(x0, 42, z0); crown.rotation.y = 0.20; g.add(crown);
   return g;
 }
@@ -514,7 +528,7 @@ function reflectionTexture(){
   for (let i = 0; i < 190; i++){
     const x = Math.random() * 512;
     const w = 1 + Math.random() * 2.5;
-    const h = 30 + Math.random() * 96;
+    const h = 46 + Math.random() * 82;
     const warm = Math.random() < 0.72;
     const grd = g.createLinearGradient(0, 0, 0, h);
     grd.addColorStop(0, warm ? 'rgba(232,181,71,.85)' : 'rgba(180,214,226,.6)');
@@ -533,14 +547,18 @@ const reflTex = reflectionTexture();
 // The streak texture MUST be tiled. Stretching 512px across 620 world units made each streak
 // one to three units wide — the striped slab that dominated the frame and read as the strongest
 // depth cue in the scene. Tiled at 8, a streak is about 0.2 units: a thin light on the water.
-reflTex.repeat.set(8, 1);
+// In portrait the city is inherently a thin band — the tallest tower is 7deg of a 55deg frame.
+// That is fine, but it means the WATER has to carry the lower half of the picture, and a small
+// dim strip left it dead black. The band now runs from the shoreline most of the way to the
+// camera, so the district is answered by its own reflection.
+reflTex.repeat.set(5, 1);
 const refl = new THREE.Mesh(
-  new THREE.PlaneGeometry(300, 60),
-  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.30,
+  new THREE.PlaneGeometry(420, 260),
+  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.42,
     blending:THREE.AdditiveBlending, depthWrite:false })
 );
 refl.rotation.x = -Math.PI / 2;
-refl.position.set(0, 0.05, -8);
+refl.position.set(0, 0.05, 105);
 world.add(refl);
 
 /* ---------- foreground: the near field the photograph never had ----------
@@ -577,17 +595,21 @@ function palm(x, z, h, lean){
 const fg = new THREE.Group();
 const quayMat = new THREE.MeshStandardMaterial({ color:0x080B0E, roughness:1, metalness:0 });
 
+// NEAR-BLACK, and it matters. The last build gave these the WARM block texture at 0.30
+// emissive, so the near field rendered as glowing gold slabs streaked with light — the
+// brightest, largest, fastest-moving objects on screen, and the first thing the eye went to.
+// They exist to occlude the skyline, not to be looked at. Cool texture, barely lit.
 function nearBlock(x, z, w, h, d, rot){
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-    cityMaterial(TEX_BLOCK, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), 0.30, 0x090C10));
+    cityMaterial(TEX_TOWER, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), 0.055, 0x070A0D));
   m.position.set(x, h/2, z); m.rotation.y = rot;
   return m;
 }
 // Left flank, at about 100 units from the camera and inside the 13.2deg horizontal half-field.
-[[-44,222,9,15,7],[-33,232,7,10,6],[-24,218,8,12.5,6.5],[-15,236,6,8,5]].forEach(b =>
+[[-44,222,9,10,7],[-33,232,7,7,6],[-24,218,8,8.5,6.5],[-15,236,6,5.5,5]].forEach(b =>
   fg.add(nearBlock(b[0], b[1], b[2], b[3], b[4], (rnd()-0.5)*0.4)));
 // Right flank
-[[16,234,7,9,6],[25,220,8.5,13,7],[35,231,7,11,6],[46,221,9,16,7.5]].forEach(b =>
+[[16,234,7,6,6],[25,220,8.5,9,7],[35,231,7,7.5,6],[46,221,9,11,7.5]].forEach(b =>
   fg.add(nearBlock(b[0], b[1], b[2], b[3], b[4], (rnd()-0.5)*0.4)));
 
 // Quay across the open centre, with palms along it. These sit at about -24deg, just inside the
