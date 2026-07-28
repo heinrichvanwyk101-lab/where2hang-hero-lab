@@ -715,13 +715,25 @@ const reflTex = reflectionTexture();
 //    stop it being depth-TESTED. That was the irregular dark blotching through the bay.
 //    Lifted clear of the maximum crest. At 1km this costs no perceptible parallax.
 reflTex.repeat.set(5, 1);
+// SIZE AND OPACITY, not repeat, are the intensity dials — and with bloom now running, the
+// values that were merely strong before became the loudest object in the frame. Two changes:
+//
+// OPACITY 0.42 -> 0.20. Bloom amplifies everything above the threshold, and an additive band at
+// 0.42 clears it easily across its whole area. A reflection is the quietest thing in a night
+// scene; if it is competing with the skyline, the skyline has lost.
+//
+// DEPTH 260 -> 200, PUSHED BACK to z=62. At 260 deep centred on 105 the band ran to z=235,
+// which is underneath the near blocks at 218-236 — reflected city light passing beneath the
+// foreground quay, which reads as wrong before anyone works out why. Ending it at z=162 leaves
+// a band of dark unlit water between the reflection and the near field, and that dark gap is
+// what gives the foreground somewhere to sit.
 const refl = new THREE.Mesh(
-  new THREE.PlaneGeometry(420, 260),
-  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.42,
+  new THREE.PlaneGeometry(420, 200),
+  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.20,
     blending:THREE.AdditiveBlending, depthWrite:false })
 );
 refl.rotation.x = -Math.PI / 2;
-refl.position.set(0, 0.62, 105);
+refl.position.set(0, 0.62, 62);
 world.add(refl);
 
 /* ---------- foreground: the near field the photograph never had ----------
@@ -768,12 +780,15 @@ const quayMat = new THREE.MeshStandardMaterial({ color:0x080B0E, roughness:1, me
                 objects at all and the bottom third of the frame became a void. An occluder
                 still has to be VISIBLE to occlude; a shape you cannot see does not sell depth,
                 it just removes picture.
-   0.14 cool  — enough for an edge to catch and a face to separate from the water, well below
-                anything that competes with the heroes.
-   With bloom now running, do not push this past about 0.20 or the near field starts to halo
-   and the old problem comes back wearing a different hat. */
-const FG_EMISSIVE = 0.14;
-const FG_COLOUR   = 0x0A0E12;
+   0.14 cool  — correct WITHOUT bloom, too bright with it. Bloom lifted the block tops over the
+                threshold, so the moonlit lids started glowing and the near field turned back
+                into a row of plain grey boxes: the blocky look this whole pass set out to fix,
+                arriving through the back door.
+   0.09 cool  — enough that a vertical edge catches and the face separates from the water, not
+                enough for the top surface to bloom. This is the value that survives bloom.
+   Above about 0.12 with post-processing on, the lids start to glow again. */
+const FG_EMISSIVE = 0.09;
+const FG_COLOUR   = 0x090D11;
 
 function nearBlock(x, z, w, h, d, rot){
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
