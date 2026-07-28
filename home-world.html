@@ -42,6 +42,35 @@
   ZERO COST BY CONSTRUCTION. All geometry is defined in code. No API, no licensing, no binary
   assets, nothing to host. Landmarks are recognised by silhouette, proportion and relative
   placement, not by surface detail — which is how games have made cities legible for decades.
+
+  ---------------------------------------------------------------------------------------------
+  RENDER PASS — "it looks blocky, like design from four years ago".
+
+  Fair, and none of it was a modelling problem. 41k triangles at 118fps means roughly 8ms of
+  headroom going unspent every frame. Four rendering faults, in order of how much each mattered:
+
+  1. NO BLOOM. A night city is defined by light bleeding past the surface that emits it. Every
+     lit window here stopped dead at its own polygon edge, so the towers read as coloured
+     rectangles rather than as buildings with lights on. This is the change you notice first.
+
+  2. MSAA WAS REQUESTED BUT NEVER APPLIED. antialias:true only affects the default framebuffer.
+     Nothing here drew to it once anything else was in play, so every tower edge was stepped.
+     SMAA at the end of the chain does the job properly.
+
+  3. NO ANISOTROPIC FILTERING ANYWHERE. Window textures on distant towers and the reflection
+     band on the bay were both being minified at steep angles with anisotropy at its default
+     of 1. That is the wire-wool on the far rows and part of the smear on the water.
+
+  4. THE REFLECTION BAND WAS STRETCHED AND THEN CUT. repeat was (5, 1) — one texture tile down
+     260 units of depth — so each streak was smeared the length of the bay. And it sat at
+     y=0.05 while the wave displacement reaches 0.49, so the water rose through it across most
+     of the surface and chopped it into dark blotches. Both fixed at the same place.
+
+  The near field is also lifted off zero. It was set near-black deliberately in an earlier pass,
+  after being far too bright, but 0.055 overshot: an occluder that cannot be seen does not sell
+  depth, it just removes picture. FG_EMISSIVE is now a named dial with the history written down.
+
+  Nothing about the camera, the tilt sensor, the orbit or the district layout is touched.
 -->
 <style>
   :root{
@@ -103,11 +132,19 @@
 </div>
 <div class="lab">LAB · MINIATURE · tap Silhouette: is this still Abu Dhabi in black</div>
 
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }</script>
 <script type="module">
 // Static imports at the top level, above everything. A whole-module try{} wrapped around these
 // is a parse-time SyntaxError and the module never runs. Spec v3 section 5b.
 import * as THREE from 'three';
+import { EffectComposer }   from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }       from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass }  from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass }       from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass }         from 'three/addons/postprocessing/SMAAPass.js';
 import { mountTilt } from './tilt-absolute.js?v=55';
 
 const __dbg  = document.getElementById('dbg');
@@ -174,7 +211,10 @@ const C = {
 
 /* ---------- renderer ---------- */
 const canvas = document.getElementById('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+// antialias:false is REQUIRED, not a preference. Once the scene renders into the composer's
+// render target, the canvas MSAA buffer is never drawn to — so it costs memory and bandwidth
+// and delivers nothing. SMAA at the end of the chain does the work instead.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -189,6 +229,57 @@ scene.background = new THREE.Color(C.night);
 scene.fog = new THREE.FogExp2(C.night, 0.0018);
 
 const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 3000);
+
+/* ===========================================================================
+   POST-PROCESSING. The single largest visual change in this build.
+
+   The blockiness was never a geometry budget problem — 41k triangles at 118fps leaves roughly
+   8ms of headroom per frame. It was that a night city was being rendered without the two things
+   that make a night city look like one:
+
+   BLOOM      lit windows were flat coloured pixels, not light sources. Nothing bled. Every
+              emissive surface stopped exactly at its own polygon edge, which is the single
+              strongest tell that an image was rendered rather than photographed.
+   SMAA       hard stair-stepped tower edges against a flat sky. MSAA was requested on the
+              renderer but it only ever applied to the default framebuffer.
+
+   THRESHOLD IS THE DIAL THAT MATTERS, and the instinct to lower it toward zero is wrong: that
+   blooms the sky and the building faces too and the result is grey haze. If something should
+   glow and does not, raise ITS emissive intensity above the threshold instead.
+   =========================================================================== */
+const POST = {
+  strength:  0.62,   // overall glow intensity
+  radius:    0.55,   // how far it spreads
+  threshold: 0.48,   // luminance above which a pixel blooms
+  smaa:      true,
+};
+
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(renderer.getPixelRatio());
+
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  POST.strength, POST.radius, POST.threshold
+);
+composer.addPass(bloomPass);
+
+// Tone maps and converts to display colour space. The renderer's own toneMapping and
+// toneMappingExposure settings above are what it reads, so those stay exactly as they were.
+composer.addPass(new OutputPass());
+
+// Anti-alias LAST, on the final low-dynamic-range image. Before the OutputPass it would be
+// working on linear HDR values and the edge detection misjudges them.
+// SMAAPass in 0.169 REQUIRES width and height in the constructor — it builds its render targets
+// there. Calling it bare creates targets of undefined size and the pass silently produces
+// nothing. Later versions made the arguments optional; this one did not.
+const smaaPass = POST.smaa
+  ? new SMAAPass(window.innerWidth * renderer.getPixelRatio(),
+                 window.innerHeight * renderer.getPixelRatio())
+  : null;
+if (smaaPass) composer.addPass(smaaPass);
 
 /* ---------- environment: what the water reflects ----------
    The Gulf at night is not lit, it REFLECTS. A flat plane with an upward normal returns almost
@@ -237,6 +328,10 @@ scene.add(rim);
    Lit windows are what make a dark mass read as inhabited. Generated on a canvas so there is no
    asset to ship. Density varies by building class: towers are sparse and vertical, low blocks
    are denser and warmer. */
+// Queried once. On the Fold this returns 16; it is free on any GPU made this decade and it is
+// specifically the fix for texture smearing at grazing angles.
+const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+
 function windowTexture(cols, rows, litChance, warm){
   const cv = document.createElement('canvas');
   cv.width = cols * 4; cv.height = rows * 4;
@@ -256,6 +351,13 @@ function windowTexture(cols, rows, litChance, warm){
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.magFilter = THREE.LinearFilter;
+  // A tower face seen from 1.5km is minified hard and viewed at an angle. Without anisotropic
+  // filtering the GPU takes one texel per pixel from a mip chain chosen for the WORST axis, so
+  // window rows smear along the steep direction. This is the wire-wool aliasing the comment
+  // above fought with tile counts; tile counts were only half of it.
+  t.anisotropy = MAX_ANISO;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
   return t;
 }
 // Sparser and dimmer. At 0.34/0.42 every tower glittered evenly and read as scribble rather
@@ -275,7 +377,12 @@ function cityMaterial(tex, repX, repY, emissive, colour){
               emissive.toFixed(2) + '_' + (colour === undefined ? 'd' : colour);
   const hit = matCache.get(key);
   if (hit) return hit;
-  const t = tex.clone(); t.needsUpdate = true; t.repeat.set(repX, repY);
+  // clone() copies filter settings, but set them explicitly: a clone that loses anisotropy is a
+  // silent regression that only shows up as smeared windows on the far rows.
+  const t = tex.clone();
+  t.anisotropy = MAX_ANISO;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.needsUpdate = true; t.repeat.set(repX, repY);
   const m = new THREE.MeshStandardMaterial({
     color: colour === undefined ? C.mass : colour,
     roughness: 0.72, metalness: 0.14,
@@ -569,6 +676,9 @@ function reflectionTexture(){
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = MAX_ANISO;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
   return t;
 }
 const reflTex = reflectionTexture();
@@ -582,14 +692,28 @@ const reflTex = reflectionTexture();
 // That is fine, but it means the WATER has to carry the lower half of the picture, and a small
 // dim strip left it dead black. The band now runs from the shoreline most of the way to the
 // camera, so the district is answered by its own reflection.
-reflTex.repeat.set(5, 1);
+// TWO FAULTS FIXED HERE, and neither was texture filtering.
+//
+// 1. THE STREAKS WERE STRETCHED 260 UNITS DEEP. repeat was (5, 1): five tiles across, ONE down.
+//    The texture is 128px tall and the plane is 260 world units deep, so a single 46-to-128px
+//    streak gradient was smeared across the entire depth of the bay and then viewed nearly
+//    edge-on. That is the long radial smearing — a geometry-to-texture ratio problem, not a
+//    minification one. Anisotropy above helps the sampling; only the repeat fixes the stretch.
+//    At (5, 6) a streak spans about 43 units, which reads as a reflection rather than a rail.
+//
+// 2. THE WAVES WERE CUTTING THROUGH IT. The band sat at y=0.05 while the water displacement
+//    reaches 0.22+0.17+0.10 = 0.49 at a crest. So across most of the surface the water was
+//    ABOVE the reflection band and occluded it — depthWrite:false stops it writing depth, but
+//    it does not stop it being depth-TESTED against the water. That is the irregular dark
+//    blotching through the middle of the bay. Lifted clear of the maximum crest.
+reflTex.repeat.set(5, 6);
 const refl = new THREE.Mesh(
   new THREE.PlaneGeometry(420, 260),
   new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.42,
     blending:THREE.AdditiveBlending, depthWrite:false })
 );
 refl.rotation.x = -Math.PI / 2;
-refl.position.set(0, 0.05, 105);
+refl.position.set(0, 0.62, 105);
 world.add(refl);
 
 /* ---------- foreground: the near field the photograph never had ----------
@@ -630,9 +754,22 @@ const quayMat = new THREE.MeshStandardMaterial({ color:0x080B0E, roughness:1, me
 // emissive, so the near field rendered as glowing gold slabs streaked with light — the
 // brightest, largest, fastest-moving objects on screen, and the first thing the eye went to.
 // They exist to occlude the skyline, not to be looked at. Cool texture, barely lit.
+/* THE NEAR FIELD IS A PENDULUM, so it gets a named dial instead of a buried number.
+   0.30 warm  — glowing gold slabs, the brightest thing on screen. Too far.
+   0.055 cool — the correction, and it went past the mark: the blocks stopped reading as
+                objects at all and the bottom third of the frame became a void. An occluder
+                still has to be VISIBLE to occlude; a shape you cannot see does not sell depth,
+                it just removes picture.
+   0.14 cool  — enough for an edge to catch and a face to separate from the water, well below
+                anything that competes with the heroes.
+   With bloom now running, do not push this past about 0.20 or the near field starts to halo
+   and the old problem comes back wearing a different hat. */
+const FG_EMISSIVE = 0.14;
+const FG_COLOUR   = 0x0A0E12;
+
 function nearBlock(x, z, w, h, d, rot){
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-    cityMaterial(TEX_TOWER, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), 0.055, 0x070A0D));
+    cityMaterial(TEX_TOWER, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), FG_EMISSIVE, FG_COLOUR));
   m.position.set(x, h/2, z); m.rotation.y = rot;
   return m;
 }
@@ -710,6 +847,15 @@ let last = 0, fps = 60;
 function resize(){
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
+
+  // Every pass owns its own render targets and none of them resize themselves. Miss one and it
+  // keeps sampling a stale buffer — usually seen as the bloom drifting out of register with the
+  // scene after an orientation change or the Android URL bar collapsing.
+  const pr = renderer.getPixelRatio();
+  composer.setSize(w, h);
+  bloomPass.setSize(w, h);
+  if (smaaPass) smaaPass.setSize(w * pr, h * pr);
+
   camera.aspect = w / h;
   // Portrait phones are about 0.45 wide per 1 tall, so the horizontal field is roughly a
   // quarter of the vertical. Widen the lens further on very narrow screens rather than let the
@@ -757,7 +903,7 @@ function frame(now){
     reflTex.offset.y = (t * 0.018) % 1;
   }
 
-  renderer.render(scene, camera);
+  composer.render();
 
   if (DEBUG){
     const info = renderer.info;
@@ -767,7 +913,11 @@ function frame(now){
         '   T.x ' + T.x.toFixed(3) + '   T.y ' + T.y.toFixed(3) + '\n' +
       'fps     ' + fps.toFixed(0) + '\n' +
       'tris    ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
-      'geo     ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n\n' +
+      'geo     ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n' +
+      'post    bloom ' + (bloomPass.enabled ? POST.strength.toFixed(2) : 'off') +
+        '   thr ' + POST.threshold.toFixed(2) +
+        '   smaa ' + (smaaPass ? 'on' : 'off') +
+        '   aniso ' + MAX_ANISO + '\n\n' +
       'the whole district must fit the frame.\nif a landmark is never visible, it is\noutside the 13deg horizontal half-field,\nnot below the frustum.';
   }
 }
@@ -786,6 +936,21 @@ document.getElementById('rec').addEventListener('click', () => {
   tilt.recentre(); dragX = 0; dragY = 0;
 });
 
+/* LIVE TUNING. Bloom is judged in the hand, not argued about in a commit message. From a
+   remote-debug console on the Fold:
+     W2H.post.strength = 0.9; W2H.apply()
+     W2H.post.threshold = 0.6; W2H.apply()
+   Read the values back off the debug overlay and paste the ones that win into POST above. */
+window.W2H = {
+  post: POST,
+  apply(){
+    bloomPass.strength  = POST.strength;
+    bloomPass.radius    = POST.radius;
+    bloomPass.threshold = POST.threshold;
+  },
+  exposure(v){ renderer.toneMappingExposure = v; },
+};
+
 /* SILHOUETTE MODE. The brief's own test, made runnable: flatten everything to black against a
    pale sky and see whether the city is still Abu Dhabi. Any landmark that disappears here is
    not carrying its own recognition, and lighting will not rescue it in build two. */
@@ -799,6 +964,10 @@ document.getElementById('sil').addEventListener('click', () => {
   scene.fog = silhouette ? null : new THREE.FogExp2(C.night, 0.0018);
   scene.environment = silhouette ? null : envMap;
   refl.visible = !silhouette;
+  // BLOOM OFF IN SILHOUETTE, or the test stops being a test. The pale sky sits far above the
+  // bloom threshold, so it would flare across every edge in the frame and soften exactly the
+  // profiles the mode exists to judge. A landmark must earn recognition on its outline alone.
+  bloomPass.enabled = !silhouette;
   world.traverse(o => {
     if (!o.isMesh) return;
     if (silhouette){
