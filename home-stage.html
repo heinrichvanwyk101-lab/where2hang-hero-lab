@@ -999,7 +999,7 @@ const LOOK_CENTRE_PX = 0;
    PLATE_GUARD: over-scale. room.x is computed in JS from the untransformed geometry, so the
    rotation would otherwise swing an edge inside the viewport at full pan, where the margin is
    already zero. 1.06 buys roughly 3% each side, comfortably more than the rotation consumes. */
-const ROT_MAX_DEG = 3.5;
+const ROT_MAX_DEG = 5;
 const PLATE_GUARD = 1.06;
 
 const tintEl=document.getElementById('tint'), hazeEl=document.getElementById('haze');
