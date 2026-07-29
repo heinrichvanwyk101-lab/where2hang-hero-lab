@@ -460,17 +460,25 @@ function roundedSlab(w, d, h, r, seg){
   return g;
 }
 
-/* ETIHAD TOWERS — five curved towers, unequal heights, tight cluster, all leaning the same way
-   with slanted crowns. Real: 277, 305, 260, 234, 218 m. The height stagger plus the shared lean
-   is the signature; get those right and the cluster is unmistakable in black. */
+/* ETIHAD TOWERS — five curved towers, unequal heights, all leaning the same way with slanted
+   crowns. Real: 277, 305, 260, 234, 218 m, and those exact ratios are used below because the
+   descending stagger from the second tower is the thing people actually remember.
+
+   SPACING IS THE WHOLE PROBLEM. The previous cluster used 5.5-6.5 units between centres against
+   bodies about 5.3 wide, leaving barely a unit of sky between neighbours — so at 1.5km they
+   fused into a single textured mass and the count was unreadable. You cannot recognise Etihad
+   Towers without counting five, which means the GAPS carry as much identity as the profiles.
+   Centres now sit 7.5-8.5 apart on slimmer bodies, giving roughly 4 units of visible sky
+   between each pair. Also flattened the depth scatter: the real towers stand on a gentle arc,
+   and randomised z was making near ones eclipse far ones from half the orbit. */
 function etihadTowers(x0, z0){
   const g = new THREE.Group();
   const spec = [
-    { dx:-10.0, dz: 3.5, h:30.0, r:2.30, lean: 0.9, shear: 1.1 },
-    { dx: -3.5, dz:-1.5, h:33.0, r:2.45, lean: 1.0, shear: 1.3 },
-    { dx:  3.0, dz: 2.5, h:28.0, r:2.20, lean: 0.8, shear: 1.0 },
-    { dx:  9.0, dz:-2.0, h:25.0, r:2.05, lean: 0.7, shear: 0.9 },
-    { dx: 14.5, dz: 3.0, h:23.0, r:1.95, lean: 0.6, shear: 0.8 },
+    { dx:-17.0, dz: 3.0, h:27.7, r:1.95, lean: 0.9, shear: 1.1 },
+    { dx: -8.5, dz: 0.8, h:30.5, r:2.05, lean: 1.0, shear: 1.3 },
+    { dx:  0.0, dz: 0.0, h:26.0, r:1.90, lean: 0.8, shear: 1.0 },
+    { dx:  8.0, dz: 0.8, h:23.4, r:1.80, lean: 0.7, shear: 0.9 },
+    { dx: 15.5, dz: 3.0, h:21.8, r:1.72, lean: 0.6, shear: 0.8 },
   ];
   spec.forEach((s, i) => {
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
@@ -537,20 +545,32 @@ function emiratesPalace(x0, z0){
   return g;
 }
 
-/* ADNOC HQ — a single broad rounded slab, taller than anything around it, with a curved crown.
-   Its job in the composition is to anchor the eastern end and give the orbit something to
-   measure against on the far side. Real: 342 m. */
+/* ADNOC HQ — real: 342 m, and the tallest thing in the frame by a clear margin.
+   The old version was 9.5 wide and 42 tall — a 4.4:1 slab, which is the proportion of an
+   ordinary office block and reads as anonymous however well it is lit. The real building is
+   markedly slimmer than that and its identity is the CROWN: the shaft runs clean and then stops
+   in a stepped, lit cap that overhangs slightly. That silhouette notch is the recognition cue,
+   so it is exaggerated here — two steps rather than one, and the upper step wider than the
+   shaft so it throws a distinct shoulder against the sky. Nobody complains that a landmark is
+   too recognisable. */
 function adnocHQ(x0, z0){
   const g = new THREE.Group();
-  const body = new THREE.Mesh(roundedSlab(9.5, 5.2, 42, 2.1, 7),
+  const rot = 0.20;
+  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 7),
     cityMaterial(TEX_TOWER, 3, 3, 0.72));
-  body.position.set(x0, 0, z0); body.rotation.y = 0.20;
+  body.position.set(x0, 0, z0); body.rotation.y = rot;
   body.userData.hero = true; g.add(body);
-  // Crown: inset and slightly narrower, then a thin lit band. Softens the top without a cap.
-  const crown = new THREE.Mesh(roundedSlab(8.4, 4.6, 3.2, 2.0, 7),
+
+  // Step one: a narrow dark waist. Reads as a shadow line and separates shaft from cap.
+  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 7),
+    new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 }));
+  waist.position.set(x0, 44, z0); waist.rotation.y = rot; g.add(waist);
+
+  // Step two: the lit cap, WIDER than the shaft so the overhang shows in pure black.
+  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 7),
     new THREE.MeshStandardMaterial({ color:0x101519, roughness:0.55,
-      emissive:0x9FBDC8, emissiveIntensity:0.07 }));
-  crown.position.set(x0, 42, z0); crown.rotation.y = 0.20; g.add(crown);
+      emissive:0x9FBDC8, emissiveIntensity:0.14 }));
+  cap.position.set(x0, 45.6, z0); cap.rotation.y = rot; g.add(cap);
   return g;
 }
 
@@ -726,7 +746,7 @@ const reflectionShader = {
     color:         { value: null },
     tDiffuse:      { value: null },
     textureMatrix: { value: null },
-    strength:      { value: 0.34 },
+    strength:      { value: 0.55 },   // raised with the calmer surface: a still bay reflects more
   },
   vertexShader: /* glsl */`
     uniform mat4 textureMatrix;
@@ -781,9 +801,10 @@ refl.material.transparent = true;
 refl.material.blending = THREE.AdditiveBlending;
 refl.material.depthWrite = false;
 refl.rotation.x = -Math.PI / 2;
-// Sits above the maximum wave crest (0.22+0.17+0.10=0.49) so the displaced water cannot rise
-// through it and chop it into blotches. 0.62 costs no visible parallax at this distance.
-refl.position.set(0, 0.62, 62);
+// Sits above the maximum wave crest, which the calmer surface above has dropped from 0.49 to
+// 0.24 — so the plane comes down with it. Closer to the true water line means the reflection
+// starts tighter against the shore instead of hovering a little above it.
+refl.position.set(0, 0.30, 62);
 world.add(refl);
 
 /* ---------- foreground: the near field the photograph never had ----------
@@ -973,8 +994,13 @@ function frame(now){
     const t = now * 0.00042;
     for (let i = 0; i < waterPos.count; i++){
       const x = waterBase[i*3], y = waterBase[i*3+1];
-      waterPos.array[i*3+2] = Math.sin(x*0.055 + t*2.1) * 0.22 + Math.sin(y*0.041 - t*1.6) * 0.17
-                            + Math.sin((x+y)*0.021 + t*0.9) * 0.10;
+      // CALMER. Amplitudes roughly halved (0.22/0.17/0.10 -> 0.11/0.08/0.05, crest 0.24 not
+      // 0.49) and the two fast terms slowed. Still water against sharp architecture is one of
+      // the strongest things about this city, and chop was scattering the reflection into
+      // mush. Mirror quality here comes from the PLANAR REFLECTION, not from dropping the
+      // roughness — that route is what produced the blowout, and it would produce it again.
+      waterPos.array[i*3+2] = Math.sin(x*0.055 + t*1.3) * 0.11 + Math.sin(y*0.041 - t*1.0) * 0.08
+                            + Math.sin((x+y)*0.021 + t*0.6) * 0.05;
     }
     waterPos.needsUpdate = true;
     water.geometry.computeVertexNormals();   // without this the ripple never catches the light
