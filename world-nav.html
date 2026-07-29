@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Where2Hang — Abu Dhabi World</title>
+
+<!--
+  PASTE TARGET: where2hang-hero-lab/world-nav.html
+
+  ===========================================================================
+  FIVE ISLANDS, ONE FINISHED
+
+  Corniche is built at full quality using the real landmark code from home-world.html —
+  Emirates Palace, Etihad Towers, ADNOC HQ, the graded city rows. The other four are
+  placeholder massing.
+
+  That asymmetry is the point of this build. One finished island sitting beside four crude
+  ones makes the quality gap visible and, more usefully, makes the COST of that gap
+  measurable: watch the triangle count and the frame rate when Corniche's detail layer
+  switches on, and you will know what the remaining four actually cost before committing to
+  building them.
+
+  ===========================================================================
+  LOD IS A SWAP, NOT AN ADDITION
+
+  Every district carries two mutually exclusive layers:
+
+    mass    cheap silhouette. Visible when the district is NOT active.
+    detail  full landmarks. Visible when it IS.
+
+  They are never both on. An earlier draft of this had detail simply added on top of mass,
+  which doubles the geometry precisely at the moment the camera is closest and the budget is
+  tightest. Swapping means the peak cost is one detailed district plus four silhouettes, no
+  matter how rich any single island becomes.
+
+  ===========================================================================
+  DISTRICTS ARE AUTHORED AT LOCAL ORIGIN
+
+  Every district's contents are built around (0,0) and the GROUP is positioned. This is why
+  Corniche's landmarks drop in unchanged: home-world.html built them around origin too. Author
+  in world coordinates instead and every island becomes impossible to move, reuse or hand to
+  a different scene — which is the thing that makes hand-built city projects calcify.
+
+  ===========================================================================
+  PORTRAIT FRAMING, THE CONSTRAINT THAT SHAPES THE LAYOUT
+
+  On a phone the horizontal field is tiny: at 52 degrees vertical and a 0.46 aspect, the
+  horizontal half-angle is about 13. Spreading five islands east-to-west would push the camera
+  so far back they became specks. So the layout leans NORTH-SOUTH, using the depth of the
+  frame rather than its width. That is also roughly true to the real geography, which runs
+  diagonally — the constraint and the map happen to agree.
+  ===========================================================================
+-->
+
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0B1620;color:#E7EDF3;overscroll-behavior:none;
+    font-family:Inter,system-ui,-apple-system,sans-serif;overflow:hidden;
+    -webkit-user-select:none;user-select:none}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .top{position:fixed;left:12px;right:12px;top:12px;z-index:5;pointer-events:none}
+  .title{font:700 18px Inter,sans-serif}
+  .title b{color:#3DE9CD}
+  .crumb{margin-top:8px;font:600 13px Inter,sans-serif;color:#9FB3C4}
+  .crumb span{color:#3DE9CD}
+  .hint{margin-top:6px;font:500 12px Inter,sans-serif;color:#7C8EA0}
+  .dbg{margin-top:10px;font:500 11px/1.5 ui-monospace,monospace;color:#4E6B5F;
+    display:none;white-space:pre}
+  .dbg.on{display:block}
+  .back{position:fixed;left:12px;bottom:18px;z-index:6;appearance:none;
+    border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
+    font:600 14px Inter,sans-serif;padding:11px 18px;border-radius:999px;
+    backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .25s}
+  .back.on{opacity:1;pointer-events:auto}
+  .isle{position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;
+    font:600 12px Inter,sans-serif;color:#DCE8F0;text-shadow:0 1px 8px rgba(0,0,0,.95);
+    white-space:nowrap;opacity:0;transition:opacity .35s;letter-spacing:.04em}
+  .isle.on{opacity:1}
+  .isle i{display:block;width:5px;height:5px;border-radius:50%;background:#3DE9CD;
+    margin:0 auto 5px;box-shadow:0 0 8px #3DE9CD}
+  #err{position:fixed;left:12px;right:12px;bottom:76px;z-index:9;display:none;
+    background:#3A1414;border:1px solid #7A2A2A;border-radius:10px;padding:10px;
+    font:500 12px/1.4 ui-monospace,monospace;color:#FFD9D9;white-space:pre-wrap}
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div class="top">
+  <div class="title">Where<b>2</b>Hang</div>
+  <div class="crumb" id="crumb">Abu Dhabi</div>
+  <div class="hint" id="hint">Tap an island</div>
+  <div class="dbg" id="dbg"></div>
+</div>
+
+<button class="back" id="back">Back</button>
+<div id="err"></div>
+
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }</script>
+
+<script type="module">
+const errEl = document.getElementById('err');
+function fail(where, e){
+  errEl.style.display='block';
+  errEl.textContent = where + '\n' + (e && e.stack ? e.stack : e);
+  console.error(where, e);
+}
+window.addEventListener('error', ev => fail('window', ev.error || ev.message));
+
+import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass }        from 'three/addons/postprocessing/SMAAPass.js';
+
+try {
+
+const DEBUG = location.hash.indexOf('debug') >= 0;
+if (DEBUG) document.getElementById('dbg').classList.add('on');
+
+const C = {
+  night:   0x0B1620,
+  haze:    0x241D15,
+  mass:    0x151A1F,
+  masswarm:0x241E17,
+  gold:    0xE8B547,
+  teal:    0x00C2A8,
+  water:   0x0A141B,
+};
+
+/* ---------- renderer ---------- */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.info.autoReset = false;
+
+const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(C.night);
+scene.fog = new THREE.FogExp2(C.haze, 0.0013);
+
+// FOV is interpolated between states. Wider high up, tighter close in — that change is what
+// makes descending feel like moving through space rather than scaling an image.
+const camera = new THREE.PerspectiveCamera(52, 1, 1, 6000);
+
+/* ---------- environment ---------- */
+function skyEnvTexture(){
+  const cv = document.createElement('canvas');
+  cv.width = 32; cv.height = 128;
+  const g = cv.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 128);
+  grd.addColorStop(0.00, '#04080C');
+  grd.addColorStop(0.40, '#0B1A24');
+  grd.addColorStop(0.485,'#1E333E');
+  grd.addColorStop(0.515,'#2A2317');
+  grd.addColorStop(0.70, '#080D12');
+  grd.addColorStop(1.00, '#03060A');
+  g.fillStyle = grd; g.fillRect(0, 0, 32, 128);
+  const t = new THREE.CanvasTexture(cv);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envMap = pmrem.fromEquirectangular(skyEnvTexture()).texture;
+scene.environment = envMap;
+
+/* ---------- lighting ---------- */
+scene.add(new THREE.HemisphereLight(0x16303d, 0x04070a, 0.55));
+
+const moon = new THREE.DirectionalLight(0xA8C8DA, 0.55);
+moon.position.set(-320, 220, -260);
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.camera.near = 40;
+moon.shadow.camera.far  = 1600;
+// Wide enough to cover all five islands. Coarse per-texel, but at world scale the shadows are
+// only reading as soft contact darkening under the masses, not as legible shapes.
+moon.shadow.camera.left = -340; moon.shadow.camera.right =  340;
+moon.shadow.camera.top  =  340; moon.shadow.camera.bottom = -340;
+moon.shadow.bias = -0.0009;
+moon.shadow.normalBias = 0.6;
+scene.add(moon);
+
+const rim = new THREE.DirectionalLight(C.teal, 0.26);
+rim.position.set(220, 60, 240);
+scene.add(rim);
+
+function windowTexture(cols, rows, litChance, warm){
+  const cv = document.createElement('canvas');
+  cv.width = cols * 4; cv.height = rows * 4;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#05080b'; g.fillRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < rows; y++){
+    for (let x = 0; x < cols; x++){
+      if (Math.random() > litChance) continue;
+      const a = 0.45 + Math.random() * 0.55;
+      g.fillStyle = warm
+        ? 'rgba(232,181,71,' + a.toFixed(2) + ')'
+        : 'rgba(214,226,232,' + (a * 0.82).toFixed(2) + ')';
+      g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.LinearFilter;
+  // A tower face seen from 1.5km is minified hard and viewed at an angle. Without anisotropic
+  // filtering the GPU takes one texel per pixel from a mip chain chosen for the WORST axis, so
+  // window rows smear along the steep direction. This is the wire-wool aliasing the comment
+  // above fought with tile counts; tile counts were only half of it.
+  t.anisotropy = MAX_ANISO;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  return t;
+}
+// Sparser and dimmer. At 0.34/0.42 every tower glittered evenly and read as scribble rather
+// than as a lit building; a night skyline is mostly dark with pockets of light.
+const TEX_TOWER = windowTexture(14, 46, 0.17, false);
+const TEX_BLOCK = windowTexture(18, 14, 0.22, true);
+
+// repX/repY are TILE COUNTS, and getting them wrong is not a cosmetic error. The first pass
+// used h/1.5, putting roughly 1,150 window rows on a 380m tower: far below one pixel per row at
+// this distance, so every building aliased into wire wool. One texture row is 46 windows, a
+// floor is about 4m, so a tower of h units wants about h/16 tiles.
+// Cached. Every building was cloning its own texture and material, which took draw calls from
+// 44 to 240. Repeats are quantised so near-identical buildings share one material.
+const matCache = new Map();
+function cityMaterial(tex, repX, repY, emissive, colour){
+  const key = (tex === TEX_TOWER ? 'T' : 'B') + repX + '_' + repY + '_' +
+              emissive.toFixed(2) + '_' + (colour === undefined ? 'd' : colour);
+  const hit = matCache.get(key);
+  if (hit) return hit;
+  // clone() copies filter settings, but set them explicitly: a clone that loses anisotropy is a
+  // silent regression that only shows up as smeared windows on the far rows.
+  const t = tex.clone();
+  t.anisotropy = MAX_ANISO;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.needsUpdate = true; t.repeat.set(repX, repY);
+  const m = new THREE.MeshStandardMaterial({
+    color: colour === undefined ? C.mass : colour,
+    roughness: 0.72, metalness: 0.14,
+    emissive: 0xffffff, emissiveMap: t, emissiveIntensity: emissive,
+  });
+  matCache.set(key, m);
+  return m;
+}
+
+// (the world group is created in the district section below, not here)
+
+/* ===========================================================================
+   LANDMARKS — SILHOUETTE FIRST.
+
+   Brief, taken literally: converted to flat black, this must still read as Abu Dhabi. So the
+   effort here goes into PROFILE, not surface. The first pass built everything from the same
+   tapered cylinder, which is why it read as a generic dark city — five identical primitives
+   cannot carry recognition however well they are lit.
+
+   Tap SILHOUETTE to test exactly that: every material flattens to black against a pale sky.
+   If a landmark is not recognisable in that mode, no amount of lighting in build two saves it.
+
+   Real heights in metres are noted; divide by 10 for units. Proportions are compressed
+   deliberately — curate, do not model.
+   =========================================================================== */
+
+/* A tower whose profile CURVES. Etihad Towers lean and swell and are cut off at a slant at the
+   crown; that diagonal top edge is the single most recognisable thing about them, and a flat
+   cap throws it away. Built by displacing the vertices of a cylinder:
+     swell  — radius bulge through the middle of the rise
+     lean   — lateral drift, weighted to the top so the tower curves rather than tilts
+     shear  — the slanted crown, applied only near the top so the base stays plumb
+     ell    — elliptical footprint                                                            */
+function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, segs || 26, 16, false);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++){
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const t = (y + h/2) / h;                       // 0 at base, 1 at crown
+    const k = 1 + swell * Math.sin(Math.PI * t);
+    x *= k; z *= k * ell;
+    x += lean * Math.pow(t, 1.7);
+    y += shear * (x / Math.max(rBot, 0.001)) * Math.pow(t, 7);
+    pos.setXYZ(i, x, y, z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/* A rounded-corner slab. ADNOC HQ is not a box and not a cylinder — it is a broad rectangle with
+   softened corners and a curved crown, and that in-between quality is what identifies it. */
+function roundedSlab(w, d, h, r, seg){
+  const sh = new THREE.Shape();
+  const hw = w/2 - r, hd = d/2 - r;
+  sh.moveTo(-hw, -d/2);
+  sh.lineTo(hw, -d/2);  sh.quadraticCurveTo(w/2, -d/2, w/2, -hd);
+  sh.lineTo(w/2, hd);   sh.quadraticCurveTo(w/2, d/2, hw, d/2);
+  sh.lineTo(-hw, d/2);  sh.quadraticCurveTo(-w/2, d/2, -w/2, hd);
+  sh.lineTo(-w/2, -hd); sh.quadraticCurveTo(-w/2, -d/2, -hw, -d/2);
+  const g = new THREE.ExtrudeGeometry(sh, { depth:h, bevelEnabled:false, curveSegments: seg || 6 });
+  g.rotateX(-Math.PI/2);
+  g.computeVertexNormals();
+  return g;
+}
+
+/* ETIHAD TOWERS — five curved towers, unequal heights, all leaning the same way with slanted
+   crowns. Real: 277, 305, 260, 234, 218 m, and those exact ratios are used below because the
+   descending stagger from the second tower is the thing people actually remember.
+
+   SPACING IS THE WHOLE PROBLEM. The previous cluster used 5.5-6.5 units between centres against
+   bodies about 5.3 wide, leaving barely a unit of sky between neighbours — so at 1.5km they
+   fused into a single textured mass and the count was unreadable. You cannot recognise Etihad
+   Towers without counting five, which means the GAPS carry as much identity as the profiles.
+   Centres now sit 7.5-8.5 apart on slimmer bodies, giving roughly 4 units of visible sky
+   between each pair. Also flattened the depth scatter: the real towers stand on a gentle arc,
+   and randomised z was making near ones eclipse far ones from half the orbit. */
+function etihadTowers(x0, z0){
+  const g = new THREE.Group();
+  const spec = [
+    { dx:-17.0, dz: 3.0, h:27.7, r:1.95, lean: 0.9, shear: 1.1 },
+    { dx: -8.5, dz: 0.8, h:30.5, r:2.05, lean: 1.0, shear: 1.3 },
+    { dx:  0.0, dz: 0.0, h:26.0, r:1.90, lean: 0.8, shear: 1.0 },
+    { dx:  8.0, dz: 0.8, h:23.4, r:1.80, lean: 0.7, shear: 0.9 },
+    { dx: 15.5, dz: 3.0, h:21.8, r:1.72, lean: 0.6, shear: 0.8 },
+  ];
+  spec.forEach((s, i) => {
+    // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
+    // they are broad curved slabs, and the width is as much of the signature as the lean.
+    const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 26);
+    // MATERIAL IDENTITY. Every landmark previously shared one near-black mass tone, so the only
+    // thing separating them was outline. Etihad is blue-green curtain glass and now reads that
+    // way — cool and slightly reflective against the warm haze behind it.
+    // Emissive stepped 0.90 -> 0.78 so the warm palace holds the eye FIRST and the cluster
+    // second. Light hierarchy is about relative order, not absolute brightness.
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/16)), 0.78, 0x111C22));
+    m.position.set(x0 + s.dx, s.h/2, z0 + s.dz);
+    m.rotation.y = 0.10 + i * 0.06;
+    m.userData.hero = true;
+    g.add(m);
+  });
+  return g;
+}
+
+/* EMIRATES PALACE — the counterweight to the towers. Very wide, very low, symmetric, with a
+   dome rhythm that steps down from a large centre to corner pavilions. Its horizontality is what
+   makes the cluster beside it read as tall, so the width is not decoration — it is the scale
+   contrast the brief asks for, built into the composition. */
+function emiratesPalace(x0, z0){
+  const g = new THREE.Group();
+  // Three tones, not one. At a single emissive the body, wings and arcade fused into a
+  // continuous gold bar and the dome rhythm — the only thing that identifies this building —
+  // disappeared into it. The masses go dark and the domes carry the light.
+  const stone = new THREE.MeshStandardMaterial({
+    color:0x14110C, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
+  const arch = new THREE.MeshStandardMaterial({
+    color:0x1A150E, roughness:0.9, emissive:C.gold, emissiveIntensity:0.10 });
+  const glow = new THREE.MeshStandardMaterial({
+    color:0x2A2216, roughness:0.7, emissive:C.gold, emissiveIntensity:0.34 });
+
+  const W = 46;
+  const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 3.0, 6.5), stone);
+  main.position.set(x0, 1.5, z0); g.add(main);
+
+  // Wings step DOWN and OUT. The stepping is the rhythm; a single long block reads as a shed.
+  [[-1,0.62,2.3],[1,0.62,2.3],[-1,0.86,1.7],[1,0.86,1.7]].forEach(([sgn, f, hh]) => {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(W*0.20, hh, 5.4), stone);
+    w.position.set(x0 + sgn * W * f * 0.5, hh/2, z0 + 0.5); g.add(w);
+  });
+
+  // Arcade along the front. Reads as a colonnade in silhouette, costs almost nothing.
+  for (let i = 0; i < 26; i++){
+    const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.15, 0.55), arch);
+    a.position.set(x0 - W*0.46 + i * (W*0.92/25), 0.58, z0 + 3.7); g.add(a);
+  }
+
+  function dome(dx, r, hy){
+    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 22, 13, 0, Math.PI*2, 0, Math.PI/2), glow);
+    d.position.set(x0 + dx, hy, z0); d.userData.hero = true; g.add(d);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.88, r*0.88, 0.8, 20), stone);
+    drum.position.set(x0 + dx, hy - 0.4, z0); g.add(drum);
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), glow);
+    fin.position.set(x0 + dx, hy + r + 0.35, z0); g.add(fin);
+  }
+  dome(0, 3.4, 3.2);
+  dome(-9, 1.7, 2.5);  dome(9, 1.7, 2.5);
+  dome(-17, 1.15, 2.0); dome(17, 1.15, 2.0);
+  // Corner pavilions, raised — they bracket the whole composition.
+  [-22.5, 22.5].forEach(dx => {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.6, 5.0), stone);
+    p.position.set(x0 + dx, 1.3, z0 + 0.3); g.add(p);
+    dome(dx, 1.5, 3.3);
+  });
+  return g;
+}
+
+/* ADNOC HQ — real: 342 m, and the tallest thing in the frame by a clear margin.
+   The old version was 9.5 wide and 42 tall — a 4.4:1 slab, which is the proportion of an
+   ordinary office block and reads as anonymous however well it is lit. The real building is
+   markedly slimmer than that and its identity is the CROWN: the shaft runs clean and then stops
+   in a stepped, lit cap that overhangs slightly. That silhouette notch is the recognition cue,
+   so it is exaggerated here — two steps rather than one, and the upper step wider than the
+   shaft so it throws a distinct shoulder against the sky. Nobody complains that a landmark is
+   too recognisable. */
+function adnocHQ(x0, z0){
+  const g = new THREE.Group();
+  const rot = 0.20;
+  // Graphite glazing: denser and less blue than Etihad, so the two towers no longer read as the
+  // same building at different sizes. Emissive third in the hierarchy, behind palace and Etihad.
+  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 7),
+    cityMaterial(TEX_TOWER, 3, 3, 0.60, 0x14161A));
+  body.position.set(x0, 0, z0); body.rotation.y = rot;
+  body.userData.hero = true; g.add(body);
+
+  // Step one: a narrow dark waist. Reads as a shadow line and separates shaft from cap.
+  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 7),
+    new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 }));
+  waist.position.set(x0, 44, z0); waist.rotation.y = rot; g.add(waist);
+
+  // Step two: the lit cap, WIDER than the shaft so the overhang shows in pure black.
+  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 7),
+    new THREE.MeshStandardMaterial({ color:0x101519, roughness:0.55,
+      emissive:0x9FBDC8, emissiveIntensity:0.14 }));
+  cap.position.set(x0, 45.6, z0); cap.rotation.y = rot; g.add(cap);
+  return g;
+}
+
+/* ===========================================================================
+   SUPPORTING CITY. Four distinct tower languages rather than one, so the skyline stops
+   repeating. Deterministic seed: a skyline that reshuffles between refreshes makes it
+   impossible to judge whether a change helped.
+   =========================================================================== */
+let seed = 20260728;
+function rnd(){ seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+
+function boxTower(w, h, d, em){
+  return new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+    cityMaterial(h > 9 ? TEX_TOWER : TEX_BLOCK, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), em));
+}
+function setbackTower(w, h, d, em){
+  const g = new THREE.Group();
+  let hh = 0;
+  for (let i = 0; i < 3; i++){
+    const f = 1 - i * 0.24, seg = h * (0.46 - i * 0.10);
+    const m = boxTower(w * f, seg, d * f, em);
+    m.position.y = hh + seg/2; hh += seg; g.add(m);
+  }
+  return g;
+}
+function slabTower(w, h, d, em){
+  return boxTower(w * 1.9, h, d * 0.45, em);
+}
+function taperTower(w, h, d, em){
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(w*0.30, w*0.50, h, 16, 1),
+    cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(h/16)), em));
+  m.position.y = h/2; m.scale.z = 0.8;
+  return m;
+}
+
+/* zSlope tilts the row in depth: the western end sits nearer the camera, the eastern end
+   recedes. A shoreline running parallel to the camera gives every building the same distance,
+   which is precisely why the skyline read as one rigid object however hard it was orbited.
+   gap opens holes in the row — Abu Dhabi is defined as much by its empty ground as its towers,
+   and an unbroken wall of buildings is the fastest way to look like a game level. */
+function cityRow(count, xMin, xMax, z, zJit, hMin, hMax, em, zSlope, gap){
+  const g = new THREE.Group();
+  const xMid = (xMin + xMax) / 2;
+  const slope = zSlope === undefined ? 0 : zSlope;
+  const holes = gap === undefined ? 0.12 : gap;
+  for (let i = 0; i < count; i++){
+    if (rnd() < holes) continue;
+    const h = hMin + Math.pow(rnd(), 1.5) * (hMax - hMin);   // skewed: many low, few tall
+    const w = 2.0 + rnd() * 3.2;
+    const d = 2.0 + rnd() * 2.8;
+    const px = xMin + (xMax - xMin) * (i / (count - 1)) + (rnd() - 0.5) * 4;
+    const pick = rnd();
+    let m;
+    if (h < 6)          m = boxTower(w * 1.4, h, d * 1.4, em);
+    else if (pick < 0.28) m = setbackTower(w, h, d, em);
+    else if (pick < 0.50) m = slabTower(w, h, d, em);
+    else if (pick < 0.72) { m = taperTower(w, h, d, em); }
+    else                { m = boxTower(w, h, d, em); m.position.y = h/2; }
+    if (m.isMesh && m.geometry.type === 'BoxGeometry') m.position.y = h/2;
+    m.position.x = px;
+    m.position.z = z + (px - xMid) * -slope + (rnd() - 0.5) * zJit;
+    m.rotation.y = (rnd() - 0.5) * 0.6;
+    g.add(m);
+  }
+  return g;
+}
+
+/* LOW-RISE. The brief's scale contrast: villas and two-storey mass at the water's edge make the
+   towers behind them read as enormous. Without this band everything is the same size and the
+   city has no sense of scale at all. */
+function lowRise(count, xMin, xMax, z, zJit, em){
+  const g = new THREE.Group();
+  for (let i = 0; i < count; i++){
+    if (rnd() < 0.18) continue;
+    const h = 0.7 + rnd() * 1.5;
+    const m = boxTower(2.2 + rnd()*3.4, h, 2.0 + rnd()*2.6, em);
+    m.position.set(xMin + (xMax-xMin) * (i/(count-1)) + (rnd()-0.5)*3, h/2, z + (rnd()-0.5)*zJit);
+    m.rotation.y = (rnd()-0.5) * 0.9;
+    g.add(m);
+  }
+  return g;
+}
+
+
+/* ---------- the sea that connects everything ---------- */
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(3200, 3200, 70, 70),
+  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.58, metalness:0.05,
+    envMapIntensity:0.95 })
+);
+water.rotation.x = -Math.PI/2;
+water.receiveShadow = true;
+scene.add(water);
+const waterPos  = water.geometry.attributes.position;
+const waterBase = Float32Array.from(waterPos.array);
+
+/* ===========================================================================
+   THE FIVE DISTRICTS
+
+   Positions are intuitively geographic, heavily compressed, and lean north-south for the
+   portrait frame. Yas north-east, Saadiyat between it and the city, Corniche west, Al Maryah
+   and Reem on the city's eastern flank.
+
+   Real separations run to tens of kilometres. Nobody navigates a map like this by distance —
+   they navigate by relative position, and relative position is preserved exactly. The water
+   is what makes the compression invisible: squeeze four inland districts together and it
+   reads as a lie; squeeze five ISLANDS together and it reads as a map.
+   =========================================================================== */
+const world = new THREE.Group();
+scene.add(world);
+
+const matLand = new THREE.MeshStandardMaterial({ color:0x0E1319, roughness:1, metalness:0 });
+const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
+const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
+
+const DISTRICTS = [
+  { id:'corniche', name:'Corniche',   x:-78, z:  62, r:76, rot: 0.10, tint:C.gold,
+    built:true,  places:['Emirates Palace','Etihad Towers','Corniche Beach'] },
+  { id:'maryah',   name:'Al Maryah',  x: -6, z:  -4, r:34, rot: 0.30, tint:0x8FD3E8,
+    built:false, places:['The Galleria','Rosewood','Waterfront'] },
+  { id:'reem',     name:'Al Reem',    x: 58, z:  46, r:44, rot:-0.20, tint:0xBFD3E0,
+    built:false, places:['Reem Central','Shams Boutik','Gate Towers'] },
+  { id:'saadiyat', name:'Saadiyat',   x:-28, z:-104, r:56, rot: 0.15, tint:0xDDD3C0,
+    built:false, places:['Louvre Abu Dhabi','Saadiyat Beach','Manarat'] },
+  { id:'yas',      name:'Yas Island', x: 82, z:-186, r:62, rot:-0.10, tint:C.gold,
+    built:false, places:['Yas Marina','Yas Mall','Ferrari World'] },
+];
+
+const pickTargets = [];
+
+DISTRICTS.forEach(d => {
+  const g = new THREE.Group();
+  g.name = d.id;
+  // AUTHORED AT LOCAL ORIGIN, positioned by the container. This is the single line that lets
+  // Corniche's landmarks drop in unchanged from home-world.html, where they were also built
+  // around (0,0).
+  g.position.set(d.x, 0, d.z);
+  g.rotation.y = d.rot;
+  world.add(g);
+
+  const mass   = new THREE.Group(); mass.name = 'mass';
+  const detail = new THREE.Group(); detail.name = 'detail';
+  detail.visible = false;
+  g.add(mass, detail);
+  d.group = g; d.mass = mass; d.detail = detail;
+
+  // Island platform, in both layers so the ground never disappears during the swap.
+  [mass, detail].forEach(layer => {
+    const isle = new THREE.Mesh(new THREE.CylinderGeometry(d.r, d.r*0.93, 2.4, 40), matLand);
+    isle.position.y = 0.2;
+    isle.receiveShadow = true;
+    layer.add(isle);
+  });
+
+  // Generous invisible hit disc. A fingertip is about 9mm; targets matched to the visual edge
+  // feel broken on a phone.
+  const pick = new THREE.Mesh(new THREE.CircleGeometry(d.r * 1.2, 20),
+    new THREE.MeshBasicMaterial({ visible:false }));
+  pick.rotation.x = -Math.PI/2;
+  pick.position.y = 1.6;
+  pick.userData.district = d;
+  g.add(pick);
+  pickTargets.push(pick);
+
+  d.placeAnchors = d.places.map((label, i) => {
+    const a = (i / d.places.length) * Math.PI * 2 + 0.7;
+    return { label, x: Math.cos(a) * d.r * 0.46, z: Math.sin(a) * d.r * 0.46, district:d };
+  });
+});
+
+/* ---------- CORNICHE: the finished island ---------- */
+const corniche = DISTRICTS.find(d => d.id === 'corniche');
+{
+  const D = corniche.detail;
+
+  // Land shelf under the city, matching home-world's arrangement.
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(150, 1.2, 78),
+    new THREE.MeshStandardMaterial({ color:0x0C1218, roughness:0.95 }));
+  shelf.position.set(0, 0.9, -34);
+  shelf.receiveShadow = true;
+  D.add(shelf);
+
+  D.add(emiratesPalace(-44, 12));
+  D.add(etihadTowers(-6, -30));
+  D.add(adnocHQ(42, -62));
+
+  D.add(lowRise(26, -70, 72, 22, 6, 0.55));
+  D.add(cityRow(20, -68, 72, -44, 8, 3.5, 17, 0.62, 0.30, 0.20));
+  D.add(cityRow(18, -70, 74, -68, 10, 5, 22, 0.42, 0.24, 0.24));
+
+  /* CORNICHE MASS — the cheap silhouette shown when this island is NOT active.
+     Six boxes standing in for roughly 90 detailed meshes. It only has to survive being seen
+     from 400 units away at world scale, where its whole job is to make the island read as
+     "tall cluster, low wide thing beside it" — which is all the eye resolves at that size. */
+  const cm = corniche.mass;
+  const litMass = new THREE.MeshStandardMaterial({
+    color:0x0E141A, roughness:0.6, emissive:C.gold, emissiveIntensity:0.30 });
+  [[-44,12,26,7,10],[-10,-30,17,29,12],[6,-30,15,26,11],[42,-62,9,44,6],
+   [-30,-50,30,12,14],[20,-46,26,15,13]].forEach(b => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(b[2], b[3], b[4]), litMass);
+    m.position.set(b[0], 1.4 + b[3]/2, b[1]);
+    m.castShadow = true;
+    cm.add(m);
+  });
+}
+
+/* ---------- the four placeholders ---------- */
+const matLitWarm = new THREE.MeshStandardMaterial({
+  color:0x0E141A, roughness:0.5, emissive:C.gold, emissiveIntensity:0.5 });
+const matLitCool = new THREE.MeshStandardMaterial({
+  color:0x0E141A, roughness:0.5, emissive:0x8FD3E8, emissiveIntensity:0.45 });
+
+DISTRICTS.filter(d => !d.built).forEach(d => {
+  const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
+  // Each placeholder still gets a distinct height profile, so the five islands already read as
+  // different places in world view even before any of them is properly built.
+  const tallest = d.id === 'reem' ? 42 : d.id === 'maryah' ? 38 : d.id === 'yas' ? 20 : 16;
+  const count   = d.id === 'saadiyat' ? 12 : 18;
+
+  [ [d.mass, 0.55], [d.detail, 1.0] ].forEach(([layer, density]) => {
+    const n = Math.round(count * density);
+    for (let i = 0; i < n; i++){
+      const a  = rnd() * Math.PI * 2;
+      const rr = Math.sqrt(rnd()) * d.r * 0.74;
+      const h  = 5 + Math.pow(rnd(), 2.0) * tallest;
+      const w  = 4 + rnd() * 7;
+      const dd = w * (0.7 + rnd()*0.6);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dd),
+        rnd() < 0.4 ? matPlaceGlass : matPlaceStone);
+      m.position.set(Math.cos(a)*rr, 1.4 + h/2, Math.sin(a)*rr);
+      m.rotation.y = rnd() * 0.9;
+      m.castShadow = true; m.receiveShadow = true;
+      layer.add(m);
+
+      if (h > 13){
+        const band = new THREE.Mesh(new THREE.BoxGeometry(w*1.02, h*0.32, dd*0.74),
+          cool ? matLitCool : matLitWarm);
+        band.position.set(m.position.x, 1.4 + h*0.75, m.position.z);
+        band.rotation.y = m.rotation.y;
+        layer.add(band);
+      }
+    }
+  });
+
+  // A single warm light per island, lit only when active. Nine per district would be correct
+  // and unaffordable; one reads as a district glowing because the eye is generous.
+  const glow = new THREE.PointLight(d.tint, 0, 150, 2);
+  glow.position.set(0, 20, 0);
+  d.detail.add(glow);
+  d.glow = glow;
+});
+
+// Corniche gets its glow too, so all five behave identically to the state machine.
+const cglow = new THREE.PointLight(C.gold, 0, 170, 2);
+cglow.position.set(0, 22, -20);
+corniche.detail.add(cglow);
+corniche.glow = cglow;
+
+/* ---------- shadow flags, one sweep ---------- */
+world.traverse(o => {
+  if (!o.isMesh) return;
+  o.castShadow = true;
+  o.receiveShadow = true;
+});
+water.castShadow = false;
+
+/* ===========================================================================
+   CAMERA STATE MACHINE
+   =========================================================================== */
+const STATE = { WORLD:'world', DISTRICT:'district', PLACE:'place' };
+let state = STATE.WORLD;
+let activeDistrict = null, activePlace = null;
+
+const goal = { target:new THREE.Vector3(0,0,-40), dist:430, elev:300, angle:0, fov:52 };
+const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
+               angle:goal.angle, fov:goal.fov };
+
+function applyLOD(){
+  DISTRICTS.forEach(d => {
+    const on = (d === activeDistrict);
+    // MUTUALLY EXCLUSIVE. Never both, or the closest view is also the heaviest one.
+    d.detail.visible = on;
+    d.mass.visible   = !on;
+    if (d.glow) d.glow.intensity = on ? 70 : 0;
+  });
+}
+
+function setWorld(){
+  state = STATE.WORLD; activeDistrict = null; activePlace = null;
+  goal.target.set(0, 0, -40);
+  goal.dist = 430; goal.elev = 300; goal.angle = 0; goal.fov = 52;
+  applyLOD();
+  ui('Abu Dhabi', 'Tap an island');
+}
+function setDistrict(d){
+  state = STATE.DISTRICT; activeDistrict = d; activePlace = null;
+  goal.target.set(d.x, 8, d.z);
+  goal.dist = d.r * 2.6; goal.elev = d.r * 1.15; goal.fov = 42;
+  // Approach from the seaward side, so the move always reads as the world turning to present
+  // the island rather than the camera swinging round behind it.
+  goal.angle = Math.atan2(d.x, d.z + 300);
+  applyLOD();
+  ui('Abu Dhabi <span>&rsaquo; ' + d.name + '</span>',
+     d.built ? 'Tap a place, or Back' : 'Placeholder island — Back');
+}
+function setPlace(d, anchor){
+  state = STATE.PLACE; activeDistrict = d; activePlace = anchor;
+  const wx = d.x + anchor.x * Math.cos(d.rot) + anchor.z * Math.sin(d.rot);
+  const wz = d.z - anchor.x * Math.sin(d.rot) + anchor.z * Math.cos(d.rot);
+  goal.target.set(wx, 6, wz);
+  goal.dist = 52; goal.elev = 24; goal.fov = 36;
+  goal.angle = Math.atan2(wx - d.x, wz - d.z + 60);
+  ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
+     'Back to ' + d.name);
+}
+function ui(crumb, hint){
+  document.getElementById('crumb').innerHTML = crumb;
+  document.getElementById('hint').textContent = hint;
+  document.getElementById('back').classList.toggle('on', state !== STATE.WORLD);
+}
+document.getElementById('back').addEventListener('click', () => {
+  if (state === STATE.PLACE)         setDistrict(activeDistrict);
+  else if (state === STATE.DISTRICT) setWorld();
+});
+
+/* ---------- tap ---------- */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let dx0=0, dy0=0, dt0=0;
+canvas.addEventListener('pointerdown', e => { dx0=e.clientX; dy0=e.clientY; dt0=performance.now(); });
+canvas.addEventListener('pointerup', e => {
+  // Tap, not drag. Without this every camera drag also fires a selection.
+  if (Math.hypot(e.clientX-dx0, e.clientY-dy0) > 12 || performance.now()-dt0 > 600) return;
+  ndc.x =  (e.clientX / window.innerWidth) * 2 - 1;
+  ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  ray.setFromCamera(ndc, camera);
+
+  if (state === STATE.WORLD){
+    const hit = ray.intersectObjects(pickTargets, false)[0];
+    if (hit) setDistrict(hit.object.userData.district);
+    return;
+  }
+  if (state === STATE.DISTRICT && activeDistrict){
+    const plane = new THREE.Plane(new THREE.Vector3(0,1,0), -3);
+    const p = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(plane, p)) return;
+    const d = activeDistrict;
+    let best=null, bestD=Infinity;
+    d.placeAnchors.forEach(a => {
+      const wx = d.x + a.x*Math.cos(d.rot) + a.z*Math.sin(d.rot);
+      const wz = d.z - a.x*Math.sin(d.rot) + a.z*Math.cos(d.rot);
+      const dd = Math.hypot(wx-p.x, wz-p.z);
+      if (dd < bestD){ bestD = dd; best = a; }
+    });
+    if (best && bestD < d.r) setPlace(d, best);
+  }
+});
+
+/* ---------- labels ---------- */
+const isleEls = new Map();
+DISTRICTS.forEach(d => {
+  const el = document.createElement('div');
+  el.className = 'isle';
+  el.innerHTML = '<i></i>' + d.name;
+  document.body.appendChild(el);
+  isleEls.set(d, el);
+  d.placeAnchors.forEach(a => {
+    const p = document.createElement('div');
+    p.className = 'isle';
+    p.innerHTML = '<i></i>' + a.label;
+    document.body.appendChild(p);
+    isleEls.set(a, p);
+  });
+});
+const proj = new THREE.Vector3();
+function place2d(el, x, y, z){
+  proj.set(x, y, z).project(camera);
+  if (proj.z > 1){ el.classList.remove('on'); return; }
+  el.style.left = ((proj.x*0.5+0.5) * window.innerWidth) + 'px';
+  el.style.top  = ((-proj.y*0.5+0.5) * window.innerHeight) + 'px';
+  el.classList.add('on');
+}
+function updateLabels(){
+  DISTRICTS.forEach(d => {
+    const el = isleEls.get(d);
+    if (state === STATE.WORLD) place2d(el, d.x, 26, d.z);
+    else el.classList.remove('on');
+
+    d.placeAnchors.forEach(a => {
+      const p = isleEls.get(a);
+      if (state !== STATE.WORLD && d === activeDistrict){
+        const wx = d.x + a.x*Math.cos(d.rot) + a.z*Math.sin(d.rot);
+        const wz = d.z - a.x*Math.sin(d.rot) + a.z*Math.cos(d.rot);
+        place2d(p, wx, 12, wz);
+      } else p.classList.remove('on');
+    });
+  });
+}
+
+/* ---------- post ---------- */
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(renderer.getPixelRatio());
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight), 0.60, 0.55, 0.46);
+composer.addPass(bloom);
+
+/* TILT-SHIFT. The cue that makes a city read as a MODEL rather than a city. Human vision has
+   effectively infinite depth of field at this scale, so a frame with a narrow sharp band
+   cannot be a real place — the brain concludes the subject is small and close. */
+const TiltShift = {
+  uniforms:{ tDiffuse:{value:null}, amount:{value:1.0}, focus:{value:0.47},
+             aperture:{value:0.16}, strength:{value:0.0023} },
+  vertexShader:'varying vec2 vUv; void main(){ vUv=uv;' +
+    ' gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+  fragmentShader:[
+    'uniform sampler2D tDiffuse; uniform float amount, focus, aperture, strength;',
+    'varying vec2 vUv;',
+    'void main(){',
+    '  float d = max(abs(vUv.y-focus)-aperture, 0.0);',
+    '  float b = smoothstep(0.0,0.34,d)*strength*amount;',
+    '  vec4 c = texture2D(tDiffuse,vUv)*0.226;',
+    '  c += texture2D(tDiffuse,vUv+vec2( b*1.0, b*0.4))*0.129;',
+    '  c += texture2D(tDiffuse,vUv+vec2(-b*1.0,-b*0.4))*0.129;',
+    '  c += texture2D(tDiffuse,vUv+vec2( b*0.4,-b*1.0))*0.117;',
+    '  c += texture2D(tDiffuse,vUv+vec2(-b*0.4, b*1.0))*0.117;',
+    '  c += texture2D(tDiffuse,vUv+vec2( b*2.0, b*0.8))*0.071;',
+    '  c += texture2D(tDiffuse,vUv+vec2(-b*2.0,-b*0.8))*0.071;',
+    '  c += texture2D(tDiffuse,vUv+vec2( b*0.8,-b*2.0))*0.070;',
+    '  c += texture2D(tDiffuse,vUv+vec2(-b*0.8, b*2.0))*0.070;',
+    '  gl_FragColor = c;',
+    '}'
+  ].join('\n')
+};
+const tiltPass = new ShaderPass(TiltShift);
+composer.addPass(tiltPass);
+composer.addPass(new OutputPass());
+const smaa = new SMAAPass(window.innerWidth * renderer.getPixelRatio(),
+                          window.innerHeight * renderer.getPixelRatio());
+composer.addPass(smaa);
+
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight, pr = renderer.getPixelRatio();
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h); bloom.setSize(w, h); smaa.setSize(w*pr, h*pr);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+setWorld();
+
+/* ---------- frame ---------- */
+const clock = new THREE.Clock();
+function frame(){
+  requestAnimationFrame(frame);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t  = clock.elapsedTime;
+
+  /* DAMPED, framerate-independent. The 1-exp(-k*dt) form is correct at 30fps and 120fps
+     alike; a plain lerp by a fixed fraction travels twice as fast on a 120Hz phone, which is
+     the usual reason camera feel differs between devices. Damping also means a tap during a
+     transition simply re-aims, with no timeline to cancel. */
+  const e = 1 - Math.exp(-2.0 * dt);
+  cur.target.lerp(goal.target, e);
+  cur.dist  += (goal.dist  - cur.dist)  * e;
+  cur.elev  += (goal.elev  - cur.elev)  * e;
+  cur.angle += (goal.angle - cur.angle) * e;
+  cur.fov   += (goal.fov   - cur.fov)   * e;
+
+  const drift = state === STATE.WORLD ? Math.sin(t * 0.045) * 0.09 : 0;
+  const a = cur.angle + drift;
+  camera.position.set(
+    cur.target.x + Math.sin(a) * cur.dist,
+    cur.elev,
+    cur.target.z + Math.cos(a) * cur.dist
+  );
+  camera.lookAt(cur.target);
+  if (Math.abs(camera.fov - cur.fov) > 0.01){
+    camera.fov = cur.fov; camera.updateProjectionMatrix();
+  }
+
+  for (let i = 0; i < waterPos.count; i++){
+    const x = waterBase[i*3], y = waterBase[i*3+1];
+    waterPos.array[i*3+2] = Math.sin(x*0.010 + t*0.45)*0.55 + Math.sin(y*0.008 - t*0.35)*0.42;
+  }
+  waterPos.needsUpdate = true;
+  water.geometry.computeVertexNormals();
+
+  updateLabels();
+  renderer.info.reset();
+  composer.render();
+
+  if (DEBUG){
+    const info = renderer.info;
+    document.getElementById('dbg').textContent =
+      'state  ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') + '\n' +
+      'tris   ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
+      'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures;
+  }
+}
+frame();
+
+window.W2H = {
+  world: setWorld,
+  go: id => { const d = DISTRICTS.find(x => x.id === id); if (d) setDistrict(d); },
+  tilt: v => tiltPass.uniforms.amount.value = v,
+  DISTRICTS, goal, cur,
+};
+
+} catch(e){ fail('module top level', e); }
+</script>
+</body>
+</html>
