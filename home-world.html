@@ -653,6 +653,28 @@ headland.position.set(-46, -0.25, 8);
 headland.rotation.y = 0.14;
 world.add(headland);
 
+/* ===========================================================================
+   NEAR SHORE. The reason the foreground "floats" — there was never any ground under it.
+
+   The near field sits at z=218-240. Land was at z=-190 and the headland at z=8, so the eight
+   near blocks, the quay and fifteen palms have been standing in open sea this whole time, their
+   bases at exactly y=0 with water on all sides and water visible behind their feet. No amount
+   of lighting or contact shading fixes that, because the eye is reading a true fact about the
+   scene: there is nothing holding them up.
+
+   This is the bank the camera is standing on. It runs from z=190 past the camera at z~320 to
+   z=430, so it never shows a far edge behind the viewer, and its waterline at z=190 becomes the
+   near edge of the bay — which also gives the reflection somewhere to stop.
+
+   Darker than the city land at 0x0C1218: this is 100 units from the camera rather than 500, so
+   the same colour would read considerably lighter and pull the eye down into the corner. */
+const nearShore = new THREE.Mesh(
+  new THREE.BoxGeometry(560, 1.6, 240),
+  new THREE.MeshStandardMaterial({ color:0x070A0E, roughness:1, metalness:0 })
+);
+nearShore.position.set(0, -0.3, 310);   // top at +0.5, clear of the 0.49 wave crest
+world.add(nearShore);
+
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(1400, 900, 160, 90),
   // NOW that there is an environment to reflect, metalness is correct — it was only wrong
@@ -845,6 +867,11 @@ for (let i = 0; i < 11; i++){
   b.position.set(-40 + i * 8, 2.1, 238);
   fg.add(b);
 }
+// Everything in the near field was authored with its base at y=0, back when there was nothing
+// to stand on. Lifting the GROUP rather than editing eight block positions, fifteen palms, the
+// quay and eleven bollards individually keeps every relative placement exactly as tuned and
+// puts all of it on the shore surface at +0.5 in one move.
+fg.position.y = 0.5;
 world.add(fg);
 
 /* ---------- assemble the district ---------- */
