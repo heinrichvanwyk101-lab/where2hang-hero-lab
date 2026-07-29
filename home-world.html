@@ -146,6 +146,7 @@ import { RenderPass }       from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass }  from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass }       from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass }         from 'three/addons/postprocessing/SMAAPass.js';
+import { ShaderPass }       from 'three/addons/postprocessing/ShaderPass.js';
 import { Reflector }        from 'three/addons/objects/Reflector.js';
 import { mountTilt } from './tilt-absolute.js?v=55';
 
@@ -203,7 +204,14 @@ const TAU       = 0.24;
 
 /* Palette. Straight from the app tokens — no purple, no neon, no Vegas. */
 const C = {
-  night:   0x0B1620,   // fog and clear colour, the haze the far skyline dissolves into
+  night:   0x0B1620,   // sky and clear colour
+  // AERIAL PERSPECTIVE. Fog was the same cold navy as the sky, so distance read as "darker"
+  // rather than "further" — everything receded toward black and the far skyline simply
+  // disappeared instead of dissolving. This is warmer and lighter than the sky, which is what
+  // a real city's night haze looks like: sodium and dust glowing above the horizon under a
+  // cold sky. Far towers now lose contrast INTO a warm band rather than into the background,
+  // and that difference is the single strongest depth cue available for free.
+  haze:    0x241D15,
   mass:    0x151A1F,   // building masses, barely above the page background
   masswarm:0x241E17,   // Emirates Palace stone, warm against the cool city
   gold:    0xE8B547,
@@ -222,13 +230,22 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
+/* SHADOWS. The single fix for the floating-foreground problem, addressed at the cause rather
+   than by lifting emissive until the shapes stop looking wrong. An object with a shadow is
+   standing on something; an object without one is hovering over a texture, and no amount of
+   material tuning talks the eye out of that.
+   PCFSoft rather than VSM: cheaper, and it does not need per-object tuning to avoid light
+   bleeding through thin geometry like palm fronds. */
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(C.night);
 // Aerial perspective. This is what makes a small model read as a large city: distant masses
 // lose contrast and dissolve into the sky, exactly as haze does over a bay.
 // At 0.0042 over 360 units this erased about 90% of the far city — there was no skyline left
 // behind the heroes. Distances roughly doubled with the pull-back, so the coefficient halves.
-scene.fog = new THREE.FogExp2(C.night, 0.0018);
+scene.fog = new THREE.FogExp2(C.haze, 0.0019);
 
 const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 3000);
 
@@ -267,6 +284,51 @@ const bloomPass = new UnrealBloomPass(
   POST.strength, POST.radius, POST.threshold
 );
 composer.addPass(bloomPass);
+
+/* TILT-SHIFT. The strongest miniature cue there is, and the cheapest to run.
+   Human vision has effectively infinite depth of field at city scale, so a frame where a
+   narrow band is sharp and everything else is soft cannot be a real city — the brain concludes
+   the subject must be SMALL and CLOSE. Every "tiny planet" photograph runs on this one effect.
+   Without it a night skyline reads as a skyline; with it, the same geometry reads as a model
+   on a table, which is the entire premise of this hero.
+
+   Blur is driven by distance from a horizontal band, NOT by real depth. That is a cheat and it
+   is the correct one: true depth-of-field needs the depth buffer and a circle-of-confusion
+   solve, costs several times as much, and looks near-identical on a scene whose subject
+   already sits in a band across the middle of the frame. */
+const TiltShift = {
+  uniforms: {
+    tDiffuse: { value: null },
+    amount:   { value: 1.0 },
+    focus:    { value: 0.44 },
+    aperture: { value: 0.15 },
+    strength: { value: 0.0024 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float amount, focus, aperture, strength;
+    varying vec2 vUv;
+    void main(){
+      float d = max(abs(vUv.y - focus) - aperture, 0.0);
+      float blur = smoothstep(0.0, 0.34, d) * strength * amount;
+      // Nine taps. Below about seven the falloff bands visibly on a gradient sky.
+      vec4 c = texture2D(tDiffuse, vUv) * 0.226;
+      c += texture2D(tDiffuse, vUv + vec2( blur*1.0,  blur*0.4)) * 0.129;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*1.0, -blur*0.4)) * 0.129;
+      c += texture2D(tDiffuse, vUv + vec2( blur*0.4, -blur*1.0)) * 0.117;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*0.4,  blur*1.0)) * 0.117;
+      c += texture2D(tDiffuse, vUv + vec2( blur*2.0,  blur*0.8)) * 0.071;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*2.0, -blur*0.8)) * 0.071;
+      c += texture2D(tDiffuse, vUv + vec2( blur*0.8, -blur*2.0)) * 0.070;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*0.8,  blur*2.0)) * 0.070;
+      gl_FragColor = c;
+    }`
+};
+const tiltPass = new ShaderPass(TiltShift);
+composer.addPass(tiltPass);
 
 // Tone maps and converts to display colour space. The renderer's own toneMapping and
 // toneMappingExposure settings above are what it reads, so those stay exactly as they were.
@@ -329,6 +391,19 @@ scene.add(new THREE.HemisphereLight(0x16303d, 0x04070a, 0.55));
 // touches is the specular sheet on the bay, which is exactly the thing that was blowing out.
 const moon = new THREE.DirectionalLight(0xA8C8DA, 0.55);
 moon.position.set(-130, 46, -190);
+/* THE SHADOW FRUSTUM MUST WRAP THE SCENE AND NOTHING MORE. Every unit of frustum spends
+   shadow-map texels, so an oversized box puts most of its resolution on empty sea and returns
+   blocky, stair-stepped shadow edges that read as cheap. This box covers the district and the
+   near shore and stops. 2048 over ~700 units is roughly 3.4m per texel — coarse for a hard
+   edge, ample for the soft contact darkening that is all this needs to do. */
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.camera.near = 20;
+moon.shadow.camera.far  = 900;
+moon.shadow.camera.left = -260; moon.shadow.camera.right =  260;
+moon.shadow.camera.top  =  320; moon.shadow.camera.bottom = -320;
+moon.shadow.bias = -0.0007;
+moon.shadow.normalBias = 0.5;   // stops self-shadow acne on the curved towers
 scene.add(moon);
 
 // DAY SUN. Off at night. High and to the east so the towers throw their long faces toward the
@@ -336,6 +411,14 @@ scene.add(moon);
 // is the mistake that makes daylight tests useless.
 const sun = new THREE.DirectionalLight(0xFFF3E2, 2.0);
 sun.position.set(90, 120, 70);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 20;
+sun.shadow.camera.far  = 900;
+sun.shadow.camera.left = -260; sun.shadow.camera.right =  260;
+sun.shadow.camera.top  =  320; sun.shadow.camera.bottom = -320;
+sun.shadow.bias = -0.0007;
+sun.shadow.normalBias = 0.5;
 sun.visible = false;
 scene.add(sun);
 
@@ -445,7 +528,13 @@ function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++){
     let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const t = (y + h/2) / h;                       // 0 at base, 1 at crown
+    // CLAMPED, and the clamp is load-bearing. Vertex positions are Float32; for a height whose
+    // half is not exactly representable (27.7 -> 13.85) the bottom cap lands a few ten-millionths
+    // BELOW -h/2, so t comes out very slightly negative. Math.pow(negative, 1.7) is NaN, that NaN
+    // writes straight into the position buffer, and three then throws on computeBoundingSphere.
+    // Silent for the old heights (30, 33, 28 — halves exact) and triggered the moment the real
+    // Etihad ratios went in. Clamping costs nothing and removes a whole class of edge case.
+    const t = Math.min(1, Math.max(0, (y + h/2) / h));   // 0 at base, 1 at crown
     const k = 1 + swell * Math.sin(Math.PI * t);
     x *= k; z *= k * ell;
     x += lean * Math.pow(t, 1.7);
@@ -496,7 +585,12 @@ function etihadTowers(x0, z0){
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
     // they are broad curved slabs, and the width is as much of the signature as the lean.
     const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 26);
-    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/16)), 0.90));
+    // MATERIAL IDENTITY. Every landmark previously shared one near-black mass tone, so the only
+    // thing separating them was outline. Etihad is blue-green curtain glass and now reads that
+    // way — cool and slightly reflective against the warm haze behind it.
+    // Emissive stepped 0.90 -> 0.78 so the warm palace holds the eye FIRST and the cluster
+    // second. Light hierarchy is about relative order, not absolute brightness.
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/16)), 0.78, 0x111C22));
     m.position.set(x0 + s.dx, s.h/2, z0 + s.dz);
     m.rotation.y = 0.10 + i * 0.06;
     m.userData.hero = true;
@@ -568,8 +662,10 @@ function emiratesPalace(x0, z0){
 function adnocHQ(x0, z0){
   const g = new THREE.Group();
   const rot = 0.20;
+  // Graphite glazing: denser and less blue than Etihad, so the two towers no longer read as the
+  // same building at different sizes. Emissive third in the hierarchy, behind palace and Etihad.
   const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 7),
-    cityMaterial(TEX_TOWER, 3, 3, 0.72));
+    cityMaterial(TEX_TOWER, 3, 3, 0.60, 0x14161A));
   body.position.set(x0, 0, z0); body.rotation.y = rot;
   body.userData.hero = true; g.add(body);
 
@@ -823,24 +919,8 @@ world.add(refl);
    About 140m from the camera against a skyline at 1.5km. Roughly 10:1, and that ratio is why
    the orbit produces visible parallax at all. These are near-black silhouettes on purpose:
    they are here to occlude, not to be looked at. */
-function palm(x, z, h, lean){
-  const g = new THREE.Group();
-  const dark = new THREE.MeshStandardMaterial({ color:0x070A0C, roughness:1, metalness:0 });
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.085, h, 7), dark);
-  trunk.position.y = h / 2; g.add(trunk);
-  const n = 8;
-  for (let i = 0; i < n; i++){
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.5, 5), dark);
-    const a = (i / n) * Math.PI * 2;
-    f.position.set(Math.cos(a) * 0.52, h + 0.12, Math.sin(a) * 0.52);
-    f.rotation.z = Math.cos(a) * 1.16;
-    f.rotation.x = -Math.sin(a) * 1.16;
-    g.add(f);
-  }
-  g.position.set(x, 0, z);
-  g.rotation.z = lean;
-  return g;
-}
+// The per-palm Group builder that used to live here is gone: palms are instanced now.
+
 /* THE NEAR FIELD, REBUILT.
    About 55 units from the camera against Etihad at 157 and the far rows beyond 300. Only 2.9:1,
    far less than the 10:1 the first pass aimed at — but the first pass put its near field off the
@@ -891,20 +971,70 @@ function nearBlock(x, z, w, h, d, rot){
 const quay = new THREE.Mesh(new THREE.BoxGeometry(150, 1.4, 6), quayMat);
 quay.position.set(0, 0.7, 240); quay.rotation.y = 0.03;
 fg.add(quay);
-for (let i = 0; i < 15; i++){
-  const x = -42 + i * 6 + (rnd() - 0.5) * 2.5;
-  fg.add(palm(x, 236 + (rnd() - 0.5) * 3, 2.6 + rnd() * 1.2, (rnd() - 0.5) * 0.14));
+/* PALMS, INSTANCED. Was 15 palms built as Groups of nine meshes each — 135 draw calls for a
+   thin scatter that read as props rather than as a planted corniche. Density is most of what
+   separates a real waterfront from a few lonely objects, and density is only affordable
+   through instancing: 170 palms here cost TWO draw calls instead of 1,530.
+   The frond crown is a squashed sphere rather than eight cones. At this distance a cone fan
+   and a flattened sphere are indistinguishable, and the sphere is a fifth of the triangles. */
+const N_PALM = 170;
+const palmTrunkGeo = new THREE.CylinderGeometry(0.05, 0.09, 1, 6);
+palmTrunkGeo.translate(0, 0.5, 0);          // origin at the base so scale grows upward
+const palmFrondGeo = new THREE.SphereGeometry(1, 7, 5);
+palmFrondGeo.scale(1, 0.40, 1);
+
+const palmDark = new THREE.MeshStandardMaterial({ color:0x080B0D, roughness:1, metalness:0 });
+const palmTrunks = new THREE.InstancedMesh(palmTrunkGeo, palmDark, N_PALM);
+const palmFronds = new THREE.InstancedMesh(palmFrondGeo, palmDark, N_PALM);
+palmTrunks.castShadow = palmFronds.castShadow = true;
+fg.add(palmTrunks, palmFronds);
+
+const palmData = [];
+const palmDummy = new THREE.Object3D();
+for (let i = 0; i < N_PALM; i++){
+  // Two rows along the quay plus a looser scatter behind, so the planting reads as designed
+  // rather than as a single line of identical objects.
+  const row = i % 3;
+  const x = -60 + (i / N_PALM) * 120 + (rnd() - 0.5) * 3.5;
+  const z = row === 0 ? 237 + (rnd()-0.5)*1.6
+          : row === 1 ? 231 + (rnd()-0.5)*2.0
+          :             224 + (rnd()-0.5)*5.0;
+  const h = 2.4 + rnd() * 1.5;
+  palmData.push({ x, z, h, phase: rnd() * Math.PI * 2, r: 0.85 + rnd()*0.35 });
+
+  palmDummy.position.set(x, 0, z);
+  palmDummy.scale.set(1, h, 1);
+  palmDummy.rotation.set(0, 0, (rnd()-0.5) * 0.12);
+  palmDummy.updateMatrix();
+  palmTrunks.setMatrixAt(i, palmDummy.matrix);
 }
+palmTrunks.instanceMatrix.needsUpdate = true;
+palmDummy.rotation.set(0, 0, 0);
+
 for (let i = 0; i < 11; i++){
   const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 1.4, 8), quayMat);
   b.position.set(-40 + i * 8, 2.1, 238);
   fg.add(b);
 }
-// Everything in the near field was authored with its base at y=0, back when there was nothing
-// to stand on. Lifting the GROUP rather than editing eight block positions, fifteen palms, the
-// quay and eleven bollards individually keeps every relative placement exactly as tuned and
-// puts all of it on the shore surface at +0.5 in one move.
-fg.position.y = 0.5;
+
+/* LAMP POOLS. Emissive geometry GLOWS but does not LIGHT — a lamp head with nothing beside it
+   is a bright sticker that illuminates nothing, which is why an emissive-only night scene
+   reads as decals on black. Real point lights are expensive, so there are only seven and they
+   sit where the eye already goes. Widely spaced, they still read as a continuous chain because
+   the eye fills the gaps in. */
+const lampHeadMat = new THREE.MeshStandardMaterial({
+  color:0xFFE6BE, emissive:C.gold, emissiveIntensity:2.2 });
+for (let i = 0; i < 7; i++){
+  const x = -54 + i * 18;
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.0, 6), quayMat);
+  post.position.set(x, 1.5, 240); fg.add(post);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 8, 6), lampHeadMat);
+  head.position.set(x, 3.1, 240); fg.add(head);
+  const pool = new THREE.PointLight(C.gold, 9.0, 26, 2);
+  pool.position.set(x, 2.9, 240);
+  fg.add(pool);
+}
+
 world.add(fg);
 
 /* ---------- assemble the district ---------- */
@@ -924,6 +1054,17 @@ world.add(lowRise(26, -78, 80, 22, 6, 0.55));                          // villas
 world.add(cityRow(20, -76, 80, -44, 8, 3.5, 17, 0.62, 0.30, 0.20));    // corniche behind
 world.add(cityRow(24, -80, 82, -110, 14, 5, 26, 0.42, 0.24, 0.24));    // mid distance
 world.add(cityRow(28, -84, 86, -190, 20, 4, 20, 0.24, 0.16, 0.30));    // far, nearly silhouette
+
+/* SHADOW FLAGS, applied in one sweep once the world exists. Doing it per-builder would mean
+   remembering it in a dozen places and silently losing it in one. The water and the reflector
+   RECEIVE but never CAST: a 1400x900 plane in the shadow frustum would swamp the map's
+   resolution and buy nothing, since a flat sea casts no shadow anyone can see. */
+world.traverse(o => {
+  if (!o.isMesh && !o.isInstancedMesh) return;
+  if (o === water || o === refl){ o.castShadow = false; o.receiveShadow = true; return; }
+  o.castShadow = true;
+  o.receiveShadow = true;
+});
 
 /* ===========================================================================
    CAMERA DRIVE. Tilt sets a target point on the arc; the camera eases toward it and always
@@ -1018,6 +1159,21 @@ function frame(now){
     water.geometry.computeVertexNormals();   // without this the ripple never catches the light
     // The painted band used to be scrolled here to fake movement. The reflection now derives
     // from the camera and the animated surface below it, so it moves on its own.
+
+    /* PALM SWAY. Deliberately tiny — a couple of hundredths of a radian. Large enough to
+       register only if you look for it, which is precisely the threshold that separates a
+       scene that feels alive from one that feels animated. Anything you can clearly SEE
+       moving in a hero reads as a screensaver. */
+    for (let i = 0; i < N_PALM; i++){
+      const pm = palmData[i];
+      palmDummy.position.set(pm.x, pm.h + 0.10, pm.z);
+      palmDummy.rotation.set(Math.sin(t * 1.7 + pm.phase) * 0.022, 0,
+                             Math.cos(t * 1.3 + pm.phase) * 0.022);
+      palmDummy.scale.set(pm.r, pm.r * 0.62, pm.r);
+      palmDummy.updateMatrix();
+      palmFronds.setMatrixAt(i, palmDummy.matrix);
+    }
+    palmFronds.instanceMatrix.needsUpdate = true;
   }
 
   renderer.info.reset();
@@ -1042,6 +1198,9 @@ function frame(now){
         '   rough ' + water.material.roughness.toFixed(2) +
         '   env ' + water.material.envMapIntensity.toFixed(2) +
         '   moon ' + moon.intensity.toFixed(2) + '\n' +
+      'fx      tilt ' + tiltPass.uniforms.amount.value.toFixed(2) +
+        '   shadow ' + (renderer.shadowMap.enabled ? 'on' : 'off') +
+        '   palms ' + N_PALM + '\n' +
       'refl    ' + (refl.visible
           ? 'on  str ' + refl.material.uniforms.strength.value.toFixed(2) + '   512px'
           : 'off') + '   mode ' + mode + '\n\n' +
@@ -1078,6 +1237,17 @@ window.W2H = {
   exposure(v){ renderer.toneMappingExposure = v; },
   // W2H.reflection(0.5) to push the reflection, W2H.reflection(0.2) to pull it back.
   reflection(v){ refl.material.uniforms.strength.value = v; },
+  // Aerial perspective, judged in the hand. W2H.haze(0.0026) for a thicker, closer horizon;
+  // W2H.haze(0.0012) to push the far skyline back into legibility. Second argument recolours
+  // the haze: W2H.haze(0.0019, 0x2E2418) for a warmer, dustier band.
+  // W2H.tilt(0) to switch the miniature blur off, W2H.tilt(1.8) to exaggerate it.
+  // W2H.focus(0.55) moves the sharp band up the frame.
+  tilt(v){ tiltPass.uniforms.amount.value = v; },
+  focus(v){ tiltPass.uniforms.focus.value = v; },
+  haze(density, colour){
+    if (colour !== undefined) scene.fog.color.setHex(colour);
+    scene.fog.density = density;
+  },
 };
 
 /* ===========================================================================
@@ -1116,7 +1286,7 @@ function applyMode(next){
   scene.background = new THREE.Color(sil ? 0xC8D8DF : day ? 0x9FC4DA : C.night);
   scene.fog = sil ? null
             : day ? new THREE.FogExp2(0xB6CEDD, 0.0011)
-            : new THREE.FogExp2(C.night, 0.0018);
+            : new THREE.FogExp2(C.haze, 0.0019);
   // Day drops the env map: it is a NIGHT gradient, and leaving it on tints every daylight
   // surface a muddy blue. The hemisphere light does the ambient job instead.
   scene.environment = (sil || day) ? null : envMap;

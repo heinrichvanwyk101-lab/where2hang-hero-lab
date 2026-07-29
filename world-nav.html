@@ -179,7 +179,7 @@ const envMap = pmrem.fromEquirectangular(skyEnvTexture()).texture;
 scene.environment = envMap;
 
 /* ---------- lighting ---------- */
-scene.add(new THREE.HemisphereLight(0x16303d, 0x04070a, 0.55));
+scene.add(new THREE.HemisphereLight(0x2A4A5C, 0x0A0F14, 0.95));
 
 const moon = new THREE.DirectionalLight(0xA8C8DA, 0.55);
 moon.position.set(-320, 220, -260);
@@ -288,7 +288,13 @@ function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++){
     let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const t = (y + h/2) / h;                       // 0 at base, 1 at crown
+    // CLAMPED, and the clamp is load-bearing. Vertex positions are Float32; for a height whose
+    // half is not exactly representable (27.7 -> 13.85) the bottom cap lands a few ten-millionths
+    // BELOW -h/2, so t comes out very slightly negative. Math.pow(negative, 1.7) is NaN, that NaN
+    // writes straight into the position buffer, and three then throws on computeBoundingSphere.
+    // Silent for the old heights (30, 33, 28 — halves exact) and triggered the moment the real
+    // Etihad ratios went in. Clamping costs nothing and removes a whole class of edge case.
+    const t = Math.min(1, Math.max(0, (y + h/2) / h));   // 0 at base, 1 at crown
     const k = 1 + swell * Math.sin(Math.PI * t);
     x *= k; z *= k * ell;
     x += lean * Math.pow(t, 1.7);
@@ -549,7 +555,14 @@ scene.add(world);
    and the scene read as lit slabs floating in a void. Same class of mistake as the near-field
    pendulum: a colour chosen for one lighting setup, then the lighting changed underneath it.
    Land has to be visible for the islands to be the subject, which at world scale they are. */
-const matLand = new THREE.MeshStandardMaterial({ color:0x1E252C, roughness:1, metalness:0 });
+/* SECOND ATTEMPT AT THIS, because 0x1E252C was still invisible and the reasoning was wrong
+   both times. Work the numbers instead of guessing: 0x1E252C is about (0.012,0.018,0.026) in
+   LINEAR terms, and the hemisphere sky it is lit by is about (0.008,0.030,0.048) at 0.55
+   intensity. Multiply those together and the result is a few thousandths — indistinguishable
+   from black on any screen. Dark albedo times dim light is not "moody", it is nothing.
+   0x424E58 is a pale slate that survives being multiplied by a dim night sky. The islands are
+   the SUBJECT at world scale; they cannot be the least visible thing in the frame. */
+const matLand = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
 /* ===========================================================================
    ISLAND OUTLINES.
@@ -840,14 +853,21 @@ function applyLOD(){
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   goal.target.set(0, 0, -40);
-  goal.dist = 430; goal.elev = 300; goal.angle = 0; goal.fov = 52;
+  goal.dist = 600; goal.elev = 400; goal.angle = 0; goal.fov = 52;
   applyLOD();
   ui('Abu Dhabi', 'Tap an island');
 }
 function setDistrict(d){
   state = STATE.DISTRICT; activeDistrict = d; activePlace = null;
   goal.target.set(d.x, 8, d.z);
-  goal.dist = d.r * 2.6; goal.elev = d.r * 1.15; goal.fov = 42;
+  /* THE PORTRAIT FIELD CAUGHT ME TWICE. I corrected the world view for it and then set the
+     district view by eye, and 2.6r put the camera INSIDE the island: at fov 42 with a 0.46
+     aspect the horizontal half-angle is about 10 degrees, so the visible half-width at 2.6r is
+     roughly 0.46r — barely a quarter of the island, filling the frame with the dark ground
+     between buildings. That is the black screen.
+     The arithmetic, once rather than by eye: to fit a radius r across the frame,
+     dist = r / tan(hFov/2), and tan(10 degrees) is 0.176, so dist must be about 5.7r. */
+  goal.dist = d.r * 5.7; goal.elev = d.r * 2.3; goal.fov = 42;
   // Approach from the seaward side, so the move always reads as the world turning to present
   // the island rather than the camera swinging round behind it.
   goal.angle = Math.atan2(d.x, d.z + 300);
@@ -860,7 +880,9 @@ function setPlace(d, anchor){
   const wx = d.x + anchor.x * Math.cos(d.rot) + anchor.z * Math.sin(d.rot);
   const wz = d.z - anchor.x * Math.sin(d.rot) + anchor.z * Math.cos(d.rot);
   goal.target.set(wx, 6, wz);
-  goal.dist = 52; goal.elev = 24; goal.fov = 36;
+  // Same correction. 52 units at fov 36 showed about 8 units of width — two tower faces and
+  // nothing else. A "place" should frame a cluster, not press against one wall of it.
+  goal.dist = 190; goal.elev = 78; goal.fov = 38;
   goal.angle = Math.atan2(wx - d.x, wz - d.z + 60);
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
      'Back to ' + d.name);
