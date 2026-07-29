@@ -145,6 +145,7 @@ import { RenderPass }       from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass }  from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass }       from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass }         from 'three/addons/postprocessing/SMAAPass.js';
+import { Reflector }        from 'three/addons/objects/Reflector.js';
 import { mountTilt } from './tilt-absolute.js?v=55';
 
 const __dbg  = document.getElementById('dbg');
@@ -675,76 +676,91 @@ world.add(water);
 const waterPos = water.geometry.attributes.position;
 const waterBase = Float32Array.from(waterPos.array);
 
-/* Reflection band. Real reflections cost a render target; this is a scrolling additive strip
-   under the lit shoreline, which at this distance is indistinguishable and nearly free. */
-function reflectionTexture(){
-  const cv = document.createElement('canvas');
-  cv.width = 512; cv.height = 128;
-  const g = cv.getContext('2d');
-  g.fillStyle = '#000'; g.fillRect(0, 0, 512, 128);
-  for (let i = 0; i < 190; i++){
-    const x = Math.random() * 512;
-    const w = 1 + Math.random() * 2.5;
-    const h = 46 + Math.random() * 82;
-    const warm = Math.random() < 0.72;
-    const grd = g.createLinearGradient(0, 0, 0, h);
-    grd.addColorStop(0, warm ? 'rgba(232,181,71,.85)' : 'rgba(180,214,226,.6)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grd; g.fillRect(x, 0, w, h);
-  }
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = MAX_ANISO;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
-  t.generateMipmaps = true;
-  return t;
-}
-const reflTex = reflectionTexture();
-// Deliberately subordinate. At 0.5 opacity and 30 units from the camera this was the brightest,
-// nearest, fastest-moving thing on screen — it proved the parallax works while stealing the eye
-// from the landmarks it was meant to support. Dimmed, pushed back toward the shore, and slowed.
-// The streak texture MUST be tiled. Stretching 512px across 620 world units made each streak
-// one to three units wide — the striped slab that dominated the frame and read as the strongest
-// depth cue in the scene. Tiled at 8, a streak is about 0.2 units: a thin light on the water.
-// In portrait the city is inherently a thin band — the tallest tower is 7deg of a 55deg frame.
-// That is fine, but it means the WATER has to carry the lower half of the picture, and a small
-// dim strip left it dead black. The band now runs from the shoreline most of the way to the
-// camera, so the district is answered by its own reflection.
-// TWO FAULTS, and the first one I got wrong on the previous pass — corrected here.
-//
-// 1. repeat.y MUST BE 1. This texture is NOT tileable vertically. Each streak is a gradient
-//    running from opaque at the top of the canvas to fully transparent at the bottom, so the
-//    image is a single band meant to run ONCE from the shoreline to the camera. Setting
-//    repeat.y to 6 put a hard bright-to-transparent seam at every tile boundary: six stacked
-//    gold rails across the bay, which is far worse than the smear it was meant to cure.
-//    The horizontal repeat of 5 is fine — the streaks ARE distributed across x and wrap
-//    cleanly. If the band still reads too strong, the dial is opacity, not repeat.
-//
-// 2. THE WAVES WERE CUTTING THROUGH IT. The band sat at y=0.05 while the water displacement
-//    reaches 0.22+0.17+0.10 = 0.49 at a crest, so across most of the surface the water rose
-//    ABOVE the band and occluded it — depthWrite:false stops it WRITING depth, it does not
-//    stop it being depth-TESTED. That was the irregular dark blotching through the bay.
-//    Lifted clear of the maximum crest. At 1km this costs no perceptible parallax.
-reflTex.repeat.set(5, 1);
-// SIZE AND OPACITY, not repeat, are the intensity dials — and with bloom now running, the
-// values that were merely strong before became the loudest object in the frame. Two changes:
-//
-// OPACITY 0.42 -> 0.20. Bloom amplifies everything above the threshold, and an additive band at
-// 0.42 clears it easily across its whole area. A reflection is the quietest thing in a night
-// scene; if it is competing with the skyline, the skyline has lost.
-//
-// DEPTH 260 -> 200, PUSHED BACK to z=62. At 260 deep centred on 105 the band ran to z=235,
-// which is underneath the near blocks at 218-236 — reflected city light passing beneath the
-// foreground quay, which reads as wrong before anyone works out why. Ending it at z=162 leaves
-// a band of dark unlit water between the reflection and the near field, and that dark gap is
-// what gives the foreground somewhere to sit.
-const refl = new THREE.Mesh(
+/* ===========================================================================
+   PLANAR REFLECTION. Replaces the painted band entirely.
+
+   The old strip was a canvas of random gold streaks tiled five times across the bay. It had no
+   relationship of any kind to where the lit buildings actually stood, which is why streaks
+   appeared under empty sky on the right where the skyline thins out. No amount of tuning fixes
+   that: a reflection that does not mirror anything reads as a rug, and the eye knows it before
+   the mind works out why.
+
+   This mirrors the camera through the water plane, renders the scene a second time into a small
+   off-screen target, and projects that back onto the surface. The skyline is genuinely
+   reflected. Towers land under towers, the mosque lands under the mosque, the right side goes
+   dark because there is nothing there to reflect, and the whole thing moves correctly as the
+   phone tilts because it is derived from the camera rather than painted.
+
+   COST: one extra scene render at 512x512. Roughly 1-2ms. The headroom was there.
+   =========================================================================== */
+
+// Additive rather than the stock overlay blend, which is the right model for a reflection on
+// dark water: it ADDS light where the city is lit and adds nothing where the sky is black.
+// The stock ReflectorShader replaces the surface colour outright, which would erase the wave
+// specular underneath it.
+const reflectionShader = {
+  name: 'W2HReflectorShader',
+  uniforms: {
+    color:         { value: null },
+    tDiffuse:      { value: null },
+    textureMatrix: { value: null },
+    strength:      { value: 0.34 },
+  },
+  vertexShader: /* glsl */`
+    uniform mat4 textureMatrix;
+    varying vec4 vUv;
+    varying vec2 vLocal;
+    void main(){
+      vLocal = uv;
+      vUv = textureMatrix * vec4( position, 1.0 );
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 color;
+    uniform sampler2D tDiffuse;
+    uniform float strength;
+    varying vec4 vUv;
+    varying vec2 vLocal;
+    void main(){
+      vec4 base = texture2DProj( tDiffuse, vUv );
+
+      // The plane is a rectangle and its edges must never be visible. Local V runs 1 at the
+      // shoreline to 0 at the camera, so the reflection is strongest directly beneath the city
+      // and dies out with distance from it — which is also how a real reflection behaves, since
+      // the surface roughness scatters it more the further it travels.
+      float fade = smoothstep( 0.04, 0.62, vLocal.y );
+      fade *= smoothstep( 0.0, 0.07, vLocal.x ) * ( 1.0 - smoothstep( 0.93, 1.0, vLocal.x ) );
+
+      gl_FragColor = vec4( base.rgb * color * strength * fade, 1.0 );
+
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`
+};
+
+const refl = new Reflector(
   new THREE.PlaneGeometry(420, 200),
-  new THREE.MeshBasicMaterial({ map:reflTex, transparent:true, opacity:0.20,
-    blending:THREE.AdditiveBlending, depthWrite:false })
+  {
+    // 512 is deliberately small. The surface is rough water, the reflection is meant to be
+    // broken up, and a sharp mirror would look more wrong than a soft one. It also keeps the
+    // second scene render cheap.
+    textureWidth:  512,
+    textureHeight: 512,
+    // Thin towers reflected into a small target alias badly without this.
+    multisample:   4,
+    // Nudges the oblique clip plane off the surface. Without it the reflection can self-clip
+    // at grazing angles and flicker along the shoreline.
+    clipBias:      0.003,
+    color:         0x9FB4C4,   // cool tint; the bay is not a neutral mirror
+    shader:        reflectionShader,
+  }
 );
+refl.material.transparent = true;
+refl.material.blending = THREE.AdditiveBlending;
+refl.material.depthWrite = false;
 refl.rotation.x = -Math.PI / 2;
+// Sits above the maximum wave crest (0.22+0.17+0.10=0.49) so the displaced water cannot rise
+// through it and chop it into blotches. 0.62 costs no visible parallax at this distance.
 refl.position.set(0, 0.62, 62);
 world.add(refl);
 
@@ -935,7 +951,8 @@ function frame(now){
     }
     waterPos.needsUpdate = true;
     water.geometry.computeVertexNormals();   // without this the ripple never catches the light
-    reflTex.offset.y = (t * 0.018) % 1;
+    // The painted band used to be scrolled here to fake movement. The reflection now derives
+    // from the camera and the animated surface below it, so it moves on its own.
   }
 
   renderer.info.reset();
@@ -959,7 +976,10 @@ function frame(now){
       'water   metal ' + water.material.metalness.toFixed(2) +
         '   rough ' + water.material.roughness.toFixed(2) +
         '   env ' + water.material.envMapIntensity.toFixed(2) +
-        '   moon ' + moon.intensity.toFixed(2) + '\n\n' +
+        '   moon ' + moon.intensity.toFixed(2) + '\n' +
+      'refl    ' + (refl.visible
+          ? 'on  str ' + refl.material.uniforms.strength.value.toFixed(2) + '   512px'
+          : 'off') + '\n\n' +
       'the whole district must fit the frame.\nif a landmark is never visible, it is\noutside the 13deg horizontal half-field,\nnot below the frustum.';
   }
 }
@@ -991,6 +1011,8 @@ window.W2H = {
     bloomPass.threshold = POST.threshold;
   },
   exposure(v){ renderer.toneMappingExposure = v; },
+  // W2H.reflection(0.5) to push the reflection, W2H.reflection(0.2) to pull it back.
+  reflection(v){ refl.material.uniforms.strength.value = v; },
 };
 
 /* SILHOUETTE MODE. The brief's own test, made runnable: flatten everything to black against a
