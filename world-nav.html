@@ -631,15 +631,41 @@ const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness
 
 const DISTRICTS = [
   { id:'corniche', name:'Corniche',   x:-44, z:  58, r:76, rot: 0.10, tint:C.gold,
-    built:true,  places:['Emirates Palace','Etihad Towers','Corniche Beach'] },
+    /* REAL COORDINATES, matching where the landmarks are actually built. The generated ring
+       was the reason tapping "Emirates Palace" framed the skyline behind it: the anchor sat at
+       0.46r on an arbitrary arc while the palace itself is at local (-44, 12). A label that
+       does not sit on the thing it names is worse than no label, because it teaches the user
+       the model is decorative. h is the height the camera aims at — a 44-unit tower and a
+       6-unit palace want very different look-at points. */
+    built:true, places:[
+      { label:'Emirates Palace', x:-44, z: 12, h: 7,  r: 46 },
+      { label:'Etihad Towers',   x: -6, z:-30, h:18,  r: 52 },
+      { label:'ADNOC HQ',        x: 42, z:-62, h:26,  r: 50 },
+    ] },
   { id:'maryah',   name:'Al Maryah',  x: -6, z:  -4, r:34, rot: 0.30, tint:0x8FD3E8,
-    built:false, places:['The Galleria','Rosewood','Waterfront'] },
+    built:false, places:[
+      { label:'The Galleria', x:-10, z:  6, h:10, r:30 },
+      { label:'Rosewood',     x: 12, z:-10, h:12, r:30 },
+      { label:'Waterfront',   x:  2, z: 18, h: 5, r:30 },
+    ] },
   { id:'reem',     name:'Al Reem',    x: 58, z:  46, r:44, rot:-0.20, tint:0xBFD3E0,
-    built:false, places:['Reem Central','Shams Boutik','Gate Towers'] },
+    built:false, places:[
+      { label:'Reem Central', x:  0, z:  0, h:12, r:36 },
+      { label:'Shams Boutik', x: 22, z: 10, h:10, r:34 },
+      { label:'Gate Towers',  x:-22, z: -8, h:16, r:36 },
+    ] },
   { id:'saadiyat', name:'Saadiyat',   x:-28, z:-104, r:56, rot: 0.15, tint:0xDDD3C0,
-    built:false, places:['Louvre Abu Dhabi','Saadiyat Beach','Manarat'] },
+    built:false, places:[
+      { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
+      { label:'Saadiyat Beach',   x:-24, z: 22, h: 3, r:44 },
+      { label:'Manarat',          x:  4, z:-18, h: 6, r:38 },
+    ] },
   { id:'yas',      name:'Yas Island', x: 82, z:-186, r:62, rot:-0.10, tint:C.gold,
-    built:false, places:['Yas Marina','Yas Mall','Ferrari World'] },
+    built:false, places:[
+      { label:'Yas Marina',    x:-28, z: 22, h: 5, r:42 },
+      { label:'Yas Mall',      x: 10, z: -6, h: 8, r:40 },
+      { label:'Ferrari World', x: 34, z:-20, h: 9, r:40 },
+    ] },
 ];
 
 const pickTargets = [];
@@ -680,10 +706,9 @@ DISTRICTS.forEach(d => {
   g.add(pick);
   pickTargets.push(pick);
 
-  d.placeAnchors = d.places.map((label, i) => {
-    const a = (i / d.places.length) * Math.PI * 2 + 0.7;
-    return { label, x: Math.cos(a) * d.r * 0.46, z: Math.sin(a) * d.r * 0.46, district:d };
-  });
+  // Straight through from the table. Every anchor now names a position that something is
+  // actually standing on.
+  d.placeAnchors = d.places.map(pl => ({ ...pl, district:d }));
 });
 
 /* ---------- CORNICHE: the finished island ---------- */
@@ -879,10 +904,15 @@ function setPlace(d, anchor){
   state = STATE.PLACE; activeDistrict = d; activePlace = anchor;
   const wx = d.x + anchor.x * Math.cos(d.rot) + anchor.z * Math.sin(d.rot);
   const wz = d.z - anchor.x * Math.sin(d.rot) + anchor.z * Math.cos(d.rot);
-  goal.target.set(wx, 6, wz);
-  // Same correction. 52 units at fov 36 showed about 8 units of width — two tower faces and
-  // nothing else. A "place" should frame a cluster, not press against one wall of it.
-  goal.dist = 190; goal.elev = 78; goal.fov = 38;
+  goal.target.set(wx, anchor.h * 0.55, wz);
+  /* Framed from the anchor's OWN radius rather than one distance for everything. Emirates
+     Palace is a 90-unit-wide low building and Etihad is a tight cluster of towers; a single
+     distance either loses the palace off both edges or leaves the towers as a speck.
+     dist = r / tan(hFov/2) again, with tan about 0.159 at fov 38 on a portrait phone. */
+  const R = anchor.r || 46;
+  goal.dist = R / 0.159;
+  goal.elev = R * 0.62 + anchor.h * 1.2;
+  goal.fov  = 38;
   goal.angle = Math.atan2(wx - d.x, wz - d.z + 60);
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
      'Back to ' + d.name);
@@ -964,7 +994,7 @@ function updateLabels(){
       if (state !== STATE.WORLD && d === activeDistrict){
         const wx = d.x + a.x*Math.cos(d.rot) + a.z*Math.sin(d.rot);
         const wz = d.z - a.x*Math.sin(d.rot) + a.z*Math.cos(d.rot);
-        place2d(p, wx, 12, wz);
+        place2d(p, wx, a.h + 4, wz);
       } else p.classList.remove('on');
     });
   });
