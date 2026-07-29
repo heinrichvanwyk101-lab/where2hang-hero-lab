@@ -127,6 +127,7 @@
   <button class="chip" id="o8"  aria-pressed="false">Orbit 8</button>
   <button class="chip" id="o12" aria-pressed="true">Orbit 12</button>
   <button class="chip" id="o18" aria-pressed="false">Orbit 18</button>
+  <button class="chip" id="day" aria-pressed="false">Day</button>
   <button class="chip" id="sil" aria-pressed="false">Silhouette</button>
   <button class="chip" id="rec" aria-pressed="false">Recentre</button>
 </div>
@@ -330,6 +331,17 @@ const moon = new THREE.DirectionalLight(0xA8C8DA, 0.55);
 moon.position.set(-130, 46, -190);
 scene.add(moon);
 
+// DAY SUN. Off at night. High and to the east so the towers throw their long faces toward the
+// camera and the massing reads: a light straight down the view axis flattens everything, which
+// is the mistake that makes daylight tests useless.
+const sun = new THREE.DirectionalLight(0xFFF3E2, 2.0);
+sun.position.set(90, 120, 70);
+sun.visible = false;
+scene.add(sun);
+
+const daySky = new THREE.HemisphereLight(0xBBD6E8, 0x6E6455, 1.35);
+daySky.visible = false;
+scene.add(daySky);
 // One teal rim from the seaward side. Used sparingly — it is the brand colour, not a wash.
 const rim = new THREE.DirectionalLight(C.teal, 0.30);
 rim.position.set(120, 26, 130);
@@ -1032,7 +1044,7 @@ function frame(now){
         '   moon ' + moon.intensity.toFixed(2) + '\n' +
       'refl    ' + (refl.visible
           ? 'on  str ' + refl.material.uniforms.strength.value.toFixed(2) + '   512px'
-          : 'off') + '\n\n' +
+          : 'off') + '   mode ' + mode + '\n\n' +
       'the whole district must fit the frame.\nif a landmark is never visible, it is\noutside the 13deg horizontal half-field,\nnot below the frustum.';
   }
 }
@@ -1068,33 +1080,78 @@ window.W2H = {
   reflection(v){ refl.material.uniforms.strength.value = v; },
 };
 
-/* SILHOUETTE MODE. The brief's own test, made runnable: flatten everything to black against a
-   pale sky and see whether the city is still Abu Dhabi. Any landmark that disappears here is
-   not carrying its own recognition, and lighting will not rescue it in build two. */
-let silhouette = false;
-const silMat = new THREE.MeshBasicMaterial({ color:0x000000 });
+/* ===========================================================================
+   THREE VIEW MODES, because each one answers a question the other two cannot.
+
+   NIGHT       the real product. Tests lighting, bloom, reflection, atmosphere.
+   SILHOUETTE  flat black on pale sky. Tests OUTLINE only. If a landmark vanishes here it is
+               not carrying its own recognition and no lighting will rescue it.
+   DAY         neutral stone under a hard sun. Tests MASSING — how forms shade, how they sit
+               against each other, whether the composition has depth or is one flat wall.
+
+   The gap DAY fills: at night almost every surface is near-black, so proportion, setback,
+   spacing and depth are all invisible. You cannot judge whether the district is well composed
+   in a picture where you can only see the windows. Under a raking sun each face takes a
+   different value and the massing becomes legible — which is exactly what the composition and
+   scale notes in the brief are about.
+   =========================================================================== */
+let mode = 'night';   // 'night' | 'day' | 'sil'
+
+const silMat   = new THREE.MeshBasicMaterial({ color:0x000000 });
 const silWater = new THREE.MeshBasicMaterial({ color:0xB9CBD4 });
-document.getElementById('sil').addEventListener('click', () => {
-  silhouette = !silhouette;
-  document.getElementById('sil').setAttribute('aria-pressed', String(silhouette));
-  scene.background = new THREE.Color(silhouette ? 0xC8D8DF : C.night);
-  scene.fog = silhouette ? null : new THREE.FogExp2(C.night, 0.0018);
-  scene.environment = silhouette ? null : envMap;
-  refl.visible = !silhouette;
-  // BLOOM OFF IN SILHOUETTE, or the test stops being a test. The pale sky sits far above the
-  // bloom threshold, so it would flare across every edge in the frame and soften exactly the
-  // profiles the mode exists to judge. A landmark must earn recognition on its outline alone.
-  bloomPass.enabled = !silhouette;
+
+// STANDARD, not Basic. A flat unlit material would give a day mode that is just a paler
+// silhouette — every face the same value, no massing information at all. Standard means the
+// sun shades each plane differently and the forms read as solid.
+const dayMat   = new THREE.MeshStandardMaterial({ color:0xC9C2B2, roughness:0.88, metalness:0 });
+const dayWater = new THREE.MeshStandardMaterial({ color:0x6E9CB6, roughness:0.30, metalness:0 });
+
+function applyMode(next){
+  mode = next;
+  const sil = (mode === 'sil'), day = (mode === 'day');
+
+  ['day','sil'].forEach(id => document.getElementById(id)
+    .setAttribute('aria-pressed', String(mode === id)));
+
+  scene.background = new THREE.Color(sil ? 0xC8D8DF : day ? 0x9FC4DA : C.night);
+  scene.fog = sil ? null
+            : day ? new THREE.FogExp2(0xB6CEDD, 0.0011)
+            : new THREE.FogExp2(C.night, 0.0018);
+  // Day drops the env map: it is a NIGHT gradient, and leaving it on tints every daylight
+  // surface a muddy blue. The hemisphere light does the ambient job instead.
+  scene.environment = (sil || day) ? null : envMap;
+
+  moon.visible  = !sil && !day;
+  rim.visible   = !sil && !day;
+  sun.visible   = day;
+  daySky.visible = day;
+
+  // Bloom is a night effect. Against a pale sky it flares every edge and destroys exactly the
+  // profiles and massing these two modes exist to judge.
+  bloomPass.enabled = (mode === 'night');
+  renderer.toneMappingExposure = day ? 1.0 : 1.15;
+
+  // The reflection stays on in day — a still bay under sky is half the point of the city — but
+  // is off in silhouette, where anything but flat black is noise.
+  refl.visible = !sil;
+
   world.traverse(o => {
-    if (!o.isMesh) return;
-    if (silhouette){
-      if (!o.userData.origMat) o.userData.origMat = o.material;
-      o.material = (o === water) ? silWater : silMat;
-    } else if (o.userData.origMat){
-      o.material = o.userData.origMat;
+    if (!o.isMesh || o === refl) return;   // NEVER swap the Reflector: its ShaderMaterial IS the
+                                           // reflection, and replacing it silently kills it.
+    if (mode === 'night'){
+      if (o.userData.origMat) o.material = o.userData.origMat;
+      return;
     }
+    if (!o.userData.origMat) o.userData.origMat = o.material;
+    o.material = (o === water) ? (sil ? silWater : dayWater)
+                               : (sil ? silMat   : dayMat);
   });
-});
+}
+
+document.getElementById('sil').addEventListener('click',
+  () => applyMode(mode === 'sil' ? 'night' : 'sil'));
+document.getElementById('day').addEventListener('click',
+  () => applyMode(mode === 'day' ? 'night' : 'day'));
 
 // Permission gate for iOS. Android attaches on mount and this is a no-op.
 canvas.addEventListener('click', function once(){
