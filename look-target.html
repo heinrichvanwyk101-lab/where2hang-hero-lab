@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Where2Hang — Look Target</title>
+
+<!--
+  PASTE TARGET: where2hang-hero-lab/look-target.html
+
+  ===========================================================================
+  WHAT THIS IS
+
+  A look-development benchmark, not a scene. The geometry here is deliberately
+  crude — boxes and cylinders, no landmarks, nothing recognisable. That is the
+  point. It isolates the ART DIRECTION so you can judge the ceiling without
+  architecture confusing the read.
+
+  If this looks like a miniature, then home-world.html can look like a
+  miniature, because it already has far better geometry than this does.
+
+  ===========================================================================
+  THE FIVE TECHNIQUES, in order of how much each one contributes
+
+  1. TILT-SHIFT DEPTH OF FIELD
+     The single strongest miniature cue that exists, and the cheapest. Human
+     vision has effectively infinite depth of field at city scale — so when an
+     image shows a narrow band in focus and everything else soft, the brain
+     concludes the subject must be SMALL and CLOSE. Every "tiny planet"
+     photograph works on this one trick. Without it, no amount of lighting
+     makes a city read as a model.
+
+  2. SHADOWS
+     Contact is what stops objects floating. A palm with a shadow is standing
+     on the ground; a palm without one is hovering above a texture. One
+     directional shadow map buys this for the whole scene.
+
+  3. WARM LIGHT POOLING
+     Real streetlights spill onto what is under them. Emissive geometry alone
+     glows but lights nothing, which is why an emissive-only night scene reads
+     as stickers on black. A handful of cheap point lights changes it.
+
+  4. GOLDEN-HOUR KEY
+     A low raking sun gives every face a different value and long shadows
+     stretch across the ground, which is what makes massing legible. Overhead
+     light flattens everything.
+
+  5. MOTION
+     Almost imperceptible. Cars, palm sway, water shimmer. The scene must
+     never be perfectly still or it reads as a photograph of a model rather
+     than a living miniature.
+
+  ===========================================================================
+  WHAT IS DELIBERATELY NOT HERE
+
+  Photoreal glass, ray-traced reflections, volumetric haze, thousands of
+  individual lights. Those belong to offline rendering. Chasing them on a
+  phone is how a project loses six months.
+  ===========================================================================
+-->
+
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0d1014;color:#E7EDF3;
+    font-family:Inter,system-ui,-apple-system,sans-serif;overflow:hidden}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{position:fixed;left:12px;right:12px;top:12px;z-index:5;
+    font:600 13px/1.45 Inter,system-ui,sans-serif;letter-spacing:.01em}
+  .title{font-size:18px;margin-bottom:6px}
+  .title b{color:#3DE9CD}
+  .note{background:rgba(10,14,18,.72);border:1px solid rgba(255,255,255,.09);
+    border-radius:12px;padding:10px 12px;max-width:520px;
+    font-weight:500;color:#B9C6D2;backdrop-filter:blur(8px)}
+  .chips{position:fixed;left:0;right:0;bottom:16px;z-index:5;display:flex;
+    gap:8px;justify-content:center;flex-wrap:wrap;padding:0 12px}
+  .chip{appearance:none;border:1px solid rgba(255,255,255,.14);
+    background:rgba(20,26,32,.82);color:#E7EDF3;font:600 13px Inter,sans-serif;
+    padding:9px 15px;border-radius:999px;backdrop-filter:blur(8px)}
+  .chip[aria-pressed="true"]{background:#125F53;border-color:#1E8C7A;color:#EAFFF9}
+  #err{position:fixed;left:12px;right:12px;bottom:70px;z-index:9;display:none;
+    background:#3A1414;border:1px solid #7A2A2A;border-radius:10px;padding:10px;
+    font:500 12px/1.4 ui-monospace,monospace;color:#FFD9D9;white-space:pre-wrap}
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div class="hud">
+  <div class="title">Where<b>2</b>Hang · look target</div>
+  <div class="note" id="note">
+    Crude geometry on purpose. Toggle each technique to see what it is worth.
+  </div>
+</div>
+
+<div class="chips">
+  <button class="chip" id="tTilt"   aria-pressed="true">Tilt-shift</button>
+  <button class="chip" id="tShadow" aria-pressed="true">Shadows</button>
+  <button class="chip" id="tLamps"  aria-pressed="true">Lamp pools</button>
+  <button class="chip" id="tBloom"  aria-pressed="true">Bloom</button>
+  <button class="chip" id="tTime"   aria-pressed="false">Night</button>
+</div>
+
+<div id="err"></div>
+
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }</script>
+
+<script type="module">
+const errEl = document.getElementById('err');
+function fail(where, e){
+  errEl.style.display = 'block';
+  errEl.textContent = where + '\n' + (e && e.stack ? e.stack : e);
+  console.error(where, e);
+}
+window.addEventListener('error', ev => fail('window', ev.error || ev.message));
+
+import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass }        from 'three/addons/postprocessing/SMAAPass.js';
+
+try {
+
+/* ---------- renderer ---------- */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+// TECHNIQUE 2. Soft shadows. VSM and PCFSoft are the only two worth using; PCFSoft is
+// cheaper and does not need the light to be tuned per object.
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 2000);
+
+/* ---------- palette ---------- */
+const P = {
+  sandDay:   0xC8B99B,
+  sandNight: 0x2A2620,
+  lawn:      0x5E7A4A,
+  stone:     0xD6CDBC,
+  glass:     0x8FA9BC,
+  road:      0x3A3A3C,
+  seaDay:    0x4E86A6,
+  seaNight:  0x0C1A24,
+  warm:      0xFFC46B,
+  skyDay:    0xBFD9EA,
+  skyNight:  0x0B1620,
+  hazeDay:   0xE7D3B4,
+  hazeNight: 0x241D15,
+};
+
+/* ---------- lighting ---------- */
+// TECHNIQUE 4. Golden hour. LOW and to one side. The elevation is the whole point: at 18
+// degrees above the horizon every vertical face takes a different value and shadows run long
+// across the ground. Put this light overhead and the scene flattens into a plan drawing.
+const sun = new THREE.DirectionalLight(0xFFD9A8, 3.1);
+sun.position.set(-150, 62, 95);          // ~18 deg elevation
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 10;
+sun.shadow.camera.far  = 520;
+// The shadow frustum must WRAP THE SCENE and nothing more. Too large and the map resolution
+// is wasted on empty desert, giving blocky shadow edges that read as low quality.
+sun.shadow.camera.left   = -190;
+sun.shadow.camera.right  =  190;
+sun.shadow.camera.top    =  190;
+sun.shadow.camera.bottom = -190;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.6;
+scene.add(sun);
+scene.add(sun.target);
+
+const sky = new THREE.HemisphereLight(0xCFE3F2, 0x8A7A5E, 1.05);
+scene.add(sky);
+
+/* ---------- ground, sea, road ---------- */
+const matSand = new THREE.MeshStandardMaterial({ color:P.sandDay, roughness:0.96, metalness:0 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), matSand);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const matSea = new THREE.MeshStandardMaterial({
+  color:P.seaDay, roughness:0.16, metalness:0.02 });
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(1200, 420, 90, 34), matSea);
+sea.rotation.x = -Math.PI/2;
+sea.position.set(0, 0.35, -180);
+scene.add(sea);
+const seaPos  = sea.geometry.attributes.position;
+const seaBase = Float32Array.from(seaPos.array);
+
+const matRoad = new THREE.MeshStandardMaterial({ color:P.road, roughness:0.85 });
+const road = new THREE.Mesh(new THREE.BoxGeometry(600, 0.3, 15), matRoad);
+road.position.set(0, 0.16, 62);
+road.receiveShadow = true;
+scene.add(road);
+
+// Lawns. Colour variety is doing real work here — an all-sand scene reads as a desert, and a
+// couple of green rectangles are what make it read as a maintained corniche.
+const matLawn = new THREE.MeshStandardMaterial({ color:P.lawn, roughness:0.95 });
+for (let i = 0; i < 7; i++){
+  const w = 26 + Math.random()*22, d = 15 + Math.random()*10;
+  const g = new THREE.Mesh(new THREE.BoxGeometry(w, 0.35, d), matLawn);
+  g.position.set(-170 + i*52 + Math.random()*10, 0.2, 22 + Math.random()*12);
+  g.receiveShadow = true;
+  scene.add(g);
+}
+
+/* ---------- skyline: crude on purpose ---------- */
+const matStone = new THREE.MeshStandardMaterial({ color:P.stone, roughness:0.75 });
+const matGlass = new THREE.MeshStandardMaterial({
+  color:P.glass, roughness:0.22, metalness:0.10 });
+// Emissive windows live on their own material so night mode can raise them without touching
+// the daytime stone.
+const matLit = new THREE.MeshStandardMaterial({
+  color:0x2A3038, roughness:0.4, emissive:0xFFC98A, emissiveIntensity:0.0 });
+
+const skyline = new THREE.Group();
+scene.add(skyline);
+let s = 987654321;
+const rnd = () => (s = (s*1664525 + 1013904223) % 4294967296) / 4294967296;
+
+for (let i = 0; i < 46; i++){
+  const h = 18 + Math.pow(rnd(), 2.1) * 96;
+  const w = 8 + rnd()*13;
+  const d = 8 + rnd()*13;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+    rnd() < 0.42 ? matGlass : matStone);
+  m.position.set(-250 + rnd()*500, h/2, -260 + rnd()*130);
+  m.rotation.y = rnd()*0.5;
+  m.castShadow = true; m.receiveShadow = true;
+  skyline.add(m);
+
+  // A thin lit band near the top. In daylight it is invisible; at night it is the only thing
+  // separating one tower from another.
+  if (h > 45){
+    const band = new THREE.Mesh(new THREE.BoxGeometry(w*1.01, h*0.5, d*1.01), matLit);
+    band.position.copy(m.position); band.position.y = h*0.7;
+    band.rotation.y = m.rotation.y;
+    skyline.add(band);
+  }
+}
+
+/* ---------- palms: ONE draw call for all of them ---------- */
+// TECHNIQUE NOTE. 240 palms as individual meshes is 480 draw calls and it will not hold 60fps
+// on a phone. As two InstancedMeshes it is TWO. Instancing is what makes density affordable,
+// and density is most of what separates a populated promenade from a few lonely props.
+const N_PALM = 240;
+const trunkGeo = new THREE.CylinderGeometry(0.16, 0.30, 1, 6);
+trunkGeo.translate(0, 0.5, 0);                       // origin at the base, so scale grows upward
+const frondGeo = new THREE.SphereGeometry(1, 7, 5);
+frondGeo.scale(1, 0.42, 1);
+
+const matTrunk = new THREE.MeshStandardMaterial({ color:0x6B5B45, roughness:1 });
+const matFrond = new THREE.MeshStandardMaterial({ color:0x3E6B37, roughness:0.9 });
+
+const trunks = new THREE.InstancedMesh(trunkGeo, matTrunk, N_PALM);
+const fronds = new THREE.InstancedMesh(frondGeo, matFrond, N_PALM);
+trunks.castShadow = fronds.castShadow = true;
+trunks.receiveShadow = fronds.receiveShadow = true;
+scene.add(trunks, fronds);
+
+const palms = [];
+const dummy = new THREE.Object3D();
+for (let i = 0; i < N_PALM; i++){
+  const along = -290 + (i / N_PALM) * 580 + (rnd()-0.5)*4;
+  const row   = rnd() < 0.5 ? 44 + rnd()*5 : 78 + rnd()*7;
+  const h     = 7 + rnd()*5;
+  palms.push({ x:along, z:row, h, phase: rnd()*Math.PI*2 });
+
+  dummy.position.set(along, 0, row);
+  dummy.scale.set(1, h, 1);
+  dummy.updateMatrix();
+  trunks.setMatrixAt(i, dummy.matrix);
+
+  dummy.position.set(along, h + 0.4, row);
+  dummy.scale.setScalar(1.9 + rnd()*0.7);
+  dummy.updateMatrix();
+  fronds.setMatrixAt(i, dummy.matrix);
+}
+trunks.instanceMatrix.needsUpdate = true;
+fronds.instanceMatrix.needsUpdate = true;
+
+/* ---------- street lamps ---------- */
+// TECHNIQUE 3. Emissive geometry GLOWS but does not LIGHT. A lamp head with no point light
+// beside it looks like a sticker: bright itself, illuminating nothing. Real point lights are
+// expensive, so only a handful are used and they are placed where the eye already is.
+const lampPosts = new THREE.InstancedMesh(
+  new THREE.CylinderGeometry(0.12, 0.16, 1, 6),
+  new THREE.MeshStandardMaterial({ color:0x4A4A4E, roughness:0.7 }), 44);
+const lampHeads = new THREE.InstancedMesh(
+  new THREE.SphereGeometry(0.55, 8, 6),
+  new THREE.MeshStandardMaterial({ color:0xFFE6BE, emissive:P.warm, emissiveIntensity:2.4 }), 44);
+lampPosts.castShadow = true;
+scene.add(lampPosts, lampHeads);
+
+const LAMP_H = 6.5;
+for (let i = 0; i < 44; i++){
+  const x = -280 + i*13, z = 60;
+  dummy.position.set(x, LAMP_H/2, z); dummy.scale.set(1, LAMP_H, 1);
+  dummy.updateMatrix(); lampPosts.setMatrixAt(i, dummy.matrix);
+  dummy.position.set(x, LAMP_H, z); dummy.scale.setScalar(1);
+  dummy.updateMatrix(); lampHeads.setMatrixAt(i, dummy.matrix);
+}
+lampPosts.instanceMatrix.needsUpdate = true;
+lampHeads.instanceMatrix.needsUpdate = true;
+
+// Only nine real lights across the whole promenade. Spaced widely, they read as a continuous
+// chain of pools because the eye fills in the gaps.
+const pools = [];
+for (let i = 0; i < 9; i++){
+  const p = new THREE.PointLight(P.warm, 0, 34, 2);
+  p.position.set(-260 + i*66, LAMP_H - 0.6, 60);
+  pools.push(p); scene.add(p);
+}
+
+/* ---------- cars ---------- */
+const carGeo = new THREE.BoxGeometry(3.2, 1.3, 1.6);
+const carMat = new THREE.MeshStandardMaterial({ color:0xD8D8DC, roughness:0.35, metalness:0.2 });
+const cars = new THREE.InstancedMesh(carGeo, carMat, 26);
+cars.castShadow = true;
+scene.add(cars);
+const carState = [];
+for (let i = 0; i < 26; i++){
+  carState.push({ x: -300 + rnd()*600, lane: rnd() < 0.5 ? 58.5 : 65.5, dir: 0, spd: 0 });
+  carState[i].dir = carState[i].lane < 62 ? 1 : -1;
+  carState[i].spd = 14 + rnd()*10;
+}
+
+/* ---------- post-processing ---------- */
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(renderer.getPixelRatio());
+composer.addPass(new RenderPass(scene, camera));
+
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight), 0.42, 0.55, 0.72);
+composer.addPass(bloom);
+
+/* TECHNIQUE 1. TILT-SHIFT.
+   Blur strength is driven by distance from a horizontal focus band, NOT by real depth. That
+   is a cheat, and it is the correct cheat: real depth-of-field needs the depth buffer and a
+   circle-of-confusion calculation, costs several times as much, and looks almost identical on
+   a scene where the subject already sits in a band across the middle of the frame.
+   Nine taps on a widening radius. Fewer than seven and the blur bands visibly.               */
+const TiltShift = {
+  uniforms: {
+    tDiffuse:  { value: null },
+    amount:    { value: 1.0 },   // 0 disables
+    focus:     { value: 0.46 },  // screen height of the sharp band, 0 bottom 1 top
+    aperture:  { value: 0.16 },  // half-height of the sharp band
+    strength:  { value: 0.0026 },// maximum blur radius in UV units
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float amount, focus, aperture, strength;
+    varying vec2 vUv;
+    void main(){
+      // Distance from the focus band, zero inside it, ramping outside.
+      float d = max(abs(vUv.y - focus) - aperture, 0.0);
+      float blur = smoothstep(0.0, 0.34, d) * strength * amount;
+
+      vec4 c = texture2D(tDiffuse, vUv) * 0.226;
+      c += texture2D(tDiffuse, vUv + vec2( blur*1.0,  blur*0.4)) * 0.129;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*1.0, -blur*0.4)) * 0.129;
+      c += texture2D(tDiffuse, vUv + vec2( blur*0.4, -blur*1.0)) * 0.117;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*0.4,  blur*1.0)) * 0.117;
+      c += texture2D(tDiffuse, vUv + vec2( blur*2.0,  blur*0.8)) * 0.071;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*2.0, -blur*0.8)) * 0.071;
+      c += texture2D(tDiffuse, vUv + vec2( blur*0.8, -blur*2.0)) * 0.070;
+      c += texture2D(tDiffuse, vUv + vec2(-blur*0.8,  blur*2.0)) * 0.070;
+      gl_FragColor = c;
+    }`
+};
+const tilt = new ShaderPass(TiltShift);
+composer.addPass(tilt);
+
+composer.addPass(new OutputPass());
+const smaa = new SMAAPass(
+  window.innerWidth * renderer.getPixelRatio(),
+  window.innerHeight * renderer.getPixelRatio());
+composer.addPass(smaa);
+
+/* ---------- day / night ---------- */
+let night = false;
+function applyTime(){
+  scene.background = new THREE.Color(night ? P.skyNight : P.skyDay);
+  scene.fog = new THREE.FogExp2(night ? P.hazeNight : P.hazeDay, night ? 0.0021 : 0.0016);
+
+  sun.intensity = night ? 0.16 : 3.1;
+  sun.color.setHex(night ? 0x9FBBD4 : 0xFFD9A8);
+  sky.intensity = night ? 0.30 : 1.05;
+  sky.color.setHex(night ? 0x1B3444 : 0xCFE3F2);
+
+  matSand.color.setHex(night ? P.sandNight : P.sandDay);
+  matSea.color.setHex(night ? P.seaNight : P.seaDay);
+  matLit.emissiveIntensity = night ? 1.35 : 0.0;
+  pools.forEach(p => p.intensity = (night && lampsOn) ? 260 : 0);
+  bloom.strength = night ? 0.62 : 0.42;
+
+  document.getElementById('tTime').setAttribute('aria-pressed', String(night));
+}
+
+/* ---------- toggles ---------- */
+let lampsOn = true;
+const chip = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+
+chip('tTilt', e => {
+  const on = tilt.uniforms.amount.value === 0;
+  tilt.uniforms.amount.value = on ? 1 : 0;
+  e.currentTarget.setAttribute('aria-pressed', String(on));
+});
+chip('tShadow', e => {
+  renderer.shadowMap.enabled = !renderer.shadowMap.enabled;
+  scene.traverse(o => { if (o.isMesh && o.material) o.material.needsUpdate = true; });
+  e.currentTarget.setAttribute('aria-pressed', String(renderer.shadowMap.enabled));
+});
+chip('tLamps', e => {
+  lampsOn = !lampsOn;
+  pools.forEach(p => p.intensity = (night && lampsOn) ? 260 : 0);
+  lampHeads.material.emissiveIntensity = lampsOn ? 2.4 : 0.15;
+  e.currentTarget.setAttribute('aria-pressed', String(lampsOn));
+});
+chip('tBloom', e => {
+  bloom.enabled = !bloom.enabled;
+  e.currentTarget.setAttribute('aria-pressed', String(bloom.enabled));
+});
+chip('tTime', () => { night = !night; applyTime(); });
+
+/* ---------- resize ---------- */
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  const pr = renderer.getPixelRatio();
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  bloom.setSize(w, h);
+  smaa.setSize(w * pr, h * pr);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+applyTime();
+
+/* ---------- frame ---------- */
+// TECHNIQUE 5. The camera never stops and never repeats obviously. A completely static hero
+// reads as a picture; a slow drift reads as a place that exists while you are not looking.
+const clock = new THREE.Clock();
+function frame(){
+  requestAnimationFrame(frame);
+  const t = clock.getElapsedTime();
+
+  const a = Math.sin(t * 0.045) * 0.30;
+  camera.position.set(Math.sin(a) * 250, 46 + Math.sin(t*0.03)*4, 175 + Math.cos(a)*70);
+  camera.lookAt(0, 26, -110);
+
+  // Sea. Very small amplitude: calm water is what makes architecture read as sharp.
+  for (let i = 0; i < seaPos.count; i++){
+    const x = seaBase[i*3], y = seaBase[i*3+1];
+    seaPos.array[i*3+2] = Math.sin(x*0.05 + t*0.7)*0.30 + Math.sin(y*0.038 - t*0.5)*0.22;
+  }
+  seaPos.needsUpdate = true;
+  sea.geometry.computeVertexNormals();
+
+  // Palm sway. Tiny — 0.02 radians. Large enough to notice only if you look for it, which is
+  // exactly the threshold that separates "alive" from "animated".
+  for (let i = 0; i < N_PALM; i++){
+    const p = palms[i];
+    dummy.position.set(p.x, p.h + 0.4, p.z);
+    dummy.rotation.set(Math.sin(t*0.55 + p.phase)*0.02, 0, Math.cos(t*0.42 + p.phase)*0.02);
+    dummy.scale.setScalar(1.9);
+    dummy.updateMatrix();
+    fronds.setMatrixAt(i, dummy.matrix);
+  }
+  fronds.instanceMatrix.needsUpdate = true;
+  dummy.rotation.set(0,0,0);
+
+  // Cars.
+  for (let i = 0; i < carState.length; i++){
+    const c = carState[i];
+    c.x += c.dir * c.spd * 0.016;
+    if (c.x >  310) c.x = -310;
+    if (c.x < -310) c.x =  310;
+    dummy.position.set(c.x, 0.95, c.lane);
+    dummy.scale.setScalar(1);
+    dummy.updateMatrix();
+    cars.setMatrixAt(i, dummy.matrix);
+  }
+  cars.instanceMatrix.needsUpdate = true;
+
+  composer.render();
+}
+frame();
+
+} catch(e){ fail('module top level', e); }
+</script>
+</body>
+</html>
