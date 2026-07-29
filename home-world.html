@@ -657,16 +657,16 @@ const water = new THREE.Mesh(
   // NOW that there is an environment to reflect, metalness is correct — it was only wrong
   // before because there was nothing to mirror. Roughness at 0.20 breaks the mirror just enough
   // that the ripple reads as movement rather than as a sheet of glass.
-  /* WATER IS A DIELECTRIC, NOT A METAL, and metalness 0.92 was the whole bug.
-     A metal reflects its environment at close to full strength across the entire surface and
-     has no diffuse term at all. That is why the bay was mirroring the env map's pale horizon
-     band everywhere, and why the moon's reflected lobe went nuclear the moment bloom arrived.
-     It is also why raising roughness barely helped: roughness BLURS a reflection, it does not
-     DIM one, and at grazing incidence the Fresnel term climbs toward 1 regardless of it.
-     At metalness 0.05 the physically based Fresnel curve does the work instead — near-black
-     looking down into the water, bright only where the view really does graze the surface.
-     That is both correct and self-limiting, so no camera angle can blow out. */
-  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.22, metalness:0.05,
+  /* WATER IS A DIELECTRIC, NOT A METAL — metalness 0.92 was wrong and 0.05 is correct. But the
+     blowout was never the ENVIRONMENT reflection: the env map's pale band sits around 0.05 in
+     linear terms and could not cross a 0.48 bloom threshold if it tried.
+     IT IS THE MOON'S DIRECT SPECULAR HIGHLIGHT. A GGX lobe on a smooth surface concentrates a
+     light's energy into a peak far above 1.0 — a 0.55-intensity light produces specular values
+     in the tens where the half-vector lines up. ROUGHNESS is what spreads that peak, and
+     dropping it to 0.22 in the same edit as the metalness fix re-sharpened the lobe and
+     cancelled the mitigation out. 0.58 is also nearer the truth: a bay with wind chop is not
+     polished glass, and the wave displacement below already implies exactly that surface. */
+  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.58, metalness:0.05,
     envMapIntensity:0.95 })
 );
 water.rotation.x = -Math.PI / 2;
