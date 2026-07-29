@@ -544,12 +544,80 @@ const waterBase = Float32Array.from(waterPos.array);
 const world = new THREE.Group();
 scene.add(world);
 
-const matLand = new THREE.MeshStandardMaterial({ color:0x0E1319, roughness:1, metalness:0 });
+/* LAND WAS INVISIBLE. 0x0E1319 is near-black, and with the moon pushed out to (-320,220,-260)
+   for the wider shadow frustum there was nothing left to light it — so the islands vanished
+   and the scene read as lit slabs floating in a void. Same class of mistake as the near-field
+   pendulum: a colour chosen for one lighting setup, then the lighting changed underneath it.
+   Land has to be visible for the islands to be the subject, which at world scale they are. */
+const matLand = new THREE.MeshStandardMaterial({ color:0x1E252C, roughness:1, metalness:0 });
+
+/* ===========================================================================
+   ISLAND OUTLINES.
+
+   At world scale the SHAPE OF THE LAND carries more identity than the buildings on it. Five
+   identical cylinders read as five identical places however differently they are massed —
+   which is exactly what the first pass looked like. A recognisable outline is what makes an
+   island nameable from a glance, and it is nearly free: one extruded polygon each.
+
+   Points are normalised to -1..1 and scaled by each district's radius, so an island can be
+   resized without redrawing it. The bevel is doing real work — it reads as a shallow beach
+   shelf where the land meets the water rather than a slab dropped into the sea.
+
+   NOTE ON AXES: ExtrudeGeometry builds in XY and extrudes along +Z. After rotateX(-90) the
+   extrusion points up and the shape's +Y maps to -Z. So in these tables, +Y is NORTH.
+   =========================================================================== */
+const ISLE_SHAPES = {
+  // Long west-east wedge with a concave northern edge — the corniche curve itself.
+  corniche: [[-1.00,0.02],[-0.78,0.28],[-0.38,0.40],[0.08,0.36],[0.54,0.28],
+             [0.92,0.10],[1.00,-0.20],[0.56,-0.44],[0.00,-0.52],[-0.56,-0.44],[-0.90,-0.24]],
+  // Small and compact, almost rectangular. Reads as the dense financial block it is.
+  maryah:   [[-1.00,0.22],[-0.62,0.60],[0.18,0.68],[0.84,0.44],[1.00,0.00],
+             [0.80,-0.50],[0.10,-0.70],[-0.66,-0.54],[-1.00,-0.20]],
+  // Elongated and curved, running north-east. The long thin one.
+  reem:     [[-1.00,-0.28],[-0.72,0.14],[-0.20,0.44],[0.42,0.54],[0.86,0.34],
+             [1.00,-0.06],[0.70,-0.46],[0.10,-0.60],[-0.52,-0.56]],
+  // Broad, with a long straight north-west edge standing in for the beach.
+  saadiyat: [[-1.00,0.18],[-0.48,0.52],[0.22,0.62],[0.80,0.40],[1.00,0.00],
+             [0.68,-0.46],[0.00,-0.66],[-0.70,-0.46]],
+  // Rounded mass with a bite out of the south-west: the marina inlet.
+  yas:      [[-0.94,0.12],[-0.58,0.46],[0.02,0.60],[0.62,0.48],[0.96,0.14],
+             [0.88,-0.32],[0.38,-0.60],[-0.16,-0.58],[-0.40,-0.30],[-0.62,-0.40],[-0.90,-0.16]],
+};
+
+function islandGeometry(id, r){
+  const pts = ISLE_SHAPES[id];
+  const shape = new THREE.Shape();
+  shape.moveTo(pts[0][0]*r, pts[0][1]*r);
+  // splineThru rather than lineTo: a hand-drawn coastline should not have visible straight
+  // segments, and 11 points through a spline gives a smooth outline for almost nothing.
+  shape.splineThru(pts.slice(1).map(p => new THREE.Vector2(p[0]*r, p[1]*r))
+    .concat([new THREE.Vector2(pts[0][0]*r, pts[0][1]*r)]));
+  const g = new THREE.ExtrudeGeometry(shape, {
+    depth: 2.4, curveSegments: 14,
+    bevelEnabled: true, bevelThickness: 0.5, bevelSize: 1.6, bevelSegments: 2,
+  });
+  g.rotateX(-Math.PI/2);
+  g.computeVertexNormals();
+  return g;
+}
+
+// Rejection sampling, so placeholder buildings land ON the island rather than in the sea.
+// A circle of radius 0.74r was fine for a cylinder and is wrong the moment the outline is not
+// round — the long thin islands would have scattered half their towers into the water.
+function insideIsle(id, nx, ny){
+  const pts = ISLE_SHAPES[id];
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+    if (((yi > ny) !== (yj > ny)) && (nx < (xj - xi) * (ny - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
 const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
 
 const DISTRICTS = [
-  { id:'corniche', name:'Corniche',   x:-78, z:  62, r:76, rot: 0.10, tint:C.gold,
+  { id:'corniche', name:'Corniche',   x:-44, z:  58, r:76, rot: 0.10, tint:C.gold,
     built:true,  places:['Emirates Palace','Etihad Towers','Corniche Beach'] },
   { id:'maryah',   name:'Al Maryah',  x: -6, z:  -4, r:34, rot: 0.30, tint:0x8FD3E8,
     built:false, places:['The Galleria','Rosewood','Waterfront'] },
@@ -580,10 +648,12 @@ DISTRICTS.forEach(d => {
   d.group = g; d.mass = mass; d.detail = detail;
 
   // Island platform, in both layers so the ground never disappears during the swap.
+  const isleGeo = islandGeometry(d.id, d.r);
   [mass, detail].forEach(layer => {
-    const isle = new THREE.Mesh(new THREE.CylinderGeometry(d.r, d.r*0.93, 2.4, 40), matLand);
-    isle.position.y = 0.2;
+    const isle = new THREE.Mesh(isleGeo, matLand);
+    isle.position.y = 0.0;
     isle.receiveShadow = true;
+    isle.castShadow = true;
     layer.add(isle);
   });
 
@@ -623,19 +693,58 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   D.add(cityRow(20, -68, 72, -44, 8, 3.5, 17, 0.62, 0.30, 0.20));
   D.add(cityRow(18, -70, 74, -68, 10, 5, 22, 0.42, 0.24, 0.24));
 
-  /* CORNICHE MASS — the cheap silhouette shown when this island is NOT active.
-     Six boxes standing in for roughly 90 detailed meshes. It only has to survive being seen
-     from 400 units away at world scale, where its whole job is to make the island read as
-     "tall cluster, low wide thing beside it" — which is all the eye resolves at that size. */
+  /* CORNICHE MASS — the silhouette shown when this island is NOT active.
+
+     The first version was six oversized boxes on one fully-emissive gold material, which read
+     as a solid slab and was the crudest of the five islands — worse than the placeholders,
+     which at least had a dark base with a lit band on top. Fixed by giving Corniche the same
+     two-part treatment AND by matching the real landmark footprints, so the silhouette at
+     world scale is a compressed portrait of what is actually down there:
+
+       Emirates Palace   one long low warm mass, west
+       Etihad Towers     five slim towers with the real height stagger, centre
+       ADNOC HQ          one tall slim slab, east
+       supporting city   a scatter of low blocks between them
+
+     Five separate slim towers rather than one lump matters even at this size: the gaps are
+     what make the cluster countable, and countability is the whole identity of Etihad. */
   const cm = corniche.mass;
-  const litMass = new THREE.MeshStandardMaterial({
-    color:0x0E141A, roughness:0.6, emissive:C.gold, emissiveIntensity:0.30 });
-  [[-44,12,26,7,10],[-10,-30,17,29,12],[6,-30,15,26,11],[42,-62,9,44,6],
-   [-30,-50,30,12,14],[20,-46,26,15,13]].forEach(b => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(b[2], b[3], b[4]), litMass);
-    m.position.set(b[0], 1.4 + b[3]/2, b[1]);
-    m.castShadow = true;
+  const massDark  = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
+  const massGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.4, metalness:0.1 });
+  const bandWarm  = new THREE.MeshStandardMaterial({
+    color:0x0E141A, roughness:0.6, emissive:C.gold, emissiveIntensity:0.42 });
+  const bandCool  = new THREE.MeshStandardMaterial({
+    color:0x0E141A, roughness:0.6, emissive:0x8FD3E8, emissiveIntensity:0.34 });
+
+  function massBlock(x, z, w, h, dp, glass, warm, bandFrac){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), glass ? massGlass : massDark);
+    m.position.set(x, 1.4 + h/2, z);
+    m.castShadow = true; m.receiveShadow = true;
     cm.add(m);
+    if (bandFrac > 0){
+      const bh = h * bandFrac;
+      const band = new THREE.Mesh(new THREE.BoxGeometry(w*1.02, bh, dp*0.76), warm ? bandWarm : bandCool);
+      band.position.set(x, 1.4 + h - bh*0.55, z);
+      cm.add(band);
+    }
+  }
+
+  // Emirates Palace: wide, low, warm. Its horizontality is what makes the cluster read tall.
+  massBlock(-44, 12, 30, 6.5, 11, false, true, 0.34);
+  massBlock(-52, 14,  8, 9.0,  8, false, true, 0.40);   // the dome mass, slightly taller
+
+  // Etihad Towers: real spacing and real height ratios, slim and cool.
+  [[-23,27.7],[-14.5,30.5],[-6,26.0],[2,23.4],[9.5,21.8]].forEach(t => {
+    massBlock(t[0], -30, 4.2, t[1], 4.2, true, false, 0.30);
+  });
+
+  // ADNOC HQ: the tall slim anchor at the eastern end.
+  massBlock(42, -62, 7.6, 44, 4.8, true, false, 0.14);
+
+  // Supporting skyline between and behind the heroes.
+  [[-34,-48,14,11],[-12,-52,11,14],[16,-46,13,9],[28,-56,10,16],
+   [-58,-30,12,8],[58,-44,11,12],[6,4,16,5],[-20,10,14,4]].forEach(b => {
+    massBlock(b[0], b[1], b[2], b[3], b[2]*0.8, false, b[3] < 8, 0.26);
   });
 }
 
@@ -655,14 +764,22 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
   [ [d.mass, 0.55], [d.detail, 1.0] ].forEach(([layer, density]) => {
     const n = Math.round(count * density);
     for (let i = 0; i < n; i++){
-      const a  = rnd() * Math.PI * 2;
-      const rr = Math.sqrt(rnd()) * d.r * 0.74;
+      // Rejection sample inside the actual outline, with a margin so nothing straddles the
+      // coast. Twenty attempts then give up — on a thin island a stubborn point is a sign the
+      // sample is in the water, not that it needs more tries.
+      let nx = 0, ny = 0, ok = false;
+      for (let k = 0; k < 20 && !ok; k++){
+        nx = (rnd()*2 - 1) * 0.82; ny = (rnd()*2 - 1) * 0.82;
+        ok = insideIsle(d.id, nx, ny);
+      }
+      if (!ok) continue;
       const h  = 5 + Math.pow(rnd(), 2.0) * tallest;
       const w  = 4 + rnd() * 7;
       const dd = w * (0.7 + rnd()*0.6);
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dd),
         rnd() < 0.4 ? matPlaceGlass : matPlaceStone);
-      m.position.set(Math.cos(a)*rr, 1.4 + h/2, Math.sin(a)*rr);
+      // Shape +Y became world -Z in the extrusion, so the sampled ny is negated here.
+      m.position.set(nx * d.r, 1.4 + h/2, -ny * d.r);
       m.rotation.y = rnd() * 0.9;
       m.castShadow = true; m.receiveShadow = true;
       layer.add(m);
