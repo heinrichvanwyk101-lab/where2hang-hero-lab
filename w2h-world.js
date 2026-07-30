@@ -78,7 +78,12 @@ const water = new THREE.Mesh(
     envMapIntensity:0.95 })
 );
 water.rotation.x = -Math.PI/2;
-water.receiveShadow = true;
+/* NO SHADOWS ON THE SEA. The dusk sun sits 13 degrees up, so every island throws a shadow two
+   hundred units long, and on the water those landed as hard dark slabs floating next to the
+   land — an island casting a solid rectangle across a reflective surface reads as a rendering
+   fault, not as evening. Water at a grazing angle is mostly reflecting the sky anyway, and the
+   sky is not in shadow. */
+water.receiveShadow = false;
 scene.add(water);
 
 const farSea = new THREE.Mesh(
@@ -550,21 +555,31 @@ const DISTRICTS = [
        all in a band just inland of the north coast, with the supporting city behind them to the
        south. h is the height the camera aims at — a 44-unit tower and a 7-unit palace want very
        different look-at points. */
+    /* r IS A RADIUS AND I HAD BEEN WRITING DIAMETERS. dist = r / tan(hFov/2), so r 46 for a
+       building 46 units WIDE frames a 92-unit box and leaves the palace filling half the frame
+       from 289 units away — which is why the place view still looked like a district view. At
+       r 32 the palace is 72 per cent of the frame width from 201 units, ADNOC at r 22 is 46 per
+       cent of the frame HEIGHT from 138. That is the reference's framing, and it is the only
+       state close enough for the props to be the subject. */
     places:[
-      { label:'Emirates Palace', x:-42, z:  0, h: 7,  r: 46 },
-      { label:'Etihad Towers',   x: -4, z:-16, h:18,  r: 52 },
-      { label:'ADNOC HQ',        x: 48, z: -6, h:26,  r: 50 },
+      { label:'Emirates Palace', x:-42, z:  0, h: 7,  r: 32 },
+      { label:'Etihad Towers',   x: -4, z:-16, h:18,  r: 28 },
+      { label:'ADNOC HQ',        x: 48, z: -6, h:26,  r: 22 },
     ],
     coreN:[-0.05, -0.34],
     coastPark:[0.07, 0.40, 0.055],
     ground:[
-      { kind:'paving', x:-42, z:  1, w:58, d:13 },   // palace forecourt
+      // Palace GROUNDS, not a forecourt. Emirates Palace stands in a large landscaped estate
+      // and reads as a landmark because of the space around it, not its height — at 6.6 units
+      // it is half the height of the fabric capping it, so clearance is the only tool left.
+      { kind:'lawn',   x:-46, z:  2, w:80, d:30 },
+      { kind:'paving', x:-42, z:  1, w:52, d:14 },
       { kind:'paving', x: -4, z:-15, w:40, d:13 },   // Etihad plaza
       { kind:'paving', x: 48, z: -6, w:17, d:13 },   // ADNOC apron
       // The mixed-tower row behind the landmarks. Sloped to match cityRow's zSlope, and
       // deliberately longer than the island — patches are painted inside the coastline clip,
       // so overshoot is trimmed for free and no patch has to be fitted to the coast by hand.
-      { kind:'paving', x:  2, z:  4, w:150, d:24, rot: 0.08 },
+      { kind:'paving', x: 30, z:  4, w:96, d:24, rot: 0.08 },
     ] },
   { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
     built:false, coreN:[0.0, 0.0], places:[
@@ -789,10 +804,17 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
 
   // Low-rise seaward of the towers: the scale contrast that makes the cluster read as enormous.
   const low = kit.lowRise(16, -40, 26, -18, 3, 0.55);
-  // A second row of mixed tower types behind the landmarks, giving the skyline profiles the
-  // box-only instanced fabric cannot produce. zSlope pulled back to 0.08 — at 0.30 the ends of
-  // a 128-unit row swing 19 units in z and walk straight off the coast.
-  const row = kit.cityRow(22, -62, 66, 4, 5, 4, 13, 0.62, 0.08, 0.22);
+  /* A second row of mixed tower types behind the landmarks, giving the skyline profiles the
+     box-only instanced fabric cannot produce. zSlope pulled back to 0.08 — at 0.30 the ends of
+     a 128-unit row swing 19 units in z and walk straight off the coast.
+
+     STARTS AT x = -6, NOT -62. The row was running from -62 to 66 at z = 4, and Emirates Palace
+     occupies x -66 to -18 at z -3.3 to 4.0 — so for forty-four units of its width the row was
+     standing inside the palace. It is the same fault as the fabric cap in a different costume:
+     a landmark stops being a landmark the moment something ordinary is allowed to share its
+     ground. The western third of the island is now palace grounds and nothing else, which is
+     also what is actually there. */
+  const row = kit.cityRow(18, -6, 66, 4, 5, 4, 13, 0.62, 0.08, 0.22);
   [low, row].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* CORNICHE MASS — the silhouette shown when this island is NOT active. Same two-part

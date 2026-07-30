@@ -168,12 +168,19 @@ function roundedSlab(w, d, h, r, seg){
    and randomised z was making near ones eclipse far ones from half the orbit. */
 function etihadTowers(x0, z0){
   const g = new THREE.Group();
+  /* WIDER, THIRD TIME. The comment above fixed the taper and the spacing and still left these
+     too slim: at r 1.95 with ell 0.62 the footprint is 3.9 by 2.4 units, which against a 7.8
+     metre unit is a tower 30 m by 19 m. The real ones are nearer 45 by 30, and at dusk — with
+     the window emissive dimmed and the profile lit as pale glass — the difference is the whole
+     read. They were coming out as smooth grey pipes standing in a field of chunky blocks.
+     Centres are unchanged, so the gaps drop to about 2.6 units of sky. That is still enough to
+     count five, which is the constraint that governs this cluster. */
   const spec = [
-    { dx:-17.0, dz: 3.0, h:27.7, r:1.95, lean: 0.9, shear: 1.1 },
-    { dx: -8.5, dz: 0.8, h:30.5, r:2.05, lean: 1.0, shear: 1.3 },
-    { dx:  0.0, dz: 0.0, h:26.0, r:1.90, lean: 0.8, shear: 1.0 },
-    { dx:  8.0, dz: 0.8, h:23.4, r:1.80, lean: 0.7, shear: 0.9 },
-    { dx: 15.5, dz: 3.0, h:21.8, r:1.72, lean: 0.6, shear: 0.8 },
+    { dx:-17.0, dz: 3.0, h:27.7, r:2.85, lean: 0.9, shear: 1.1 },
+    { dx: -8.5, dz: 0.8, h:30.5, r:3.00, lean: 1.0, shear: 1.3 },
+    { dx:  0.0, dz: 0.0, h:26.0, r:2.80, lean: 0.8, shear: 1.0 },
+    { dx:  8.0, dz: 0.8, h:23.4, r:2.65, lean: 0.7, shear: 0.9 },
+    { dx: 15.5, dz: 3.0, h:21.8, r:2.50, lean: 0.6, shear: 0.8 },
   ];
   spec.forEach((s, i) => {
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
