@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v8';
+export const BUILD = 'props v9';
 
 /* SCALE, fixed once and obeyed everywhere below.
 
@@ -149,7 +149,9 @@ const boatGeo = mergeGeometries([hull, boatCabin]);
    colour a palm frond should be under any light in this scene, and turning it into pale stone in
    the one mode built to judge a daytime render would be a strange thing to have built. */
 const matBark  = new THREE.MeshStandardMaterial({ color:0x6E5B45, roughness:0.94 });
-const matFrond = new THREE.MeshStandardMaterial({ color:0x466E33, roughness:0.86,
+// Lifted for the same reason as the lawn: a low warm sun and a dark green read as black
+// spikes, and the palms along the shore were coming out as bare masts.
+const matFrond = new THREE.MeshStandardMaterial({ color:0x5E8F45, roughness:0.86,
   side: THREE.DoubleSide });
 const matPost  = new THREE.MeshStandardMaterial({ color:0x3A4048, roughness:0.6, metalness:0.4 });
 // Emissive well above 1. The bloom threshold at dusk is 0.82, so a lamp head has to clear that

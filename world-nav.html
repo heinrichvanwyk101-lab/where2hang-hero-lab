@@ -146,10 +146,10 @@ import * as THREE from 'three';
    that had not shipped. Bump this number in ALL FOUR FILES together when deploying — including
    the import of w2h-city.js inside w2h-world.js, because a mismatched specifier loads the city
    kit twice and splits its shared random seed in two. */
-import { C, createCityKit, BUILD as B_CITY } from './w2h-city.js?v=8';
-import { buildWorld, GROUND, BUILD as B_WORLD } from './w2h-world.js?v=8';
-import { createPropKit, BUILD as B_PROPS }   from './w2h-props.js?v=8';
-const B_NAV = 'nav v8';
+import { C, createCityKit, BUILD as B_CITY } from './w2h-city.js?v=9';
+import { buildWorld, GROUND, BUILD as B_WORLD } from './w2h-world.js?v=9';
+import { createPropKit, BUILD as B_PROPS }   from './w2h-props.js?v=9';
+const B_NAV = 'nav v9';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -423,7 +423,9 @@ const duskWater = new THREE.MeshStandardMaterial({ color:0x5E7A88, roughness:0.1
    user who presses Day first registers dayMat as the thing to restore, and night never comes
    back. That is a genuinely nasty bug because it only appears on the second mode change.
    =========================================================================== */
-const DUSK_STONE = 0xD9CDB6, DUSK_GLASS = 0xA6BECC;
+// Glass pushed cooler and greener. At 0xA6BECC the towers took the warm key light and came
+// out the same grey as the stone, which threw away the one material distinction dusk preserves.
+const DUSK_STONE = 0xD9CDB6, DUSK_GLASS = 0x8FB6C2;
 const liftReg = [];
 {
   const seen = new Set();

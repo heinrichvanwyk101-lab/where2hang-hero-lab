@@ -44,14 +44,14 @@ import * as THREE from 'three';
    invisible, so every cross-module import carries ?v=N and bumping N in all files forces a
    fresh fetch of the lot.
 
-   The trap: if world-nav.html imports './w2h-city.js?v=8' and this file imports
-   './w2h-city.js?v=8', the browser treats those as TWO DIFFERENT MODULES and evaluates the city kit
-   twice. That gives two independent copies of the seeded RNG — and the header of that file is
+   The trap: if world-nav.html and this file import the city kit under specifiers that differ by
+   so much as a query string, the browser treats them as TWO DIFFERENT MODULES and evaluates the
+   city kit twice. That gives two independent copies of the seeded RNG — and the header of that file is
    explicit that the shared sequence is what makes the skyline deterministic. The city would
    quietly reshuffle between the landmarks and the fabric. Identical specifiers, always. */
-import { C, rnd } from './w2h-city.js?v=8';
+import { C, rnd } from './w2h-city.js?v=9';
 
-export const BUILD = 'world v8';
+export const BUILD = 'world v9';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -214,8 +214,11 @@ const SURF = {
   sandDk:   '#9E8F74',
   sandLt:   '#D2C4A7',
   beach:    '#DACBAB',
-  lawn:     'rgba(78,113,58,',
-  lawnLt:   'rgba(104,143,74,',
+  /* GREENS LIFTED. These are multiplied by a dusk ground tint of 0xC6B99E and then lit by a sun
+     13 degrees above the horizon, and the palace grounds were coming out near black. Parkland
+     that reads as a dark stain is worse than no parkland — it looks like a rendering fault. */
+  lawn:     'rgba(96,134,70,',
+  lawnLt:   'rgba(132,172,94,',
   street:   '#4E555C',
   road:     '#3C4248',
   paving:   '#ADA99B',

@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v8';
+export const BUILD = 'city v9';
 
 export const C = {
   night:   0x0B1620,
@@ -40,19 +40,47 @@ export function reseed(v){ seed = v; }
 export function createCityKit(renderer){
 const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
 
+/* WINDOWS ARE HORIZONTAL, AND THE FIRST VERSION WAS NOISE.
+
+   Independent per-window random lighting produces a field of unrelated dots, and at the place
+   camera that reads as dirt on the glass rather than as a building. Two things fix it, and
+   neither is expensive:
+
+   1. FLOOR LINES. A continuous faint horizontal line on every storey, lit or not. Real curtain
+      wall has a spandrel band at every slab edge and it is visible from a mile away — it is the
+      strongest single cue that a surface is a building. Vertical mullions get a fainter line;
+      they matter less because they are usually closer together than the eye can separate.
+
+   2. RUNS, NOT DOTS. Offices are lit in blocks — a whole floor, a corner, a bank of four. The
+      loop now decides "is this run lit" and then paints two to five adjacent cells, so the
+      lights group into horizontal streaks along the floor lines instead of scattering. */
 function windowTexture(cols, rows, litChance, warm){
   const cv = document.createElement('canvas');
   cv.width = cols * 4; cv.height = rows * 4;
   const g = cv.getContext('2d');
   g.fillStyle = '#05080b'; g.fillRect(0, 0, cv.width, cv.height);
+
+  g.fillStyle = 'rgba(190,205,215,0.10)';
+  for (let y = 0; y < rows; y++) g.fillRect(0, y * 4 + 3, cv.width, 1);
+  g.fillStyle = 'rgba(190,205,215,0.045)';
+  for (let x = 0; x < cols; x++) g.fillRect(x * 4 + 3, 0, 1, cv.height);
+
   for (let y = 0; y < rows; y++){
-    for (let x = 0; x < cols; x++){
-      if (Math.random() > litChance) continue;
-      const a = 0.45 + Math.random() * 0.55;
-      g.fillStyle = warm
-        ? 'rgba(232,181,71,' + a.toFixed(2) + ')'
-        : 'rgba(214,226,232,' + (a * 0.82).toFixed(2) + ')';
-      g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+    let x = 0;
+    while (x < cols){
+      // The run length is what turns dots into banding, so the per-cell chance is scaled down
+      // to keep the overall lit fraction roughly where it was.
+      if (Math.random() < litChance * 0.55){
+        const run = 2 + Math.floor(Math.random() * 4);
+        const base = 0.45 + Math.random() * 0.55;
+        for (let k = 0; k < run && x < cols; k++, x++){
+          const a = Math.min(1, base * (0.82 + Math.random() * 0.36));
+          g.fillStyle = warm
+            ? 'rgba(232,181,71,' + a.toFixed(2) + ')'
+            : 'rgba(214,226,232,' + (a * 0.82).toFixed(2) + ')';
+          g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+        }
+      } else x++;
     }
   }
   const t = new THREE.CanvasTexture(cv);
@@ -75,8 +103,11 @@ const TEX_BLOCK = windowTexture(18, 14, 0.22, true);
 
 // repX/repY are TILE COUNTS, and getting them wrong is not a cosmetic error. The first pass
 // used h/1.5, putting roughly 1,150 window rows on a 380m tower: far below one pixel per row at
-// this distance, so every building aliased into wire wool. One texture row is 46 windows, a
-// floor is about 4m, so a tower of h units wants about h/16 tiles.
+// this distance, so every building aliased into wire wool.
+// h/16 WAS STILL 40 PER CENT TOO MANY. One tile is 46 rows; at a 4 m floor that is 184 m, and
+// at 7.8 m per unit that is 23.6 units per tile — not 16. The old divisor put 92 floors on
+// Etihad's tallest tower, a 2.6 m storey height, which is why the glass read as fine speckle
+// rather than as floors. h/24 gives a 4 m storey and lets the banding show.
 // Cached. Every building was cloning its own texture and material, which took draw calls from
 // 44 to 240. Repeats are quantised so near-identical buildings share one material.
 const matCache = new Map();
@@ -197,7 +228,7 @@ function etihadTowers(x0, z0){
     // way — cool and slightly reflective against the warm haze behind it.
     // Emissive stepped 0.90 -> 0.78 so the warm palace holds the eye FIRST and the cluster
     // second. Light hierarchy is about relative order, not absolute brightness.
-    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/16)), 0.78, 0x111C22));
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/24)), 0.78, 0x111C22));
     m.position.set(x0 + s.dx, s.h/2, z0 + s.dz);
     m.rotation.y = 0.10 + i * 0.06;
     m.userData.hero = true;
@@ -272,7 +303,7 @@ function adnocHQ(x0, z0){
   // Graphite glazing: denser and less blue than Etihad, so the two towers no longer read as the
   // same building at different sizes. Emissive third in the hierarchy, behind palace and Etihad.
   const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 7),
-    cityMaterial(TEX_TOWER, 3, 3, 0.60, 0x14161A));
+    cityMaterial(TEX_TOWER, 3, 2, 0.60, 0x14161A));
   body.position.set(x0, 0, z0); body.rotation.y = rot;
   body.userData.hero = true; g.add(body);
 
@@ -297,7 +328,7 @@ function adnocHQ(x0, z0){
 
 function boxTower(w, h, d, em){
   return new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-    cityMaterial(h > 9 ? TEX_TOWER : TEX_BLOCK, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/16)), em));
+    cityMaterial(h > 9 ? TEX_TOWER : TEX_BLOCK, Math.max(1, Math.round(w/2.6)), Math.max(1, Math.round(h/24)), em));
 }
 function setbackTower(w, h, d, em){
   const g = new THREE.Group();
@@ -314,7 +345,7 @@ function slabTower(w, h, d, em){
 }
 function taperTower(w, h, d, em){
   const m = new THREE.Mesh(new THREE.CylinderGeometry(w*0.30, w*0.50, h, 16, 1),
-    cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(h/16)), em));
+    cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(h/24)), em));
   m.position.y = h/2; m.scale.z = 0.8;
   return m;
 }
