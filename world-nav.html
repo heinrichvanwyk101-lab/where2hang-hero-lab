@@ -516,9 +516,15 @@ function applyView(next){
   if (!water.userData.origMat) water.userData.origMat = water.material;
   water.material = sil ? silWater : day ? dayWater : dusk ? duskWater
                  : water.userData.origMat;
-  // The far sea takes the same material. It is flat and unanimated, but it has to be the same
-  // COLOUR as the near water or the join becomes a visible line across the middle of the frame.
-  farSea.material = water.material;
+  /* The far sea takes the same material. It is flat and unanimated, but it has to be the same
+     COLOUR as the near water or the join becomes a visible line across the middle of the frame.
+
+     GUARDED, because this file and w2h-world.js can be deployed a minute apart. farSea is a new
+     return value, and an older module simply does not have one — which took the whole page down
+     with "Cannot set properties of undefined" rather than degrading to a scene with a short
+     horizon. Anything read out of another module's return should assume that module might be a
+     version behind; on GitHub Pages, with its caching, it frequently is. */
+  if (farSea) farSea.material = water.material;
 
   applyLOD();
 }
