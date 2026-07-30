@@ -167,14 +167,14 @@ try {
    'nav v10 / city v9 / world v10 / props v9' means city and props have not changed since v9 and
    do not need re-pasting — the version bump only forces the browser to refetch them.
    =========================================================================== */
-const V = '?v=13';
+const V = '?v=14';
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
 const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v13', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v14', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -394,8 +394,15 @@ document.getElementById('back').addEventListener('click', () => {
    across a phone, and a diagnostic control that pushes the navigation off screen is a worse
    problem than an extra tap.
    =========================================================================== */
-const MODES = ['dusk', 'day', 'night', 'sil'];
-const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette' };
+/* PLAN is a fifth mode and it exists purely to end an argument. The ground texture has been
+   verified at every step — the canvas rasterises to 2,467 distinct colours, the top-cap UVs land
+   on canvas pixels 78..956 by 337..738 which is exactly the painted island, the material carries
+   the map in all three lit modes — and it still reads as one flat tone on a phone. Plan strips
+   the lighting, the tone curve, the fog, the bloom and every other mesh, and shows the island as
+   nothing but the painted canvas. One screenshot decides whether the remaining work is addressing
+   or art direction, and no amount of further palette guessing can substitute for it. */
+const MODES = ['dusk', 'day', 'night', 'sil', 'plan'];
+const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette', plan:'Plan' };
 let view = 'dusk';
 
 const silMat    = new THREE.MeshBasicMaterial({ color:0x000000 });
@@ -515,15 +522,17 @@ function applyView(next){
   view = next;
   const sil   = view === 'sil',  day   = view === 'day';
   const dusk  = view === 'dusk', night = view === 'night';
+  const plan  = view === 'plan';
 
   const chip = document.getElementById('vMode');
   chip.textContent = LABEL[view];
   chip.setAttribute('aria-pressed', String(!dusk));
 
-  scene.background = sil ? new THREE.Color(0xC8D8DF)
+  scene.background = plan ? new THREE.Color(0x101418)
+                   : sil ? new THREE.Color(0xC8D8DF)
                    : day ? new THREE.Color(0x9FC4DA)
                    : dusk ? duskSkyTex : nightSkyTex;
-  scene.fog = sil  ? null
+  scene.fog = (sil || plan) ? null
             : day  ? new THREE.FogExp2(0xB6CEDD, 0.0009)
             /* 0.00045, DOWN FROM 0.0012, and this was the single biggest fault in the first
                dusk render. FogExp2 is 1 - exp(-(distance * density)^2), so at 0.0012 the islands
@@ -534,7 +543,7 @@ function applyView(next){
                is all it was ever supposed to do. */
             : dusk ? new THREE.FogExp2(0xCBBFA8, 0.00045)
             :        new THREE.FogExp2(C.haze, 0.0013);
-  scene.environment = (sil || day) ? null : dusk ? duskEnv : nightEnv;
+  scene.environment = (sil || day || plan) ? null : dusk ? duskEnv : nightEnv;
 
   moon.visible = night;
   rim.visible  = night;
@@ -578,6 +587,9 @@ function applyView(next){
   // Bloom is a lit-window effect. Against a pale sky it flares every edge and destroys the
   // profiles and massing that Day and Silhouette exist to judge.
   bloom.enabled  = night || dusk;
+  // NoToneMapping in Plan so the render is the canvas, byte for byte. Tone mapping is part of the
+  // program cache key, so three recompiles for us and the switch costs one frame.
+  renderer.toneMapping = plan ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
   bloom.strength = dusk ? 0.26 : 0.60;
   /* THRESHOLD IS THE OTHER HALF OF THE MILKY LOOK. At 0.46 almost every sunlit stone face in a
      dusk frame clears the bar, so the bloom pass was not picking out windows and lamps, it was
@@ -589,6 +601,13 @@ function applyView(next){
 
   world.traverse(o => {
     if (!o.isMesh) return;
+    /* Plan hides everything that is not island ground — buildings, props, the lot — so nothing
+       can occlude or shade the surface under examination. */
+    o.visible = plan ? o.userData.ground === true : true;
+    if (plan){
+      if (o.userData.ground) o.material = o.userData.planMats;
+      return;
+    }
     /* Props opt out of every diagnostic except silhouette. A palm frond is already the colour a
        palm frond should be under any light in this scene, and turning it into pale stone in the
        one mode built to judge a daytime render would be a strange thing to have built. */
@@ -603,6 +622,7 @@ function applyView(next){
     o.material = sil ? silMat : (o.userData.dayMats || dayMat);
   });
 
+  water.visible = !plan;
   water.material = sil ? silWater : day ? dayWater : dusk ? duskWater
                  : water.userData.origMat;
   /* The far sea takes the same material. It is flat and unanimated, but it has to be the same
@@ -613,7 +633,7 @@ function applyView(next){
      with "Cannot set properties of undefined" rather than degrading to a scene with a short
      horizon. Anything read out of another module's return should assume that module might be a
      version behind; on GitHub Pages, with its caching, it frequently is. */
-  if (farSea) farSea.material = water.material;
+  if (farSea){ farSea.material = water.material; farSea.visible = !plan; }
 
   applyLOD();
 }

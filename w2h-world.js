@@ -38,7 +38,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v13';
+export const BUILD = 'world v14';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -174,10 +174,40 @@ function isleOutline(id){
   return o;
 }
 
+/* GROUND UVs ARE BAKED INTO THE VERTICES, not applied as a texture transform.
+
+   This was repeat = 1/span with offset = 0.5 on the texture, which is the tidy way to do it and
+   is the one link in the chain I could not verify from outside a browser. It matters because the
+   failure is silent and total: ExtrudeGeometry's default top-face UV is the raw shape coordinate,
+   so u runs from -76 to 78. If the transform reaches the shader you get 0.076 to 0.934 and the
+   island samples its own painted plan. If it does NOT, every vertex clamps to the canvas edge —
+   and the canvas edge is the pure sand of the base fill, so the island renders as one flat tan
+   tone with no roads, no apron and no parkland. Which is precisely what four passes of palette
+   and exposure work failed to shift.
+
+   Rasterising the painter with a real 2D canvas proved the texture itself is fine: 2,467 distinct
+   colours, tarmac at 4.8 per cent, paving at 9.6, and the 74 per cent pure sand is exactly the
+   area outside the coastline where it belongs. So the picture is right and the addressing was the
+   suspect. A custom UVGenerator writes 0..1 straight into the attribute buffer, the texture keeps
+   default repeat and offset, and there is no longer a mechanism to be wrong. */
 function islandGeometry(id, r){
+  const span = r * 2 * GROUND_PAD;
+  const UVGen = {
+    generateTopUV(geometry, vertices, iA, iB, iC){
+      return [iA, iB, iC].map(i => new THREE.Vector2(
+        vertices[i*3]     / span + 0.5,
+        vertices[i*3 + 1] / span + 0.5));
+    },
+    // The bevelled sides carry no map, so anything valid will do.
+    generateSideWallUV(){
+      return [new THREE.Vector2(0,0), new THREE.Vector2(1,0),
+              new THREE.Vector2(1,1), new THREE.Vector2(0,1)];
+    },
+  };
   const g = new THREE.ExtrudeGeometry(isleShape(id, r), {
     depth: ISLE_DEPTH, curveSegments: 14,
     bevelEnabled: true, bevelThickness: ISLE_BEVEL_T, bevelSize: ISLE_BEVEL_S, bevelSegments: 2,
+    UVGenerator: UVGen,
   });
   g.rotateX(-Math.PI/2);
   g.computeVertexNormals();
@@ -564,9 +594,7 @@ function paintGround(d, plan){
   t.magFilter = THREE.LinearFilter;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   t.generateMipmaps = true;
-  const span = d.r * 2 * GROUND_PAD;
-  t.repeat.set(1 / span, 1 / span);
-  t.offset.set(0.5, 0.5);
+  // No repeat, no offset. islandGeometry bakes 0..1 into the uv attribute instead.
   t.needsUpdate = true;
   return t;
 }
@@ -575,11 +603,20 @@ function paintGround(d, plan){
 /* Land tints. The map carries hue and pattern; these carry LEVEL, one per view mode. The night
    value is set so map-mean times tint lands where the old flat 0x424E58 land did — that number
    was hard won against a dim hemisphere sky and there was no reason to relitigate it. */
-/* NIGHT BEACH, DARKENED. At 0x6E6A5E this was brighter than the ground beside it and the night
-   hemisphere is a blue-teal, so every island was being outlined in a thin green rim that read
-   as a selection highlight rather than as a shoreline. Day and dusk have their own beach
-   materials; this one is only ever seen at night, so it can be as dark as night wants. */
-const matBeach    = new THREE.MeshStandardMaterial({ color:0x494539, roughness:1, metalness:0 });
+/* THE BEACH IS THE ONLY THING THAT SHOWS THE ISLAND IS RAISED, so it must never match the top.
+
+   Every island stands 2.9 units above the water and the bevelled side is the only surface that
+   says so. In Day the side was 0xE0D4B8 against a ground of 0xD8D2C4 — three per cent apart in
+   luminance — so the step vanished and the island read as a sandbank flush with the sea, while
+   dusk and night showed it as a proper shelf. Same geometry, different contrast. All three modes
+   now put the side clearly below the top, which is also physically right: a sloping shelf faces
+   away from the sky and catches less of it than flat ground does.
+
+   Worth recording while it is in view: 2.9 units at 7.8 m per unit is 22.6 m of freeboard, and
+   Abu Dhabi's islands sit two to four metres above the sea. The cliff is a deliberate diorama
+   convention rather than an oversight, but it is a convention, and dropping ISLE_DEPTH would
+   carry the whole city with it since GROUND is derived from it. */
+const matBeach    = new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0 });
 const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
 const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
@@ -987,9 +1024,9 @@ corniche.glow = cglow;
    exists after generation, and doing it in one sweep at the end means there is exactly one place
    to look when a road lands in the wrong district. */
 const dayGround  = new THREE.MeshStandardMaterial({ color:0xD8D2C4, roughness:0.92, metalness:0 });
-const dayBeach   = new THREE.MeshStandardMaterial({ color:0xE0D4B8, roughness:1, metalness:0 });
+const dayBeach   = new THREE.MeshStandardMaterial({ color:0xAB9A7C, roughness:1, metalness:0 });
 const duskGround = new THREE.MeshStandardMaterial({ color:0xC6B99E, roughness:0.94, metalness:0 });
-const duskBeach  = new THREE.MeshStandardMaterial({ color:0xD3C2A2, roughness:1, metalness:0 });
+const duskBeach  = new THREE.MeshStandardMaterial({ color:0x9C8C6F, roughness:1, metalness:0 });
 
 let propCount = { palms:0, lamps:0, cars:0, boats:0 };
 DISTRICTS.forEach(d => {
@@ -1009,6 +1046,14 @@ DISTRICTS.forEach(d => {
     color:0x68737E, roughness:1, metalness:0, map:tex });
   const day  = dayGround.clone();  day.map  = tex;
   const dusk = duskGround.clone(); dusk.map = tex;
+  /* PLAN MODE MATERIALS. MeshBasic, so no light, no shadow, no material tint and no exposure —
+     just the painted canvas projected onto the island. Four rounds have now been spent arguing
+     from screenshots about whether this texture reaches the screen; every part of the chain has
+     been verified in isolation and it should. This removes the argument: if Plan shows roads,
+     the texture is fine and the fault is in lighting or contrast. If Plan shows flat sand, the
+     fault is in the addressing and nothing about the palette will ever help. */
+  const planTop  = new THREE.MeshBasicMaterial({ map: tex });
+  const planSide = new THREE.MeshBasicMaterial({ color: 0x2A3038 });
   d.isleMeshes.forEach(m => {
     m.material = [night, matBeach];
     /* Handed to the view switcher, one ground material per lighting mode, all sharing ONE
@@ -1017,6 +1062,7 @@ DISTRICTS.forEach(d => {
        would delete the roads the props are standing beside. */
     m.userData.dayMats  = [day,  dayBeach];
     m.userData.duskMats = [dusk, duskBeach];
+    m.userData.planMats = [planTop, planSide];
     m.userData.ground   = true;
   });
 });
