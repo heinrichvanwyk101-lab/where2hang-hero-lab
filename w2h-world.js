@@ -38,7 +38,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v12';
+export const BUILD = 'world v13';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -237,8 +237,9 @@ const SURF = {
   // darkest thing on the island by a clear margin.
   street:   '#454C53',
   road:     '#33383E',
-  paving:   '#CFC9B8',
-  pavingLt: '#E0DACA',
+  apron:    '196,188,168',      // the developed ground the whole city sits on
+  paving:   '#D7D1BE',
+  pavingLt: '#E6E0CE',
   kerb:     '#EFEBDF',
   line:     'rgba(250,246,236,0.92)',
 };
@@ -435,6 +436,28 @@ function paintGround(d, plan){
   g.strokeStyle = SURF.beach;  g.lineWidth = U * 0.080; pathOutline(1.0); g.stroke();
   g.strokeStyle = SURF.sandLt; g.lineWidth = U * 0.026; pathOutline(0.972); g.stroke();
 
+  /* 3b. THE URBAN APRON, and this is the thing that was actually missing.
+
+     Three passes at the palette all assumed the ground plan was failing to RENDER. It was not.
+     The material carries the map in every mode, the district camera resolves it at roughly four
+     texels per pixel with sixteen-times anisotropy, and the roads really are there — a hard look
+     at the Day render finds the arterial sweeping past ADNOC and the green under the palace
+     palms. The plan was rendering. It was just THIN: bare desert everywhere, with roads drawn on
+     top and buildings standing directly on sand.
+
+     Which is backwards. On a developed island, paved ground is the DEFAULT and sand is the
+     exception — it survives at the beach, on waste plots and out at the edges. So the interior
+     now gets an apron laid over the sand before anything else is drawn, ramped in over four
+     concentric fills so there is no hard ring where it starts. Everything after this — parks,
+     blocks, patches, roads — lands on developed ground instead of on desert, and the tarmac
+     finally has something to be dark against.
+
+     Coast stays sand: the outermost ring is at 0.95, so the beach band is untouched. */
+  [[0.95, 0.30], [0.90, 0.34], [0.84, 0.40], [0.76, 0.45]].forEach(([sc, a]) => {
+    g.fillStyle = 'rgba(' + SURF.apron + ',' + a + ')';
+    pathOutline(sc); g.fill();
+  });
+
   // 4. Parks, straight from the plan.
   plan.parks.forEach(p => {
     const x = PX(p.x), y = PY(p.y), rr = U * p.r;
@@ -612,6 +635,9 @@ const DISTRICTS = [
       { kind:'paving', x:-42, z:  1, w:52, d:14 },
       { kind:'paving', x: -4, z:-15, w:40, d:13 },   // Etihad plaza
       { kind:'paving', x: 48, z: -6, w:17, d:13 },   // ADNOC apron
+      // The low-rise band on the seaward side had no ground under it at all — twenty buildings
+      // standing on open desert between the corniche road and the towers.
+      { kind:'paving', x: -8, z:-18, w:72, d:11 },
       // The mixed-tower row behind the landmarks. Sloped to match cityRow's zSlope, and
       // deliberately longer than the island — patches are painted inside the coastline clip,
       // so overshoot is trimmed for free and no patch has to be fitted to the coast by hand.
