@@ -38,20 +38,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-/* THE QUERY STRING IS LOAD-BEARING AND MUST MATCH world-nav.html EXACTLY.
-
-   GitHub Pages serves modules with a cache lifetime long enough that a redeploy is frequently
-   invisible, so every cross-module import carries ?v=N and bumping N in all files forces a
-   fresh fetch of the lot.
-
-   The trap: if world-nav.html and this file import the city kit under specifiers that differ by
-   so much as a query string, the browser treats them as TWO DIFFERENT MODULES and evaluates the
-   city kit twice. That gives two independent copies of the seeded RNG — and the header of that file is
-   explicit that the shared sequence is what makes the skyline deterministic. The city would
-   quietly reshuffle between the landmarks and the fabric. Identical specifiers, always. */
-import { C, rnd } from './w2h-city.js?v=9';
-
-export const BUILD = 'world v9';
+export const BUILD = 'world v11';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -65,6 +52,22 @@ const MAX_ANISO = opts.maxAnisotropy || 4;
    out and everything else still builds. Same argument as the city kit: a module that can be
    omitted can be bisected when something breaks. */
 const props = opts.props || null;
+
+/* C AND rnd ARRIVE AS ARGUMENTS NOW, and this file imports nothing local at all.
+
+   They used to come from a static `import ... from './w2h-city.js'`, which meant the cache-
+   busting query string had to be written identically here and in world-nav.html — and if the
+   two ever drifted, the browser would load the city kit TWICE and hand out two independent
+   copies of the seeded RNG. The header of that file is explicit that the shared sequence is
+   what makes the skyline deterministic; two of them would have reshuffled the city between the
+   landmarks and the fabric, silently.
+
+   That is a bad failure mode to leave lying around to save one parameter. With no local import
+   here the version string exists in exactly one place, world-nav.html, and a drop that changes
+   one module is a one-file paste instead of four. */
+const C   = opts.C;
+const rnd = opts.rnd;
+if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via opts');
 
 const world = new THREE.Group();
 scene.add(world);
@@ -201,30 +204,40 @@ function insideIsle(id, nx, ny){
    in a fairly bright, fairly narrow band, carry the HUE here and the LEVEL on the material, and
    both modes work off one canvas.
    =========================================================================== */
-/* CONTRAST RAISED across the board. The first pass was legible on the canvas and invisible in
-   the render, and the reason is that this texture is never seen at 1:1 — at district distance a
-   1024 map covers maybe 900 screen pixels of a surface tilted 15 degrees away, so every value
-   is being averaged with its neighbours by the mip chain before it reaches the eye. A palette
-   tuned by looking at the canvas is tuned at the wrong magnification.
+/* A VALUE LADDER, NOT A SET OF COLOURS. This is the third pass at this palette and the first
+   two were both wrong in the same way, which the Day render at place level finally made obvious:
+   the ground looked like one unbroken cream plain with the palace standing on nothing.
 
-   Tarmac dropped roughly a third in value and the greens gained saturation. The sand did not
-   move: it is the majority surface and lifting it would just wash the others out again. */
+   Multiply the old palette by the Day ground tint and take the luminance of each:
+
+       sand   0.545      paving  0.546      lawn  0.511
+
+   Three surfaces, three different hues, ONE brightness. Human vision reads layout and form from
+   luminance; hue does almost nothing for shape at a distance. A plan drawn in equal-luminance
+   colours is invisible however different the colours are, and only the tarmac — the one thing
+   that happened to be darker — was ever showing up.
+
+   So the palette is now spaced by VALUE first and hue second, with a deliberate ladder:
+
+       beach 0.76 > pavingLt 0.72 > paving 0.65 > sand 0.55 > lawn 0.40 > street 0.27 > road 0.21
+
+   which is also roughly true: dry beach sand really is brighter than desert, concrete really is
+   brighter than sand, and grass really is much darker than all of them. The greens go back DOWN
+   from the last pass — they were lifted to stop parkland reading as a stain, but the fix for
+   that was never to brighten the grass, it was to brighten everything the grass sits against. */
 const SURF = {
   sand:     '#B7A78B',
   sandDk:   '#9E8F74',
-  sandLt:   '#D2C4A7',
-  beach:    '#DACBAB',
-  /* GREENS LIFTED. These are multiplied by a dusk ground tint of 0xC6B99E and then lit by a sun
-     13 degrees above the horizon, and the palace grounds were coming out near black. Parkland
-     that reads as a dark stain is worse than no parkland — it looks like a rendering fault. */
-  lawn:     'rgba(96,134,70,',
-  lawnLt:   'rgba(132,172,94,',
+  sandLt:   '#DDD1B4',
+  beach:    '#E4D8BC',
+  lawn:     'rgba(74,104,52,',
+  lawnLt:   'rgba(96,132,66,',
   street:   '#4E555C',
   road:     '#3C4248',
-  paving:   '#ADA99B',
-  pavingLt: '#BEBAAB',
-  kerb:     '#DAD7CB',
-  line:     'rgba(240,236,222,0.90)',
+  paving:   '#CFC9B8',
+  pavingLt: '#E0DACA',
+  kerb:     '#EFEBDF',
+  line:     'rgba(250,246,236,0.92)',
 };
 
 // Texture covers a little more than the island so the beach edge is never clipped by the canvas.
@@ -536,7 +549,11 @@ function paintGround(d, plan){
 /* Land tints. The map carries hue and pattern; these carry LEVEL, one per view mode. The night
    value is set so map-mean times tint lands where the old flat 0x424E58 land did — that number
    was hard won against a dim hemisphere sky and there was no reason to relitigate it. */
-const matBeach    = new THREE.MeshStandardMaterial({ color:0x6E6A5E, roughness:1, metalness:0 });
+/* NIGHT BEACH, DARKENED. At 0x6E6A5E this was brighter than the ground beside it and the night
+   hemisphere is a blue-teal, so every island was being outlined in a thin green rim that read
+   as a selection highlight rather than as a shoreline. Day and dusk have their own beach
+   materials; this one is only ever seen at night, so it can be as dark as night wants. */
+const matBeach    = new THREE.MeshStandardMaterial({ color:0x494539, roughness:1, metalness:0 });
 const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
 const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
@@ -755,8 +772,14 @@ function urbanFabric(d, layer, opts){
     M.rotation.set(0, 0, 0);              // grid-aligned: the whole point
     M.scale.set(w, h, dp);
     M.updateMatrix();
-    // ONE draw of the dice, not two.
-    const isGlass = rnd() < 0.35;
+    /* GLASS FOLLOWS HEIGHT. A flat 35 per cent chance put curtain wall on one villa in three,
+       so a third of every low-rise band was rendering as mirrored towers and, once dusk started
+       tinting glass separately, a third of the island turned a different colour from the rest
+       for no reason a viewer could read. Tall buildings are glass, low ones are masonry — which
+       is both what the reference shows and what Abu Dhabi looks like.
+       Still ONE draw of the dice, not two: calling rnd() twice let the mesh and the index
+       disagree, which silently overwrites instances and leaves holes in the other buffer. */
+    const isGlass = rnd() < (h > tallest * 0.50 ? 0.62 : 0.10);
     if (isGlass){
       glassM.setMatrixAt(gi, M.matrix);
       glassM.setColorAt(gi, tint(0.30, 0.2));   // glass varies less: it is one product
