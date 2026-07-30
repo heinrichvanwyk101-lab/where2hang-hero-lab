@@ -31,6 +31,37 @@
    Everything is re-placed against the actual coastline, and every position in this file was
    checked against a point-in-polygon test rather than placed by eye.
 
+   ---------------------------------------------------------------------------------------------
+   STEP 3 — REAL COASTLINES, and the one thing the world render made undeniable.
+
+   In the Day world view all five islands were ELLIPSES. Not approximately: the ring road traced a
+   perfect concentric oval on every one of them, and with the labels covered there was no way to
+   tell Yas from Saadiyat from Corniche. Eight to eleven control points, all of them convex, run
+   through a smoothing spline, is a recipe for an oval however carefully the points are chosen —
+   and at world scale the SHAPE OF THE LAND is the only identity an island has, because at that
+   distance the buildings are three pixels tall.
+
+   Three things changed together, because changing any one alone breaks the other two.
+
+   1. THE OUTLINES are 17 to 32 points now and, more importantly, they are no longer all convex.
+      Corniche gets the Al Bateen creek, Yas the marina inlet, Reem the southern bay, Saadiyat a
+      genuinely straight beach. These are authored from the real geography rather than surveyed
+      from it — the shapes are recognisable, not accurate, and Plan mode is the check.
+
+   2. THE SMOOTHER is Chaikin, not splineThru. A spline overshoots its control polygon and would
+      have crossed the walls of the Yas inlet; corner cutting is strictly inside it and cannot.
+
+   3. THE RING ROAD is offset inward by a FIXED DISTANCE along each sample's own normal, rather
+      than scaled radially toward the island centre. The old radial scale gave Corniche a road
+      8.7 units inland at the west tip and 3.5 on the north shore, from one number. The same fix
+      is applied to the coast park, which had the same defect and for the same reason.
+
+   Everything that reads the coastline was re-pointed at a real distance test as well: the
+   "scale the point out by 1.09 and see if it is still inside" trick is correct on a blob and
+   wrong beside every notch, because it measures toward the island centre rather than toward the
+   nearest shore.
+
+   ---------------------------------------------------------------------------------------------
    THE GROUND ITSELF is one canvas texture per island, painted from the SAME cell list the
    fabric generator produced, so roads land between blocks and pavement lands under buildings by
    construction rather than by luck. It costs one texture and zero extra draw calls: the island
@@ -38,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v16';
+export const BUILD = 'world v17';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -126,31 +157,107 @@ const waterBase = Float32Array.from(waterPos.array);
    local z of -30 is 30 units toward the north coast.
    =========================================================================== */
 const ISLE_SHAPES = {
-  // Long west-east wedge with a concave northern edge — the corniche curve itself.
-  corniche: [[-1.00,0.02],[-0.78,0.28],[-0.38,0.40],[0.08,0.36],[0.54,0.28],
-             [0.92,0.10],[1.00,-0.20],[0.56,-0.44],[0.00,-0.52],[-0.56,-0.44],[-0.90,-0.24]],
-  // Small and compact, almost rectangular. Reads as the dense financial block it is.
-  maryah:   [[-1.00,0.22],[-0.62,0.60],[0.18,0.68],[0.84,0.44],[1.00,0.00],
-             [0.80,-0.50],[0.10,-0.70],[-0.66,-0.54],[-1.00,-0.20]],
-  // Elongated and curved, running north-east. The long thin one.
-  reem:     [[-1.00,-0.28],[-0.72,0.14],[-0.20,0.44],[0.42,0.54],[0.86,0.34],
-             [1.00,-0.06],[0.70,-0.46],[0.10,-0.60],[-0.52,-0.56]],
-  // Broad, with a long straight north-west edge standing in for the beach.
-  saadiyat: [[-1.00,0.18],[-0.48,0.52],[0.22,0.62],[0.80,0.40],[1.00,0.00],
-             [0.68,-0.46],[0.00,-0.66],[-0.70,-0.46]],
-  // Rounded mass with a bite out of the south-west: the marina inlet.
-  yas:      [[-0.94,0.12],[-0.58,0.46],[0.02,0.60],[0.62,0.48],[0.96,0.14],
-             [0.88,-0.32],[0.38,-0.60],[-0.16,-0.58],[-0.40,-0.30],[-0.62,-0.40],[-0.90,-0.16]],
+  /* ABU DHABI ISLAND. Long WSW-ENE wedge. Three features carry the recognition: the west tip at
+     the Breakwater, the long shallow arc of the Corniche along the whole north shore, and the
+     Al Bateen creek biting north into the south-west coast. The creek is the important one — it
+     is the first genuinely CONCAVE feature in this world, and it is what the ring-road offset
+     below had to be rewritten to survive. */
+  corniche: [
+    [-1.00,-0.02],[-0.93, 0.10],[-0.82, 0.22],[-0.68, 0.29],[-0.52, 0.33],
+    [-0.34, 0.35],[-0.15, 0.34],[ 0.04, 0.31],[ 0.22, 0.27],[ 0.40, 0.22],
+    [ 0.56, 0.18],[ 0.70, 0.12],[ 0.82, 0.04],[ 0.92,-0.08],[ 1.00,-0.22],
+    [ 0.94,-0.36],[ 0.80,-0.44],[ 0.62,-0.50],[ 0.42,-0.54],[ 0.20,-0.56],
+    [-0.02,-0.55],[-0.20,-0.52],[-0.34,-0.48],
+    [-0.47,-0.47],[-0.51,-0.36],[-0.55,-0.28],[-0.62,-0.30],[-0.64,-0.42],
+    [-0.72,-0.48],[-0.85,-0.44],[-0.94,-0.28],[-0.99,-0.14],
+  ],
+  /* AL MARYAH. Small, dense, reclaimed, and honestly close to a rounded rectangle in life — so
+     the identity here is the CORNERS, not a silhouette. Straighter flanks with distinct corner
+     points give Chaikin a rounded rectangle to smooth; an evenly spaced ring gives it an
+     ellipse, which is what every island in this world used to be. */
+  maryah: [
+    [-0.30, 1.00],[ 0.10, 0.96],[ 0.44, 0.82],[ 0.72, 0.56],[ 0.86, 0.22],
+    [ 0.86,-0.16],[ 0.72,-0.52],[ 0.44,-0.80],[ 0.08,-0.95],[-0.28,-1.00],
+    [-0.58,-0.88],[-0.76,-0.62],[-0.82,-0.30],[-0.82, 0.06],[-0.78, 0.40],
+    [-0.64, 0.70],[-0.48, 0.90],
+  ],
+  /* AL REEM. Long, thin, and bitten into from the south by a wide open bay. The bay is broad
+     enough that the ring road follows it round rather than cutting across the mouth, which is
+     the other half of the offset test: one island where a concavity is KEPT, one where it is
+     cut. */
+  reem: [
+    [-1.00, 0.06],[-0.86, 0.26],[-0.66, 0.40],[-0.42, 0.48],[-0.16, 0.52],
+    [ 0.12, 0.52],[ 0.40, 0.48],[ 0.66, 0.38],[ 0.86, 0.22],[ 0.98, 0.00],
+    [ 0.94,-0.22],[ 0.76,-0.38],[ 0.52,-0.46],[ 0.26,-0.50],
+    [ 0.06,-0.44],[-0.06,-0.28],[-0.18,-0.20],[-0.32,-0.28],[-0.44,-0.42],
+    [-0.60,-0.50],[-0.78,-0.44],[-0.92,-0.24],
+  ],
+  /* SAADIYAT. Broad, and defined by ONE STRAIGHT LINE: the north-west beach runs nearly ruler
+     straight for two thirds of the island. The six points along it are deliberately collinear —
+     a straight coast is a feature, and jittering it "for naturalism" is what turned this island
+     into an oval in the first place. */
+  saadiyat: [
+    [-1.00, 0.10],[-0.72, 0.19],[-0.44, 0.27],[-0.14, 0.36],[ 0.16, 0.45],
+    [ 0.46, 0.54],[ 0.70, 0.48],[ 0.90, 0.30],[ 1.00, 0.04],[ 0.96,-0.22],
+    [ 0.82,-0.42],[ 0.60,-0.54],[ 0.34,-0.58],[ 0.10,-0.52],[-0.04,-0.40],
+    [-0.16,-0.46],[-0.30,-0.58],[-0.52,-0.62],[-0.74,-0.52],[-0.90,-0.34],
+    [-0.98,-0.12],
+  ],
+  /* YAS. The marina inlet, driven deep into the south-west and narrow all the way up. Nothing
+     else in this world tests the geometry as hard: the inlet is narrower than twice the ring
+     offset, so a naive inward scale folds the road back over itself inside it. The offset here
+     detects that and cuts the ring into open runs across the mouth instead — which is also what
+     the real road does, because you cannot drive across a marina. */
+  yas: [
+    [-0.94, 0.18],[-0.72, 0.44],[-0.42, 0.62],[-0.08, 0.70],[ 0.26, 0.66],
+    [ 0.58, 0.52],[ 0.84, 0.30],[ 0.98, 0.02],[ 0.94,-0.28],[ 0.76,-0.52],
+    [ 0.48,-0.68],[ 0.16,-0.74],[-0.12,-0.70],
+    [-0.26,-0.62],[-0.30,-0.46],[-0.29,-0.26],[-0.33,-0.12],[-0.42,-0.14],
+    [-0.44,-0.30],[-0.47,-0.48],[-0.56,-0.58],[-0.74,-0.58],[-0.92,-0.36],
+    [-1.00,-0.10],
+  ],
 };
 
+/* CHAIKIN, NOT A SPLINE, AND THIS IS NOT A STYLE PREFERENCE.
+
+   splineThru was fine on eleven control points and is unusable on thirty-two. Catmull-Rom
+   overshoots its control polygon on convex runs and cuts inside it on concave ones; at low point
+   counts that reads as "hand drawn", but drive it through the walls of a narrow inlet and the
+   two sides cross. Yas would have knotted at the head of the marina.
+
+   Chaikin is corner cutting: every output point is a convex combination of two inputs, so the
+   result is strictly INSIDE the control polygon and can never overshoot. Two passes quadruples
+   the point count and rounds the corners by about a quarter of the shortest edge, which is
+   exactly the amount of softening a stylised coast wants.
+
+   It also means the collinear runs stay collinear. Saadiyat's beach survives as a straight line,
+   which no spline through the same points would have allowed. */
+function chaikin(pts, passes){
+  let p = pts.map(a => [a[0], a[1]]);
+  for (let k = 0; k < passes; k++){
+    const out = [];
+    for (let i = 0; i < p.length; i++){
+      const a = p[i], b = p[(i + 1) % p.length];
+      out.push([a[0]*0.75 + b[0]*0.25, a[1]*0.75 + b[1]*0.25]);
+      out.push([a[0]*0.25 + b[0]*0.75, a[1]*0.25 + b[1]*0.75]);
+    }
+    p = out;
+  }
+  return p;
+}
+const smoothCache = new Map();
+function isleSmooth(id){
+  let sm = smoothCache.get(id);
+  if (!sm){ sm = chaikin(ISLE_SHAPES[id], 2); smoothCache.set(id, sm); }
+  return sm;
+}
+
 function isleShape(id, r){
-  const pts = ISLE_SHAPES[id];
+  const pts = isleSmooth(id);
   const shape = new THREE.Shape();
   shape.moveTo(pts[0][0]*r, pts[0][1]*r);
-  // splineThru rather than lineTo: a hand-drawn coastline should not have visible straight
-  // segments, and 11 points through a spline gives a smooth outline for almost nothing.
-  shape.splineThru(pts.slice(1).map(p => new THREE.Vector2(p[0]*r, p[1]*r))
-    .concat([new THREE.Vector2(pts[0][0]*r, pts[0][1]*r)]));
+  for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0]*r, pts[i][1]*r);
+  shape.closePath();
   return shape;
 }
 
@@ -223,6 +330,113 @@ function insideIsle(id, nx, ny){
     if (((yi > ny) !== (yj > ny)) && (nx < (xj - xi) * (ny - yi) / (yj - yi) + xi)) inside = !inside;
   }
   return inside;
+}
+
+/* DISTANCE TO THE COAST, replacing every "scale the point out by 1.09 and re-test" in this file.
+
+   That trick works on a convex blob and is wrong the moment a coastline has a notch: scaling a
+   point radially about the island centre moves it ACROSS the mouth of an inlet rather than away
+   from the nearest shore, so a building beside the Yas marina passed a clearance test measured
+   against the far bank. It also gave a clearance that varied with position — 1.09 of a point 76
+   units out is a 6.8-unit margin, 1.09 of a point 20 units out is 1.8.
+
+   A real distance to the sampled outline is one polyline test, gives the same margin everywhere,
+   and is correct in a concavity by construction. */
+const closedCache = new Map();
+function outlineClosed(id){
+  let c = closedCache.get(id);
+  if (!c){
+    c = isleOutline(id).map(p => [p.x, p.y]);
+    // getSpacedPoints returns divisions+1 points and the last is the first, so this is closed.
+    closedCache.set(id, c);
+  }
+  return c;
+}
+function distToOutline(id, x, y){ return distToPolyline(x, y, outlineClosed(id)); }
+
+/* ===========================================================================
+   THE INWARD OFFSET, and why the ring road needed one.
+
+   The ring was outline.map(p => [p.x * 0.885, p.y * 0.885]) — a radial scale toward the island
+   centre. On Corniche that insets the coast by 8.7 units on the long axis and 3.5 on the short,
+   because a percentage of a large radius is not a percentage of a small one. Worse, on a
+   concave coast it folds: scale both walls of an inlet toward a centre that lies OUTSIDE the
+   inlet and they cross each other.
+
+   This offsets every sample along its own inward normal by a FIXED distance instead, which is
+   what "the road runs sixty metres inland" actually means. The normal direction is chosen by
+   testing which side lands inside the polygon, so it needs no orientation convention and cannot
+   be got backwards.
+
+   THE FOLD TEST IS ONE LINE AND IT IS THE WHOLE TRICK. An offset point that has crossed to the
+   far wall of a notch is, by definition, closer than `inset` to some other part of the original
+   coastline. So: drop any offset point whose distance to the original outline is materially less
+   than the inset it was given. In an inlet narrower than 2 * inset every point in the throat
+   fails, and what is left is two runs that stop either side of the mouth.
+
+   RETURNS AN ARRAY OF POLYLINES, NOT ONE CLOSED LOOP. That is the honest shape of the result and
+   it is also the real road: nothing drives across the mouth of a marina. Where nothing was
+   pruned the single run is closed back on itself, so a simple island still gets a ring.
+   =========================================================================== */
+/* One sample, offset inward. Shared by the ring and by the coast park, because the park was
+   scaling radially too — outline[i] * 0.925 — and had exactly the same defect: on Corniche that
+   is 2.8 units inland on the north shore and 8.7 at the west tip, so a strip described as a
+   constant width was in fact three times wider at one end than the other. */
+function inwardAt(id, pts, i, dist){
+  const n = pts.length - 1;
+  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+  let tx = b.x - a.x, ty = b.y - a.y;
+  const L = Math.hypot(tx, ty) || 1;
+  tx /= L; ty /= L;
+  const nx = -ty, ny = tx;
+  let px = pts[i].x + nx * dist, py = pts[i].y + ny * dist;
+  if (!insideIsle(id, px, py)){ px = pts[i].x - nx * dist; py = pts[i].y - ny * dist; }
+  return [px, py];
+}
+
+const RING_INSET = 0.085;      // normalised island units — about 6.5 on Corniche, 5.3 on Yas
+const RING_MIN   = 10;         // a surviving run shorter than this is debris, not a road
+
+function insetRing(id, inset){
+  const o = isleOutline(id);
+  const n = o.length - 1;                       // last point repeats the first
+  const poly = [];
+  for (let i = 0; i < n; i++) poly.push([o[i].x, o[i].y]);
+  const closed = poly.concat([poly[0]]);
+
+  const off = [];
+  for (let i = 0; i < n; i++){
+    const a = poly[(i - 1 + n) % n], b = poly[(i + 1) % n];
+    let tx = b[0] - a[0], ty = b[1] - a[1];
+    const L = Math.hypot(tx, ty) || 1;
+    tx /= L; ty /= L;
+    let nx = -ty, ny = tx;
+    let px = poly[i][0] + nx * inset, py = poly[i][1] + ny * inset;
+    if (!insideIsle(id, px, py)){
+      px = poly[i][0] - nx * inset; py = poly[i][1] - ny * inset;
+    }
+    const good = insideIsle(id, px, py) &&
+                 distToPolyline(px, py, closed) > inset * 0.92;
+    off.push(good ? [px, py] : null);
+  }
+
+  // Walk the circle from the first gap, so a run that straddles index 0 is not split in two.
+  let start = 0;
+  while (start < n && off[start] !== null) start++;
+  if (start === n){                              // nothing pruned: a clean closed ring
+    const loop = off.slice();
+    loop.push(loop[0].slice());
+    return [loop];
+  }
+  const segs = [];
+  let run = [];
+  for (let k = 0; k <= n; k++){
+    const p = off[(start + k) % n];
+    if (p) run.push(p);
+    else { if (run.length >= RING_MIN) segs.push(run); run = []; }
+  }
+  if (run.length >= RING_MIN) segs.push(run);
+  return segs;
 }
 
 /* ===========================================================================
@@ -337,6 +551,8 @@ function roundRect(g, x, y, w, h, r){
    nothing that stands up gets to ignore it.
    =========================================================================== */
 const ROAD_RING = 0.052, ROAD_ART = 0.044;   // normalised widths, shared by paint and clearance
+const COAST_CLEAR = 0.050;                   // no building closer than this to the waterline
+const COAST_PARK_IN = 0.038;                 // the seafront park sits between the beach and the ring
 
 function roadSkeleton(d){
   const rndPlan = localRnd(hashId(d.id));
@@ -344,7 +560,7 @@ function roadSkeleton(d){
   const core    = d.coreN || [0, 0];
   const inside  = (nx, ny) => insideIsle(d.id, nx, ny);
 
-  const ring = outline.map(p => [p.x * 0.885, p.y * 0.885]);
+  const ring = insetRing(d.id, RING_INSET);   // an ARRAY of open runs, not one closed loop
 
   /* Arterials out of the core, TRIMMED at the coastline and at the district's reserved band.
      The coast trim is obvious — the painter draws inside a clip so it could get away with running
@@ -396,7 +612,9 @@ function distToPolyline(x, y, pts){
 function onRoad(d, x, y, pitch){
   const R = d.roads;
   if (!R) return false;
-  if (distToPolyline(x, y, R.ring) < ROAD_RING * 0.60 + pitch * 0.45) return true;
+  for (let i = 0; i < R.ring.length; i++){
+    if (distToPolyline(x, y, R.ring[i]) < ROAD_RING * 0.60 + pitch * 0.45) return true;
+  }
   for (let i = 0; i < R.arterials.length; i++){
     if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.60 + pitch * 0.45) return true;
   }
@@ -437,7 +655,7 @@ function groundPlan(d, cells, pitch){
   for (let nx = -0.95; nx <= 0.95; nx += q){
     for (let ny = -0.95; ny <= 0.95; ny += q){
       if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
-      if (!inside(nx * 1.07, ny * 1.07)) continue;
+      if (distToOutline(d.id, nx, ny) < 0.045) continue;   // real margin, not a radial scale
       if (inPatch(nx, ny)) continue;
       if (onRoad(d, nx, ny, pitch)) continue;      // no lawns in the carriageway either
       if (rndPlan() > 0.58) continue;
@@ -452,7 +670,7 @@ function groundPlan(d, cells, pitch){
     const a = Math.round(d.coastPark[0] * (N - 1));
     const b = Math.round(d.coastPark[1] * (N - 1));
     coastLine = [];
-    for (let i = a; i <= b; i++) coastLine.push([outline[i].x * 0.925, outline[i].y * 0.925]);
+    for (let i = a; i <= b; i++) coastLine.push(inwardAt(d.id, outline, i, COAST_PARK_IN));
   }
 
   return {
@@ -631,7 +849,9 @@ function paintGround(d, plan){
   // The ring road. On Corniche its northern half IS the Corniche.
   // Wider than the first pass. A 17-pixel road on a 1024 map is under two screen pixels once
   // the island is drawn at world scale, and two pixels of dark line does not survive a mipmap.
-  road(() => { pathPoly(plan.ring); g.closePath(); }, ROAD_RING);
+  // One stroke per surviving run. A run that is a full loop already ends where it started, so
+  // there is nothing to close and nothing to special-case.
+  plan.ring.forEach(seg => road(() => pathPoly(seg), ROAD_RING));
   plan.arterials.forEach(a => road(() => pathPoly(a), ROAD_ART));
 
   // The roundabout where they meet. Not decoration — it is the single most Abu Dhabi thing that
@@ -725,7 +945,9 @@ const DISTRICTS = [
        the road skeleton needs it too — arterials are trimmed at this band so none of them drives
        through Emirates Palace or the Etihad plaza. */
     avoidY:[-0.20, 1.0],
-    coastPark:[0.07, 0.40, 0.055],
+    // Re-derived against the new outline. Index 0 is the west tip and the samples run east
+    // along the north shore, so this is the Corniche itself, end to end.
+    coastPark:[0.05, 0.40, 0.055],
     ground:[
       // Palace GROUNDS, not a forecourt. Emirates Palace stands in a large landscaped estate
       // and reads as a landmark because of the space around it, not its height — at 6.6 units
@@ -755,16 +977,20 @@ const DISTRICTS = [
       { label:'Gate Towers',  x:-22, z: -8, h:16, r:36 },
     ] },
   { id:'saadiyat', name:'Saadiyat',   x:-40, z:-108, r:56, rot: 0.15, tint:0xDDD3C0,
-    built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.30, 0.070], places:[
+    built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.28, 0.070], places:[
       { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
       { label:'Saadiyat Beach',   x:-24, z: 22, h: 3, r:44 },
       { label:'Manarat',          x:  4, z:-18, h: 6, r:38 },
     ] },
   { id:'yas',      name:'Yas Island', x: 78, z:-196, r:62, rot:-0.10, tint:C.gold,
     built:false, coreN:[0.20, -0.10], places:[
-      { label:'Yas Marina',    x:-28, z: 22, h: 5, r:42 },
+      /* BOTH MOVED, because the marina inlet is now real water. Yas Marina was at x -28,
+         which the new outline puts in the middle of the channel, and Ferrari World at x 34 sat
+         exactly on the north waterline. Anchors are checked against the sampled coastline, the
+         same rule every other position in this table follows. */
+      { label:'Yas Marina',    x:-10, z: 18, h: 5, r:42 },
       { label:'Yas Mall',      x: 10, z: -6, h: 8, r:40 },
-      { label:'Ferrari World', x: 34, z:-20, h: 9, r:40 },
+      { label:'Ferrari World', x: 30, z:-12, h: 9, r:40 },
     ] },
 ];
 
@@ -858,8 +1084,10 @@ function urbanFabric(d, layer, opts){
       const jx = nx + (rnd() - 0.5) * pitch * 0.35;
       const jy = ny + (rnd() - 0.5) * pitch * 0.35;
       if (!insideIsle(d.id, jx, jy)) continue;
-      // Keep the coast clear so buildings do not straddle the waterline.
-      if (!insideIsle(d.id, jx * 1.09, jy * 1.09)) continue;
+      // Keep the coast clear so buildings do not straddle the waterline. Measured as a real
+      // distance to the outline now: the old radial scale gave a margin that grew with distance
+      // from the island centre and pointed the wrong way inside every notch.
+      if (distToOutline(d.id, jx, jy) < COAST_CLEAR + pitch * 0.30) continue;
       /* avoidY is a BAND, not a disc. innerHole worked when the hand-built content sat in a
          circle at the island's centre; Corniche's landmarks run right across the island in a
          strip along the north shore, and no radius excludes that without also deleting half the

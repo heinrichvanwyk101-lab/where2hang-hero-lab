@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v9';
+export const BUILD = 'props v10';
 
 /* SCALE, fixed once and obeyed everywhere below.
 
@@ -194,7 +194,15 @@ function addProps(d, layer, plan, budget = {}){
 
   const palms = [], lamps = [], cars = [], boats = [];
 
-  const roads = [{ pts: plan.ring, w: 0.040 }]
+  /* plan.ring IS NOW AN ARRAY OF RUNS, not one closed loop.
+
+     The ring road is built by offsetting the coastline inward by a fixed distance, and inside an
+     inlet narrower than twice that distance the offset folds back over itself. Those points are
+     pruned, which leaves the ring as two or more open runs that stop either side of the mouth —
+     correct, since nothing drives across a marina. Every run is walked exactly as the single
+     loop used to be, so lamps, palms and traffic simply stop at the water instead of marching
+     across it. */
+  const roads = plan.ring.map(pts => ({ pts, w: 0.040 }))
     .concat(plan.arterials.map(a => ({ pts: a, w: 0.034 })));
 
   roads.forEach(rd => {
