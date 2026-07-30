@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v17';
+export const BUILD = 'world v18';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -245,6 +245,21 @@ function chaikin(pts, passes){
   }
   return p;
 }
+/* THE SHAPE'S OWN HALF-EXTENTS. Everything below that used to assume an island filled -1..1 on
+   both axes now asks for these instead. No island has ever filled both: Corniche is 1.00 wide and
+   0.56 deep, which is the whole reason two thirds of its ground canvas was painting open sea. */
+const bboxCache = new Map();
+function isleHalf(id){
+  let b = bboxCache.get(id);
+  if (!b){
+    let hx = 0, hy = 0;
+    isleSmooth(id).forEach(p => { hx = Math.max(hx, Math.abs(p[0])); hy = Math.max(hy, Math.abs(p[1])); });
+    b = { x: hx, y: hy };
+    bboxCache.set(id, b);
+  }
+  return b;
+}
+
 const smoothCache = new Map();
 function isleSmooth(id){
   let sm = smoothCache.get(id);
@@ -298,12 +313,20 @@ function isleOutline(id){
    suspect. A custom UVGenerator writes 0..1 straight into the attribute buffer, the texture keeps
    default repeat and offset, and there is no longer a mechanism to be wrong. */
 function islandGeometry(id, r){
-  const span = r * 2 * GROUND_PAD;
+  /* TWO SPANS NOW, ONE PER AXIS, and the canvas below is cut to the same aspect so that pixels
+     per unit stays EQUAL on both. That last part is not optional: map the island into a square
+     canvas with different spans and every road stroke, kerb and roundabout comes out elliptical,
+     because a lineWidth is measured in canvas pixels and those pixels would no longer be square
+     on the ground. Crop the canvas instead of stretching the mapping and the geometry is
+     untouched — the texture simply stops storing sea. */
+  const h = isleHalf(id);
+  const spanX = r * 2 * h.x * GROUND_PAD;
+  const spanY = r * 2 * h.y * GROUND_PAD;
   const UVGen = {
     generateTopUV(geometry, vertices, iA, iB, iC){
       return [iA, iB, iC].map(i => new THREE.Vector2(
-        vertices[i*3]     / span + 0.5,
-        vertices[i*3 + 1] / span + 0.5));
+        vertices[i*3]     / spanX + 0.5,
+        vertices[i*3 + 1] / spanY + 0.5));
     },
     // The bevelled sides carry no map, so anything valid will do.
     generateSideWallUV(){
@@ -554,6 +577,41 @@ const ROAD_RING = 0.052, ROAD_ART = 0.044;   // normalised widths, shared by pai
 const COAST_CLEAR = 0.050;                   // no building closer than this to the waterline
 const COAST_PARK_IN = 0.038;                 // the seafront park sits between the beach and the ring
 
+/* EXCLUSION IS A SET OF ROOMS, NOT A WALL.
+
+   Corniche reserved its landmark band as avoidY:[-0.20, 1.0] — a strip right across the island,
+   sixty per cent of its depth, off limits to the fabric generator. Combined with two large
+   painted patches that covered the same strip, the entire northern half of the island was three
+   landmarks standing on flat colour. In Plan it read as a cream void; in Day the west third was
+   bare sand. The band was doing far more work than it was asked to.
+
+   Every landmark actually occupies a rectangle a few tens of units across. Reserving those, and
+   nothing else, lets the fabric come up between Etihad and ADNOC and round behind the palace —
+   which is what is there in life. Emirates Palace does not read as a landmark because it stands
+   alone; it reads as one because it is long and low and warm in front of a dense city, and it
+   had nothing to be in front of.
+
+   Authored in LOCAL UNITS beside the landmark each one belongs to, same convention as the ground
+   patches, for the same reason: a reservation kept in step with a building by hand should be
+   readable on the same screen as it. */
+function normRects(d){
+  if (!d._avoidN){
+    d._avoidN = (d.avoid || []).map(a => ({
+      x0: (a.x - a.w/2) / d.r, x1: (a.x + a.w/2) / d.r,
+      y0: (-a.z - a.d/2) / d.r, y1: (-a.z + a.d/2) / d.r,
+    }));
+  }
+  return d._avoidN;
+}
+function inAvoid(d, nx, ny, pad){
+  const R = normRects(d), m = pad || 0;
+  for (let i = 0; i < R.length; i++){
+    const b = R[i];
+    if (nx > b.x0 - m && nx < b.x1 + m && ny > b.y0 - m && ny < b.y1 + m) return true;
+  }
+  return false;
+}
+
 function roadSkeleton(d){
   const rndPlan = localRnd(hashId(d.id));
   const outline = isleOutline(d.id);
@@ -567,7 +625,6 @@ function roadSkeleton(d){
      into the sea, but a car placed on the clipped part would be a car in the water. The band trim
      is Corniche's: its landmarks occupy a strip right across the island, and an arterial driven
      through Emirates Palace is no better than a tower standing in a road. */
-  const avoid = d.avoidY || null;
   const arterials = [];
   for (let i = 0; i < 3; i++){
     const a  = (i / 3) * Math.PI * 2 + rndPlan() * 0.7;
@@ -580,7 +637,7 @@ function roadSkeleton(d){
       const x = u*u*core[0] + 2*u*t*mx + t*t*ex;
       const y = u*u*core[1] + 2*u*t*my + t*t*ey;
       if (!inside(x, y)) break;
-      if (avoid && y > avoid[0] && y < avoid[1]) break;
+      if (inAvoid(d, x, y, 0.01)) break;   // no arterial through the palace or the Etihad plaza
       pts.push([x, y]);
     }
     if (pts.length > 1) arterials.push(pts);
@@ -690,14 +747,26 @@ function groundPlan(d, cells, pitch){
    multiple of the island radius the canvas mapping is IDENTICAL for all five islands regardless
    of size. Everything below is therefore written in normalised island units. */
 function paintGround(d, plan){
-  const S = d.r >= 50 ? 1024 : 512;
+  /* THE CANVAS IS CUT TO THE ISLAND, and this is where the ground plan gets its resolution back.
+
+     Corniche's top cap used to land on canvas pixels 78..956 by 337..738 of a 1024 square: 878
+     by 401, or 32.6 per cent of the texture. The other two thirds were the pure sand outside the
+     coastline — memory spent storing open sea at full resolution.
+
+     Width now sets the density and height follows the shape's own aspect, so pixels per unit is
+     identical on both axes and nothing is stretched. At W 1536 Corniche comes out 1536 x 860 and
+     the short axis — the one the roads run across, and the one four rounds of legibility work
+     were fought on — goes from 401 usable pixels to 860. */
+  const h  = isleHalf(d.id);
+  const W  = d.r >= 50 ? 1536 : 768;
+  const H  = Math.max(64, Math.round(W * h.y / h.x));
   const cv = document.createElement('canvas');
-  cv.width = cv.height = S;
+  cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
 
-  const U  = S * 0.5 / GROUND_PAD;          // pixels per normalised island unit
-  const PX = n => S * 0.5 + n * U;
-  const PY = n => S * 0.5 - n * U;          // +Y is north, canvas y runs the other way
+  const U  = W * 0.5 / (h.x * GROUND_PAD);  // pixels per normalised island unit, both axes
+  const PX = n => W * 0.5 + n * U;
+  const PY = n => H * 0.5 - n * U;          // +Y is north, canvas y runs the other way
   const R  = plan.rndPaint;
   const outline = plan.outline;
   const N = outline.length;
@@ -720,7 +789,7 @@ function paintGround(d, plan){
   /* 1. SAND, everywhere. Everything else is something laid on top of the desert, which is the
         correct order of operations for this city and reads that way. */
   g.fillStyle = SURF.sand;
-  g.fillRect(0, 0, S, S);
+  g.fillRect(0, 0, W, H);
 
   // Clip to the coastline once. Nothing painted after this can bleed into the sea.
   g.save();
@@ -941,10 +1010,17 @@ const DISTRICTS = [
       { label:'ADNOC HQ',        x: 48, z: -6, h:26,  r: 22 },
     ],
     coreN:[-0.05, -0.34],
-    /* The landmark strip, declared here rather than only at the urbanFabric call site, because
-       the road skeleton needs it too — arterials are trimmed at this band so none of them drives
-       through Emirates Palace or the Etihad plaza. */
-    avoidY:[-0.20, 1.0],
+    /* The reservations, declared here rather than only at the urbanFabric call site because the
+       road skeleton needs them too — arterials break on entry, so none drives through Emirates
+       Palace or the Etihad plaza. One rectangle per piece of hand-built content, sized to what
+       that content actually covers. */
+    avoid:[
+      { x:-43, z:  0, w:62, d:24 },   // Emirates Palace and its estate
+      { x: -4, z:-16, w:48, d:20 },   // Etihad Towers and the plaza
+      { x: 48, z: -6, w:20, d:20 },   // ADNOC HQ and its apron
+      { x: -7, z:-18, w:74, d:10 },   // the seaward low-rise band
+      { x: 30, z:  4, w:84, d:22 },   // the mixed-tower row behind the landmarks
+    ],
     // Re-derived against the new outline. Index 0 is the west tip and the samples run east
     // along the north shore, so this is the Corniche itself, end to end.
     coastPark:[0.05, 0.40, 0.055],
@@ -952,8 +1028,13 @@ const DISTRICTS = [
       // Palace GROUNDS, not a forecourt. Emirates Palace stands in a large landscaped estate
       // and reads as a landmark because of the space around it, not its height — at 6.6 units
       // it is half the height of the fabric capping it, so clearance is the only tool left.
-      { kind:'lawn',   x:-46, z:  2, w:80, d:30 },
-      { kind:'paving', x:-42, z:  1, w:52, d:14 },
+      /* 56 x 26, DOWN FROM 80 x 30. The estate was wider than the palace needed and wider than
+         the island could spare — at 80 units it reached from x -86, which is off the west coast,
+         to x -6, which is under Etihad's plaza. Clearance is still the tool that makes a 6.6-unit
+         building a landmark; it just does not need to be the only thing on that third of the
+         island. */
+      { kind:'lawn',   x:-44, z:  1, w:56, d:26 },
+      { kind:'paving', x:-42, z:  1, w:46, d:13 },
       { kind:'paving', x: -4, z:-15, w:40, d:13 },   // Etihad plaza
       { kind:'paving', x: 48, z: -6, w:17, d:13 },   // ADNOC apron
       // The low-rise band on the seaward side had no ground under it at all — twenty buildings
@@ -962,7 +1043,8 @@ const DISTRICTS = [
       // The mixed-tower row behind the landmarks. Sloped to match cityRow's zSlope, and
       // deliberately longer than the island — patches are painted inside the coastline clip,
       // so overshoot is trimmed for free and no patch has to be fitted to the coast by hand.
-      { kind:'paving', x: 30, z:  4, w:96, d:24, rot: 0.08 },
+      // Trimmed to the row it belongs to. At 96 x 24 it was a blank apron reading as an airstrip.
+      { kind:'paving', x: 30, z:  4, w:84, d:20, rot: 0.08 },
     ] },
   { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
     built:false, coreN:[0.0, 0.0], places:[
@@ -1072,7 +1154,7 @@ fabricGeo.translate(0, 0.5, 0);          // base at origin so Y scale grows upwa
 
 function urbanFabric(d, layer, opts){
   const { density, coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
-          cap = Infinity, avoidY = null } = opts;
+          cap = Infinity, avoid = false } = opts;
 
   // Block pitch in normalised island units. Smaller pitch = finer grain = denser city.
   const pitch = 0.085 / density;
@@ -1088,11 +1170,10 @@ function urbanFabric(d, layer, opts){
       // distance to the outline now: the old radial scale gave a margin that grew with distance
       // from the island centre and pointed the wrong way inside every notch.
       if (distToOutline(d.id, jx, jy) < COAST_CLEAR + pitch * 0.30) continue;
-      /* avoidY is a BAND, not a disc. innerHole worked when the hand-built content sat in a
-         circle at the island's centre; Corniche's landmarks run right across the island in a
-         strip along the north shore, and no radius excludes that without also deleting half the
-         supporting city. */
-      if (avoidY && jy > avoidY[0] && jy < avoidY[1]) continue;
+      /* Per-landmark rectangles, not a band. The band version reserved sixty per cent of
+         Corniche's depth to protect three buildings that between them occupy about a fifth of
+         it, and the difference was the empty northern half. */
+      if (avoid && inAvoid(d, jx, jy, pitch * 0.5)) continue;
       if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
       // THE ROAD WINS. Placed before the fabric, so the fabric has to make room for it.
       if (onRoad(d, jx, jy, pitch)) continue;
@@ -1307,26 +1388,29 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
   d.glow = glow;
 });
 
-/* Corniche gets fabric too, but only SOUTH of the landmark strip. That is also true to the
-   place: the corniche towers stand in front of a dense low-rise island, and the fabric behind
-   them is most of what makes them read as a downtown rather than as objects on sand.
-   cap 19 keeps every generated building below Etihad's shortest tower (21.8) and well below
-   ADNOC (44), so the three landmarks own the skyline from any angle. */
-/* DENSITY 1.6, NOT 0.95, and the reason is worth writing down. The exclusion band leaves the
-   fabric a strip about 24 units deep along the southern shore — a quarter of what it had when
-   it could sprawl over the whole island. At the old pitch that strip held two and a half rows
-   of blocks and two dozen buildings, which reads as a handful of sheds rather than as a city
-   behind a skyline. Halving the pitch puts six finer rows in the same strip, and the grain is
-   right anyway: this is the low-rise island the towers stand in front of, not a second
-   downtown. Instancing means the extra buildings cost nothing in draw calls. */
-/* CAP 12, NOT 19. Etihad's shortest tower is 21.8 and the cap was 19, so in the Day render the
-   supporting city stood level with the landmarks and Etihad stopped being a landmark — a thing
-   is only a hero if there is a visible gap between it and everything around it. Twelve leaves
-   nearly a two-to-one margin on the shortest Etihad tower and almost four to one on ADNOC. */
+/* Corniche gets fabric across the whole island now, minus the five reserved rectangles. The
+   towers standing in front of a dense low-rise city is most of what makes them read as a
+   downtown rather than as objects on sand — and until this drop the half of the island where
+   that mattered most was the half with nothing on it. */
+/* DENSITY BACK DOWN TO 1.30, AND THE REASON IS THE SAME ONE THAT PUT IT UP.
+
+   It was raised to 2.10 because the exclusion band left the fabric a strip about 24 units deep
+   along the southern shore, and at a coarse pitch that strip held two dozen buildings — a handful
+   of sheds, not a city. Halving the pitch filled it.
+
+   The band is gone, the fabric has roughly two and a half times the ground, and 2.10 is now
+   actively wrong: at that density the block pitch is 3.1 units, which is a 24-metre block. Plan
+   showed exactly what that produces — a fine regular mesh that reads as graph paper rather than
+   as urbanism. At 1.30 the pitch is 5.0 units, or 39 metres, which is a plausible small block and
+   coarse enough that the streets between them survive being drawn at district distance.
+
+   CAP 12 STAYS. Etihad's shortest tower is 21.8 and ADNOC is 44, so the margin that makes the
+   three landmarks legible as landmarks is unchanged — and the fabric is now allowed to come up
+   behind Emirates Palace, which is what gives a 6.6-unit building something to be low against. */
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
-  { density:2.10, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
+  { density:1.30, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
 urbanFabric(corniche, corniche.mass,
-  { density:1.15, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
+  { density:0.90, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
