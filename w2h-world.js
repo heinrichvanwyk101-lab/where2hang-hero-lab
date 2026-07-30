@@ -56,7 +56,22 @@ const props = opts.props || null;
 const world = new THREE.Group();
 scene.add(world);
 
-/* ---------- the sea that connects everything ---------- */
+/* ---------- the sea that connects everything ----------
+
+   TWO PLANES, and the second one is not decoration.
+
+   The animated water is 3,200 across, so its edge is 1,600 units out. At dusk the camera can see
+   the horizon, and a ray leaving the world camera 8 degrees below horizontal does not reach y=0
+   until 2,846 units — well past that edge. Everything beyond it was falling through to the
+   skybox, and since the skybox below the horizon was painted as ground, the far half of every
+   frame came out as brown haze with no waterline anywhere in it. That is most of why the first
+   dusk render read as one flat sepia wash.
+
+   Enlarging the animated plane is the wrong fix: the wave loop walks every vertex on the CPU and
+   recomputes normals each frame, so a plane big enough to reach the horizon at this resolution
+   would cost twenty thousand vertices a frame on a phone. Instead a second, static, unlit-ish
+   plane sits just below it and runs out to 14,000. It never animates, it is one draw call, and
+   by the time it is visible it is far enough away that the fog has most of it anyway. */
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(3200, 3200, 70, 70),
   new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.58, metalness:0.05,
@@ -65,6 +80,16 @@ const water = new THREE.Mesh(
 water.rotation.x = -Math.PI/2;
 water.receiveShadow = true;
 scene.add(water);
+
+const farSea = new THREE.Mesh(
+  new THREE.PlaneGeometry(14000, 14000, 1, 1),
+  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.62, metalness:0.05 })
+);
+farSea.rotation.x = -Math.PI/2;
+farSea.position.y = -0.45;          // clearly under the wave troughs, so it never z-fights
+farSea.receiveShadow = false;
+farSea.castShadow = false;
+scene.add(farSea);
 const waterPos  = water.geometry.attributes.position;
 const waterBase = Float32Array.from(waterPos.array);
 
@@ -896,6 +921,6 @@ world.traverse(o => {
 });
 water.castShadow = false;
 
-return { world, water, waterPos, waterBase, DISTRICTS, pickTargets, corniche, GROUND,
+return { world, water, farSea, waterPos, waterBase, DISTRICTS, pickTargets, corniche, GROUND,
          propCount };
 }

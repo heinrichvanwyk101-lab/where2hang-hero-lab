@@ -201,9 +201,13 @@ function skyTexture(stops){
 const nightSkyTex = skyTexture([
   [0.000,'#04080C'],[0.400,'#0B1A24'],[0.485,'#1E333E'],
   [0.515,'#2A2317'],[0.700,'#080D12'],[1.000,'#03060A']]);
+/* BELOW THE HORIZON IS SEA. The obvious thing to paint under a sky is ground, and it is wrong
+   for this scene: the camera is always over water looking at islands, so every ray that misses
+   the water plane should still land on something that looks like sea. Painting it brown put a
+   band of desert across the far half of the frame and there was no waterline anywhere. */
 const duskSkyTex = skyTexture([
   [0.000,'#2A5A86'],[0.300,'#6E9CC0'],[0.440,'#C6D6DE'],[0.492,'#F7D4A2'],
-  [0.512,'#E6B078'],[0.620,'#7C7058'],[1.000,'#39362D']]);
+  [0.512,'#C9A882'],[0.560,'#5A6C79'],[1.000,'#28343E']]);
 
 const pmrem    = new THREE.PMREMGenerator(renderer);
 const nightEnv = pmrem.fromEquirectangular(nightSkyTex).texture;
@@ -258,7 +262,8 @@ const kit     = createCityKit(renderer);
 const propKit = createPropKit();
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
-const { world, water, waterPos, waterBase, DISTRICTS, pickTargets, corniche, propCount } =
+const { world, water, farSea, waterPos, waterBase, DISTRICTS, pickTargets, corniche,
+        propCount } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -302,7 +307,14 @@ function setDistrict(d){
      between buildings. That is the black screen.
      The arithmetic, once rather than by eye: to fit a radius r across the frame,
      dist = r / tan(hFov/2), and tan(10 degrees) is 0.176, so dist must be about 5.7r. */
-  goal.dist = d.r * 5.7; goal.elev = d.r * 2.3; goal.fov = 42;
+  /* ELEVATION 1.5r, NOT 2.3r. At 2.3r the pitch is 22 degrees against a 21-degree vertical
+     half-angle, so the top of the frame sits one degree BELOW the horizon and there is no sky
+     in the shot at all — which is why every district render came out as a plan drawing with no
+     waterline and nothing for the sea to reflect. At 1.5r the pitch is 14.7 and the horizon
+     lands about six degrees into frame, which is the reference's framing.
+     Distance is unchanged: dist = r / tan(hFov/2) still governs how much island is visible, and
+     that arithmetic was already right. */
+  goal.dist = d.r * 5.7; goal.elev = d.r * 1.5; goal.fov = 42;
   // Approach from the seaward side, so the move always reads as the world turning to present
   // the island rather than the camera swinging round behind it.
   goal.angle = Math.atan2(d.x, d.z + 300);
@@ -436,10 +448,14 @@ function applyView(next){
                    : dusk ? duskSkyTex : nightSkyTex;
   scene.fog = sil  ? null
             : day  ? new THREE.FogExp2(0xB6CEDD, 0.0009)
-            /* WARM AND SLIGHTLY THICKER at dusk. In the reference the background city is
-               deliberately worse than the foreground — flat, low-contrast, hazed back. Our
-               fabric was failing not because it is crude but because nothing was eating it. */
-            : dusk ? new THREE.FogExp2(0xD8C0A0, 0.0012)
+            /* 0.00045, DOWN FROM 0.0012, and this was the single biggest fault in the first
+               dusk render. FogExp2 is 1 - exp(-(distance * density)^2), so at 0.0012 the islands
+               at 800 units were already 60 per cent fog and the far ones at 1,200 were 87 per
+               cent. Against a near-black night haze that reads as depth; against a bright warm
+               haze it reads as a beige sheet pulled over the model. At 0.00045 the same
+               distances are 12 and 25 per cent — enough to push the background city back, which
+               is all it was ever supposed to do. */
+            : dusk ? new THREE.FogExp2(0xCBBFA8, 0.00045)
             :        new THREE.FogExp2(C.haze, 0.0013);
   scene.environment = (sil || day) ? null : dusk ? duskEnv : nightEnv;
 
@@ -454,7 +470,9 @@ function applyView(next){
     // cheapest cue that this is evening rather than noon.
     sun.position.set(-420, 118, 300);
     daySky.color.setHex(0xA8C6DE); daySky.groundColor.setHex(0x6E5B44);
-    daySky.intensity = 0.78;
+    // The dusk sky env map is already a strong ambient source. Stacking a bright hemisphere on
+    // top of it flattens the massing, which is the one thing the low sun is there to reveal.
+    daySky.intensity = 0.52;
   } else if (day){
     sun.color.setHex(0xFFD9A8); sun.intensity = 3.0;
     sun.position.set(-380, 210, 260);
@@ -467,7 +485,13 @@ function applyView(next){
   // Bloom is a lit-window effect. Against a pale sky it flares every edge and destroys the
   // profiles and massing that Day and Silhouette exist to judge.
   bloom.enabled  = night || dusk;
-  bloom.strength = dusk ? 0.30 : 0.60;
+  bloom.strength = dusk ? 0.26 : 0.60;
+  /* THRESHOLD IS THE OTHER HALF OF THE MILKY LOOK. At 0.46 almost every sunlit stone face in a
+     dusk frame clears the bar, so the bloom pass was not picking out windows and lamps, it was
+     glowing the entire city. At 0.82 only the emissive surfaces qualify, which is the whole
+     point of having the effect. Night can stay low: at night very little is above 0.46 except
+     the windows anyway. */
+  bloom.threshold = dusk ? 0.82 : 0.46;
   renderer.toneMappingExposure = night ? 1.15 : dusk ? 1.02 : 1.0;
 
   world.traverse(o => {
@@ -492,6 +516,9 @@ function applyView(next){
   if (!water.userData.origMat) water.userData.origMat = water.material;
   water.material = sil ? silWater : day ? dayWater : dusk ? duskWater
                  : water.userData.origMat;
+  // The far sea takes the same material. It is flat and unanimated, but it has to be the same
+  // COLOUR as the near water or the join becomes a visible line across the middle of the frame.
+  farSea.material = water.material;
 
   applyLOD();
 }
