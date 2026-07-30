@@ -38,7 +38,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v11';
+export const BUILD = 'world v12';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -232,8 +232,11 @@ const SURF = {
   beach:    '#E4D8BC',
   lawn:     'rgba(74,104,52,',
   lawnLt:   'rgba(96,132,66,',
-  street:   '#4E555C',
-  road:     '#3C4248',
+  // A little darker again now that Day is no longer over-exposed. Tarmac is the bottom rung of
+  // the ladder and the one surface whose job is to draw a line, so it can afford to be the
+  // darkest thing on the island by a clear margin.
+  street:   '#454C53',
+  road:     '#33383E',
   paving:   '#CFC9B8',
   pavingLt: '#E0DACA',
   kerb:     '#EFEBDF',
