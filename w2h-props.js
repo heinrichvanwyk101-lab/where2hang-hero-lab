@@ -48,10 +48,16 @@ export function createPropKit(){
    with a half-width that swells and tapers. Drawn double-sided, because a frond has no thickness
    and half of them face away from any given camera. */
 function frondGeometry(){
-  const st = [[0.00, 0.000, 0.020],
-              [0.30, 0.075, 0.055],
-              [0.62, 0.055, 0.042],
-              [0.90,-0.100, 0.020],
+  /* WIDER FRONDS. The first pass sized these off a real frond and they came out sub-pixel: at
+     district distance a palm is about ten screen pixels tall and a frond four hundredths of a
+     unit wide is a fraction of one, so antialiasing simply deleted the crown and left a stick.
+     A miniature exaggerates silhouette for exactly this reason — the crown is now roughly seven
+     metres across, which is a real palm crown and which also happens to be the smallest thing
+     that survives being drawn at this size. */
+  const st = [[0.00, 0.000, 0.032],
+              [0.30, 0.075, 0.090],
+              [0.62, 0.055, 0.070],
+              [0.90,-0.100, 0.034],
               [1.06,-0.300, 0.000]];
   const pos = [], uv = [], idx = [];
   st.forEach(([x, y, w], i) => {
@@ -87,12 +93,12 @@ function crownGeometry(n){
     parts.push(f);
   }
   const g = mergeGeometries(parts);
-  g.scale(0.55, 0.55, 0.55);
+  g.scale(0.85, 0.85, 0.85);
   return g;
 }
 
 const PALM_H = 15 * U_PER_M;                       // trunk height, 1.92 units
-const trunkGeo = new THREE.CylinderGeometry(0.055, 0.095, PALM_H, 6, 1);
+const trunkGeo = new THREE.CylinderGeometry(0.075, 0.125, PALM_H, 6, 1);
 trunkGeo.translate(0, PALM_H / 2, 0);
 const crownGeo = crownGeometry(7);
 crownGeo.translate(0, PALM_H, 0);
@@ -141,11 +147,13 @@ const boatGeo = mergeGeometries([hull, boatCabin]);
    colour a palm frond should be under any light in this scene, and turning it into pale stone in
    the one mode built to judge a daytime render would be a strange thing to have built. */
 const matBark  = new THREE.MeshStandardMaterial({ color:0x6E5B45, roughness:0.94 });
-const matFrond = new THREE.MeshStandardMaterial({ color:0x4E7A3C, roughness:0.86,
+const matFrond = new THREE.MeshStandardMaterial({ color:0x466E33, roughness:0.86,
   side: THREE.DoubleSide });
 const matPost  = new THREE.MeshStandardMaterial({ color:0x3A4048, roughness:0.6, metalness:0.4 });
+// Emissive well above 1. The bloom threshold at dusk is 0.82, so a lamp head has to clear that
+// on its own to produce a pool of light rather than just a pale box.
 const matGlow  = new THREE.MeshStandardMaterial({ color:0xF2E6C8, roughness:0.4,
-  emissive:0xFFD8A0, emissiveIntensity:0.9 });
+  emissive:0xFFD8A0, emissiveIntensity:1.8 });
 const matCar   = new THREE.MeshStandardMaterial({ color:0xBFC4C8, roughness:0.42, metalness:0.25 });
 const matBoat  = new THREE.MeshStandardMaterial({ color:0xE2E4E0, roughness:0.5 });
 

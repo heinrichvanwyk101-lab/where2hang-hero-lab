@@ -381,10 +381,18 @@ const silWater  = new THREE.MeshBasicMaterial({ color:0xB9CBD4 });
 // forms read as solid, which is the entire reason for having the mode.
 const dayMat    = new THREE.MeshStandardMaterial({ color:0xC9C2B2, roughness:0.88, metalness:0 });
 const dayWater  = new THREE.MeshStandardMaterial({ color:0x6E9CB6, roughness:0.30, metalness:0 });
-// Dusk water is nearly a mirror. Roughness 0.14 against the gradient sky is what produces the
-// long band of reflected sun, and that band is most of why the reference reads as evening.
-const duskWater = new THREE.MeshStandardMaterial({ color:0x2C4658, roughness:0.14,
-  metalness:0.30, envMapIntensity:1.6 });
+/* DUSK WATER, SECOND ATTEMPT, and the first one was dark for a reason worth writing down.
+   0x2C4658 at metalness 0.30 gives an albedo of about 0.03 in linear terms, and the dusk sun
+   sits 13 degrees above the horizon so N·L on a flat sea is 0.22. Multiply those and the diffuse
+   term is essentially zero; all that was left was a Fresnel sliver of sky and one specular
+   glint, so the sea rendered near black and the whole lower half of the frame went with it.
+   Water really is that dark in physical terms — but this is a lit diorama, not a simulation, and
+   a black foreground is not a defensible outcome.
+   Metalness back to a dielectric 0.10 (which is what water actually is), a base colour four
+   times lighter, and the env map carrying the rest. The sun glint survives; the sea no longer
+   swallows the frame. */
+const duskWater = new THREE.MeshStandardMaterial({ color:0x5E7A88, roughness:0.16,
+  metalness:0.10, envMapIntensity:1.5 });
 
 /* ===========================================================================
    THE DUSK LIFT.

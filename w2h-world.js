@@ -183,19 +183,27 @@ function insideIsle(id, nx, ny){
    in a fairly bright, fairly narrow band, carry the HUE here and the LEVEL on the material, and
    both modes work off one canvas.
    =========================================================================== */
+/* CONTRAST RAISED across the board. The first pass was legible on the canvas and invisible in
+   the render, and the reason is that this texture is never seen at 1:1 — at district distance a
+   1024 map covers maybe 900 screen pixels of a surface tilted 15 degrees away, so every value
+   is being averaged with its neighbours by the mip chain before it reaches the eye. A palette
+   tuned by looking at the canvas is tuned at the wrong magnification.
+
+   Tarmac dropped roughly a third in value and the greens gained saturation. The sand did not
+   move: it is the majority surface and lifting it would just wash the others out again. */
 const SURF = {
   sand:     '#B7A78B',
-  sandDk:   '#A2937A',
-  sandLt:   '#CEC0A3',
-  beach:    '#D6C7A8',
-  lawn:     'rgba(110,141,87,',
-  lawnLt:   'rgba(130,161,103,',
-  street:   '#666B71',
-  road:     '#565B61',
-  paving:   '#A5A296',
-  pavingLt: '#B6B3A6',
-  kerb:     '#CFCCC2',
-  line:     'rgba(230,226,212,0.85)',
+  sandDk:   '#9E8F74',
+  sandLt:   '#D2C4A7',
+  beach:    '#DACBAB',
+  lawn:     'rgba(78,113,58,',
+  lawnLt:   'rgba(104,143,74,',
+  street:   '#4E555C',
+  road:     '#3C4248',
+  paving:   '#ADA99B',
+  pavingLt: '#BEBAAB',
+  kerb:     '#DAD7CB',
+  line:     'rgba(240,236,222,0.90)',
 };
 
 // Texture covers a little more than the island so the beach edge is never clipped by the canvas.
@@ -473,8 +481,10 @@ function paintGround(d, plan){
   }
 
   // The ring road. On Corniche its northern half IS the Corniche.
-  road(() => { pathPoly(plan.ring); g.closePath(); }, 0.040);
-  plan.arterials.forEach(a => road(() => pathPoly(a.full || a), 0.034));
+  // Wider than the first pass. A 17-pixel road on a 1024 map is under two screen pixels once
+  // the island is drawn at world scale, and two pixels of dark line does not survive a mipmap.
+  road(() => { pathPoly(plan.ring); g.closePath(); }, 0.052);
+  plan.arterials.forEach(a => road(() => pathPoly(a.full || a), 0.044));
 
   // The roundabout where they meet. Not decoration — it is the single most Abu Dhabi thing that
   // can be drawn in six lines.
@@ -524,9 +534,17 @@ const matLitCool = new THREE.MeshStandardMaterial({
 
    Local coordinates below are all POST-CHECK: every landmark, row and patch was tested against
    the sampled coastline before it went in the table.
+
+   POSITIONS RESPACED. Corniche and Al Reem were sharing land — literally, the two outlines
+   intersected — and Corniche and Al Maryah had ten units of open water between them, which at
+   world scale is nothing and read as one lumpy blob rather than as three islands. Judging that
+   by radius is misleading, because these outlines do not fill their radius: the honest test is
+   polygon to polygon, and by that test the minimum channel between any two islands is now 13.7
+   units, with Corniche to Al Maryah opened up to more than twenty-six. The total land extent
+   barely moved (262 units wide before, 254 after), so the portrait framing is unaffected.
    =========================================================================== */
 const DISTRICTS = [
-  { id:'corniche', name:'Corniche',   x:-44, z:  58, r:76, rot: 0.10, tint:C.gold,
+  { id:'corniche', name:'Corniche',   x:-40, z:  66, r:76, rot: 0.10, tint:C.gold,
     built:true,
     /* Re-placed onto the island. Emirates Palace west, Etihad centre, ADNOC at the eastern end,
        all in a band just inland of the north coast, with the supporting city behind them to the
@@ -548,25 +566,25 @@ const DISTRICTS = [
       // so overshoot is trimmed for free and no patch has to be fitted to the coast by hand.
       { kind:'paving', x:  2, z:  4, w:150, d:24, rot: 0.08 },
     ] },
-  { id:'maryah',   name:'Al Maryah',  x: -6, z:  -4, r:34, rot: 0.30, tint:0x8FD3E8,
+  { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
     built:false, coreN:[0.0, 0.0], places:[
       { label:'The Galleria', x:-10, z:  6, h:10, r:30 },
       { label:'Rosewood',     x: 12, z:-10, h:12, r:30 },
       { label:'Waterfront',   x:  2, z: 18, h: 5, r:30 },
     ] },
-  { id:'reem',     name:'Al Reem',    x: 58, z:  46, r:44, rot:-0.20, tint:0xBFD3E0,
+  { id:'reem',     name:'Al Reem',    x: 80, z:  34, r:44, rot:-0.20, tint:0xBFD3E0,
     built:false, coreN:[-0.25, 0.05], places:[
       { label:'Reem Central', x:  0, z:  0, h:12, r:36 },
       { label:'Shams Boutik', x: 22, z: 10, h:10, r:34 },
       { label:'Gate Towers',  x:-22, z: -8, h:16, r:36 },
     ] },
-  { id:'saadiyat', name:'Saadiyat',   x:-28, z:-104, r:56, rot: 0.15, tint:0xDDD3C0,
+  { id:'saadiyat', name:'Saadiyat',   x:-40, z:-108, r:56, rot: 0.15, tint:0xDDD3C0,
     built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.30, 0.070], places:[
       { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
       { label:'Saadiyat Beach',   x:-24, z: 22, h: 3, r:44 },
       { label:'Manarat',          x:  4, z:-18, h: 6, r:38 },
     ] },
-  { id:'yas',      name:'Yas Island', x: 82, z:-186, r:62, rot:-0.10, tint:C.gold,
+  { id:'yas',      name:'Yas Island', x: 78, z:-196, r:62, rot:-0.10, tint:C.gold,
     built:false, coreN:[0.20, -0.10], places:[
       { label:'Yas Marina',    x:-28, z: 22, h: 5, r:42 },
       { label:'Yas Mall',      x: 10, z: -6, h: 8, r:40 },
