@@ -38,7 +38,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v15';
+export const BUILD = 'world v16';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -322,37 +322,94 @@ function roundRect(g, x, y, w, h, r){
    TWO SEPARATE RANDOM SEQUENCES come out of here, deliberately. Tuning a road colour must not
    move a palm tree, and adding a palm must not repaint a car park. Anything that changes layout
    goes through rndPlan; the other two are downstream and independent. */
-function groundPlan(d, cells, pitch){
-  const seed = hashId(d.id);
-  const rndPlan  = localRnd(seed);
-  const outline  = isleOutline(d.id);
-  const core     = d.coreN || [0, 0];
-  const inside   = (nx, ny) => insideIsle(d.id, nx, ny);
-  const N        = outline.length;
+/* THE ROAD SKELETON COMES FIRST, and everything else is placed around it.
 
-  // The ring road, as a polyline rather than a path object.
+   Roads were being drawn LAST — over the blocks, so they read correctly on the canvas — but the
+   buildings had already been placed by a generator that knew nothing about them. So a road would
+   run straight under a row of towers, which is the one mistake that cannot be argued as stylised:
+   a city can be compressed, abstracted or recoloured, but a carriageway with a building standing
+   in it is simply wrong.
+
+   The fix is an ordering one rather than a drawing one. Ring and arterials depend only on the
+   coastline and the district core — never on the cells — so they can be computed first, handed to
+   the fabric generator as an exclusion, and only then painted. Same principle as using real map
+   data for the skeleton and generating the fabric inside it: the network is the armature, and
+   nothing that stands up gets to ignore it.
+   =========================================================================== */
+const ROAD_RING = 0.052, ROAD_ART = 0.044;   // normalised widths, shared by paint and clearance
+
+function roadSkeleton(d){
+  const rndPlan = localRnd(hashId(d.id));
+  const outline = isleOutline(d.id);
+  const core    = d.coreN || [0, 0];
+  const inside  = (nx, ny) => insideIsle(d.id, nx, ny);
+
   const ring = outline.map(p => [p.x * 0.885, p.y * 0.885]);
 
-  /* Arterials out of the core. Sampled to points and TRIMMED AT THE COASTLINE — the painter
-     could get away with running them into the sea because it draws inside a clip, but a car
-     placed on the part that got clipped would be a car in the water. */
+  /* Arterials out of the core, TRIMMED at the coastline and at the district's reserved band.
+     The coast trim is obvious — the painter draws inside a clip so it could get away with running
+     into the sea, but a car placed on the clipped part would be a car in the water. The band trim
+     is Corniche's: its landmarks occupy a strip right across the island, and an arterial driven
+     through Emirates Palace is no better than a tower standing in a road. */
+  const avoid = d.avoidY || null;
   const arterials = [];
   for (let i = 0; i < 3; i++){
     const a  = (i / 3) * Math.PI * 2 + rndPlan() * 0.7;
     const ex = core[0] + Math.cos(a) * 1.30, ey = core[1] + Math.sin(a) * 1.30;
     const mx = core[0] + Math.cos(a) * 0.62 + (rndPlan() - 0.5) * 0.30;
     const my = core[1] + Math.sin(a) * 0.62 + (rndPlan() - 0.5) * 0.30;
-    const full = [], trimmed = [];
-    for (let s = 0; s <= 1.0001; s += 1/28){
-      const u = 1 - s;
-      const x = u*u*core[0] + 2*u*s*mx + s*s*ex;
-      const y = u*u*core[1] + 2*u*s*my + s*s*ey;
-      full.push([x, y]);
-      if (inside(x, y)) trimmed.push([x, y]); else break;
+    const pts = [];
+    for (let t = 0; t <= 1.0001; t += 1/28){
+      const u = 1 - t;
+      const x = u*u*core[0] + 2*u*t*mx + t*t*ex;
+      const y = u*u*core[1] + 2*u*t*my + t*t*ey;
+      if (!inside(x, y)) break;
+      if (avoid && y > avoid[0] && y < avoid[1]) break;
+      pts.push([x, y]);
     }
-    arterials.push(trimmed);
-    arterials[arterials.length - 1].full = full;
+    if (pts.length > 1) arterials.push(pts);
   }
+  return { ring, arterials, core, rndPlan };
+}
+
+/* Point to polyline, squared until the last step. Called for every candidate block against every
+   road segment, so it is the hot loop in world construction — about two million distance tests
+   across five islands and two LOD layers, which measures at well under a tenth of a second. */
+function distToPolyline(x, y, pts){
+  let best = Infinity;
+  for (let i = 0; i < pts.length - 1; i++){
+    const ax = pts[i][0], ay = pts[i][1];
+    const dx = pts[i+1][0] - ax, dy = pts[i+1][1] - ay;
+    const L2 = dx*dx + dy*dy;
+    let t = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const px = ax + t*dx - x, py = ay + t*dy - y;
+    const d2 = px*px + py*py;
+    if (d2 < best) best = d2;
+  }
+  return Math.sqrt(best);
+}
+
+/* Clearance is the road's own half-width plus its kerb, plus half a block for the building that
+   would otherwise overhang it. Written once so the painted width and the reserved width can
+   never drift apart — which is exactly how a road ends up under a tower. */
+function onRoad(d, x, y, pitch){
+  const R = d.roads;
+  if (!R) return false;
+  if (distToPolyline(x, y, R.ring) < ROAD_RING * 0.60 + pitch * 0.45) return true;
+  for (let i = 0; i < R.arterials.length; i++){
+    if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.60 + pitch * 0.45) return true;
+  }
+  return false;
+}
+
+function groundPlan(d, cells, pitch){
+  const seed     = hashId(d.id);
+  const rndPlan  = localRnd(seed ^ 0x2545F491);
+  const outline  = isleOutline(d.id);
+  const inside   = (nx, ny) => insideIsle(d.id, nx, ny);
+  const N        = outline.length;
+  const { ring, arterials, core } = d.roads;
 
   /* Parks, in the holes the fabric left. Building an occupancy set from the actual cells and
      filling what is left over is the only way parkland lands where there is genuinely no city —
@@ -382,6 +439,7 @@ function groundPlan(d, cells, pitch){
       if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
       if (!inside(nx * 1.07, ny * 1.07)) continue;
       if (inPatch(nx, ny)) continue;
+      if (onRoad(d, nx, ny, pitch)) continue;      // no lawns in the carriageway either
       if (rndPlan() > 0.58) continue;
       parks.push({ x: nx + (rndPlan()-0.5)*q, y: ny + (rndPlan()-0.5)*q,
                    r: q * (1.2 + rndPlan() * 1.0) });
@@ -573,8 +631,8 @@ function paintGround(d, plan){
   // The ring road. On Corniche its northern half IS the Corniche.
   // Wider than the first pass. A 17-pixel road on a 1024 map is under two screen pixels once
   // the island is drawn at world scale, and two pixels of dark line does not survive a mipmap.
-  road(() => { pathPoly(plan.ring); g.closePath(); }, 0.052);
-  plan.arterials.forEach(a => road(() => pathPoly(a.full || a), 0.044));
+  road(() => { pathPoly(plan.ring); g.closePath(); }, ROAD_RING);
+  plan.arterials.forEach(a => road(() => pathPoly(a), ROAD_ART));
 
   // The roundabout where they meet. Not decoration — it is the single most Abu Dhabi thing that
   // can be drawn in six lines.
@@ -663,6 +721,10 @@ const DISTRICTS = [
       { label:'ADNOC HQ',        x: 48, z: -6, h:26,  r: 22 },
     ],
     coreN:[-0.05, -0.34],
+    /* The landmark strip, declared here rather than only at the urbanFabric call site, because
+       the road skeleton needs it too — arterials are trimmed at this band so none of them drives
+       through Emirates Palace or the Etihad plaza. */
+    avoidY:[-0.20, 1.0],
     coastPark:[0.07, 0.40, 0.055],
     ground:[
       // Palace GROUNDS, not a forecourt. Emirates Palace stands in a large landscaped estate
@@ -763,6 +825,9 @@ DISTRICTS.forEach(d => {
   g.add(pick);
   pickTargets.push(pick);
 
+  // Before any fabric exists, so the generator can be told where the roads are.
+  d.roads = roadSkeleton(d);
+
   d.placeAnchors = d.places.map(pl => ({ ...pl, district:d }));
 });
 
@@ -801,6 +866,8 @@ function urbanFabric(d, layer, opts){
          supporting city. */
       if (avoidY && jy > avoidY[0] && jy < avoidY[1]) continue;
       if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
+      // THE ROAD WINS. Placed before the fabric, so the fabric has to make room for it.
+      if (onRoad(d, jx, jy, pitch)) continue;
       if (rnd() > 0.88) continue;                      // occasional gap: a square, a car park
       cells.push({ jx, jy });
     }
@@ -996,9 +1063,14 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
   // Per-district character: where downtown sits, and how tall it gets there.
   const tallest = { maryah:40, reem:44, saadiyat:14, yas:18 }[d.id];
 
-  urbanFabric(d, d.mass,   { density:0.62, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
+  /* DENSITY UP, because the road network now takes its cut first. Reserving the ring and the
+     arterials removed about forty per cent of the blocks — correctly, that ground is carriageway
+     — but the islands came out thin. A finer pitch wins twice: more blocks fit in what is left,
+     AND the clearance shrinks with the pitch, since half of it is the building's own overhang.
+     Instancing means the extra count is free in draw calls. */
+  urbanFabric(d, d.mass,   { density:0.80, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   const built = urbanFabric(d, d.detail,
-                           { density:1.00, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
+                           { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   d.fabric = built;
 
   const glow = new THREE.PointLight(d.tint, 0, 150, 2);
@@ -1024,9 +1096,9 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
    is only a hero if there is a visible gap between it and everything around it. Twelve leaves
    nearly a two-to-one margin on the shortest Etihad tower and almost four to one on ADNOC. */
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
-  { density:1.60, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
+  { density:2.10, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
 urbanFabric(corniche, corniche.mass,
-  { density:0.90, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
+  { density:1.15, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
