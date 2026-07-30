@@ -38,7 +38,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v14';
+export const BUILD = 'world v15';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -736,13 +736,30 @@ DISTRICTS.forEach(d => {
     d.isleMeshes.push(isle);
   });
 
-  // Generous invisible hit disc, sitting just clear of the ground. A fingertip is about 9mm;
-  // targets matched to the visual edge feel broken on a phone.
+  /* Generous invisible hit disc, sitting just clear of the ground. A fingertip is about 9mm;
+     targets matched to the visual edge feel broken on a phone.
+
+     FLAGGED helper, AND THIS WAS THE BUG THAT COST FIVE ROUNDS.
+
+     It is a horizontal circle of radius 1.2r, parked 0.4 units above the ground, kept off screen
+     only by material.visible = false. But the view switcher walks every mesh in the world and
+     assigns it a mode material — so in Day the disc was handed dayMat, a perfectly visible flat
+     stone, and rendered as a solid lid over the entire island. Everything followed from that: no
+     roads, no parkland, no palace grounds, and an island that appeared to sit flush with the sea
+     because the disc is WIDER than the coastline and hid the beach shelf too.
+
+     Every diagnosis along the way was of the wrong surface. The ground texture was correct from
+     the first commit — Plan mode, which hides anything without a ground flag, shows the full road
+     network — and four passes of palette, exposure and apron work were spent on a plan that was
+     being covered up. The flag is what stops a helper from ever being painted again. */
   const pick = new THREE.Mesh(new THREE.CircleGeometry(d.r * 1.2, 20),
     new THREE.MeshBasicMaterial({ visible:false }));
   pick.rotation.x = -Math.PI/2;
   pick.position.y = GROUND + 0.4;
   pick.userData.district = d;
+  pick.userData.helper = true;
+  pick.castShadow = false;
+  pick.receiveShadow = false;
   g.add(pick);
   pickTargets.push(pick);
 
@@ -1069,7 +1086,7 @@ DISTRICTS.forEach(d => {
 
 /* ---------- shadow flags, one sweep ---------- */
 world.traverse(o => {
-  if (!o.isMesh) return;
+  if (!o.isMesh || o.userData.helper) return;
   o.castShadow = true;
   o.receiveShadow = true;
 });
