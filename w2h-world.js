@@ -48,6 +48,10 @@ export const GROUND = ISLE_DEPTH + ISLE_BEVEL_T;   // 2.9 — the top face of ev
 
 export function buildWorld(scene, kit, opts = {}){
 const MAX_ANISO = opts.maxAnisotropy || 4;
+/* The prop kit is OPTIONAL. Pass it and the islands get palms, lamps, cars and boats; leave it
+   out and everything else still builds. Same argument as the city kit: a module that can be
+   omitted can be bisected when something breaks. */
+const props = opts.props || null;
 
 const world = new THREE.Group();
 scene.add(world);
@@ -202,6 +206,104 @@ function roundRect(g, x, y, w, h, r){
   g.closePath();
 }
 
+/* THE PLAN, SEPARATED FROM THE PAINT.
+
+   The painter used to invent the road network and the parkland as it drew them, which was fine
+   while pixels were the only consumer. They are not any more: every palm, lamp and car has to
+   stand beside a road that actually exists and inside a park that actually exists, and a prop
+   placer that re-derives the layout from its own random sequence will agree with the canvas for
+   about one commit.
+
+   So the layout is computed ONCE, as data, and handed to both. groundPlan knows where things
+   are; paintGround decides what colour they are; the prop kit decides what stands next to them.
+   Nothing downstream is allowed to invent geometry.
+
+   TWO SEPARATE RANDOM SEQUENCES come out of here, deliberately. Tuning a road colour must not
+   move a palm tree, and adding a palm must not repaint a car park. Anything that changes layout
+   goes through rndPlan; the other two are downstream and independent. */
+function groundPlan(d, cells, pitch){
+  const seed = hashId(d.id);
+  const rndPlan  = localRnd(seed);
+  const outline  = isleOutline(d.id);
+  const core     = d.coreN || [0, 0];
+  const inside   = (nx, ny) => insideIsle(d.id, nx, ny);
+  const N        = outline.length;
+
+  // The ring road, as a polyline rather than a path object.
+  const ring = outline.map(p => [p.x * 0.885, p.y * 0.885]);
+
+  /* Arterials out of the core. Sampled to points and TRIMMED AT THE COASTLINE — the painter
+     could get away with running them into the sea because it draws inside a clip, but a car
+     placed on the part that got clipped would be a car in the water. */
+  const arterials = [];
+  for (let i = 0; i < 3; i++){
+    const a  = (i / 3) * Math.PI * 2 + rndPlan() * 0.7;
+    const ex = core[0] + Math.cos(a) * 1.30, ey = core[1] + Math.sin(a) * 1.30;
+    const mx = core[0] + Math.cos(a) * 0.62 + (rndPlan() - 0.5) * 0.30;
+    const my = core[1] + Math.sin(a) * 0.62 + (rndPlan() - 0.5) * 0.30;
+    const full = [], trimmed = [];
+    for (let s = 0; s <= 1.0001; s += 1/28){
+      const u = 1 - s;
+      const x = u*u*core[0] + 2*u*s*mx + s*s*ex;
+      const y = u*u*core[1] + 2*u*s*my + s*s*ey;
+      full.push([x, y]);
+      if (inside(x, y)) trimmed.push([x, y]); else break;
+    }
+    arterials.push(trimmed);
+    arterials[arterials.length - 1].full = full;
+  }
+
+  /* Parks, in the holes the fabric left. Building an occupancy set from the actual cells and
+     filling what is left over is the only way parkland lands where there is genuinely no city —
+     scattering green at random puts lawns through the middle of blocks. */
+  const q = 0.05;
+  const occ = new Set();
+  cells.forEach(c => {
+    const cx = Math.round(c.jx / q), cy = Math.round(c.jy / q);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) occ.add((cx+a) + ',' + (cy+b));
+  });
+  /* HAND-AUTHORED GROUND WINS. Corniche's fabric is confined to a southern strip, so by the
+     "no cells here" test the entire landmark band counts as empty and was generating 165 park
+     blobs across it — which the painter then covered with forecourt patches, but which the prop
+     placer read as an instruction to stand palm trees in the middle of the Etihad plaza. If a
+     patch has been placed by hand, parkland does not get a vote there. Axis-aligned and slightly
+     inflated: the rotation on the row strip is five degrees and not worth a matrix for. */
+  const patches = (d.ground || []).map(p => ({
+    x0: (p.x - p.w/2) / d.r, x1: (p.x + p.w/2) / d.r,
+    y0: (-p.z - p.d/2) / d.r, y1: (-p.z + p.d/2) / d.r,
+  }));
+  const inPatch = (nx, ny) => patches.some(b =>
+    nx > b.x0 - q && nx < b.x1 + q && ny > b.y0 - q && ny < b.y1 + q);
+
+  const parks = [];
+  for (let nx = -0.95; nx <= 0.95; nx += q){
+    for (let ny = -0.95; ny <= 0.95; ny += q){
+      if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
+      if (!inside(nx * 1.07, ny * 1.07)) continue;
+      if (inPatch(nx, ny)) continue;
+      if (rndPlan() > 0.58) continue;
+      parks.push({ x: nx + (rndPlan()-0.5)*q, y: ny + (rndPlan()-0.5)*q,
+                   r: q * (1.2 + rndPlan() * 1.0) });
+    }
+  }
+
+  // The coast park, as a polyline the avenue of palms can follow.
+  let coastLine = null;
+  if (d.coastPark){
+    const a = Math.round(d.coastPark[0] * (N - 1));
+    const b = Math.round(d.coastPark[1] * (N - 1));
+    coastLine = [];
+    for (let i = a; i <= b; i++) coastLine.push([outline[i].x * 0.925, outline[i].y * 0.925]);
+  }
+
+  return {
+    outline, core, inside, ring, arterials, parks, coastLine, cells, pitch,
+    coastPark: d.coastPark, ground: GROUND,
+    rndPaint: localRnd(seed ^ 0x9E3779B1),
+    rndProps: localRnd(seed ^ 0x85EBCA6B),
+  };
+}
+
 /* THE PAINTER.
 
    UV NOTE, because getting this wrong produces a ground that slides off the island and is
@@ -210,7 +312,7 @@ function roundRect(g, x, y, w, h, r){
    offset = 0.5 maps the island into 0..1 with no custom UV generator, and because R is a fixed
    multiple of the island radius the canvas mapping is IDENTICAL for all five islands regardless
    of size. Everything below is therefore written in normalised island units. */
-function paintGround(d, cells, pitch){
+function paintGround(d, plan){
   const S = d.r >= 50 ? 1024 : 512;
   const cv = document.createElement('canvas');
   cv.width = cv.height = S;
@@ -219,8 +321,8 @@ function paintGround(d, cells, pitch){
   const U  = S * 0.5 / GROUND_PAD;          // pixels per normalised island unit
   const PX = n => S * 0.5 + n * U;
   const PY = n => S * 0.5 - n * U;          // +Y is north, canvas y runs the other way
-  const R  = localRnd(hashId(d.id));
-  const outline = isleOutline(d.id);
+  const R  = plan.rndPaint;
+  const outline = plan.outline;
   const N = outline.length;
 
   function pathOutline(s, from, to){
@@ -232,6 +334,10 @@ function paintGround(d, cells, pitch){
       i === a ? g.moveTo(X, Y) : g.lineTo(X, Y);
     }
     if (from === undefined) g.closePath();
+  }
+  function pathPoly(pts){
+    g.beginPath();
+    pts.forEach((p, i) => { const X = PX(p[0]), Y = PY(p[1]); i ? g.lineTo(X, Y) : g.moveTo(X, Y); });
   }
 
   /* 1. SAND, everywhere. Everything else is something laid on top of the desert, which is the
@@ -259,29 +365,15 @@ function paintGround(d, cells, pitch){
   g.strokeStyle = SURF.beach;  g.lineWidth = U * 0.080; pathOutline(1.0); g.stroke();
   g.strokeStyle = SURF.sandLt; g.lineWidth = U * 0.026; pathOutline(0.972); g.stroke();
 
-  /* 4. PARKS, in the holes the fabric left. Building an occupancy set from the actual cells and
-        then filling what is left over is the only way parkland lands where there is genuinely
-        no city — scattering green blobs at random puts lawns through the middle of blocks. */
-  const q = 0.05;
-  const occ = new Set();
-  cells.forEach(c => {
-    const cx = Math.round(c.jx / q), cy = Math.round(c.jy / q);
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) occ.add((cx+a) + ',' + (cy+b));
+  // 4. Parks, straight from the plan.
+  plan.parks.forEach(p => {
+    const x = PX(p.x), y = PY(p.y), rr = U * p.r;
+    const grd = g.createRadialGradient(x, y, rr*0.15, x, y, rr);
+    grd.addColorStop(0, SURF.lawnLt + '0.90)');
+    grd.addColorStop(1, SURF.lawn   + '0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(x, y, rr, 0, 6.2832); g.fill();
   });
-  for (let nx = -0.95; nx <= 0.95; nx += q){
-    for (let ny = -0.95; ny <= 0.95; ny += q){
-      if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
-      if (!insideIsle(d.id, nx * 1.07, ny * 1.07)) continue;
-      if (R() > 0.58) continue;
-      const x = PX(nx + (R()-0.5)*q), y = PY(ny + (R()-0.5)*q);
-      const rr = U * q * (1.2 + R() * 1.0);
-      const grd = g.createRadialGradient(x, y, rr*0.15, x, y, rr);
-      grd.addColorStop(0, SURF.lawnLt + '0.90)');
-      grd.addColorStop(1, SURF.lawn   + '0)');
-      g.fillStyle = grd;
-      g.beginPath(); g.arc(x, y, rr, 0, 6.2832); g.fill();
-    }
-  }
 
   /* 5. THE CITY FLOOR, painted from the fabric's own cells.
 
@@ -290,13 +382,13 @@ function paintGround(d, cells, pitch){
         the paved lot at 0.78, centred on the cell. What is left between the lots IS the street,
         the same width the fabric used for its gap, and it is a street rather than a painted
         line because it was never painted at all. */
-  const bp = pitch * U;
+  const bp = plan.pitch * U;
   g.fillStyle = SURF.street;
-  cells.forEach(c => {
+  plan.cells.forEach(c => {
     g.fillRect(PX(c.jx) - bp*0.62, PY(c.jy) - bp*0.62, bp*1.24, bp*1.24);
   });
   const kerbW = Math.max(1, U * 0.0045);
-  cells.forEach(c => {
+  plan.cells.forEach(c => {
     const s = bp * 0.78, X = PX(c.jx) - s/2, Y = PY(c.jy) - s/2;
     g.fillStyle = shade(SURF.paving, 0.90 + R() * 0.20);
     g.fillRect(X, Y, s, s);
@@ -330,16 +422,16 @@ function paintGround(d, cells, pitch){
     g.restore();
   });
 
-  /* 7. THE COASTAL PARK. A stroke along a NAMED STRETCH of coastline rather than a rectangle:
-        the Corniche park follows a curve, and no axis-aligned box put along it stays on the
-        island — the north shore is 30 units out at the middle and 16 at the western end. */
-  if (d.coastPark){
-    const [a, b, wid] = d.coastPark;
+  /* 7. THE COAST PARK. A stroke along a NAMED STRETCH of coastline rather than a rectangle: the
+        Corniche park follows a curve, and no axis-aligned box put along it stays on the island —
+        the north shore is 30 units out at the middle and 16 at the western end. */
+  if (plan.coastLine){
+    const wid = d.coastPark[2];
     g.lineCap = 'round';
     g.strokeStyle = SURF.lawnLt + '0.55)'; g.lineWidth = U * wid * 1.35;
-    pathOutline(0.925, a, b); g.stroke();
+    pathPoly(plan.coastLine); g.stroke();
     g.strokeStyle = SURF.lawnLt + '0.92)'; g.lineWidth = U * wid;
-    pathOutline(0.925, a, b); g.stroke();
+    pathPoly(plan.coastLine); g.stroke();
   }
 
   /* 8. ROADS, laid LAST so they cut through the fabric the way a real arterial does. Kerb first
@@ -356,22 +448,12 @@ function paintGround(d, cells, pitch){
   }
 
   // The ring road. On Corniche its northern half IS the Corniche.
-  road(() => pathOutline(0.885), 0.040);
+  road(() => { pathPoly(plan.ring); g.closePath(); }, 0.040);
+  plan.arterials.forEach(a => road(() => pathPoly(a.full || a), 0.034));
 
-  // Arterials out of the core, and a roundabout where they meet. The roundabout is not
-  // decoration — it is the single most Abu Dhabi thing that can be drawn in six lines.
-  const core = d.coreN || [0, 0];
-  for (let i = 0; i < 3; i++){
-    const a  = (i / 3) * Math.PI * 2 + R() * 0.7;
-    const ex = core[0] + Math.cos(a) * 1.30, ey = core[1] + Math.sin(a) * 1.30;
-    const mx = core[0] + Math.cos(a) * 0.62 + (R() - 0.5) * 0.30;
-    const my = core[1] + Math.sin(a) * 0.62 + (R() - 0.5) * 0.30;
-    road(() => {
-      g.beginPath();
-      g.moveTo(PX(core[0]), PY(core[1]));
-      g.quadraticCurveTo(PX(mx), PY(my), PX(ex), PY(ey));
-    }, 0.034);
-  }
+  // The roundabout where they meet. Not decoration — it is the single most Abu Dhabi thing that
+  // can be drawn in six lines.
+  const core = plan.core;
   const cr = U * 0.040;
   g.fillStyle = SURF.kerb; g.beginPath(); g.arc(PX(core[0]), PY(core[1]), cr*1.18, 0, 6.2832); g.fill();
   g.fillStyle = SURF.road; g.beginPath(); g.arc(PX(core[0]), PY(core[1]), cr,      0, 6.2832); g.fill();
@@ -393,6 +475,7 @@ function paintGround(d, cells, pitch){
   t.needsUpdate = true;
   return t;
 }
+
 
 /* Land tints. The map carries hue and pattern; these carry LEVEL, one per view mode. The night
    value is set so map-mean times tint lands where the old flat 0x424E58 land did — that number
@@ -576,8 +659,17 @@ function urbanFabric(d, layer, opts){
   cells.forEach(c => {
     const x = c.jx * d.r, z = -c.jy * d.r;
     const block = pitch * d.r;
-    const w = block * (1 - gap) * (0.7 + rnd() * 0.3);
-    const dp = block * (1 - gap) * (0.7 + rnd() * 0.3);
+    /* ASPECT, not just size. Every block being a near-square box was making the fabric read as
+       crystal growth rather than as buildings — the Day render showed it plainly. One roll
+       decides whether this plot is a slab, a wide low mass or an ordinary block, and the two
+       dimensions are then set AGAINST each other rather than drawn independently. Independent
+       rolls regress to square; that is what was happening. */
+    const shape = rnd();
+    let aw = 0.72 + rnd() * 0.26, ad = 0.72 + rnd() * 0.26;
+    if (shape < 0.26){ aw = 0.92 + rnd() * 0.06; ad = 0.34 + rnd() * 0.20; }        // slab
+    else if (shape < 0.44){ aw = 0.34 + rnd() * 0.20; ad = 0.92 + rnd() * 0.06; }   // slab, turned
+    const w  = block * (1 - gap) * aw;
+    const dp = block * (1 - gap) * ad;
 
     // Height falls away from the core. The exponent controls how abruptly downtown ends.
     const dc = Math.hypot(c.jx - coreX, c.jy - coreZ);
@@ -657,7 +749,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   // A second row of mixed tower types behind the landmarks, giving the skyline profiles the
   // box-only instanced fabric cannot produce. zSlope pulled back to 0.08 — at 0.30 the ends of
   // a 128-unit row swing 19 units in z and walk straight off the coast.
-  const row = kit.cityRow(22, -62, 66, 4, 5, 4, 18, 0.62, 0.08, 0.22);
+  const row = kit.cityRow(22, -62, 66, 4, 5, 4, 13, 0.62, 0.08, 0.22);
   [low, row].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* CORNICHE MASS — the silhouette shown when this island is NOT active. Same two-part
@@ -740,10 +832,14 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
    behind a skyline. Halving the pitch puts six finer rows in the same strip, and the grain is
    right anyway: this is the low-rise island the towers stand in front of, not a second
    downtown. Instancing means the extra buildings cost nothing in draw calls. */
+/* CAP 12, NOT 19. Etihad's shortest tower is 21.8 and the cap was 19, so in the Day render the
+   supporting city stood level with the landmarks and Etihad stopped being a landmark — a thing
+   is only a hero if there is a visible gap between it and everything around it. Twelve leaves
+   nearly a two-to-one margin on the shortest Etihad tower and almost four to one on ADNOC. */
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
-  { density:1.60, coreX:-0.05, coreZ:-0.34, tallest:22, avoidY:[-0.20, 1.0], cap:19 });
+  { density:1.60, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
 urbanFabric(corniche, corniche.mass,
-  { density:0.90, coreX:-0.05, coreZ:-0.34, tallest:22, avoidY:[-0.20, 1.0], cap:19 });
+  { density:0.90, coreX:-0.05, coreZ:-0.34, tallest:16, avoidY:[-0.20, 1.0], cap:12 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
@@ -757,22 +853,38 @@ corniche.glow = cglow;
    Deliberately the last thing that happens. The painter needs the cell list, the cell list only
    exists after generation, and doing it in one sweep at the end means there is exactly one place
    to look when a road lands in the wrong district. */
-const dayGround = new THREE.MeshStandardMaterial({ color:0xD8D2C4, roughness:0.92, metalness:0 });
-const dayBeach  = new THREE.MeshStandardMaterial({ color:0xE0D4B8, roughness:1, metalness:0 });
+const dayGround  = new THREE.MeshStandardMaterial({ color:0xD8D2C4, roughness:0.92, metalness:0 });
+const dayBeach   = new THREE.MeshStandardMaterial({ color:0xE0D4B8, roughness:1, metalness:0 });
+const duskGround = new THREE.MeshStandardMaterial({ color:0xC6B99E, roughness:0.94, metalness:0 });
+const duskBeach  = new THREE.MeshStandardMaterial({ color:0xD3C2A2, roughness:1, metalness:0 });
 
+let propCount = { palms:0, lamps:0, cars:0, boats:0 };
 DISTRICTS.forEach(d => {
   const f = d.fabric;
   if (!f) return;
-  const tex = paintGround(d, f.cells, f.pitch);
+  const plan = groundPlan(d, f.cells, f.pitch);
+  d.plan = plan;
+  const tex = paintGround(d, plan);
+  /* Props into the DETAIL layer only. At world scale a palm is a third of a pixel; paying for
+     four hundred of them per island at exactly the moment five islands are on screen would be
+     paying for invisible geometry. The LOD swap already exists and this is what it is for. */
+  if (props){
+    const n = props.addProps(d, d.detail, plan);
+    Object.keys(n).forEach(k => propCount[k] += n[k]);
+  }
   const night = new THREE.MeshStandardMaterial({
     color:0x68737E, roughness:1, metalness:0, map:tex });
-  const day = dayGround.clone(); day.map = tex;
+  const day  = dayGround.clone();  day.map  = tex;
+  const dusk = duskGround.clone(); dusk.map = tex;
   d.isleMeshes.forEach(m => {
     m.material = [night, matBeach];
-    // Handed to the view switcher so Day mode keeps the roads. Losing the ground plan in the
-    // one mode that exists to judge layout would be perverse.
-    m.userData.dayMats = [day, dayBeach];
-    m.userData.ground  = true;
+    /* Handed to the view switcher, one ground material per lighting mode, all sharing ONE
+       canvas. The map carries hue and pattern; these carry level. Losing the ground plan in Day
+       — the one mode that exists to judge layout — would be perverse, and losing it at dusk
+       would delete the roads the props are standing beside. */
+    m.userData.dayMats  = [day,  dayBeach];
+    m.userData.duskMats = [dusk, duskBeach];
+    m.userData.ground   = true;
   });
 });
 
@@ -784,5 +896,6 @@ world.traverse(o => {
 });
 water.castShadow = false;
 
-return { world, water, waterPos, waterBase, DISTRICTS, pickTargets, corniche, GROUND };
+return { world, water, waterPos, waterBase, DISTRICTS, pickTargets, corniche, GROUND,
+         propCount };
 }

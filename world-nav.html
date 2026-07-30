@@ -122,8 +122,7 @@
 <button class="back" id="back">Back</button>
 
 <div class="views">
-  <button class="chip" id="vDay" aria-pressed="false">Day</button>
-  <button class="chip" id="vSil" aria-pressed="false">Silhouette</button>
+  <button class="chip" id="vMode" aria-pressed="false">Dusk</button>
 </div>
 <div id="err"></div>
 
@@ -144,6 +143,7 @@ window.addEventListener('error', ev => fail('window', ev.error || ev.message));
 import * as THREE from 'three';
 import { C, createCityKit } from './w2h-city.js';
 import { buildWorld, GROUND } from './w2h-world.js';
+import { createPropKit }      from './w2h-props.js';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -177,30 +177,41 @@ scene.fog = new THREE.FogExp2(C.haze, 0.0013);
 // makes descending feel like moving through space rather than scaling an image.
 const camera = new THREE.PerspectiveCamera(52, 1, 1, 6000);
 
-/* ---------- environment ---------- */
-function skyEnvTexture(){
+/* ---------- environment ----------
+   A GRADIENT SKYBOX, not a flat clear colour. The reference render's horizon is doing half the
+   lighting work: the band of warm light where the sea meets the sky is what makes the water
+   read as water and gives every glazed face something to reflect. A flat background colour can
+   never produce that, however carefully the lights are placed.
+
+   Canvas row 0 is the zenith after the default flipY, so the stops read top-down: sky, haze,
+   horizon, sun band, ground. The two mode textures share one builder because the only real
+   difference between night and dusk here is where the warm band sits and how wide it is. */
+function skyTexture(stops){
   const cv = document.createElement('canvas');
-  cv.width = 32; cv.height = 128;
+  cv.width = 32; cv.height = 256;
   const g = cv.getContext('2d');
-  const grd = g.createLinearGradient(0, 0, 0, 128);
-  grd.addColorStop(0.00, '#04080C');
-  grd.addColorStop(0.40, '#0B1A24');
-  grd.addColorStop(0.485,'#1E333E');
-  grd.addColorStop(0.515,'#2A2317');
-  grd.addColorStop(0.70, '#080D12');
-  grd.addColorStop(1.00, '#03060A');
-  g.fillStyle = grd; g.fillRect(0, 0, 32, 128);
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  stops.forEach(st => grd.addColorStop(st[0], st[1]));
+  g.fillStyle = grd; g.fillRect(0, 0, 32, 256);
   const t = new THREE.CanvasTexture(cv);
   t.mapping = THREE.EquirectangularReflectionMapping;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
-const pmrem = new THREE.PMREMGenerator(renderer);
-const envMap = pmrem.fromEquirectangular(skyEnvTexture()).texture;
-scene.environment = envMap;
+const nightSkyTex = skyTexture([
+  [0.000,'#04080C'],[0.400,'#0B1A24'],[0.485,'#1E333E'],
+  [0.515,'#2A2317'],[0.700,'#080D12'],[1.000,'#03060A']]);
+const duskSkyTex = skyTexture([
+  [0.000,'#2A5A86'],[0.300,'#6E9CC0'],[0.440,'#C6D6DE'],[0.492,'#F7D4A2'],
+  [0.512,'#E6B078'],[0.620,'#7C7058'],[1.000,'#39362D']]);
+
+const pmrem    = new THREE.PMREMGenerator(renderer);
+const nightEnv = pmrem.fromEquirectangular(nightSkyTex).texture;
+const duskEnv  = pmrem.fromEquirectangular(duskSkyTex).texture;
 
 /* ---------- lighting ---------- */
-scene.add(new THREE.HemisphereLight(0x2A4A5C, 0x0A0F14, 0.95));
+const hemiNight = new THREE.HemisphereLight(0x2A4A5C, 0x0A0F14, 0.95);
+scene.add(hemiNight);
 
 const moon = new THREE.DirectionalLight(0xA8C8DA, 0.55);
 moon.position.set(-320, 220, -260);
@@ -220,8 +231,11 @@ const rim = new THREE.DirectionalLight(C.teal, 0.26);
 rim.position.set(220, 60, 240);
 scene.add(rim);
 
-// DAY SUN. Low and to one side, never overhead — a raking light is what makes massing legible,
-// and a light down the view axis flattens the whole model into a plan drawing.
+/* THE KEY LIGHT, shared by Day and Dusk rather than one each. Both want a low raking sun and
+   both want shadows; two directional lights would mean two 2048 shadow maps resident for the
+   whole session to save four property assignments in a function that runs on a button press.
+   Low and to one side, never overhead — a raking light is what makes massing legible, and a
+   light down the view axis flattens the whole model into a plan drawing. */
 const sun = new THREE.DirectionalLight(0xFFD9A8, 3.0);
 sun.position.set(-380, 210, 260);
 sun.castShadow = true;
@@ -233,17 +247,22 @@ sun.shadow.bias = -0.0009; sun.shadow.normalBias = 0.6;
 sun.visible = false;
 scene.add(sun);
 
+// The sky fill for both lit modes. Colours and intensity are set per mode in applyView.
 const daySky = new THREE.HemisphereLight(0xBBD6E8, 0x7A6E5C, 1.30);
 daySky.visible = false;
 scene.add(daySky);
 
 
 /* The two content modules, in order. City kit first: the world needs its landmark builders. */
-const kit = createCityKit(renderer);
+const kit     = createCityKit(renderer);
+const propKit = createPropKit();
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
-const { world, water, waterPos, waterBase, DISTRICTS, pickTargets, corniche } =
-  buildWorld(scene, kit, { maxAnisotropy: renderer.capabilities.getMaxAnisotropy() });
+const { world, water, waterPos, waterBase, DISTRICTS, pickTargets, corniche, propCount } =
+  buildWorld(scene, kit, {
+    maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
+    props: propKit,
+  });
 
 /* ===========================================================================
    CAMERA STATE MACHINE
@@ -262,7 +281,7 @@ function applyLOD(){
     // MUTUALLY EXCLUSIVE. Never both, or the closest view is also the heaviest one.
     d.detail.visible = on;
     d.mass.visible   = !on;
-    if (d.glow) d.glow.intensity = (on && view === 'night') ? 70 : 0;
+    if (d.glow) d.glow.intensity = !on ? 0 : view === 'night' ? 70 : view === 'dusk' ? 22 : 0;
   });
 }
 
@@ -321,73 +340,164 @@ document.getElementById('back').addEventListener('click', () => {
 /* ===========================================================================
    VIEW MODES, independent of the navigation state.
 
-   NIGHT       the product. Lighting, bloom, warm haze.
-   DAY         neutral stone under a raking sun. Tests MASSING — whether this reads as a city
-               at all, which at night is impossible to judge because almost every surface is
-               near-black and only the windows are visible.
-   SILHOUETTE  flat black on pale sky. Tests OUTLINE alone.
+   FOUR NOW, AND THE PRODUCT ONE CHANGED.
 
-   These are diagnostics, not product states. Judging the night render is judging the lighting;
-   judging Day is judging whether there is a city under it. Both questions are real and they
-   cannot be answered in the same image.
+   The reference we are building to is not a night render. It is golden hour: pale stone reading
+   its own colour, the sky doing most of the lighting, and warm practicals just coming on as
+   ACCENTS rather than as the only visible thing. Deep night is the hardest possible condition to
+   make a miniature legible in — everything below the window line goes to black, which is exactly
+   what the night screenshots showed. So DUSK is now the base state and night has joined day and
+   silhouette as a diagnostic.
+
+     DUSK        the product. Low warm sun, gradient sky, lit windows as accents.
+     DAY         neutral stone under a raking sun. Tests MASSING.
+     NIGHT       lighting, bloom, warm haze. Tests the light hierarchy.
+     SILHOUETTE  flat black on pale sky. Tests OUTLINE alone.
+
+   ONE CYCLING CHIP rather than three toggles. Three labelled buttons plus Back did not fit
+   across a phone, and a diagnostic control that pushes the navigation off screen is a worse
+   problem than an extra tap.
    =========================================================================== */
-let view = 'night';
+const MODES = ['dusk', 'day', 'night', 'sil'];
+const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette' };
+let view = 'dusk';
 
-const silMat   = new THREE.MeshBasicMaterial({ color:0x000000 });
-const silWater = new THREE.MeshBasicMaterial({ color:0xB9CBD4 });
+const silMat    = new THREE.MeshBasicMaterial({ color:0x000000 });
+const silWater  = new THREE.MeshBasicMaterial({ color:0xB9CBD4 });
 // STANDARD, not Basic. A flat unlit day mode would be a paler silhouette — every face the same
 // value and no massing information at all. Standard means the sun shades each plane and the
 // forms read as solid, which is the entire reason for having the mode.
-const dayMat   = new THREE.MeshStandardMaterial({ color:0xC9C2B2, roughness:0.88, metalness:0 });
-const dayWater = new THREE.MeshStandardMaterial({ color:0x6E9CB6, roughness:0.30, metalness:0 });
+const dayMat    = new THREE.MeshStandardMaterial({ color:0xC9C2B2, roughness:0.88, metalness:0 });
+const dayWater  = new THREE.MeshStandardMaterial({ color:0x6E9CB6, roughness:0.30, metalness:0 });
+// Dusk water is nearly a mirror. Roughness 0.14 against the gradient sky is what produces the
+// long band of reflected sun, and that band is most of why the reference reads as evening.
+const duskWater = new THREE.MeshStandardMaterial({ color:0x2C4658, roughness:0.14,
+  metalness:0.30, envMapIntensity:1.6 });
+
+/* ===========================================================================
+   THE DUSK LIFT.
+
+   Day swaps every material for one flat stone, which throws away the window maps — acceptable
+   for a massing diagnostic, useless for the product. Dusk needs pale bodies AND lit windows at
+   the same time, so it does not swap materials at all: it RECOLOURS them in place and leaves
+   every emissive map exactly where it was.
+
+   Two target tones, chosen by a test on the material's own night colour. The night palette is so
+   dark that hue differences between materials are a few thousandths and survive no arithmetic
+   worth doing — attempts to preserve those hues by normalising or boosting them all collapsed to
+   the same cream. But the ONE distinction that actually matters, glass against stone, is still
+   legible as a blue-over-red ratio in the original sRGB bytes, so that is what gets tested and
+   nothing else is inferred. Building character at dusk comes from the emissive maps and from the
+   fabric's per-instance colour, both of which survive untouched.
+
+   Emissive is dimmed to 0.42. At full night intensity the windows read as the light source,
+   which is correct at midnight and wrong an hour after sunset.
+
+   BUILT ONCE, EAGERLY, while the materials still hold their night values. Build it lazily and a
+   user who presses Day first registers dayMat as the thing to restore, and night never comes
+   back. That is a genuinely nasty bug because it only appears on the second mode change.
+   =========================================================================== */
+const DUSK_STONE = 0xD9CDB6, DUSK_GLASS = 0xA6BECC;
+const liftReg = [];
+{
+  const seen = new Set();
+  world.traverse(o => {
+    // litMat: props, already the right colour under any light. duskMats: the islands, which
+    // carry a painted ground texture and get a whole material per mode instead.
+    if (!o.isMesh || o.userData.litMat || o.userData.duskMats) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+      if (!m || !m.color || seen.has(m)) return;
+      seen.add(m);
+      const hex = m.color.getHex();
+      const r = (hex >> 16) & 255, b = hex & 255;
+      liftReg.push({ m, nightHex:hex, nightEmi: m.emissiveIntensity,
+                     duskHex: (b > r * 1.75) ? DUSK_GLASS : DUSK_STONE });
+    });
+  });
+}
+function applyLift(on){
+  liftReg.forEach(e => {
+    e.m.color.setHex(on ? e.duskHex : e.nightHex);
+    e.m.emissiveIntensity = on ? e.nightEmi * 0.42 : e.nightEmi;
+  });
+}
 
 function applyView(next){
   view = next;
-  const sil = view === 'sil', day = view === 'day';
-  document.getElementById('vDay').setAttribute('aria-pressed', String(day));
-  document.getElementById('vSil').setAttribute('aria-pressed', String(sil));
+  const sil   = view === 'sil',  day   = view === 'day';
+  const dusk  = view === 'dusk', night = view === 'night';
 
-  scene.background = new THREE.Color(sil ? 0xC8D8DF : day ? 0x9FC4DA : C.night);
-  scene.fog = sil ? null
-            : day ? new THREE.FogExp2(0xB6CEDD, 0.0009)
-            : new THREE.FogExp2(C.haze, 0.0013);
-  // The env map is a NIGHT gradient; leaving it on in day tints every surface muddy blue.
-  scene.environment = (sil || day) ? null : envMap;
+  const chip = document.getElementById('vMode');
+  chip.textContent = LABEL[view];
+  chip.setAttribute('aria-pressed', String(!dusk));
 
-  moon.visible = !sil && !day;
-  rim.visible  = !sil && !day;
-  sun.visible  = day;
-  daySky.visible = day;
-  scene.children.forEach(o => {
-    if (o.isHemisphereLight && o !== daySky) o.visible = !sil && !day;
-  });
+  scene.background = sil ? new THREE.Color(0xC8D8DF)
+                   : day ? new THREE.Color(0x9FC4DA)
+                   : dusk ? duskSkyTex : nightSkyTex;
+  scene.fog = sil  ? null
+            : day  ? new THREE.FogExp2(0xB6CEDD, 0.0009)
+            /* WARM AND SLIGHTLY THICKER at dusk. In the reference the background city is
+               deliberately worse than the foreground — flat, low-contrast, hazed back. Our
+               fabric was failing not because it is crude but because nothing was eating it. */
+            : dusk ? new THREE.FogExp2(0xD8C0A0, 0.0012)
+            :        new THREE.FogExp2(C.haze, 0.0013);
+  scene.environment = (sil || day) ? null : dusk ? duskEnv : nightEnv;
 
-  // Bloom is a night effect. Against a pale sky it flares every edge and destroys the profiles
-  // and massing these modes exist to judge.
-  bloom.enabled = (view === 'night');
-  renderer.toneMappingExposure = day ? 1.0 : 1.15;
+  moon.visible = night;
+  rim.visible  = night;
+  hemiNight.visible = night;
+  sun.visible    = day || dusk;
+  daySky.visible = day || dusk;
+  if (dusk){
+    sun.color.setHex(0xFFC489); sun.intensity = 2.4;
+    // Lower than Day and further round. Long shadows across the ground plan are the single
+    // cheapest cue that this is evening rather than noon.
+    sun.position.set(-420, 118, 300);
+    daySky.color.setHex(0xA8C6DE); daySky.groundColor.setHex(0x6E5B44);
+    daySky.intensity = 0.78;
+  } else if (day){
+    sun.color.setHex(0xFFD9A8); sun.intensity = 3.0;
+    sun.position.set(-380, 210, 260);
+    daySky.color.setHex(0xBBD6E8); daySky.groundColor.setHex(0x7A6E5C);
+    daySky.intensity = 1.30;
+  }
 
-  /* A mesh may carry its own Day materials. The islands do: their ground is a painted texture
-     and Day is the one mode that exists to judge layout, so replacing it with flat stone would
-     delete the roads at precisely the moment you want to look at them. Silhouette still goes
-     flat black — that mode is about outline and nothing else. */
+  applyLift(dusk);
+
+  // Bloom is a lit-window effect. Against a pale sky it flares every edge and destroys the
+  // profiles and massing that Day and Silhouette exist to judge.
+  bloom.enabled  = night || dusk;
+  bloom.strength = dusk ? 0.30 : 0.60;
+  renderer.toneMappingExposure = night ? 1.15 : dusk ? 1.02 : 1.0;
+
   world.traverse(o => {
     if (!o.isMesh) return;
-    if (view === 'night'){
+    /* Props opt out of every diagnostic except silhouette. A palm frond is already the colour a
+       palm frond should be under any light in this scene, and turning it into pale stone in the
+       one mode built to judge a daytime render would be a strange thing to have built. */
+    if (o.userData.litMat){
+      if (!o.userData.origMat) o.userData.origMat = o.material;
+      o.material = sil ? silMat : o.userData.origMat;
+      return;
+    }
+    if (night || dusk){
       if (o.userData.origMat) o.material = o.userData.origMat;
+      if (dusk && o.userData.duskMats) o.material = o.userData.duskMats;
       return;
     }
     if (!o.userData.origMat) o.userData.origMat = o.material;
     o.material = sil ? silMat : (o.userData.dayMats || dayMat);
   });
+
   if (!water.userData.origMat) water.userData.origMat = water.material;
-  water.material = sil ? silWater : day ? dayWater : water.userData.origMat;
+  water.material = sil ? silWater : day ? dayWater : dusk ? duskWater
+                 : water.userData.origMat;
+
+  applyLOD();
 }
 
-document.getElementById('vDay').addEventListener('click',
-  () => applyView(view === 'day' ? 'night' : 'day'));
-document.getElementById('vSil').addEventListener('click',
-  () => applyView(view === 'sil' ? 'night' : 'sil'));
+document.getElementById('vMode').addEventListener('click',
+  () => applyView(MODES[(MODES.indexOf(view) + 1) % MODES.length]));
 
 /* ---------- tap ---------- */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -512,6 +622,9 @@ function resize(){
 }
 window.addEventListener('resize', resize);
 resize();
+// Dusk before setWorld, so the first frame is already the product state rather than a flash of
+// unlit night while the sky texture and key light are configured.
+applyView('dusk');
 setWorld();
 
 /* ---------- frame ---------- */
@@ -558,15 +671,19 @@ function frame(){
   if (DEBUG){
     const info = renderer.info;
     document.getElementById('dbg').textContent =
-      'state  ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') + '\n' +
+      'state  ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') +
+        '   view ' + view + '\n' +
       'tris   ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
-      'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures;
+      'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n' +
+      'props  ' + propCount.palms + ' palm  ' + propCount.lamps + ' lamp  ' +
+        propCount.cars + ' car  ' + propCount.boats + ' boat';
   }
 }
 frame();
 
 window.W2H = {
   world: setWorld,
+  view: applyView,
   go: id => { const d = DISTRICTS.find(x => x.id === id); if (d) setDistrict(d); },
   tilt: v => tiltPass.uniforms.amount.value = v,
   DISTRICTS, goal, cur,
