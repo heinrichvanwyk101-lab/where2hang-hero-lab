@@ -28,6 +28,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+export const BUILD = 'props v8';
+
 /* SCALE, fixed once and obeyed everywhere below.
 
    ADNOC HQ is 342 m at 44 units, so ONE UNIT IS ABOUT 7.8 METRES. Every prop dimension in this

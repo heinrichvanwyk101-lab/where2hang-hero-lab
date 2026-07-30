@@ -141,9 +141,15 @@ function fail(where, e){
 window.addEventListener('error', ev => fail('window', ev.error || ev.message));
 
 import * as THREE from 'three';
-import { C, createCityKit } from './w2h-city.js';
-import { buildWorld, GROUND } from './w2h-world.js';
-import { createPropKit }      from './w2h-props.js';
+/* ?v=8 ON EVERY LOCAL IMPORT. Pages caches modules hard enough that a redeploy often does not
+   reach the browser, and the last three debugging rounds were spent reading screenshots of code
+   that had not shipped. Bump this number in ALL FOUR FILES together when deploying — including
+   the import of w2h-city.js inside w2h-world.js, because a mismatched specifier loads the city
+   kit twice and splits its shared random seed in two. */
+import { C, createCityKit, BUILD as B_CITY } from './w2h-city.js?v=8';
+import { buildWorld, GROUND, BUILD as B_WORLD } from './w2h-world.js?v=8';
+import { createPropKit, BUILD as B_PROPS }   from './w2h-props.js?v=8';
+const B_NAV = 'nav v8';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -717,7 +723,8 @@ function frame(){
       'tris   ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
       'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n' +
       'props  ' + propCount.palms + ' palm  ' + propCount.lamps + ' lamp  ' +
-        propCount.cars + ' car  ' + propCount.boats + ' boat';
+        propCount.cars + ' car  ' + propCount.boats + ' boat\n' +
+      'build  ' + B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS;
   }
 }
 frame();
@@ -725,6 +732,7 @@ frame();
 window.W2H = {
   world: setWorld,
   view: applyView,
+  build: [B_NAV, B_CITY, B_WORLD, B_PROPS].join(' / '),
   go: id => { const d = DISTRICTS.find(x => x.id === id); if (d) setDistrict(d); },
   tilt: v => tiltPass.uniforms.amount.value = v,
   DISTRICTS, goal, cur,

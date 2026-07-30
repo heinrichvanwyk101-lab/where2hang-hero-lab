@@ -38,7 +38,20 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-import { C, rnd } from './w2h-city.js';
+/* THE QUERY STRING IS LOAD-BEARING AND MUST MATCH world-nav.html EXACTLY.
+
+   GitHub Pages serves modules with a cache lifetime long enough that a redeploy is frequently
+   invisible, so every cross-module import carries ?v=N and bumping N in all files forces a
+   fresh fetch of the lot.
+
+   The trap: if world-nav.html imports './w2h-city.js?v=8' and this file imports
+   './w2h-city.js?v=8', the browser treats those as TWO DIFFERENT MODULES and evaluates the city kit
+   twice. That gives two independent copies of the seeded RNG — and the header of that file is
+   explicit that the shared sequence is what makes the skyline deterministic. The city would
+   quietly reshuffle between the landmarks and the fabric. Identical specifiers, always. */
+import { C, rnd } from './w2h-city.js?v=8';
+
+export const BUILD = 'world v8';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;

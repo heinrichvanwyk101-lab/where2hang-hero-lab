@@ -14,6 +14,12 @@
    ============================================================================================= */
 import * as THREE from 'three';
 
+/* BUILD STAMP. Shown in the #debug overlay alongside the stamps from the other three files.
+   Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
+   which costs a full cycle each time and, worse, produces confident wrong conclusions about
+   code that was never running. One line per module ends that argument in one screenshot. */
+export const BUILD = 'city v8';
+
 export const C = {
   night:   0x0B1620,
   haze:    0x241D15,
