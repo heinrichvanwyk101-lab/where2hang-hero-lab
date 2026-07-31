@@ -158,8 +158,15 @@ const shrubGeo = (() => {
   g.scale(1, 1, 1.15);                       // very slightly oval, so a cluster is not six-fold
   return g;
 })();
-const matShrub = new THREE.MeshStandardMaterial({ color:0x1B2415, roughness:1, metalness:0 });
-matShrub.userData.duskColor = 0x5E7440;
+/* ONE COLOUR FOR EVERY MODE, and 0x1B2415 was the wrong one. Props carry userData.litMat, which
+   means the dusk lift skips them entirely and they keep this exact colour in Night, Dusk and Day
+   alike — so a duskColor on a prop material does nothing at all, and a near-black green that
+   works after dark comes out as a black stain at noon. The comment above matFrond says the same
+   thing about the palms: a low warm sun and a dark green read as black spikes.
+
+   0x4C7038 is a shade under the fronds, which is right — massed low planting sits in its own
+   shadow and should read a step darker than the canopy above it. */
+const matShrub = new THREE.MeshStandardMaterial({ color:0x4C7038, roughness:0.95, metalness:0 });
 
 /* ---------- lamp light pools ----------
 
