@@ -166,15 +166,37 @@ try {
    The BUILD stamps are per-file CONTENT revisions and deliberately do not track V. A reading of
    'nav v10 / city v9 / world v10 / props v9' means city and props have not changed since v9 and
    do not need re-pasting — the version bump only forces the browser to refetch them.
+
+   ---------------------------------------------------------------------------------------------
+   V IS A TIMESTAMP NOW, AND THE HAND-EDITED NUMBER IS GONE.
+
+   It sat at 16 through six module drops. Four of them were diagnosed from screenshots of code
+   that had never loaded, because a forgotten bump and a working deploy look identical from the
+   outside — and worse, they are INTERMITTENT: Pages serves assets with max-age 600, so whether a
+   drop appeared depended on how long ago the last one was fetched. That is the least debuggable
+   failure mode there is.
+
+   No browser-side trick fixes it either, and it is worth being precise about why. The page URL
+   and the module URLs are independent requests. Loading world-nav.html?x=2 forces a fresh copy of
+   the PAGE; that page then executes this line and asks for ./w2h-world.js?v=16, exactly the URL
+   it asked for last time, which is exactly the copy already in cache. The stale specifier is
+   baked into the source, so the source is the only place it can be fixed.
+
+   Date.now() makes every load a URL no cache has seen. The cost is that modules are never cached
+   at all — about 126 KB refetched per reload across the four files. That is the wrong trade for
+   production and obviously the right one for a lab that gets reloaded thirty times a day.
+
+   TO PIN A BUILD, replace it with a literal: const V = '?v=31'. Worth doing when profiling, so
+   the numbers are not measured against a cold fetch every time.
    =========================================================================== */
-const V = '?v=16';
+const V = '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
 const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v20', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v21', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');

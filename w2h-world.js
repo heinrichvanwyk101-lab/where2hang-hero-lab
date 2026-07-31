@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v27';
+export const BUILD = 'world v28';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1378,17 +1378,31 @@ DISTRICTS.forEach(d => {
        eye takes gradients for shading. A BRIGHT band with a dark one immediately under it is a
        waterline, and nothing else looks like that. It sits at y 0.06, just above the mean
        surface, one unit wide, and it is the brightest thing in the profile. */
+    /* THE HEIGHT COMES OFF AT THE BACK, NOT AT THE WATER, and the first three profiles all had
+       this backwards.
+
+       Every one of them held its height across most of the width and then dumped the last unit
+       or so into the sea. Four units back from the waterline v27 still stood 1.06 units up, so
+       the final approach averaged 1:3.8 — and a shelf with a 1:4 face at the end of it is a
+       CLIFF WITH A TERRACE ON TOP, which is what the red mark is pointing at. Widening from 8 to
+       12 made the terrace bigger without touching the face.
+
+       A real beach loses its height immediately behind the berm and then runs almost flat to the
+       water. So the steep part moves up under the promenade, where a sea wall belongs and where
+       it reads as one, and the last four units come in at 1:8.6. Same total width, same total
+       drop, the fall redistributed: 1.55 units of it now happens in the first 1.9 units of run
+       rather than being spread down to the shore. */
     const BW = BEACH_W / d.r;
     const P = [                                            // t, height, shade
       [0.00, ISLE_DEPTH, 1.00],   // meets the platform at its widest point, not above it
-      [0.16, 2.28,       1.06],   // promenade, 1.9 units wide, falling 1:16 for drainage
-      [0.19, 1.75,       0.78],   // kerb face, the one band that wants to be dark
-      [0.46, 0.85,       1.24],   // dry sand, 3.2 units at 1:3.6
-      [0.62, 0.30,       1.14],   // damp
-      [0.70, 0.06,       1.52],   // FOAM: brightest band, one unit wide, just above mean water
-      [0.76, -0.06,      0.70],   // and the dark one under it that makes the foam read
-      [0.88, -0.55,      0.52],
-      [1.00, -1.30,      0.36],
+      [0.13, 2.30,       1.06],   // promenade, 1.6 units wide, falling 1:16 for drainage
+      [0.16, 1.55,       0.74],   // sea wall under it: 0.75 units of drop in 0.36 of run
+      [0.26, 0.75,       1.10],   // back of the beach, still coming down fast
+      [0.45, 0.35,       1.26],   // berm: the palest band, and the last of the real height
+      [0.68, 0.08,       1.16],   // foreshore, 2.8 units at 1:10 — this is what was missing
+      [0.74, -0.02,      1.52],   // FOAM: brightest band, straddling the mean surface
+      [0.86, -0.35,      0.66],   // and the dark one under it that makes the foam read
+      [1.00, -0.95,      0.40],
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;
