@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v28', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v29', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -766,7 +766,32 @@ const liftReg = [];
 
    Passed in rather than derived, because applyLift's "off" branch covers Day, Plan and Silhouette
    as well as Night, and boosting lit windows in a daytime diagnostic would be wrong. */
-const NIGHT_EMI = 1.8;
+/* CHRISTMAS TREES, AND WHY MORE AMBIENT WAS THE WRONG LEVER.
+
+   v28 raised the hemisphere and the moon and the buildings still did not appear, because the
+   limit was never the light. A wall's screen value is irradiance times ALBEDO, and the albedo is
+   0.0112 linear. Multiplying irradiance by 1.9 took a moon-facing wall from 5 to 9 out of 255,
+   while the windows went up 1.8 and got brighter still — so the one thing already visible became
+   more dominant and the render turned into lights on a black tree.
+
+   Scaling the albedo is the lever, because it lifts exactly the surfaces meant to have mass and
+   nothing else. Through the ACES curve at exposure 1.24, a moon-facing wall:
+
+       albedo x1.0     9 / 255        shadow side  1
+       albedo x5.0    43 / 255        shadow side  3
+
+   Forty-three is a dark grey you can read a silhouette in; nine is black. And it costs nothing
+   elsewhere — the sea is not in the lift registry, so it keeps its own 0.0029 and stays dark. The
+   city lifts and the water does not, which is the whole difference between an aerial night
+   photograph and a black frame with dots on it.
+
+   GLASS TAKES HALF THE SCALE. It is dark at night for a physical reason: it is a mirror, and at
+   night there is nothing to mirror. Lifting it as far as stone turns Etihad into five grey slabs.
+
+   AND THE WINDOWS COME BACK DOWN, 1.8 to 1.2. They were raised to compensate for buildings that
+   were not there. Now that the buildings are, the boost over-corrects the other way. */
+const NIGHT_ALBEDO = 5.0, NIGHT_ALBEDO_GLASS = 2.4;
+const NIGHT_EMI = 1.2;
 
 function applyLift(on, night){
   liftReg.forEach(e => {
@@ -782,6 +807,8 @@ function applyLift(on, night){
       }
     } else {
       e.m.color.setHex(e.nightHex);
+      // setHex decodes sRGB into the linear working space, so this scales radiance directly.
+      if (night) e.m.color.multiplyScalar(e.glass ? NIGHT_ALBEDO_GLASS : NIGHT_ALBEDO);
       e.m.emissiveIntensity = e.nightEmi * (night ? NIGHT_EMI : 1);
       e.m.roughness = e.nightRough;
       e.m.metalness = e.nightMetal;
