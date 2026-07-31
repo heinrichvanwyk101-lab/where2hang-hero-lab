@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v29';
+export const BUILD = 'world v30';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1393,33 +1393,38 @@ DISTRICTS.forEach(d => {
        drop, the fall redistributed: 1.55 units of it now happens in the first 1.9 units of run
        rather than being spread down to the shore. */
     const BW = BEACH_W / d.r;
-    const P = [                                            // t, height, shade
-      [0.00, ISLE_DEPTH, 1.00],   // meets the platform at its widest point, not above it
-      [0.13, 2.30,       1.06],   // promenade, 1.6 units wide, falling 1:16 for drainage
-      [0.16, 1.55,       0.74],   // sea wall under it: 0.75 units of drop in 0.36 of run
-      [0.26, 0.75,       1.10],   // back of the beach, still coming down fast
-      /* THE FOAM WAS UNDER THE WATER. Not subtle, not badly tuned — below the surface.
+    const P = [                                            // offset in world units, height, shade
+      /* THE INNER RING WAS IN MID-AIR, AND THAT IS THE WHOLE REASON NONE OF THIS HAS BEEN
+         VISIBLE FOR FOUR DROPS.
 
-         It sat at y -0.02, and the comment above it claimed it straddled the mean level. It does
-         not: mean level is 0 and -0.02 is beneath it. The brightest band in the profile, the one
-         whole thing that was supposed to say waterline, was submerged, and what showed at the
-         shore was the 1.16 band above it — barely distinguishable from the 1.26 berm behind it.
-         So the beach graded evenly from pale to pale and the eye read shading.
+         The platform is an ExtrudeGeometry with bevelSize 1.6, and a bevel does not leave the
+         outline where the shape put it: the caps and the body sit at DIFFERENT radii, 1.6 units
+         apart. v23 attached the skirt at GROUND, v25 "corrected" it to ISLE_DEPTH, and both were
+         guesses about which of the two the bevel widens. Whichever it is, an inner ring placed
+         exactly on the outline at either height is 1.6 units off the edge it is supposed to
+         continue — buried inside the platform, or hanging under an overhanging rim where a
+         camera looking down at 25 degrees cannot see it. That is what the render has been
+         showing all along: the rounded lip at the island edge is the platform's OWN bevel, and
+         the beach has been tucked behind it.
 
-         It is above the surface now, and it is TWO rings at the same value rather than one, so
-         the bright part is a flat band 0.7 units wide instead of a single interpolated peak that
-         the strip either side immediately darkens. The dark wet ring drops to 0.78 within 0.7
-         units of it: bright, then dark, sharply, which is the only thing that reads as a
-         waterline rather than as a gradient.
+         So stop guessing. The first ring goes 1.8 units INSIDE the outline at GROUND, which is on
+         the top face under any reading of the bevel, and the second goes 1.8 units OUTSIDE it,
+         which clears the widest the body can possibly be. The skirt now overlaps the platform
+         instead of trying to meet it, and an overlap cannot leave a gap.
 
-         With the swell now at 0.15 the foam sits just clear of it and gets washed at the crests,
-         which is exactly what that band is. */
-      [0.45, 0.35,       1.28],   // berm: the last of the real height
-      [0.64, 0.16,       1.55],   // FOAM, upper edge — above mean water, washed at crests
-      [0.70, 0.10,       1.55],   // FOAM, lower edge: a flat band, not a peak
-      [0.76, 0.00,       0.78],   // and the dark one under it that makes the foam read
-      [0.86, -0.35,      0.58],
-      [1.00, -0.95,      0.38],
+         Offsets are absolute world units from the outline now, signed, rather than a fraction of
+         a width — because the two rings that matter are defined by bevelSize, which is a fixed
+         distance and not a proportion of anything. */
+      [-1.8, GROUND, 1.00],   // on the top face, inside the outline: overlap, do not abut
+      [ 1.8, 2.55,   1.06],   // clear of the bevel at its widest; promenade starts here
+      [ 2.2, 1.55,   0.74],   // sea wall
+      [ 3.6, 0.75,   1.10],
+      [ 5.6, 0.35,   1.28],   // berm
+      [ 7.8, 0.16,   1.55],   // FOAM, upper edge
+      [ 8.6, 0.10,   1.55],   // FOAM, lower edge
+      [ 9.4, 0.00,   0.78],   // wet
+      [10.8, -0.35,  0.58],
+      [12.0, -0.95,  0.38],
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;
@@ -1429,9 +1434,14 @@ DISTRICTS.forEach(d => {
     const reach = [];
     for (let i = 0; i < n; i++) reach.push(beachReach(d.id, o, i, BW));
     const pos = [], col = [], idx = [];
-    P.forEach(([t, y, sh]) => {
+    P.forEach(([off, y, sh]) => {
       for (let i = 0; i < n; i++){
-        const [px, py] = t === 0 ? [o[i].x, o[i].y] : outwardAt(d.id, o, i, reach[i] * t);
+        // reach[i] is the largest OUTWARD distance this sample can take before folding, so the
+        // pinch at an inlet stays proportional. Inward offsets need no clamp: the island is
+        // always wider than 1.8 units.
+        const f = reach[i] / BW;
+        const [px, py] = off < 0 ? inwardAt(d.id, o, i, -off / d.r)
+                                 : outwardAt(d.id, o, i, (off / d.r) * f);
         pos.push(px * d.r, y, -py * d.r);
         col.push(sh, sh, sh);
       }
@@ -1821,7 +1831,7 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
      — but the islands came out thin. A finer pitch wins twice: more blocks fit in what is left,
      AND the clearance shrinks with the pitch, since half of it is the building's own overhang.
      Instancing means the extra count is free in draw calls. */
-  urbanFabric(d, d.mass,   { density:0.80, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
+  urbanFabric(d, d.mass,   { density:1.05, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   const built = urbanFabric(d, d.detail,
                            { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   d.fabric = built;
@@ -1863,7 +1873,13 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
   { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
 urbanFabric(corniche, corniche.mass,
-  { density:1.25, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
+  /* MASS 1.25 -> 1.60. The LOD swap is mutually exclusive — world shows mass, district shows
+     detail — so the size of the pop is exactly the ratio between the two densities. At 1.25
+     against 1.85 the world view was coarse blocks and the district view was a city, and the
+     switch read as the model changing rather than the camera moving. 1.60 against 1.85 is a
+     grain change instead of a substitution. Cell count goes as density squared, so this is 1.6
+     times the mass fabric, paid only in the view that has the most headroom. */
+  { density:1.60, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
