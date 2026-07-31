@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v30';
+export const BUILD = 'world v31';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1446,10 +1446,28 @@ DISTRICTS.forEach(d => {
         col.push(sh, sh, sh);
       }
     });
+    /* THE STRIP WAS FACING THE SEABED. This is why nothing has been visible for five drops, and
+       every explanation before it was wrong because they were all explanations of an appearance.
+
+       Reconstructing the geometry outside three and taking the cross product of each triangle:
+       3,181 of 3,240 faces pointed DOWN. MeshStandardMaterial is side: FrontSide by default, so
+       every one of them was back-face culled from any camera above the water. The beach has been
+       built correctly, positioned correctly, coloured correctly and shaded correctly since v23,
+       and drawing nothing at all.
+
+       The cause is the outline's handedness. ISLE_SHAPES runs clockwise in shape space, and the
+       mapping to world negates Y into Z — a reflection, which flips the sense of every winding
+       that goes through it. So a triangle order that is correct on paper comes out inverted in
+       the scene, and no amount of reasoning about which way the ring "goes" would have settled
+       it. Only the cross product settles it.
+
+       The winding is flipped here rather than by setting side: DoubleSide. Double-siding hides
+       a wrong normal instead of fixing it, and this surface is lit — it needs to face the sun
+       to be shaded as sand rather than as the underside of a shelf. */
     for (let r = 0; r < P.length - 1; r++){
       for (let i = 0; i < n; i++){
         const j = (i + 1) % n, a = r * n, b = (r + 1) * n;
-        idx.push(a + i, b + i, b + j, a + i, b + j, a + j);
+        idx.push(a + i, b + j, b + i, a + i, a + j, b + j);
       }
     }
     const bg = new THREE.BufferGeometry();
