@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v18';
+export const BUILD = 'world v19';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1014,12 +1014,17 @@ const DISTRICTS = [
        road skeleton needs them too — arterials break on entry, so none drives through Emirates
        Palace or the Etihad plaza. One rectangle per piece of hand-built content, sized to what
        that content actually covers. */
+    /* THREE RECTANGLES, ONE PER HAND-BUILT LANDMARK, and no more than that.
+
+       v18 had five. The two extra ones were strips — a 74 x 10 seaward band and an 84 x 22 tower
+       row — and they protected PAINTED GROUND rather than any built geometry. Nothing stands on
+       either. They were the old exclusion band's job carried forward into rectangle form without
+       being re-examined, and between them they covered a third of the island. Five rects reserved
+       69 per cent of Corniche, which is MORE than the band they were brought in to replace. */
     avoid:[
       { x:-43, z:  0, w:62, d:24 },   // Emirates Palace and its estate
       { x: -4, z:-16, w:48, d:20 },   // Etihad Towers and the plaza
       { x: 48, z: -6, w:20, d:20 },   // ADNOC HQ and its apron
-      { x: -7, z:-18, w:74, d:10 },   // the seaward low-rise band
-      { x: 30, z:  4, w:84, d:22 },   // the mixed-tower row behind the landmarks
     ],
     // Re-derived against the new outline. Index 0 is the west tip and the samples run east
     // along the north shore, so this is the Corniche itself, end to end.
@@ -1039,12 +1044,12 @@ const DISTRICTS = [
       { kind:'paving', x: 48, z: -6, w:17, d:13 },   // ADNOC apron
       // The low-rise band on the seaward side had no ground under it at all — twenty buildings
       // standing on open desert between the corniche road and the towers.
-      { kind:'paving', x: -8, z:-18, w:72, d:11 },
       // The mixed-tower row behind the landmarks. Sloped to match cityRow's zSlope, and
       // deliberately longer than the island — patches are painted inside the coastline clip,
       // so overshoot is trimmed for free and no patch has to be fitted to the coast by hand.
-      // Trimmed to the row it belongs to. At 96 x 24 it was a blank apron reading as an airstrip.
-      { kind:'paving', x: 30, z:  4, w:84, d:20, rot: 0.08 },
+      /* The seaward band and the tower row are GONE, not trimmed. Both were painted to put
+         something on ground the fabric was forbidden to touch; the fabric reaches it now, and an
+         apron under a real city block is only a paler street. */
     ] },
   { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
     built:false, coreN:[0.0, 0.0], places:[
@@ -1388,29 +1393,35 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
   d.glow = glow;
 });
 
-/* Corniche gets fabric across the whole island now, minus the five reserved rectangles. The
-   towers standing in front of a dense low-rise city is most of what makes them read as a
-   downtown rather than as objects on sand — and until this drop the half of the island where
-   that mattered most was the half with nothing on it. */
-/* DENSITY BACK DOWN TO 1.30, AND THE REASON IS THE SAME ONE THAT PUT IT UP.
+/* Corniche gets fabric across the whole island, minus three reserved rectangles. The towers
+   standing in front of a dense low-rise city is most of what makes them read as a downtown
+   rather than as objects on sand.
 
-   It was raised to 2.10 because the exclusion band left the fabric a strip about 24 units deep
-   along the southern shore, and at a coarse pitch that strip held two dozen buildings — a handful
-   of sheds, not a city. Halving the pitch filled it.
+   DENSITY 1.85, AND THE ARITHMETIC THAT SHOULD HAVE BEEN RUN BEFORE 1.30 WAS.
 
-   The band is gone, the fabric has roughly two and a half times the ground, and 2.10 is now
-   actively wrong: at that density the block pitch is 3.1 units, which is a 24-metre block. Plan
-   showed exactly what that produces — a fine regular mesh that reads as graph paper rather than
-   as urbanism. At 1.30 the pitch is 5.0 units, or 39 metres, which is a plausible small block and
-   coarse enough that the streets between them survive being drawn at district distance.
+   v18 cut this from 2.10 to 1.30 on the reasoning that the fabric had gained two and a half times
+   the ground and would otherwise read as graph paper. The first half of that was simply false:
+   the five exclusion rectangles covered 69 per cent of the island, more than the band they
+   replaced, so the fabric gained almost nothing — and the density cut then took the cell count
+   from 206 to 69. Two changes that both removed buildings, one of them believed to be adding
+   them. The Day world view showed the result honestly: fat pale slabs scattered on green.
+
+   Three landmark rects leave 64 per cent of the island open, and 1.85 puts about 254 cells on it
+   against v17's 206 in a strip. So the local grain is close to what the strip had while the city
+   now covers the whole island. Block pitch 3.5 units, a 27-metre block — finer than v18's 39, and
+   not the 24 that made a mesh.
+
+   THE GREEN WAS THE SAME MISTAKE SEEN FROM THE OTHER SIDE. Parkland is painted first and the
+   fabric's own cells are paved on top of it, so the amount of green showing is set by how much
+   city is standing on the island. The park layer is dense enough to tint the whole of Corniche
+   and always has been — 69 cells simply stopped covering it. It needs no fix; it needs a city.
 
    CAP 12 STAYS. Etihad's shortest tower is 21.8 and ADNOC is 44, so the margin that makes the
-   three landmarks legible as landmarks is unchanged — and the fabric is now allowed to come up
-   behind Emirates Palace, which is what gives a 6.6-unit building something to be low against. */
+   three landmarks legible as landmarks is unchanged. */
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
-  { density:1.30, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
+  { density:1.85, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
 urbanFabric(corniche, corniche.mass,
-  { density:0.90, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
+  { density:1.25, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
