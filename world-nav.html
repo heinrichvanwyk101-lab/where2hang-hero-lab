@@ -174,7 +174,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v19', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v20', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -699,6 +699,21 @@ function applyView(next){
        material with a visible one in Day and Silhouette, laying a solid lid over every island.
        Anything that exists for input rather than for looking at is skipped outright. */
     if (o.userData.helper) return;
+    /* NIGHT-ONLY MESHES EXIST OR THEY DO NOT — there is no daytime version of them.
+
+       The lamp pools are additive quads standing in for 628 point lights that could not be real
+       ones. Handing them to any of the branches below is wrong in a different way each time:
+       origMat in Day leaves a warm additive smear across a sunlit ground plan, dayMat makes them
+       opaque pale discs, and silMat makes them flat black discs in the one view built to read
+       massing. So they are checked before all of it, and simply switched off.
+
+       Plan is covered for free: it is neither night nor dusk. */
+    if (o.userData.nightOnly){
+      o.visible = night || dusk;
+      if (o.visible) o.material = dusk && o.userData.duskMats ? o.userData.duskMats
+                                                             : o.userData.origMat;
+      return;
+    }
     /* Plan hides everything that is not island ground — buildings, props, the lot — so nothing
        can occlude or shade the surface under examination. */
     o.visible = plan ? o.userData.ground === true : true;

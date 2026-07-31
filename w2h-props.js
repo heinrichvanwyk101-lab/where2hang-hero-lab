@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v11';
+export const BUILD = 'props v12';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -139,6 +139,53 @@ carBody.translate(0, 0.62 * U_PER_M, 0);
 const carCabin = new THREE.BoxGeometry(2.3 * U_PER_M, 0.85 * U_PER_M, 1.60 * U_PER_M);
 carCabin.translate(-0.15 * U_PER_M, 1.45 * U_PER_M, 0);
 const carGeo = mergeGeometries([carBody, carCabin]);
+
+/* ---------- lamp light pools ----------
+
+   628 lamp columns that emit nothing. In the reference render the promenade and the roads are
+   pooled with warm light and that is most of what makes the land read as inhabited after dark;
+   in the build the ground simply goes black between the buildings and the lamps are furniture.
+
+   REAL LIGHTS ARE NOT AN OPTION AND IT IS NOT CLOSE. WebGL forward rendering evaluates every
+   light for every fragment of every lit material, so a scene with 628 point lights does not run
+   slowly, it fails to compile — three writes the count into the shader source.
+
+   An additive quad on the ground is the same effect for one draw call. It is not lighting: it
+   lights nothing, casts nothing and responds to nothing. It is a painted pool that happens to
+   sit where a pool would be, which at this scale is indistinguishable from the real thing and
+   roughly a millionth of the cost. */
+function makePool(N = 128){
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(N/2, N/2, 0, N/2, N/2, N/2);
+  /* The falloff is deliberately not linear and not 1/r^2. A physical pool from a 5-metre column
+     has a hot core and a long dim skirt; a linear ramp reads as a sticker and an inverse square
+     is all core and no skirt at this size. Four stops, hand-placed. */
+  gr.addColorStop(0.00, 'rgba(255,255,255,1.00)');
+  gr.addColorStop(0.18, 'rgba(255,255,255,0.62)');
+  gr.addColorStop(0.45, 'rgba(255,255,255,0.20)');
+  gr.addColorStop(0.75, 'rgba(255,255,255,0.05)');
+  gr.addColorStop(1.00, 'rgba(255,255,255,0.00)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, N, N);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const poolTex = makePool();
+const poolGeo = new THREE.PlaneGeometry(1, 1);
+poolGeo.rotateX(-Math.PI / 2);              // flat on the ground, +Y up
+/* Additive, depthWrite off. Additive because light adds; two overlapping pools along a road
+   should brighten where they meet rather than one winning. depthWrite off because 628 coplanar
+   transparent quads that write depth will fight each other for the rest of time. */
+const poolBase = { map: poolTex, transparent: true, blending: THREE.AdditiveBlending,
+                   depthWrite: false, toneMapped: true, side: THREE.FrontSide };
+const matPoolNight = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFB35C, opacity: 0.85 });
+/* Dusk is a lit sky. The same pool that reads at night is invisible against it if you leave the
+   strength alone and garish if you raise it, so it drops instead — a lamp at dusk is on, and
+   barely showing is exactly what that looks like. */
+const matPoolDusk  = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFC27A, opacity: 0.34 });
 
 /* ---------- boat ----------
    A hull with a raked bow, done by shearing the front of a box rather than modelling one. At
@@ -338,6 +385,28 @@ function addProps(d, layer, plan, budget = {}){
     M.rotation.set(0, p.rot, 0);
     M.scale.set(1, 1, 1);
   });
+
+  /* One pool per lamp, on the ground under it. 0.06 above the surface: enough to clear the
+     painted road without floating, and far below anything the eye resolves at district range.
+     The size jitter matters more than it sounds — 628 identical discs along a kerb line read as
+     a dotted rule rather than as lighting. */
+  const pools = build(poolGeo, matPoolNight, lamps, (p) => {
+    const s = 3.4 + R() * 1.5;
+    M.position.set(p.x * r, Y + 0.06, -p.y * r);
+    M.rotation.set(0, 0, 0);
+    M.scale.set(s, 1, s);
+  });
+  if (pools){
+    pools.castShadow = pools.receiveShadow = false;
+    /* NOT litMat. That flag means "keep your own material in every mode except silhouette",
+       which for an additive quad would put a flat black disc under every lamp in the one view
+       built to read massing. nightOnly is the shell's flag for a mesh that should simply not
+       exist outside night and dusk. */
+    pools.userData.litMat = false;
+    pools.userData.nightOnly = true;
+    pools.userData.duskMats = matPoolDusk;
+    pools.renderOrder = 2;
+  }
 
   build(carGeo, matCar, cars, (p) => {
     M.position.set(p.x * r, Y + 0.01, -p.y * r);
