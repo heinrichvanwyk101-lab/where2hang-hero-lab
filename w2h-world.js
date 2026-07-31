@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v19';
+export const BUILD = 'world v20';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1009,7 +1009,24 @@ const DISTRICTS = [
       { label:'Etihad Towers',   x: -4, z:-16, h:18,  r: 28 },
       { label:'ADNOC HQ',        x: 48, z: -6, h:26,  r: 22 },
     ],
-    coreN:[-0.05, -0.34],
+    /* THE HEIGHT CORE, AND IT WAS ON THE WRONG SHORE.
+
+       jy is north-positive, so [-0.05, -0.34] put the falloff centre against the SOUTH coast —
+       the creek side. Every landmark is north of it: Etihad at +0.21, ADNOC at +0.08, the palace
+       at 0. Running the falloff, southern blocks came out at fall 0.98 and capped at 12 almost
+       everywhere while the north shore sat at 0.30 and topped out around 8.7. The tallest
+       generated towers stood on the creek and the promenade got the short ones, which is backwards
+       from the place: the Corniche skyline faces north over the water.
+
+       It was not wrong when it was written. The fabric was a southern strip then, so the core sat
+       in the middle of the only ground the fabric had and the asymmetry had nothing to act on.
+       v19 gave the fabric the whole island and turned a harmless number into a visible one.
+
+       [0.10, 0.02] puts it between Etihad and ADNOC, where downtown actually is. Known and
+       intended side effect: the west tip falls to 0, so the Bateen end goes near-flat low-rise.
+       Khalidiya genuinely is lower than the central Corniche, and it gives the palace a quiet
+       western horizon to sit against instead of competing towers. */
+    coreN:[0.10, 0.02],
     /* The reservations, declared here rather than only at the urbanFabric call site because the
        road skeleton needs them too — arterials break on entry, so none drives through Emirates
        Palace or the Etihad plaza. One rectangle per piece of hand-built content, sized to what
@@ -1418,10 +1435,13 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
 
    CAP 12 STAYS. Etihad's shortest tower is 21.8 and ADNOC is 44, so the margin that makes the
    three landmarks legible as landmarks is unchanged. */
+/* READ FROM coreN, not retyped. The core was written out twice — once in the district table and
+   once here — and the two copies were free to drift, which is most of how the south-shore core
+   survived unnoticed through four drops. One source. */
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
-  { density:1.85, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
+  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
 urbanFabric(corniche, corniche.mass,
-  { density:1.25, coreX:-0.05, coreZ:-0.34, tallest:16, avoid:true, cap:12 });
+  { density:1.25, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
