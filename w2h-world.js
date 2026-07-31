@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v21';
+export const BUILD = 'world v22';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -966,7 +966,25 @@ function paintGround(d, plan){
 const matBeach    = new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0 });
 const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
+/* THREE STONES, AND THE REASON IS THE DUSK LIFT, NOT TASTE.
+
+   applyLift in world-nav.html sets EVERY non-glass material in the scene to one colour,
+   DUSK_STONE 0xD9CDB6, whenever dusk is on. Dusk is the product state. So adding materials that
+   differ by COLOUR would have bought nothing at all where it counts — they would all be
+   overwritten with the same hex the moment the mode was entered. That drop would have shipped
+   and changed nothing, and it took reading the lift to see it.
+
+   What the lift does NOT touch on a stone material is roughness and metalness: it only sets
+   those for glass. So surface finish is the one channel that survives into dusk, and these three
+   differ in nothing else. Same colour, so the night render is unchanged and so is the glass
+   classifier in the lift registry, which decides by blue-over-red on the night hex and must keep
+   answering "not glass" for all three.
+
+   Assigned by height, following the same logic the glass rule already uses: render on the low
+   band, precast in the middle, polished cladding on the towers. */
 const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
+const matStoneRend  = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.99, metalness:0.0 });
+const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.52, metalness:0.08 });
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
 const matLitWarm = new THREE.MeshStandardMaterial({
   color:0x0E141A, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.5 });
@@ -1187,8 +1205,60 @@ DISTRICTS.forEach(d => {
    It now RETURNS ITS CELLS, which is the hinge of the whole ground step: the pavement is
    painted from the same list that placed the buildings, so the two cannot drift apart.
    =========================================================================== */
-const fabricGeo = new THREE.BoxGeometry(1, 1, 1);
-fabricGeo.translate(0, 0.5, 0);          // base at origin so Y scale grows upward
+/* THE FABRIC IS NO LONGER A BOX, and this is the prerequisite for spending anything on
+   materials.
+
+   Every one of the ~1,400 generated buildings was BoxGeometry(1,1,1): twelve triangles, four
+   square corners, parallel walls. A better material on that gives you a shinier box. Roughness
+   needs an EDGE to read on — the reason Etihad's five towers are the most convincing thing in
+   the scene is that they taper and catch a highlight down one face, not that their material is
+   special.
+
+   TWO FEATURES, AND BOTH ARE CHOSEN TO SURVIVE NON-UNIFORM INSTANCE SCALE. Each instance scales
+   this by (w, h, dp) independently, so anything measured in Y is stretched by the building's
+   height: a plinth or a parapet at a fixed fraction would give ADNOC at 44 units a four-unit
+   band and a five-unit shed a half-unit one. Nothing vertical, therefore.
+
+   1. CHAMFERED VERTICAL CORNERS at 14 per cent of the footprint. Scales with w and dp, which is
+      what you want — a wider building gets a proportionally wider chamfer. At a low sun the
+      chamfer face takes light at a third angle from the two walls it joins, so every building
+      gets a bright or dark line down each corner. That line is the whole point.
+
+   2. A 5 PER CENT TAPER, top narrower than base. Proportional, so it is scale-safe too. It also
+      breaks the one thing that most gave away the old fabric: a field of extruded rectangles all
+      with exactly parallel vertical edges reads as a bar chart.
+
+   32 triangles against 12. About 28k extra across a district, against 92k. */
+const fabricGeo = (() => {
+  const C = 0.22 * 0.5, H = 0.5, T = 0.95;
+  /* The chamfered square, written out in order rather than generated per quadrant. A loop over
+     [±1, ±1] emits the eight points in an order that is NOT angular, and indexing a ring in the
+     wrong order gives a self-intersecting bow-tie prism that still passes a syntax check and
+     still renders — just wrongly, and only at certain angles. Explicit is cheaper to verify. */
+  const ring = [
+    [ H, -H + C], [ H,  H - C], [ H - C,  H], [-H + C,  H],
+    [-H,  H - C], [-H, -H + C], [-H + C, -H], [ H - C, -H],
+  ];
+  const pos = [], idx = [];
+  const push = (x, y, z) => { pos.push(x, y, z); return pos.length / 3 - 1; };
+  const bot = ring.map(p => push(p[0], 0, p[1]));
+  const top = ring.map(p => push(p[0] * T, 1, p[1] * T));
+  for (let i = 0; i < 8; i++){
+    const j = (i + 1) % 8;
+    idx.push(bot[i], top[i], top[j], bot[i], top[j], bot[j]);
+  }
+  const cb = push(0, 0, 0), ct = push(0, 1, 0);
+  for (let i = 0; i < 8; i++){
+    const j = (i + 1) % 8;
+    idx.push(cb, bot[i], bot[j]);
+    idx.push(ct, top[j], top[i]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+})();
 
 function urbanFabric(d, layer, opts){
   const { density, coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
@@ -1220,26 +1290,39 @@ function urbanFabric(d, layer, opts){
     }
   }
 
+  const rendM  = new THREE.InstancedMesh(fabricGeo, matStoneRend,  cells.length);
   const stoneM = new THREE.InstancedMesh(fabricGeo, matPlaceStone, cells.length);
+  const cladM  = new THREE.InstancedMesh(fabricGeo, matStoneClad,  cells.length);
   const glassM = new THREE.InstancedMesh(fabricGeo, matPlaceGlass, cells.length);
   const bandM  = new THREE.InstancedMesh(fabricGeo, cool ? matLitCool : matLitWarm, cells.length);
-  stoneM.castShadow = glassM.castShadow = true;
-  stoneM.receiveShadow = glassM.receiveShadow = true;
+  [rendM, stoneM, cladM, glassM].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
 
   const M = new THREE.Object3D();
   const col = new THREE.Color();
-  let si = 0, gi = 0, bi = 0;
+  let si = 0, gi = 0, bi = 0, ri = 0, ci = 0;
   const gap = 0.22;                       // street width as a fraction of the block
 
   /* A MULTIPLIER NEAR WHITE, not an absolute colour. instanceColor MULTIPLIES the material's
      diffuse rather than replacing it, so the base material carries the hue in whichever view
      mode is active and the instance buffer carries only the VARIATION. */
+  /* WARMTH IS NOW PER BUILDING, WHICH IT WAS NOT.
+
+     The old version rolled one number, v, and applied a FIXED warm ratio to it: R = 1.05v,
+     G = v, B = 0.94v. Every stone instance therefore had exactly the same hue and differed only
+     in brightness, which is precisely why the fabric read as one sand colour with the lights
+     turned up and down. A hue needs its own roll.
+
+     w runs slightly negative at the bottom of its range, so a few buildings come out cool grey
+     against the sand. Abu Dhabi has plenty of white and grey towers and the contrast is what
+     makes the warm ones read as warm. Since instanceColor MULTIPLIES, this is relative: it
+     works the same against the night hex and against DUSK_STONE without knowing either. */
   function tint(amount, warmBias){
     const v = 1 + (rnd() - 0.5) * amount;
+    const w = warmBias * (-0.45 + rnd() * 2.25);
     col.setRGB(
-      Math.min(1.35, v * (1 + warmBias * 0.05)),
+      Math.min(1.35, v * (1 + w * 0.05)),
       Math.min(1.35, v),
-      Math.min(1.35, v * (1 - warmBias * 0.06))
+      Math.min(1.35, v * (1 - w * 0.06))
     );
     return col;
   }
@@ -1282,9 +1365,24 @@ function urbanFabric(d, layer, opts){
       glassM.setColorAt(gi, tint(0.30, 0.2));   // glass varies less: it is one product
       gi++;
     } else {
-      stoneM.setMatrixAt(si, M.matrix);
-      stoneM.setColorAt(si, tint(0.42, 1.0));   // concrete varies more, and warm
-      si++;
+      /* Finish follows height, exactly as glass does, and for the same reason: a material that
+         varies at random across neighbouring plots reads as noise, while one that varies with
+         height reads as the city having been built in eras. ONE roll already spent above decides
+         glass; this needs none, since h is already known. */
+      const frac = h / tallest;
+      if (frac < 0.36){
+        rendM.setMatrixAt(ri, M.matrix);
+        rendM.setColorAt(ri, tint(0.46, 1.15));   // render and plaster: warmest and most varied
+        ri++;
+      } else if (frac < 0.62){
+        stoneM.setMatrixAt(si, M.matrix);
+        stoneM.setColorAt(si, tint(0.42, 1.0));   // precast concrete
+        si++;
+      } else {
+        cladM.setMatrixAt(ci, M.matrix);
+        cladM.setColorAt(ci, tint(0.30, 0.55));   // polished cladding: tighter, cooler
+        ci++;
+      }
     }
 
     if (h > tallest * 0.28){
@@ -1299,14 +1397,13 @@ function urbanFabric(d, layer, opts){
     }
   });
 
-  stoneM.count = si; glassM.count = gi; bandM.count = bi;
-  stoneM.instanceMatrix.needsUpdate = true;
-  glassM.instanceMatrix.needsUpdate = true;
-  bandM.instanceMatrix.needsUpdate = true;
-  if (stoneM.instanceColor) stoneM.instanceColor.needsUpdate = true;
-  if (glassM.instanceColor) glassM.instanceColor.needsUpdate = true;
-  if (bandM.instanceColor)  bandM.instanceColor.needsUpdate  = true;
-  layer.add(stoneM, glassM, bandM);
+  rendM.count = ri; stoneM.count = si; cladM.count = ci;
+  glassM.count = gi; bandM.count = bi;
+  [rendM, stoneM, cladM, glassM, bandM].forEach(m => {
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+  layer.add(rendM, stoneM, cladM, glassM, bandM);
   return { cells, pitch };
 }
 
