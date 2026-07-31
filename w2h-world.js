@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v34';
+export const BUILD = 'world v36';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -817,19 +817,34 @@ function distToPolyline(x, y, pts){
    half-width — the corner ends up 0.12 units INSIDE the carriageway. Not close: overlapping.
    Corniche's mass layer cleared it by 0.03 units, which is 20 centimetres and luck.
 
-   So the clearance is stated properly now: half the road, plus the largest half-diagonal a plot
-   of this pitch can produce, plus a margin. pitch * 0.62 covers block * 0.78 * 0.98 / sqrt(2)
-   with room over. */
+   So the clearance is the visible edge of the road, plus the largest half-diagonal a plot of
+   this pitch can produce, plus a margin.
+
+   AND THE VISIBLE EDGE IS THE KERB, NOT THE CARRIAGEWAY. v33 got the footprint half right and
+   then made a new mistake: it measured from ROAD_RING * 0.5, which is half the tarmac. The
+   painter strokes a kerb casing UNDER the carriageway at 1.20 times the width, so what the eye
+   sees as the road edge is at 0.60 of it. Building up to 0.5 leaves the corner standing on the
+   kerb — still obviously touching the road, which is exactly what it looked like. The original
+   0.60 was right about the width all along and wrong only about treating the plot as a point.
+
+   THE ROUNDABOUT NEEDED ONE TOO. It is a filled disc at plan.core with an outer kerb at 0.0472
+   normalised, and nothing has ever tested against it — onRoad only ever knew about polylines,
+   so the single most conspicuous piece of road on the island was the one thing buildings were
+   free to stand in. */
+const ROAD_KERB = 1.20;                      // the casing the painter strokes under the tarmac
+const CORE_R    = 0.040 * 1.18;              // roundabout outer kerb, matching the painter
+
 function onRoad(d, x, y, pitch){
   const R = d.roads;
   if (!R) return false;
   const pad = pitch * 0.62;
   for (let i = 0; i < R.ring.length; i++){
-    if (distToPolyline(x, y, R.ring[i]) < ROAD_RING * 0.5 + pad) return true;
+    if (distToPolyline(x, y, R.ring[i]) < ROAD_RING * 0.5 * ROAD_KERB + pad) return true;
   }
   for (let i = 0; i < R.arterials.length; i++){
-    if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.5 + pad) return true;
+    if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.5 * ROAD_KERB + pad) return true;
   }
+  if (R.core && Math.hypot(x - R.core[0], y - R.core[1]) < CORE_R + pad) return true;
   return false;
 }
 
@@ -1061,32 +1076,163 @@ function paintGround(d, plan){
   /* 8. ROADS, laid LAST so they cut through the fabric the way a real arterial does. Kerb first
         and slightly wider, then the carriageway on top of it, then a dashed centre line: three
         strokes of the same path, which is how you get a road with edges for the price of one. */
-  function road(pathFn, wid){
-    g.lineCap = 'butt'; g.lineJoin = 'round';
-    g.strokeStyle = SURF.kerb; g.lineWidth = U * wid * 1.20; pathFn(); g.stroke();
-    g.strokeStyle = SURF.road; g.lineWidth = U * wid;        pathFn(); g.stroke();
-    g.strokeStyle = SURF.line; g.lineWidth = Math.max(1, U * wid * 0.10);
-    g.setLineDash([U * 0.030, U * 0.026]);
-    pathFn(); g.stroke();
+  /* ===========================================================================
+     ROADS, IN THREE TIERS.
+
+     Everything below is 2D drawing on a canvas that already exists. No mesh, no draw call, no
+     triangle — which matters at a moment when the triangle count is the number under pressure,
+     and is also why this is the cheapest remaining item on the list by a wide margin.
+
+     The old version drew one stroke per road: a kerb casing, tarmac over it, and a dashed line
+     down the middle whatever the road was. That gives every carriageway the same rank, and rank
+     is most of what makes a road network read as a city rather than as a diagram. Three tiers
+     now, and they differ in width, in casing and in what is painted on them:
+
+       PRIMARY    the ring. Dual carriageway with a planted median, an edge line each side and a
+                  dashed lane divider within each direction.
+       SECONDARY  the arterials. Single carriageway, kerbed, edge lines, dashed centre.
+       SERVICE    the block grid. Thin, uncased, unmarked — which is what a service road is.
+
+     ONE HELPER DRAWS ALL THE MARKINGS, by walking a polyline and emitting a parallel offset of
+     it. Offsetting in canvas space rather than in island space is deliberate: line widths and
+     dash lengths are pixel quantities, the offsets have to match them, and doing the arithmetic
+     twice in two coordinate systems is how kerbs and markings drift apart.
+     =========================================================================== */
+
+  // A polyline, offset sideways by `off` canvas pixels. Normals from the neighbours, so corners
+  // stay parallel instead of pinching.
+  function offsetPath(pts, off){
+    const n = pts.length, out = [];
+    for (let i = 0; i < n; i++){
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+      let tx = PX(b[0]) - PX(a[0]), ty = PY(b[1]) - PY(a[1]);
+      const L = Math.hypot(tx, ty) || 1;
+      out.push([PX(pts[i][0]) - ty / L * off, PY(pts[i][1]) + tx / L * off]);
+    }
+    return out;
+  }
+  function strokePx(pts, style, width, dash){
+    if (pts.length < 2) return;
+    g.strokeStyle = style; g.lineWidth = Math.max(0.8, width);
+    g.setLineDash(dash || []);
+    g.beginPath();
+    g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.stroke();
     g.setLineDash([]);
   }
 
-  // The ring road. On Corniche its northern half IS the Corniche.
-  // Wider than the first pass. A 17-pixel road on a 1024 map is under two screen pixels once
-  // the island is drawn at world scale, and two pixels of dark line does not survive a mipmap.
-  // One stroke per surviving run. A run that is a full loop already ends where it started, so
-  // there is nothing to close and nothing to special-case.
-  plan.ring.forEach(seg => road(() => pathPoly(seg), ROAD_RING));
-  plan.arterials.forEach(a => road(() => pathPoly(a), ROAD_ART));
+  /* PRIMARY. Two carriageways with a median between them, so the geometry is: kerb casing, one
+     tarmac band per direction, a planted median filling the gap, then markings. Drawing the
+     tarmac as two bands rather than one wide band with a median painted over it means the median
+     has real kerbs on both faces, which is what it looks like from above. */
+  function roadPrimary(pts){
+    const W = U * ROAD_RING;                      // full corridor, kerb to kerb
+    const med = W * 0.16;                         // planted median
+    const car = (W - med) / 2;                    // each carriageway
+    const halfC = (med + car) / 2;                // centre of each carriageway from the axis
+    g.lineCap = 'butt'; g.lineJoin = 'round';
+    strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
+    [-1, 1].forEach(sgn => {
+      strokePx(offsetPath(pts, sgn * halfC), SURF.road, car);
+      // Edge line hard against the kerb, dashed divider down the middle of the two lanes.
+      strokePx(offsetPath(pts, sgn * (halfC + car * 0.40)), SURF.line, Math.max(1, W * 0.035));
+      strokePx(offsetPath(pts, sgn * halfC), SURF.line, Math.max(1, W * 0.030),
+               [U * 0.026, U * 0.030]);
+    });
+    // The median itself: kerb faces with planting between them.
+    strokePx(offsetPath(pts, 0), SURF.kerb, med);
+    strokePx(offsetPath(pts, 0), SURF.lawn + '0.92)', med * 0.52);
+  }
 
-  // The roundabout where they meet. Not decoration — it is the single most Abu Dhabi thing that
-  // can be drawn in six lines.
+  /* SECONDARY. One carriageway, still kerbed, edge lines and a dashed centre. Narrower casing
+     than the ring so the hierarchy shows even where the two run parallel. */
+  function roadSecondary(pts){
+    const W = U * ROAD_ART;
+    g.lineCap = 'butt'; g.lineJoin = 'round';
+    strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
+    strokePx(offsetPath(pts, 0), SURF.road, W);
+    [-1, 1].forEach(sgn => strokePx(offsetPath(pts, sgn * W * 0.40), SURF.line,
+                                    Math.max(1, W * 0.045)));
+    strokePx(offsetPath(pts, 0), SURF.line, Math.max(1, W * 0.040), [U * 0.022, U * 0.026]);
+  }
+
+  /* SERVICE. Drawn from the block grid rather than from the skeleton, because that is what a
+     service road is: the gap between plots. No casing and no markings — a painted lane the width
+     of a car and a half, which at district range is a texture rather than a road, and that is
+     exactly its job in the hierarchy. */
+  function roadService(){
+    const cells = plan.cells, pitch = plan.pitch;
+    if (!cells || !cells.length || !pitch) return;
+    const W = Math.max(1.2, U * pitch * 0.16);
+    g.strokeStyle = SURF.street; g.lineWidth = W; g.lineCap = 'round';
+    g.beginPath();
+    const step = pitch;
+    for (let k = 0; k < cells.length; k++){
+      const c = cells[k];
+      // A short run each way from the plot centre, stopping short of the next plot: the result
+      // is a broken grid that follows the fabric wherever the fabric actually went.
+      g.moveTo(PX(c.jx - step * 0.46), PY(c.jy)); g.lineTo(PX(c.jx + step * 0.46), PY(c.jy));
+      g.moveTo(PX(c.jx), PY(c.jy - step * 0.46)); g.lineTo(PX(c.jx), PY(c.jy + step * 0.46));
+    }
+    g.stroke();
+    g.lineCap = 'butt';
+  }
+
+  /* A ROUNDABOUT, AND THE SLIP LANES INTO IT. The hatching is the detail that reads as traffic
+     engineering rather than as a drawn circle: a wedge of parallel strokes on the approach side,
+     which is how a nose island between the through lane and the slip is marked. */
+  function roundabout(cx, cy, r, approaches){
+    const px = PX(cx), py = PY(cy);
+    g.fillStyle = SURF.kerb; g.beginPath(); g.arc(px, py, r * ROAD_KERB, 0, 6.2832); g.fill();
+    g.fillStyle = SURF.road; g.beginPath(); g.arc(px, py, r, 0, 6.2832); g.fill();
+    // Lane divider around the circulatory carriageway.
+    g.strokeStyle = SURF.line; g.lineWidth = Math.max(1, r * 0.05);
+    g.setLineDash([r * 0.30, r * 0.34]);
+    g.beginPath(); g.arc(px, py, r * 0.70, 0, 6.2832); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = SURF.kerb; g.beginPath(); g.arc(px, py, r * 0.46 * ROAD_KERB, 0, 6.2832); g.fill();
+    g.fillStyle = SURF.lawn + '0.95)';
+    g.beginPath(); g.arc(px, py, r * 0.46, 0, 6.2832); g.fill();
+
+    (approaches || []).forEach(ang => {
+      // Hatched nose on the near side of each approach. Strokes run across the wedge, shortening
+      // toward the point, which is what makes it read as a taper rather than as a patch.
+      const nx = Math.cos(ang), ny = Math.sin(ang);
+      const tx = -ny, ty = nx;
+      g.strokeStyle = SURF.line; g.lineWidth = Math.max(0.8, r * 0.045);
+      for (let t = 0; t < 1; t += 0.16){
+        const d0 = r * (1.10 + t * 1.35);
+        const halfW = r * 0.34 * (1 - t);
+        const bx = px + nx * d0, by = py - ny * d0;   // canvas y runs the other way
+        g.beginPath();
+        g.moveTo(bx - tx * halfW, by + ty * halfW);
+        g.lineTo(bx + tx * halfW, by - ty * halfW);
+        g.stroke();
+      }
+    });
+  }
+
+  // ---- draw, coarsest first so markings always land on top of tarmac ----
+  roadService();
+  plan.ring.forEach(seg => roadPrimary(seg));
+  plan.arterials.forEach(a => roadSecondary(a));
+
+  /* Roundabouts where the arterials meet the ring as well as at the core. The junction is the
+     LAST point of each arterial — the skeleton walks them outward from the core until they leave
+     the island or hit a reserved rectangle, so the far end is where it met something. */
   const core = plan.core;
   const cr = U * 0.040;
-  g.fillStyle = SURF.kerb; g.beginPath(); g.arc(PX(core[0]), PY(core[1]), cr*1.18, 0, 6.2832); g.fill();
-  g.fillStyle = SURF.road; g.beginPath(); g.arc(PX(core[0]), PY(core[1]), cr,      0, 6.2832); g.fill();
-  g.fillStyle = SURF.lawnLt + '0.95)';
-  g.beginPath(); g.arc(PX(core[0]), PY(core[1]), cr*0.46, 0, 6.2832); g.fill();
+  const coreApp = plan.arterials.map(a => {
+    const p = a[Math.min(3, a.length - 1)];
+    return Math.atan2(p[1] - core[1], p[0] - core[0]);
+  });
+  plan.arterials.forEach(a => {
+    if (a.length < 6) return;
+    const e = a[a.length - 1], b = a[a.length - 4];
+    roundabout(e[0], e[1], cr * 0.72, [Math.atan2(b[1] - e[1], b[0] - e[0])]);
+  });
+  roundabout(core[0], core[1], cr, coreApp);
 
   g.restore();
 
@@ -1931,11 +2077,21 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   // ADNOC HQ: the tall slim anchor at the eastern end.
   massBlock(48, -6, 7.6, 44, 4.8, true, false, 0.14);
 
-  // Supporting skyline, south of the heroes where the island is deep.
-  [[-34,10,14,11],[-12,6,11,14],[16,8,13,9],[28,14,10,16],
-   [-58,8,12,8],[58,4,11,12],[6,26,16,5],[-20,28,14,4]].forEach(b => {
-    massBlock(b[0], b[1], b[2], b[3], b[2]*0.8, false, b[3] < 8, 0.26);
-  });
+  /* THE SUPPORTING SKYLINE IS GONE, AND IT IS WHAT THE BIG BLOCKS WERE.
+
+     Eight hand-placed masses, 10 to 16 units wide. The generated fabric's largest possible plot
+     is 2.67 units, so these were five to six times the size of anything around them — which is
+     exactly what reads as a block rather than a building, and exactly what was circled.
+
+     They earned their place when the mass layer was a coarse independent city and needed help
+     carrying a skyline. v33 changed that: mass is now the detail city filtered by height, so the
+     supporting skyline is already there, at the right scale, and these were sitting on top of it
+     at six times the grain. Two of them, [6,26,16,5] and [-20,28,14,4], are also 4 and 5 units
+     tall against 16 and 14 wide — flat lids, and both close enough to the southern ring road to
+     be among the road encroachments, since massBlock has never been tested against anything.
+
+     The three landmark portraits stay. Those reserve their ground through the avoid rects and
+     they are the point of the mass layer. */
 }
 
 /* ---------- the four placeholders ---------- */
