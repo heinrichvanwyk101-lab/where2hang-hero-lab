@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v28';
+export const BUILD = 'world v29';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1398,11 +1398,28 @@ DISTRICTS.forEach(d => {
       [0.13, 2.30,       1.06],   // promenade, 1.6 units wide, falling 1:16 for drainage
       [0.16, 1.55,       0.74],   // sea wall under it: 0.75 units of drop in 0.36 of run
       [0.26, 0.75,       1.10],   // back of the beach, still coming down fast
-      [0.45, 0.35,       1.26],   // berm: the palest band, and the last of the real height
-      [0.68, 0.08,       1.16],   // foreshore, 2.8 units at 1:10 — this is what was missing
-      [0.74, -0.02,      1.52],   // FOAM: brightest band, straddling the mean surface
-      [0.86, -0.35,      0.66],   // and the dark one under it that makes the foam read
-      [1.00, -0.95,      0.40],
+      /* THE FOAM WAS UNDER THE WATER. Not subtle, not badly tuned — below the surface.
+
+         It sat at y -0.02, and the comment above it claimed it straddled the mean level. It does
+         not: mean level is 0 and -0.02 is beneath it. The brightest band in the profile, the one
+         whole thing that was supposed to say waterline, was submerged, and what showed at the
+         shore was the 1.16 band above it — barely distinguishable from the 1.26 berm behind it.
+         So the beach graded evenly from pale to pale and the eye read shading.
+
+         It is above the surface now, and it is TWO rings at the same value rather than one, so
+         the bright part is a flat band 0.7 units wide instead of a single interpolated peak that
+         the strip either side immediately darkens. The dark wet ring drops to 0.78 within 0.7
+         units of it: bright, then dark, sharply, which is the only thing that reads as a
+         waterline rather than as a gradient.
+
+         With the swell now at 0.15 the foam sits just clear of it and gets washed at the crests,
+         which is exactly what that band is. */
+      [0.45, 0.35,       1.28],   // berm: the last of the real height
+      [0.64, 0.16,       1.55],   // FOAM, upper edge — above mean water, washed at crests
+      [0.70, 0.10,       1.55],   // FOAM, lower edge: a flat band, not a peak
+      [0.76, 0.00,       0.78],   // and the dark one under it that makes the foam read
+      [0.86, -0.35,      0.58],
+      [1.00, -0.95,      0.38],
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;
