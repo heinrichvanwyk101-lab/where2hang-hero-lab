@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v25';
+export const BUILD = 'world v27';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -218,7 +218,22 @@ const farSea = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.62, metalness:0.05 })
 );
 farSea.rotation.x = -Math.PI/2;
-farSea.position.y = -0.45;          // clearly under the wave troughs, so it never z-fights
+/* -1.15, NOT -0.45, AND THE OLD COMMENT WAS WRONG ON ITS OWN TERMS.
+
+   It said "clearly under the wave troughs". The wave loop in world-nav.html is
+   sin(...)*0.55 + sin(...)*0.42, which reaches -0.97 — so the flat plane sat half a unit ABOVE
+   the deepest water and punched through it. At any instant about 17 per cent of the animated
+   plane is below -0.45, which is the large dark shape with the curved edge across the near water
+   in the district render.
+
+   It was invisible until this week for a reason worth recording: the shell assigns farSea the
+   SAME material as the near water, so while both were flat and unmapped the intersection had
+   nothing to give it away. Adding a normal map gave the near surface a specular response that
+   the flat plane does not share, and a seam that had been there all along became a hole.
+
+   -1.15 clears the trough by 0.18. The step this leaves at the 3200-unit boundary is 1.15 units
+   seen from at least 1,600 away through 40 per cent fog. */
+farSea.position.y = -1.15;
 farSea.receiveShadow = false;
 farSea.castShadow = false;
 scene.add(farSea);
@@ -695,6 +710,10 @@ function roundRect(g, x, y, w, h, r){
    =========================================================================== */
 const ROAD_RING = 0.052, ROAD_ART = 0.044;   // normalised widths, shared by paint and clearance
 const COAST_CLEAR = 0.050;                   // no building closer than this to the waterline
+/* THE BEACH WIDTH, HOISTED, because three things have to agree about it: the skirt geometry, the
+   plan handed to the prop kit so boats do not moor on dry sand, and the spacing of the islands
+   themselves. */
+const BEACH_W = 12;                          // world units, before per-sample clamping
 const COAST_PARK_IN = 0.038;                 // the seafront park sits between the beach and the ring
 
 /* EXCLUSION IS A SET OF ROOMS, NOT A WALL.
@@ -852,6 +871,7 @@ function groundPlan(d, cells, pitch){
 
   return {
     outline, core, inside, ring, arterials, parks, coastLine, cells, pitch,
+    beachN: BEACH_W / d.r,
     coastPark: d.coastPark, ground: GROUND,
     rndPaint: localRnd(seed ^ 0x9E3779B1),
     rndProps: localRnd(seed ^ 0x85EBCA6B),
@@ -1246,13 +1266,23 @@ const DISTRICTS = [
       { label:'Rosewood',     x: 12, z:-10, h:12, r:30 },
       { label:'Waterfront',   x:  2, z: 18, h: 5, r:30 },
     ] },
-  { id:'reem',     name:'Al Reem',    x: 80, z:  34, r:44, rot:-0.20, tint:0xBFD3E0,
+  /* MOVED EAST BY EIGHT. The beach width was never a design choice — it was set by the tightest
+     channel in the world, Corniche to Al Reem at 22.8 units. Two beaches have to fit in that with
+     water left between them, so the skirt could not exceed about 11 and 8 was the safe number.
+     Buying the width meant buying the channel first. Nothing depends on Reem's exact position:
+     the camera heading is derived from it, and every rule on the island is relative to its own
+     centre. */
+  { id:'reem',     name:'Al Reem',    x: 88, z:  34, r:44, rot:-0.20, tint:0xBFD3E0,
     built:false, coreN:[-0.25, 0.05], places:[
       { label:'Reem Central', x:  0, z:  0, h:12, r:36 },
       { label:'Shams Boutik', x: 22, z: 10, h:10, r:34 },
       { label:'Gate Towers',  x:-22, z: -8, h:16, r:36 },
     ] },
-  { id:'saadiyat', name:'Saadiyat',   x:-40, z:-108, r:56, rot: 0.15, tint:0xDDD3C0,
+  /* AND SAADIYAT OUT BY EIGHT, for the same reason. Widening the skirt shifts which pair is
+     tightest: Reem moving east fixed Corniche to Reem, and Al Maryah to Saadiyat then became the
+     binding constraint at 3.0 units of water between two beaches. This puts every channel in the
+     world at 4.8 or better. */
+  { id:'saadiyat', name:'Saadiyat',   x:-44, z:-116, r:56, rot: 0.15, tint:0xDDD3C0,
     built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.28, 0.070], places:[
       { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
       { label:'Saadiyat Beach',   x:-24, z: 22, h: 3, r:44 },
@@ -1338,15 +1368,27 @@ DISTRICTS.forEach(d => {
        the promenade is the other half of the answer: a near-flat pale strip at the top of the
        skirt with a kerb dropping off it, which is what the Corniche actually has and what makes
        the eye read land, then edge, then sand, then sea. */
-    const BW = 8 / d.r;                                    // 8 world units, normalised
+    /* TWELVE UNITS, AND A FOAM LINE.
+
+       At 8 the skirt was 5 per cent of a 152-unit island: structurally right, since the cliff and
+       the black rim are both gone, but too narrow to say beach. The dry sand now runs 3.2 units
+       at about 1:3.6, which reads as walkable rather than as an edge treatment.
+
+       THE FOAM LINE IS THE CUE THAT WAS MISSING. Sand grading pale to dark is a gradient, and the
+       eye takes gradients for shading. A BRIGHT band with a dark one immediately under it is a
+       waterline, and nothing else looks like that. It sits at y 0.06, just above the mean
+       surface, one unit wide, and it is the brightest thing in the profile. */
+    const BW = BEACH_W / d.r;
     const P = [                                            // t, height, shade
       [0.00, ISLE_DEPTH, 1.00],   // meets the platform at its widest point, not above it
-      [0.22, 2.28,       1.06],   // promenade, 1.8 units wide, falling 1:15 for drainage
-      [0.25, 1.75,       0.78],   // kerb face, the one band that wants to be dark
-      [0.55, 0.70,       1.22],   // dry sand: the palest thing on the island
-      [0.72, 0.10,       0.94],   // damp
-      [0.86, -0.35,      0.60],   // wet, and under the wave troughs from here down
-      [1.00, -1.20,      0.38],
+      [0.16, 2.28,       1.06],   // promenade, 1.9 units wide, falling 1:16 for drainage
+      [0.19, 1.75,       0.78],   // kerb face, the one band that wants to be dark
+      [0.46, 0.85,       1.24],   // dry sand, 3.2 units at 1:3.6
+      [0.62, 0.30,       1.14],   // damp
+      [0.70, 0.06,       1.52],   // FOAM: brightest band, one unit wide, just above mean water
+      [0.76, -0.06,      0.70],   // and the dark one under it that makes the foam read
+      [0.88, -0.55,      0.52],
+      [1.00, -1.30,      0.36],
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;

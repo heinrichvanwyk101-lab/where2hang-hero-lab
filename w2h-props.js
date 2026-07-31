@@ -28,7 +28,24 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v10';
+export const BUILD = 'props v11';
+
+/* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
+   beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
+function segDist(x, y, pts){
+  let best = Infinity;
+  for (let i = 0; i < pts.length - 1; i++){
+    const ax = pts[i][0], ay = pts[i][1];
+    const dx = pts[i+1][0] - ax, dy = pts[i+1][1] - ay;
+    const L2 = dx*dx + dy*dy;
+    let t = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const px = ax + t*dx - x, py = ay + t*dy - y;
+    const d = px*px + py*py;
+    if (d < best) best = d;
+  }
+  return Math.sqrt(best);
+}
 
 /* SCALE, fixed once and obeyed everywhere below.
 
@@ -260,13 +277,28 @@ function addProps(d, layer, plan, budget = {}){
      what stops the sea reading as an empty backdrop, and at world scale they are the only thing
      that gives the water a size. */
   const ring = plan.outline;
-  for (let i = 0, tries = 0; i < B.boats && tries < B.boats * 8; tries++){
+  /* THE BEACH PUT BOATS ON DRY SAND, and the radial scale is why.
+
+     s between 1.12 and 1.42 is a scale ABOUT THE ISLAND CENTRE, so how far out it actually
+     moves a point depends on how far out that point already was. On Corniche's long axis 1.12
+     is nine units of clearance; on the short axis the same number is five. Five was tolerable
+     when the coast ended in a wall. It is not when there is a twelve-unit beach there, and the
+     symptom would have been a fleet moored above the waterline.
+
+     A real distance to the coastline fixes it, the same correction the ring road and the
+     building clearance already had. plan.beachN is the skirt width in this island's normalised
+     units, so the test reads the same on every island whatever its radius. */
+  const closed = ring.map(p => [p.x, p.y]);
+  closed.push(closed[0]);
+  const seaRoom = (plan.beachN || 0) + 0.035;
+  for (let i = 0, tries = 0; i < B.boats && tries < B.boats * 12; tries++){
     const p = ring[Math.floor(R() * ring.length)];
-    const s = 1.12 + R() * 0.30;
+    const s = 1.12 + R() * 0.34;
     const bx = p.x * s, by = p.y * s;
     // Scaling a point off a CONCAVE stretch of coast can push it back over land — Corniche's
     // northern edge curves inward, which is the whole reason that outline was drawn. Test it.
     if (inside(bx, by)) continue;
+    if (segDist(bx, by, closed) < seaRoom) continue;      // in the water, not on the beach
     boats.push({ x: bx, y: by, rot: R() * 6.2832 });
     i++;
   }
