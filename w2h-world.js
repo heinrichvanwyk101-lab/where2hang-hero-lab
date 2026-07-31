@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v45';
+export const BUILD = 'world v46';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2097,16 +2097,299 @@ function fabricRnd(id){
   return () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
 }
 
+/* ===========================================================================
+   BUILDING PROFILES — PODIUM, SETBACK, CROWN.
+
+   THE PREREQUISITE, WHICH WAS NOT DONE. v45 claimed the two layers were one city because both
+   calls seed from the island id. They do — and then diverge on the very next line, because
+   `if (h < minH) return` sits ABOVE the glass roll, the tint rolls, the plant-room rolls and the
+   band rolls. A building the mass layer skips consumes between three and fourteen fewer numbers
+   than the same building consumed in the detail layer, so from the first short block onwards the
+   two streams are offset and every plot after it gets a different height, aspect and material.
+   Simulated over Corniche at density 1.85: 600 of 600 mass buildings differ from their detail
+   twin. Not most of them. All of them, from cell two.
+
+   The comment above the gate says every rnd() has already been spent. It was true when it was
+   written and stopped being true the moment anything was added below the gate, which is exactly
+   what this file has been doing for ten versions. A rule that has to be re-checked by hand on
+   every edit is not a rule.
+
+   SO THE STREAM NO LONGER SEES THE FILTER AT ALL. urbanFabric now runs in three passes:
+
+     1. cells   — the grid, coast, road and avoid tests. Unchanged, and already identical
+                  between layers because none of those tests knows about minH.
+     2. specs   — buildingSpec() is called once per cell, in order, and consumes the ENTIRE
+                  remaining stream. It has no minH parameter and no lod parameter. It cannot
+                  branch on them because it cannot see them.
+     3. emit    — minH filters the finished specs and lod decides how much of each one to draw.
+                  No random numbers are drawn here at all.
+
+   Adding a feature now means adding a field to the R block at the top of buildingSpec. There is
+   no ordering hazard left to get wrong.
+
+   WHAT THE PROFILES ARE.
+
+   A tower is not an extruded rectangle with a taper on it. It is a broad base you can walk into,
+   a shaft that steps in as it rises, and a top that is doing something other than stopping. All
+   three are silhouette, which is the only thing that survives being 200 pixels tall in the world
+   view — material and colour do not.
+
+   PODIUM, AND WHY IT DOES NOT GROW. The obvious podium is wider than the tower. It cannot be:
+   onRoad's clearance is pitch * 0.62, derived from the worst-case plot half-diagonal of
+   pitch * 0.5406 plus a margin, and a footprint widened even ten per cent puts the corner of a
+   square plot on the kerb — the identical bug that shipped twice already. So the PODIUM TAKES
+   THE PLOT and the SHAFT INSETS INTO IT, 0.60 to 0.82. Same ground covered, no new clearance
+   case, and a more slender tower, which is what Abu Dhabi actually looks like. The low-rise
+   plinth is allowed a small step out and is clamped by fitPlot() against the same diagonal the
+   road pad was sized for, so it grows only where the plot is a slab with room to spare.
+
+   SETBACKS are separate instances at separate world heights, so nothing is measured in the
+   geometry's Y and nothing is stretched by the building's height — the constraint that killed
+   plinths and parapets inside fabricGeo. One to three stages, each 0.74 to 0.88 of the one
+   below, cumulative width floored at 0.42 of the plot so a three-stage tower does not finish as
+   a pencil.
+
+   CROWNS: a parapet on everything low, a tapered cap on most towers, a mast on the tallest.
+   Masonry crowns take the roof deck and glass crowns take the cladding, so the top edge of every
+   building gets a line of a different material from the wall under it. That line is the whole
+   point, exactly as the corner chamfer is.
+
+   LOD, AND THE CONTRACT IT HAS TO KEEP. Tapping an island must ADD, never move. The mass layer
+   therefore draws the stages only, and absorbs the podium height into stage one and the crown
+   height into the top stage, so its massing is the same solid to the millimetre. Zooming in
+   splits that solid into base, shaft and top and hides the join inside the podium. A mast is not
+   absorbed — it is a needle, it is not mass, and at world scale it is sub-pixel.
+
+   COST. Mass goes from about 1.7 instances per building to 2.2; detail from 1.7 to about 3.6.
+   Triangles are unchanged per instance at 32. The two-pass allocation means every InstancedMesh
+   is created at its exact final count rather than at cells.length, which is where the memory for
+   the extra instances comes from — the old code over-allocated seven meshes to full cell count
+   each and used a fraction of five of them.
+   =========================================================================== */
+
+/* The mass-layer floor, written here as a constant and NOT read from opts.minH. Which tier a
+   building falls into has to be identical in both layers or the two articulate differently, and
+   minH is the one option that differs between the two calls. */
+const LOWRISE = 5.4;
+
+/* The largest footprint diagonal onRoad's pad was sized for, as a multiple of the block: the
+   widest plot is block * (1 - gap) * 0.98 square, so its diagonal is that times root two. Any
+   footprint kept under this is covered by a clearance that has already been tested. */
+const PLOT_DIAG = 1.081;
+
+function fitPlot(W, D, block){
+  const lim = block * PLOT_DIAG, dg = Math.hypot(W, D);
+  const k = dg > lim ? lim / dg : 1;
+  return [W * k, D * k];
+}
+
+/* instanceColor MULTIPLIES the material diffuse, so this carries variation only and works
+   unchanged against the night hex, against duskColor and against whatever a future view mode
+   does. Same arithmetic as v45's tint(); it takes its two numbers as arguments now because the
+   spec draws them long before anything is being written to a buffer. */
+function tintFrom(col, t){
+  const v = 1 + (t.v - 0.5) * t.amount;
+  const w = t.warm * (-0.45 + t.w * 2.25);
+  col.setRGB(
+    Math.min(1.35, v * (1 + w * 0.05)),
+    Math.min(1.35, v),
+    Math.min(1.35, v * (1 - w * 0.06))
+  );
+  return col;
+}
+
+function buildingSpec(rnd, ctx){
+  const { jx, jy, x, z, block, tallest, capH, coreX, coreZ } = ctx;
+
+  /* ONE UNCONDITIONAL DRAW. Every number this building will ever need is taken here, in a fixed
+     order, with no branch above it. Nothing below may call rnd(). This is the whole mechanism —
+     the count of numbers consumed per cell is a constant and cannot be made to depend on the
+     building, the layer or the options. */
+  const R = {
+    shape:rnd(),  aw:rnd(),     ad:rnd(),     hRoll:rnd(),
+    glass:rnd(),  glassKind:rnd(), tintV:rnd(), tintW:rnd(),
+    pod:rnd(),    podH:rnd(),   podW:rnd(),   inset:rnd(),
+    sb:rnd(),     sbA:rnd(),    sbB:rnd(),    sbRa:rnd(),  sbRb:rnd(),
+    crown:rnd(),  crownH:rnd(), crownW:rnd(),
+    plant:rnd(),  plantW:rnd(), plantD:rnd(), plantH:rnd(), plantX:rnd(), plantZ:rnd(),
+    plantV:rnd(), plantWm:rnd(), bandV:rnd(), bandWm:rnd(),
+  };
+
+  const gap  = 0.22;                     // street width as a fraction of the block
+  const plot = block * (1 - gap);
+
+  /* ASPECT. One roll decides slab, turned slab or ordinary block, and the two dimensions are
+     then set against each other — independent rolls regress to square, which is what made the
+     fabric read as crystal growth. Three numbers spent in every branch, unlike v45, which spent
+     three or five depending on the branch. */
+  let aw, ad;
+  if (R.shape < 0.26){ aw = 0.92 + R.aw * 0.06; ad = 0.34 + R.ad * 0.20; }
+  else if (R.shape < 0.44){ aw = 0.34 + R.aw * 0.20; ad = 0.92 + R.ad * 0.06; }
+  else { aw = 0.72 + R.aw * 0.26; ad = 0.72 + R.ad * 0.26; }
+  const w = plot * aw, dp = plot * ad;
+
+  // Height falls away from the core. The exponent controls how abruptly downtown ends, and the
+  // cap keeps a landmark taller than the fabric standing next to it.
+  const dc   = Math.hypot(jx - coreX, jy - coreZ);
+  const fall = Math.max(0, 1 - Math.pow(dc / 0.9, 1.5));
+  const h    = Math.min(capH, 3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95));
+
+  const frac = h / tallest;
+  const tier = h < LOWRISE ? 0 : frac < 0.42 ? 1 : 2;
+
+  /* MATERIAL FOLLOWS HEIGHT, unchanged in intent from v45: glass on the tall stock, render on
+     the low, and bronze on the shorter of the glass towers because the tint dates the building.
+     Varying finish with height reads as eras; varying it at random reads as noise. */
+  const isGlass = R.glass < (h > tallest * 0.50 ? 0.62 : 0.10);
+  let mat, tAmount, tWarm;
+  if (isGlass){
+    if (R.glassKind < (h > tallest * 0.72 ? 0.14 : 0.55)){ mat = 'bronze'; tAmount = 0.26; tWarm = 0.9; }
+    else                                                 { mat = 'glass';  tAmount = 0.30; tWarm = 0.2; }
+  } else if (frac < 0.36){ mat = 'rend';  tAmount = 0.46; tWarm = 1.15; }
+  else if   (frac < 0.62){ mat = 'stone'; tAmount = 0.42; tWarm = 1.00; }
+  else                   { mat = 'clad';  tAmount = 0.30; tWarm = 0.55; }
+  const tint = { v:R.tintV, w:R.tintW, amount:tAmount, warm:tWarm };
+
+  /* ---- PODIUM ----
+     Tier 2 takes the plot and insets the shaft. Tier 1 gets a plinth that may step OUT a little,
+     clamped by fitPlot so it only happens on plots with diagonal to spare. Tier 0 gets neither:
+     a two-storey villa with a podium is a joke, and these are the buildings the world view never
+     sees anyway. */
+  let podium = null, inset = 1;
+  if (tier === 2 && R.pod < 0.82){
+    const ph = Math.min(h * 0.28, 0.90 + R.podH * 1.30);
+    const [pw, pd] = fitPlot(w * (1.00 + R.podW * 0.06), dp * (1.00 + R.podW * 0.06), block);
+    podium = { h:ph, w:pw, d:pd };
+    inset  = 0.60 + R.inset * 0.22;
+  } else if (tier === 1 && R.pod < 0.55){
+    const ph = Math.min(h * 0.34, 0.50 + R.podH * 0.60);
+    const [pw, pd] = fitPlot(w * (1.05 + R.podW * 0.07), dp * (1.05 + R.podW * 0.07), block);
+    podium = { h:ph, w:pw, d:pd };
+  }
+
+  /* ---- SHAFT STAGES ----
+     Heights are split from the bottom up, footprint steps in at each join, and the cumulative
+     width is floored so a three-stage tower does not taper away to nothing. */
+  const podH   = podium ? podium.h : 0;
+  const shaftH = h - podH;
+  let nStage = 1;
+  if (tier === 2)      nStage = frac > 0.62 ? (R.sb < 0.22 ? 1 : R.sb < 0.72 ? 2 : 3)
+                                            : (R.sb < 0.58 ? 1 : 2);
+  else if (tier === 1) nStage = R.sb < 0.82 ? 1 : 2;
+
+  const stages = [];
+  let y = podH, left = shaftH, sw = w * inset, sd = dp * inset, cum = inset;
+  for (let s = 0; s < nStage; s++){
+    const sh = s === nStage - 1 ? left
+             : s === 0          ? left * (0.44 + R.sbA * 0.22)
+                                : left * (0.55 + R.sbB * 0.22);
+    stages.push({ y, h:sh, w:sw, d:sd });
+    y += sh; left -= sh;
+    const step = Math.max(0.42 / cum, s === 0 ? 0.74 + R.sbRa * 0.14 : 0.76 + R.sbRb * 0.14);
+    cum *= Math.min(1, step); sw *= Math.min(1, step); sd *= Math.min(1, step);
+  }
+  const top = stages[stages.length - 1];
+
+  /* ---- CROWN ----
+     A mast on the tallest, a tapered cap on most towers, a parapet on everything else. The
+     material is deliberately not the wall's: a dark deck on masonry, bright cladding on glass,
+     so the top edge always carries a line. */
+  let crown = null;
+  if (tier === 2 && frac > 0.72 && R.crown < 0.40){
+    const s = 0.07 + R.crownW * 0.05;
+    /* Scaled to the building and then clamped, not a flat range. A flat 1.4-to-3.6 needle is a
+       third of the height of a capped Corniche tower and eight per cent of ADNOC — the same
+       object reading as two different things depending on which island it landed on. */
+    crown = { kind:'mast', h:Math.min(3.6, Math.max(0.9, h * (0.08 + R.crownH * 0.10))),
+              w:top.w * s, d:top.d * s, mat:'clad' };
+  } else if (tier === 2 && R.crown < 0.74){
+    const s = 0.54 + R.crownW * 0.22;
+    crown = { kind:'cap', h:0.35 + R.crownH * 0.85, w:top.w * s, d:top.d * s,
+              mat:isGlass ? 'clad' : 'roof' };
+  } else if (tier > 0 || R.crown < 0.70){
+    crown = { kind:'parapet', h:0.14 + R.crownH * (tier === 0 ? 0.10 : 0.18),
+              w:top.w * 1.05, d:top.d * 1.05, mat:isGlass ? 'clad' : 'roof' };
+  }
+
+  /* ---- ROOF PLANT ----
+     Flatness is footprint against height: a wide low lid is the case the eye objects to, and a
+     plant room is what stops that lid being a plane. Only under a parapet — a cap or a mast is
+     already the incident, and two objects on one roof reads as clutter. Height is capped at 2.2
+     units now: v45 scaled it with h, which put an eight-unit shed on top of a 44-unit tower. */
+  let plant = null;
+  const flat = Math.min(top.w, top.d) / h;
+  if ((!crown || crown.kind === 'parapet') && flat > 0.22 && R.plant < 0.72){
+    const rw = top.w * (0.26 + R.plantW * 0.20);
+    const rd = top.d * (0.26 + R.plantD * 0.20);
+    plant = { w:rw, d:rd,
+              h:Math.min(2.2, Math.max(0.45, h * (0.10 + R.plantH * 0.09))),
+              ox:(R.plantX - 0.5) * (top.w - rw) * 0.8,
+              oz:(R.plantZ - 0.5) * (top.d - rd) * 0.8,
+              tint:{ v:R.plantV, w:R.plantWm, amount:0.30, warm:0.7 } };
+  }
+
+  /* ---- NIGHT BAND ----
+     Windows are never uniformly lit; varying the band per building is what stops a night skyline
+     reading as one applied stripe. It rides the TOP stage now rather than a fixed 0.62 of the
+     whole height, so on a setback tower it lands on the tower and not across a setback join. */
+  let band = null;
+  if (h > tallest * 0.28){
+    band = { y:top.y + top.h * 0.16, h:top.h * 0.34, w:top.w * 1.015, d:top.d * 0.72,
+             tint:{ v:R.bandV, w:R.bandWm, amount:0.70, warm:0.4 } };
+  }
+
+  return { x, z, h, w, dp, tier, mat, tint, podium, stages, crown, plant, band };
+}
+
+/* THE ONE WALKER, used by both the tally and the write so the two cannot disagree about how many
+   instances a building needs. fn takes an object rather than eight positional arguments, because
+   the last time this file passed a footprint and a depth in the wrong order it took a round to
+   find. */
+function walkSpec(sp, lod, fn){
+  const mass  = lod === 'mass';
+  const nTop  = sp.stages.length - 1;
+  // Mass absorbs the podium into stage one and a parapet or cap into the top stage, so its
+  // massing matches the articulated version exactly. A mast is not mass and is simply dropped.
+  const absB  = mass && sp.podium ? sp.podium.h : 0;
+  const absT  = mass && sp.crown && sp.crown.kind !== 'mast' ? sp.crown.h : 0;
+
+  if (!mass && sp.podium){
+    fn({ t:sp.mat, y:0, w:sp.podium.w, h:sp.podium.h, d:sp.podium.d, tint:sp.tint });
+  }
+  sp.stages.forEach((s, i) => {
+    fn({ t:sp.mat,
+         y: i === 0 ? s.y - absB : s.y,
+         w: s.w, d: s.d,
+         h: s.h + (i === 0 ? absB : 0) + (i === nTop ? absT : 0),
+         tint:sp.tint });
+  });
+  if (!mass && sp.crown){
+    fn({ t:sp.crown.mat, y:top_y(sp), w:sp.crown.w, h:sp.crown.h, d:sp.crown.d, tint:sp.tint });
+  }
+  if (!mass && sp.plant){
+    fn({ t:'roof', y:top_y(sp), w:sp.plant.w, h:sp.plant.h, d:sp.plant.d,
+         ox:sp.plant.ox, oz:sp.plant.oz, tint:sp.plant.tint });
+  }
+  if (sp.band){
+    fn({ t:'band', y:sp.band.y, w:sp.band.w, h:sp.band.h, d:sp.band.d, tint:sp.band.tint });
+  }
+}
+function top_y(sp){ const t = sp.stages[sp.stages.length - 1]; return t.y + t.h; }
+
 function urbanFabric(d, layer, opts){
   const { density, coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
           cap = Infinity, avoid = false, minH = 0 } = opts;
+  /* Derived, so the two existing call sites need no change: the mass layer is exactly the one
+     that sets a floor. Pass lod explicitly to override. */
+  const lod = opts.lod || (minH > 0 ? 'mass' : 'detail');
 
-  /* SHADOWS THE MODULE-LEVEL rnd FOR THE LENGTH OF THIS FUNCTION. Everything below is written
-     against `rnd` and none of it needs to change; it simply draws from a stream that restarts
-     at the same place for both layers of the same island. */
+  /* Shadows the module-level rnd. Seeded from the island id alone, so the seed does not depend on
+     call order — adding an island upstream must not reshuffle every island after it. */
   const rnd = fabricRnd(d.id);
 
-  // Block pitch in normalised island units. Smaller pitch = finer grain = denser city.
+  /* ---------- PASS 1: CELLS ----------
+     Block pitch in normalised island units. Smaller pitch = finer grain = denser city. Nothing
+     in this loop knows about minH or lod, so both layers produce the identical list. */
   const pitch = 0.085 / density;
   const cells = [];
   for (let nx = -0.95; nx <= 0.95; nx += pitch){
@@ -2116,192 +2399,71 @@ function urbanFabric(d, layer, opts){
       const jx = nx + (rnd() - 0.5) * pitch * 0.35;
       const jy = ny + (rnd() - 0.5) * pitch * 0.35;
       if (!insideIsle(d.id, jx, jy)) continue;
-      // Keep the coast clear so buildings do not straddle the waterline. Measured as a real
-      // distance to the outline now: the old radial scale gave a margin that grew with distance
-      // from the island centre and pointed the wrong way inside every notch.
+      // Real distance to the outline: the old radial scale gave a margin that grew with distance
+      // from the centre and pointed the wrong way inside every notch.
       if (distToOutline(d.id, jx, jy) < COAST_CLEAR + pitch * 0.30) continue;
-      /* Per-landmark rectangles, not a band. The band version reserved sixty per cent of
-         Corniche's depth to protect three buildings that between them occupy about a fifth of
-         it, and the difference was the empty northern half. */
       if (avoid && inAvoid(d, jx, jy, pitch * 0.5)) continue;
       if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
-      // THE ROAD WINS. Placed before the fabric, so the fabric has to make room for it.
-      if (onRoad(d, jx, jy, pitch)) continue;
+      if (onRoad(d, jx, jy, pitch)) continue;          // THE ROAD WINS: it is placed first
       if (rnd() > 0.88) continue;                      // occasional gap: a square, a car park
       cells.push({ jx, jy });
     }
   }
 
-  /* ROOFS, WHICH WERE THE REAL COMPLAINT.
+  /* ---------- PASS 2: SPECS ----------
+     The entire remaining stream is consumed here, one fixed-size draw per cell, with no
+     knowledge of minH or lod. This is what makes the two layers the same city. */
+  const block = pitch * d.r;
+  const specs = cells.map(c => buildingSpec(rnd, {
+    jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r,
+    block, tallest, capH:cap, coreX, coreZ }));
 
-     The wide low blocks read as pale rectangles because that is exactly what they are from
-     above: a single flat face the size of the whole plot, catching the sun with nothing on it to
-     break the light. Height variation does not help them — they are wide, not tall — and neither
-     does material, because the fault is that the silhouette has no incident.
+  /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
+     No random numbers below this line. */
+  const keep = specs.filter(sp => sp.h >= minH);
+  const need = { rend:0, stone:0, clad:0, glass:0, bronze:0, roof:0, band:0 };
+  keep.forEach(sp => walkSpec(sp, lod, o => { need[o.t]++; }));
 
-     A plant room fixes it for one instanced mesh and 32 triangles. Real buildings put their
-     lifts, tanks and air handling in a box on the roof, offset from centre because it follows
-     the core rather than the outline, and that box is what stops a roof being a plane. It reuses
-     fabricGeo, so it arrives chamfered and tapered like everything else.
-
-     WEIGHTED TOWARDS THE WIDE ONES. A slender tower does not need one and would only look
-     cluttered; a plot whose footprint is large against its height is precisely the case the eye
-     is objecting to. */
-  const roofM  = new THREE.InstancedMesh(fabricGeo, matRoofDeck, cells.length);
-  const rendM  = new THREE.InstancedMesh(fabricGeo, matStoneRend,  cells.length);
-  const stoneM = new THREE.InstancedMesh(fabricGeo, matPlaceStone, cells.length);
-  const cladM  = new THREE.InstancedMesh(fabricGeo, matStoneClad,  cells.length);
-  const glassM = new THREE.InstancedMesh(fabricGeo, matPlaceGlass,  cells.length);
-  const bronzeM = new THREE.InstancedMesh(fabricGeo, matGlassBronze, cells.length);
-  const bandM  = new THREE.InstancedMesh(fabricGeo, cool ? matLitCool : matLitWarm, cells.length);
-  [roofM, rendM, stoneM, cladM, glassM, bronzeM].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
-
-  const M = new THREE.Object3D();
-  const col = new THREE.Color();
-  let si = 0, gi = 0, bi = 0, ri = 0, ci = 0, fi = 0, zi = 0;
-  const gap = 0.22;                       // street width as a fraction of the block
-
-  /* A MULTIPLIER NEAR WHITE, not an absolute colour. instanceColor MULTIPLIES the material's
-     diffuse rather than replacing it, so the base material carries the hue in whichever view
-     mode is active and the instance buffer carries only the VARIATION. */
-  /* WARMTH IS NOW PER BUILDING, WHICH IT WAS NOT.
-
-     The old version rolled one number, v, and applied a FIXED warm ratio to it: R = 1.05v,
-     G = v, B = 0.94v. Every stone instance therefore had exactly the same hue and differed only
-     in brightness, which is precisely why the fabric read as one sand colour with the lights
-     turned up and down. A hue needs its own roll.
-
-     w runs slightly negative at the bottom of its range, so a few buildings come out cool grey
-     against the sand. Abu Dhabi has plenty of white and grey towers and the contrast is what
-     makes the warm ones read as warm. Since instanceColor MULTIPLIES, this is relative: it
-     works the same against the night hex and against DUSK_STONE without knowing either. */
-  function tint(amount, warmBias){
-    const v = 1 + (rnd() - 0.5) * amount;
-    const w = warmBias * (-0.45 + rnd() * 2.25);
-    col.setRGB(
-      Math.min(1.35, v * (1 + w * 0.05)),
-      Math.min(1.35, v),
-      Math.min(1.35, v * (1 - w * 0.06))
-    );
-    return col;
-  }
-
-  cells.forEach(c => {
-    const x = c.jx * d.r, z = -c.jy * d.r;
-    const block = pitch * d.r;
-    /* ASPECT, not just size. Every block being a near-square box was making the fabric read as
-       crystal growth rather than as buildings — the Day render showed it plainly. One roll
-       decides whether this plot is a slab, a wide low mass or an ordinary block, and the two
-       dimensions are then set AGAINST each other rather than drawn independently. Independent
-       rolls regress to square; that is what was happening. */
-    const shape = rnd();
-    let aw = 0.72 + rnd() * 0.26, ad = 0.72 + rnd() * 0.26;
-    if (shape < 0.26){ aw = 0.92 + rnd() * 0.06; ad = 0.34 + rnd() * 0.20; }        // slab
-    else if (shape < 0.44){ aw = 0.34 + rnd() * 0.20; ad = 0.92 + rnd() * 0.06; }   // slab, turned
-    const w  = block * (1 - gap) * aw;
-    const dp = block * (1 - gap) * ad;
-
-    // Height falls away from the core. The exponent controls how abruptly downtown ends.
-    const dc = Math.hypot(c.jx - coreX, c.jy - coreZ);
-    const fall = Math.max(0, 1 - Math.pow(dc / 0.9, 1.5));
-    // Capped: a landmark that is not the tallest thing near it stops being a landmark.
-    const h = Math.min(cap, 3 + tallest * fall * (0.25 + Math.pow(rnd(), 2.2) * 0.95));
-
-    /* THE ONLY DIFFERENCE BETWEEN THE TWO LAYERS, and it is tested here rather than earlier on
-       purpose. Every rnd() above has already been spent, so the stream sits in exactly the same
-       place whether this building is emitted or skipped. Move the test one line up and the mass
-       layer desynchronises from the detail layer and they are two different cities again —
-       which is the bug this whole structure exists to remove. */
-    if (h < minH) return;
-
-    M.position.set(x, GROUND, z);
-    M.rotation.set(0, 0, 0);              // grid-aligned: the whole point
-    M.scale.set(w, h, dp);
-    M.updateMatrix();
-    /* GLASS FOLLOWS HEIGHT. A flat 35 per cent chance put curtain wall on one villa in three,
-       so a third of every low-rise band was rendering as mirrored towers and, once dusk started
-       tinting glass separately, a third of the island turned a different colour from the rest
-       for no reason a viewer could read. Tall buildings are glass, low ones are masonry — which
-       is both what the reference shows and what Abu Dhabi looks like.
-       Still ONE draw of the dice, not two: calling rnd() twice let the mesh and the index
-       disagree, which silently overwrites instances and leaves holes in the other buffer. */
-    const isGlass = rnd() < (h > tallest * 0.50 ? 0.62 : 0.10);
-    if (isGlass){
-      /* WHICH GLASS. Not a free roll: bronze goes on the SHORTER of the glass towers, because
-         the tint dates the building and the older stock is the lower stock. Same reasoning as
-         the stone tiers, and it means the two tints separate by height rather than scattering,
-         which is what reads as eras instead of noise. */
-      if (rnd() < (h > tallest * 0.72 ? 0.14 : 0.55)){
-        bronzeM.setMatrixAt(zi, M.matrix);
-        bronzeM.setColorAt(zi, tint(0.26, 0.9));
-        zi++;
-      } else {
-        glassM.setMatrixAt(gi, M.matrix);
-        glassM.setColorAt(gi, tint(0.30, 0.2));   // glass varies less: it is one product
-        gi++;
-      }
-    } else {
-      /* Finish follows height, exactly as glass does, and for the same reason: a material that
-         varies at random across neighbouring plots reads as noise, while one that varies with
-         height reads as the city having been built in eras. ONE roll already spent above decides
-         glass; this needs none, since h is already known. */
-      const frac = h / tallest;
-      if (frac < 0.36){
-        rendM.setMatrixAt(ri, M.matrix);
-        rendM.setColorAt(ri, tint(0.46, 1.15));   // render and plaster: warmest and most varied
-        ri++;
-      } else if (frac < 0.62){
-        stoneM.setMatrixAt(si, M.matrix);
-        stoneM.setColorAt(si, tint(0.42, 1.0));   // precast concrete
-        si++;
-      } else {
-        cladM.setMatrixAt(ci, M.matrix);
-        cladM.setColorAt(ci, tint(0.30, 0.55));   // polished cladding: tighter, cooler
-        ci++;
-      }
-    }
-
-    /* Flatness is footprint against height. A 3-unit-wide block 12 tall is a tower and wants
-       nothing; the same width at 4 tall is a shed with a big lid, and that is what gets a plant
-       room. The threshold is 0.22 rather than something that sounds flatter, because the height
-       distribution is heavily weighted to the tall end and 0.42 caught only 15 per cent of the
-       stock — the wide blocks being complained about are not rare, they are simply the ones with
-       the largest visible area. */
-    const flat = Math.min(w, dp) / h;
-    if (flat > 0.22 && rnd() < 0.72){
-      const rw = w  * (0.26 + rnd() * 0.20);
-      const rd = dp * (0.26 + rnd() * 0.20);
-      const rh = Math.max(0.45, h * (0.10 + rnd() * 0.09));
-      // Offset toward one quadrant rather than centred: a service core is never in the middle.
-      M.position.set(x + (rnd() - 0.5) * (w - rw) * 0.8, GROUND + h,
-                     z + (rnd() - 0.5) * (dp - rd) * 0.8);
-      M.rotation.set(0, 0, 0);
-      M.scale.set(rw, rh, rd);
-      M.updateMatrix();
-      roofM.setMatrixAt(fi, M.matrix);
-      roofM.setColorAt(fi, tint(0.30, 0.7));
-      fi++;
-    }
-
-    if (h > tallest * 0.28){
-      M.position.set(x, GROUND + h * 0.62, z);
-      M.scale.set(w * 1.015, h * 0.30, dp * 0.72);
-      M.updateMatrix();
-      bandM.setMatrixAt(bi, M.matrix);
-      // Windows are never uniformly lit. Varying the band brightness per building is what
-      // stops a night skyline reading as a single applied stripe.
-      bandM.setColorAt(bi, tint(0.70, 0.4));    // window brightness, not window colour
-      bi++;
-    }
+  const mk = (m, n) => new THREE.InstancedMesh(fabricGeo, m, Math.max(1, n));
+  const meshes = {
+    rend:   mk(matStoneRend,   need.rend),
+    stone:  mk(matPlaceStone,  need.stone),
+    clad:   mk(matStoneClad,   need.clad),
+    glass:  mk(matPlaceGlass,  need.glass),
+    bronze: mk(matGlassBronze, need.bronze),
+    roof:   mk(matRoofDeck,    need.roof),
+    band:   mk(cool ? matLitCool : matLitWarm, need.band),
+  };
+  ['rend','stone','clad','glass','bronze','roof'].forEach(k => {
+    meshes[k].castShadow = true; meshes[k].receiveShadow = true;
   });
 
-  roofM.count = fi; rendM.count = ri; stoneM.count = si; cladM.count = ci;
-  glassM.count = gi; bronzeM.count = zi; bandM.count = bi;
-  [roofM, rendM, stoneM, cladM, glassM, bronzeM, bandM].forEach(m => {
+  const M   = new THREE.Object3D();
+  const col = new THREE.Color();
+  const idx = { rend:0, stone:0, clad:0, glass:0, bronze:0, roof:0, band:0 };
+
+  keep.forEach(sp => walkSpec(sp, lod, o => {
+    M.position.set(sp.x + (o.ox || 0), GROUND + o.y, sp.z + (o.oz || 0));
+    M.rotation.set(0, 0, 0);              // grid-aligned: the whole point
+    M.scale.set(o.w, o.h, o.d);
+    M.updateMatrix();
+    const m = meshes[o.t], i = idx[o.t]++;
+    m.setMatrixAt(i, M.matrix);
+    m.setColorAt(i, tintFrom(col, o.tint));
+  }));
+
+  /* An empty bucket is not added. A count-0 InstancedMesh still costs a traversal and, depending
+     on the driver, a zero-instance draw — and it would sit in the overlay's calls figure looking
+     like work. Small islands genuinely produce none of some materials. */
+  Object.keys(meshes).forEach(k => {
+    const m = meshes[k];
+    if (!idx[k]) return;
+    m.count = idx[k];
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    layer.add(m);
   });
-  layer.add(roofM, rendM, stoneM, cladM, glassM, bronzeM, bandM);
+
   return { cells, pitch };
 }
 
