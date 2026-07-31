@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v32';
+export const BUILD = 'world v34';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -805,14 +805,30 @@ function distToPolyline(x, y, pts){
 /* Clearance is the road's own half-width plus its kerb, plus half a block for the building that
    would otherwise overhang it. Written once so the painted width and the reserved width can
    never drift apart — which is exactly how a road ends up under a tower. */
+/* THE ROAD TEST WAS TREATING BUILDINGS AS POINTS.
+
+   It compared the CELL CENTRE against the carriageway and cleared it by ROAD_RING * 0.60, which
+   is 0.0312 — barely more than the road's own half-width of 0.026. The building then grew a
+   footprint around that centre and the corner nearest the road went wherever it went.
+
+   Working the worst case: the widest plot is block * (1 - gap) * 0.98, and its worst approach is
+   the DIAGONAL half-extent, which is that over root two. On a placeholder island at the mass
+   pitch that is 2.45 units of building against 3.79 units of clearance and a 1.46-unit road
+   half-width — the corner ends up 0.12 units INSIDE the carriageway. Not close: overlapping.
+   Corniche's mass layer cleared it by 0.03 units, which is 20 centimetres and luck.
+
+   So the clearance is stated properly now: half the road, plus the largest half-diagonal a plot
+   of this pitch can produce, plus a margin. pitch * 0.62 covers block * 0.78 * 0.98 / sqrt(2)
+   with room over. */
 function onRoad(d, x, y, pitch){
   const R = d.roads;
   if (!R) return false;
+  const pad = pitch * 0.62;
   for (let i = 0; i < R.ring.length; i++){
-    if (distToPolyline(x, y, R.ring[i]) < ROAD_RING * 0.60 + pitch * 0.45) return true;
+    if (distToPolyline(x, y, R.ring[i]) < ROAD_RING * 0.5 + pad) return true;
   }
   for (let i = 0; i < R.arterials.length; i++){
-    if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.60 + pitch * 0.45) return true;
+    if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.5 + pad) return true;
   }
   return false;
 }
@@ -1609,9 +1625,36 @@ const fabricGeo = (() => {
   return g;
 })();
 
+/* ONE CITY, DRAWN TWICE — WHICH IT WAS NOT, AND THAT IS THE WHOLE LOD PROBLEM.
+
+   mass and detail were two separate urbanFabric calls at two densities, drawing from the shared
+   sequence. Two calls, two different draws: the world view was one city and the district view
+   was a DIFFERENT ONE. Tapping an island did not add detail to what you were looking at, it
+   replaced every building on it. No amount of matching the two densities could fix that, which
+   is why 1.25 -> 1.60 helped so little.
+
+   The fix is a local generator seeded from the island id alone. Both calls then walk the same
+   grid and make the same rolls, so they build the identical city, and the layers differ by ONE
+   thing: mass skips anything shorter than minH. Zooming in now adds the small buildings between
+   the ones already on screen and moves nothing.
+
+   Seeded from the id, not from a counter, so the seed does not depend on call order — otherwise
+   adding an island upstream would reshuffle every island after it. */
+function fabricRnd(id){
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++){ h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h >>>= 0;
+  return () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
+}
+
 function urbanFabric(d, layer, opts){
   const { density, coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
-          cap = Infinity, avoid = false } = opts;
+          cap = Infinity, avoid = false, minH = 0 } = opts;
+
+  /* SHADOWS THE MODULE-LEVEL rnd FOR THE LENGTH OF THIS FUNCTION. Everything below is written
+     against `rnd` and none of it needs to change; it simply draws from a stream that restarts
+     at the same place for both layers of the same island. */
+  const rnd = fabricRnd(d.id);
 
   // Block pitch in normalised island units. Smaller pitch = finer grain = denser city.
   const pitch = 0.085 / density;
@@ -1639,16 +1682,32 @@ function urbanFabric(d, layer, opts){
     }
   }
 
+  /* ROOFS, WHICH WERE THE REAL COMPLAINT.
+
+     The wide low blocks read as pale rectangles because that is exactly what they are from
+     above: a single flat face the size of the whole plot, catching the sun with nothing on it to
+     break the light. Height variation does not help them — they are wide, not tall — and neither
+     does material, because the fault is that the silhouette has no incident.
+
+     A plant room fixes it for one instanced mesh and 32 triangles. Real buildings put their
+     lifts, tanks and air handling in a box on the roof, offset from centre because it follows
+     the core rather than the outline, and that box is what stops a roof being a plane. It reuses
+     fabricGeo, so it arrives chamfered and tapered like everything else.
+
+     WEIGHTED TOWARDS THE WIDE ONES. A slender tower does not need one and would only look
+     cluttered; a plot whose footprint is large against its height is precisely the case the eye
+     is objecting to. */
+  const roofM  = new THREE.InstancedMesh(fabricGeo, matPlaceStone, cells.length);
   const rendM  = new THREE.InstancedMesh(fabricGeo, matStoneRend,  cells.length);
   const stoneM = new THREE.InstancedMesh(fabricGeo, matPlaceStone, cells.length);
   const cladM  = new THREE.InstancedMesh(fabricGeo, matStoneClad,  cells.length);
   const glassM = new THREE.InstancedMesh(fabricGeo, matPlaceGlass, cells.length);
   const bandM  = new THREE.InstancedMesh(fabricGeo, cool ? matLitCool : matLitWarm, cells.length);
-  [rendM, stoneM, cladM, glassM].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
+  [roofM, rendM, stoneM, cladM, glassM].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
 
   const M = new THREE.Object3D();
   const col = new THREE.Color();
-  let si = 0, gi = 0, bi = 0, ri = 0, ci = 0;
+  let si = 0, gi = 0, bi = 0, ri = 0, ci = 0, fi = 0;
   const gap = 0.22;                       // street width as a fraction of the block
 
   /* A MULTIPLIER NEAR WHITE, not an absolute colour. instanceColor MULTIPLIES the material's
@@ -1697,6 +1756,13 @@ function urbanFabric(d, layer, opts){
     // Capped: a landmark that is not the tallest thing near it stops being a landmark.
     const h = Math.min(cap, 3 + tallest * fall * (0.25 + Math.pow(rnd(), 2.2) * 0.95));
 
+    /* THE ONLY DIFFERENCE BETWEEN THE TWO LAYERS, and it is tested here rather than earlier on
+       purpose. Every rnd() above has already been spent, so the stream sits in exactly the same
+       place whether this building is emitted or skipped. Move the test one line up and the mass
+       layer desynchronises from the detail layer and they are two different cities again —
+       which is the bug this whole structure exists to remove. */
+    if (h < minH) return;
+
     M.position.set(x, GROUND, z);
     M.rotation.set(0, 0, 0);              // grid-aligned: the whole point
     M.scale.set(w, h, dp);
@@ -1734,6 +1800,28 @@ function urbanFabric(d, layer, opts){
       }
     }
 
+    /* Flatness is footprint against height. A 3-unit-wide block 12 tall is a tower and wants
+       nothing; the same width at 4 tall is a shed with a big lid, and that is what gets a plant
+       room. The threshold is 0.22 rather than something that sounds flatter, because the height
+       distribution is heavily weighted to the tall end and 0.42 caught only 15 per cent of the
+       stock — the wide blocks being complained about are not rare, they are simply the ones with
+       the largest visible area. */
+    const flat = Math.min(w, dp) / h;
+    if (flat > 0.22 && rnd() < 0.72){
+      const rw = w  * (0.26 + rnd() * 0.20);
+      const rd = dp * (0.26 + rnd() * 0.20);
+      const rh = Math.max(0.45, h * (0.10 + rnd() * 0.09));
+      // Offset toward one quadrant rather than centred: a service core is never in the middle.
+      M.position.set(x + (rnd() - 0.5) * (w - rw) * 0.8, GROUND + h,
+                     z + (rnd() - 0.5) * (dp - rd) * 0.8);
+      M.rotation.set(0, 0, 0);
+      M.scale.set(rw, rh, rd);
+      M.updateMatrix();
+      roofM.setMatrixAt(fi, M.matrix);
+      roofM.setColorAt(fi, tint(0.30, 0.7));
+      fi++;
+    }
+
     if (h > tallest * 0.28){
       M.position.set(x, GROUND + h * 0.62, z);
       M.scale.set(w * 1.015, h * 0.30, dp * 0.72);
@@ -1746,13 +1834,13 @@ function urbanFabric(d, layer, opts){
     }
   });
 
-  rendM.count = ri; stoneM.count = si; cladM.count = ci;
+  roofM.count = fi; rendM.count = ri; stoneM.count = si; cladM.count = ci;
   glassM.count = gi; bandM.count = bi;
-  [rendM, stoneM, cladM, glassM, bandM].forEach(m => {
+  [roofM, rendM, stoneM, cladM, glassM, bandM].forEach(m => {
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   });
-  layer.add(rendM, stoneM, cladM, glassM, bandM);
+  layer.add(roofM, rendM, stoneM, cladM, glassM, bandM);
   return { cells, pitch };
 }
 
@@ -1861,7 +1949,9 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
      — but the islands came out thin. A finer pitch wins twice: more blocks fit in what is left,
      AND the clearance shrinks with the pitch, since half of it is the building's own overhang.
      Instancing means the extra count is free in draw calls. */
-  urbanFabric(d, d.mass,   { density:1.05, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
+  /* SAME DENSITY, SAME SEED, DIFFERENT FLOOR. The layers are the same city; mass simply omits
+     anything under minH, so the world view holds the massing and zooming in fills the gaps. */
+  urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool, minH:5.4 });
   const built = urbanFabric(d, d.detail,
                            { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   d.fabric = built;
@@ -1903,13 +1993,11 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
   { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
 urbanFabric(corniche, corniche.mass,
-  /* MASS 1.25 -> 1.60. The LOD swap is mutually exclusive — world shows mass, district shows
-     detail — so the size of the pop is exactly the ratio between the two densities. At 1.25
-     against 1.85 the world view was coarse blocks and the district view was a city, and the
-     switch read as the model changing rather than the camera moving. 1.60 against 1.85 is a
-     grain change instead of a substitution. Cell count goes as density squared, so this is 1.6
-     times the mass fabric, paid only in the view that has the most headroom. */
-  { density:1.60, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
+  /* Same density and the same seed as the detail call above, so this is the SAME CITY. The two
+     layers differ only by minH: the world view keeps about 72 per cent of the buildings, the
+     tall ones, and tapping in adds the short ones between them without moving anything. */
+  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true,
+    cap:12, minH:5.4 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.

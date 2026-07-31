@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v23', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v24', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -616,7 +616,18 @@ const liftReg = [];
          DUSK_STONE stays as the fallback, so anything that has not declared a dusk colour still
          behaves exactly as it did. The glass path is untouched — glass is a material problem
          rather than a colour one, for the reasons written above, and that argument still holds. */
-      liftReg.push({ m, glass: b > r * 1.75, nightHex:hex,
+      /* glassOverride: THE CLASSIFIER GUESSES, AND IT GETS ONE WRONG.
+
+         Deciding glass by blue-over-red on the night hex is a good heuristic and it has been
+         right about everything except ADNOC's waist — the narrow dark band between shaft and
+         cap, which exists to read as a shadow line. Its hex is 0x080C10, a ratio of exactly 2.0,
+         so the lift has been handing it DUSK_GLASS and metalness 0.62 and turning the one
+         deliberately dark element on the tower into a bright blue-grey stripe.
+
+         A heuristic that is right nine times out of ten does not want replacing, it wants an
+         override for the tenth. */
+      liftReg.push({ m, glass: (m.userData && m.userData.glassOverride != null)
+                               ? m.userData.glassOverride : b > r * 1.75, nightHex:hex,
                      duskHex: m.userData && m.userData.duskColor,
                      nightEmi: m.emissiveIntensity, nightRough: m.roughness,
                      nightMetal: m.metalness, nightEnv: m.envMapIntensity });

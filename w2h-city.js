@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v9';
+export const BUILD = 'city v10';
 
 export const C = {
   night:   0x0B1620,
@@ -110,6 +110,22 @@ const TEX_BLOCK = windowTexture(18, 14, 0.22, true);
 // rather than as floors. h/24 gives a 4 m storey and lets the banding show.
 // Cached. Every building was cloning its own texture and material, which took draw calls from
 // 44 to 240. Repeats are quantised so near-identical buildings share one material.
+/* DUSK COLOURS FOR THE LANDMARKS.
+
+   world-nav.html v23 stopped forcing every non-glass material to one hex at dusk and started
+   honouring m.userData.duskColor instead. Until now this file declared none, so Etihad's mass,
+   ADNOC and Emirates Palace all came out of the lift as the same DUSK_STONE as the generated
+   fabric — three buildings that carry the island's identity, rendered in the default.
+
+   Keyed by the NIGHT hex, because that is what cityMaterial is already given and what the cache
+   key is built from. Anything absent still falls back, so this list can grow one entry at a time.
+   Etihad is deliberately not here: it is glass, and glass gets a material treatment rather than a
+   colour. */
+const DUSK_BY_NIGHT = {
+  0x14161A: 0xC7B49A,   // ADNOC HQ: bronze-toned stone, warmer and darker than the fabric
+  0x151A1F: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
+};
+
 const matCache = new Map();
 function cityMaterial(tex, repX, repY, emissive, colour){
   const key = (tex === TEX_TOWER ? 'T' : 'B') + repX + '_' + repY + '_' +
@@ -127,6 +143,8 @@ function cityMaterial(tex, repX, repY, emissive, colour){
     roughness: 0.72, metalness: 0.14,
     emissive: 0xffffff, emissiveMap: t, emissiveIntensity: emissive,
   });
+  const dc = DUSK_BY_NIGHT[colour === undefined ? C.mass : colour];
+  if (dc !== undefined) m.userData.duskColor = dc;
   matCache.set(key, m);
   return m;
 }
@@ -246,12 +264,20 @@ function emiratesPalace(x0, z0){
   // Three tones, not one. At a single emissive the body, wings and arcade fused into a
   // continuous gold bar and the dome rhythm — the only thing that identifies this building —
   // disappeared into it. The masses go dark and the domes carry the light.
+  /* The three dusk colours keep the same relationship the night emissives do: the masses sit
+     back, the arcade is a step up, the domes carry the light. Warmer and paler than anything in
+     the generated fabric, because the palace is the one building on the island made of dressed
+     stone rather than render or precast — and at dusk that difference is most of what makes it
+     read as a palace instead of a long low block. */
   const stone = new THREE.MeshStandardMaterial({
     color:0x14110C, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
+  stone.userData.duskColor = 0xE7D5B0;
   const arch = new THREE.MeshStandardMaterial({
     color:0x1A150E, roughness:0.9, emissive:C.gold, emissiveIntensity:0.10 });
+  arch.userData.duskColor = 0xEFE0C0;
   const glow = new THREE.MeshStandardMaterial({
     color:0x2A2216, roughness:0.7, emissive:C.gold, emissiveIntensity:0.34 });
+  glow.userData.duskColor = 0xF4E4BC;
 
   const W = 46;
   const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 3.0, 6.5), stone);
@@ -308,14 +334,22 @@ function adnocHQ(x0, z0){
   body.userData.hero = true; g.add(body);
 
   // Step one: a narrow dark waist. Reads as a shadow line and separates shaft from cap.
-  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 7),
-    new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 }));
+  /* THE WAIST IS NOT GLASS, whatever its hex says. 0x080C10 is blue-over-red 2.0, so the lift's
+     classifier has been treating this as curtain wall and giving it DUSK_GLASS at metalness
+     0.62 — turning the one element on the tower whose entire job is to be a dark shadow line
+     into a bright blue-grey stripe. nav v24 added the override for exactly this case. */
+  const waistMat = new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 });
+  waistMat.userData.glassOverride = false;
+  waistMat.userData.duskColor = 0x6B6659;
+  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 7), waistMat);
   waist.position.set(x0, 44, z0); waist.rotation.y = rot; g.add(waist);
 
   // Step two: the lit cap, WIDER than the shaft so the overhang shows in pure black.
-  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 7),
-    new THREE.MeshStandardMaterial({ color:0x101519, roughness:0.55,
-      emissive:0x9FBDC8, emissiveIntensity:0.14 }));
+  const capMat = new THREE.MeshStandardMaterial({ color:0x101519, roughness:0.55,
+    emissive:0x9FBDC8, emissiveIntensity:0.14 });
+  // Cooler and paler than the shaft: the overhang catches sky rather than sun.
+  capMat.userData.duskColor = 0xD6DADC;
+  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 7), capMat);
   cap.position.set(x0, 45.6, z0); cap.rotation.y = rot; g.add(cap);
   return g;
 }
