@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v22', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v23', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -604,7 +604,20 @@ const liftReg = [];
       const r = (hex >> 16) & 255, b = hex & 255;
       // Everything the dusk pass touches has to be restorable, which now includes the surface
       // properties, not just the colour.
+      /* duskHex: THE MATERIAL'S OWN DUSK COLOUR, IF IT HAS ONE.
+
+         This is the single change that unblocks a palette. Until now the lift set every
+         non-glass material in the scene to one hex, so the city had exactly TWO colours at dusk
+         — DUSK_STONE and DUSK_GLASS — however many materials it was built from. Adding
+         limestone, aluminium, asphalt and concrete would have changed nothing: they would all
+         have been overwritten with 0xD9CDB6 the moment dusk was entered, which is the whole
+         reason the render reads beige.
+
+         DUSK_STONE stays as the fallback, so anything that has not declared a dusk colour still
+         behaves exactly as it did. The glass path is untouched — glass is a material problem
+         rather than a colour one, for the reasons written above, and that argument still holds. */
       liftReg.push({ m, glass: b > r * 1.75, nightHex:hex,
+                     duskHex: m.userData && m.userData.duskColor,
                      nightEmi: m.emissiveIntensity, nightRough: m.roughness,
                      nightMetal: m.metalness, nightEnv: m.envMapIntensity });
     });
@@ -613,7 +626,7 @@ const liftReg = [];
 function applyLift(on){
   liftReg.forEach(e => {
     if (on){
-      e.m.color.setHex(e.glass ? DUSK_GLASS : DUSK_STONE);
+      e.m.color.setHex(e.glass ? DUSK_GLASS : (e.duskHex != null ? e.duskHex : DUSK_STONE));
       e.m.emissiveIntensity = e.nightEmi * 0.42;
       if (e.glass){
         // Uniforms, not defines — none of these three force a shader recompile, so the mode

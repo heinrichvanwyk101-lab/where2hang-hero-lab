@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v31';
+export const BUILD = 'world v32';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1104,6 +1104,7 @@ function paintGround(d, plan){
    convention rather than an oversight, but it is a convention, and dropping ISLE_DEPTH would
    carry the whole city with it since GROUND is derived from it. */
 const matBeach    = new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0 });
+matBeach.userData.duskColor = 0x9C8C6F;           // the platform's wet lower edge, unchanged in effect
 
 /* THE BEACH SKIRT'S THREE MODES. Same three colours the platform's bevel already uses, so the
    skirt and the bevel above it cannot disagree, plus vertexColors so the wet-sand banding rides
@@ -1124,25 +1125,36 @@ const beachSand = {
 };
 const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
-/* THREE STONES, AND THE REASON IS THE DUSK LIFT, NOT TASTE.
+/* FOUR SURFACES, AND NOW THEY CAN ACTUALLY BE FOUR COLOURS.
 
-   applyLift in world-nav.html sets EVERY non-glass material in the scene to one colour,
-   DUSK_STONE 0xD9CDB6, whenever dusk is on. Dusk is the product state. So adding materials that
-   differ by COLOUR would have bought nothing at all where it counts — they would all be
-   overwritten with the same hex the moment the mode was entered. That drop would have shipped
-   and changed nothing, and it took reading the lift to see it.
+   v22 gave the fabric three stone finishes that differed only in roughness, and the comment
+   above them explained why: applyLift set every non-glass material in the scene to one hex, so
+   colour was the one channel that could not survive into dusk. That was true and it was the
+   reason the render reads beige — not that the palette was thin, but that dusk collapsed it.
 
-   What the lift does NOT touch on a stone material is roughness and metalness: it only sets
-   those for glass. So surface finish is the one channel that survives into dusk, and these three
-   differ in nothing else. Same colour, so the night render is unchanged and so is the glass
-   classifier in the lift registry, which decides by blue-over-red on the night hex and must keep
-   answering "not glass" for all three.
+   nav v23 changes the rule. A material carrying userData.duskColor keeps its own hue through the
+   lift; anything without one still gets DUSK_STONE exactly as before. So the finishes get real
+   materials now:
 
-   Assigned by height, following the same logic the glass rule already uses: render on the low
-   band, precast in the middle, polished cladding on the towers. */
+     LIMESTONE   warm, matte, the low-rise. Abu Dhabi's older stock is a sandy cream that goes
+                 distinctly orange under a low sun, which is the warmest thing in the palette.
+     CONCRETE    precast, neutral and slightly cool. The default, and the largest share.
+     ALUMINIUM   brushed cladding on the towers. Low roughness, real metalness, and a hue that is
+                 almost grey — a metal reads as metal through its SPECULAR response, not its
+                 diffuse colour, which is why the previous "polished" bucket at metalness 0.08
+                 read as shiny stone rather than as panel.
+
+   Night colours stay near-black and close together, because at night these surfaces are lit by
+   window spill and should not have opinions. The glass classifier decides on the NIGHT hex, so
+   every one of these keeps b <= 1.75r and stays out of the glass path. */
 const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
-const matStoneRend  = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.99, metalness:0.0 });
-const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.52, metalness:0.08 });
+matPlaceStone.userData.duskColor = 0xD3C4A6;      // precast concrete, neutral
+
+const matStoneRend  = new THREE.MeshStandardMaterial({ color:0x1A1A20, roughness:0.99, metalness:0.0 });
+matStoneRend.userData.duskColor  = 0xE0C79A;      // warm limestone
+
+const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x171B21, roughness:0.34, metalness:0.55 });
+matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
 const matLitWarm = new THREE.MeshStandardMaterial({
   color:0x0E141A, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.5 });
