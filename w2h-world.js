@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v41';
+export const BUILD = 'world v42';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1621,7 +1621,9 @@ const DISTRICTS = [
      painter-only, as the brief asks. */
   { id:'saadiyat', name:'Saadiyat',   x:-44, z:-116, r:56, rot: 0.15, tint:0xDDD3C0,
     shore:[
-      { kind:'mound', t:0.04, t1:0.25, reps:7, off: 7.0, y:-0.5, len:14.0, h:1.0, wide:2.6, turn:true },
+      /* Saadiyat's straight run is the NORTH-WEST coast, t 0.02 to 0.28 by the same measurement.
+         Groynes are shorter and lower than v41's: fourteen units out was a pier, not a groyne. */
+      { kind:'mound', t:0.05, t1:0.26, reps:7, off: 6.0, y:-0.5, len:9.0, h:0.8, wide:2.2, turn:true },
     ],
     built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.28, 0.070], places:[
       { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
@@ -1634,9 +1636,19 @@ const DISTRICTS = [
      furniture parked on an open shore. */
   { id:'yas',      name:'Yas Island', x: 78, z:-196, r:62, rot:-0.10, tint:C.gold,
     shore:[
-      { kind:'quay',   t:0.545, t1:0.620, reps: 4, off: 2.2, y:2.40, len:8.0, wide:1.0 },
-      { kind:'finger', t:0.552, t1:0.612, reps: 6, off:11.0, y:0.28, len:15.0, wide:3.0, turn:true },
-      { kind:'mound',  t:0.63,            off:14.0, y:-0.4, len:26.0, h:1.8, wide:8.0 },
+      /* THE INLET IS AT t 0.65 TO 0.81, NOT 0.55 TO 0.62. I guessed the fractions from the shape
+         array, but the outline is resampled at equal ARC LENGTH, so an index in that array is not
+         a fraction of the perimeter — the inlet is eight of twenty-four points and about a sixth
+         of the coast, and it sits a good deal further round than counting points suggests. The
+         marina was therefore built on the open southern shore: a comb of pontoons sticking into
+         the Gulf with no harbour behind them.
+
+         Found by search now rather than by eye. The inlet is exactly the stretch where the beach
+         skirt's own reach test has to clamp, because that is the definition of a concave coast —
+         so the same measurement that stops the sand folding tells you where the marina goes. */
+      { kind:'quay',   t:0.665, t1:0.790, reps: 6, off: 2.2, y:2.40, len:8.0, wide:1.0 },
+      { kind:'finger', t:0.680, t1:0.775, reps: 5, off: 8.0, y:0.28, len:10.0, wide:2.4, turn:true },
+      { kind:'mound',  t:0.630,            off:10.0, y:-0.4, len:22.0, h:1.8, wide:7.0 },
     ],
     built:false, coreN:[0.20, -0.10], places:[
       /* BOTH MOVED, because the marina inlet is now real water. Yas Marina was at x -28,
