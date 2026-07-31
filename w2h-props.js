@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v12';
+export const BUILD = 'props v13';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -182,10 +182,10 @@ poolGeo.rotateX(-Math.PI / 2);              // flat on the ground, +Y up
 const poolBase = { map: poolTex, transparent: true, blending: THREE.AdditiveBlending,
                    depthWrite: false, toneMapped: true, side: THREE.FrontSide };
 const matPoolNight = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFB35C, opacity: 0.85 });
-/* Dusk is a lit sky. The same pool that reads at night is invisible against it if you leave the
-   strength alone and garish if you raise it, so it drops instead — a lamp at dusk is on, and
-   barely showing is exactly what that looks like. */
-const matPoolDusk  = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFC27A, opacity: 0.34 });
+/* Dusk is a lit sky, so the pool that reads at night has to drop or it goes garish. 0.34 dropped
+   it too far: in the dusk place render it was not subtle, it was absent. 0.52 is the compromise —
+   present on the promenade, not competing with the sun. */
+const matPoolDusk  = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFC27A, opacity: 0.52 });
 
 /* ---------- boat ----------
    A hull with a raked bow, done by shearing the front of a box rather than modelling one. At

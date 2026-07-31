@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v21', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v22', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -936,7 +936,27 @@ function frame(){
 
   for (let i = 0; i < waterPos.count; i++){
     const x = waterBase[i*3], y = waterBase[i*3+1];
-    waterPos.array[i*3+2] = Math.sin(x*0.010 + t*0.45)*0.55 + Math.sin(y*0.008 - t*0.35)*0.42;
+    /* 0.09 AND 0.06, DOWN FROM 0.55 AND 0.42, and this is the fix for the beach rather than a
+       change to the sea.
+
+       Peak displacement was 0.97 units. At 7.8 metres to the unit that is a 7.6-metre swell —
+       fifteen metres crest to trough — in water holding seventy moored boats. It read as
+       plausible while the coast was a wall, because a wall does not care where the waterline is.
+
+       A beach is nothing BUT where the waterline is. The foam band and the dark band under it
+       span y +0.06 to -0.06: 0.12 units, 94 centimetres, and the sea was moving sixteen times
+       that. The shoreline swept across 9.2 of the beach's 12 units, 77 per cent of its width, so
+       at a crest the water climbed to the sea wall and at a trough it drained off the outer edge
+       and exposed the dark submerged rings. Every band in that profile was being alternately
+       drowned and stranded, several times a second. No colour or width change could have fixed
+       it — the bands were correct and the sea was washing over all of them.
+
+       At 0.15 peak the sweep is 2.0 units and lands on the foreshore, with the foam band inside
+       it. 1.2 metres of swell, which is a real day in the Gulf.
+
+       The swell has less to do now anyway: since v23 the fine surface detail is a normal map,
+       and the geometry is only carrying the long shape underneath it. */
+    waterPos.array[i*3+2] = Math.sin(x*0.010 + t*0.45)*0.09 + Math.sin(y*0.008 - t*0.35)*0.06;
   }
   waterPos.needsUpdate = true;
   water.geometry.computeVertexNormals();
