@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v47';
+export const BUILD = 'world v48';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1521,10 +1521,17 @@ Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, dus
 const matRoofDeck = new THREE.MeshStandardMaterial({ color:0x101216, roughness:0.97, metalness:0.02 });
 matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
+/* THE LIT BAND WAS BEING CLASSIFIED AS GLASS, and nobody had checked. The lift decides glass by
+   blue over red on the night hex at a ratio of 1.75; 0x0E141A is 14 red against 26 blue, a ratio
+   of 1.857. So every window band has been taking DUSK_GLASS, metalness 0.62 and roughness 0.24 —
+   a polished blue-grey mirror where a lit window should be. The override exists for exactly this
+   and ADNOC's waist was the first customer. */
 const matLitWarm = new THREE.MeshStandardMaterial({
   color:0x0E141A, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.5 });
+Object.assign(matLitWarm.userData, { glassOverride:false, duskColor:0xC7B398 });
 const matLitCool = new THREE.MeshStandardMaterial({
   color:0x0E141A, roughness:0.5, emissive:0x8FD3E8, emissiveIntensity:0.45 });
+Object.assign(matLitCool.userData, { glassOverride:false, duskColor:0xB6BFC4 });
 
 /* ===========================================================================
    THE FIVE DISTRICTS
@@ -2180,6 +2187,10 @@ const PLOT_DIAG = 1.081;
 /* Height over narrowest plan dimension. See the note at the height calculation. */
 const SLENDER = 22;
 
+/* One lit ring per this much height. 4.5 units is about eleven storeys. Lower it for a brighter
+   city and a larger night instance count; the relationship is linear. */
+const BAND_PITCH = 4.5;
+
 function fitPlot(W, D, block){
   const lim = block * PLOT_DIAG, dg = Math.hypot(W, D);
   const k = dg > lim ? lim / dg : 1;
@@ -2215,7 +2226,9 @@ function buildingSpec(rnd, ctx){
     sb:rnd(),     sbA:rnd(),    sbB:rnd(),    sbRa:rnd(),  sbRb:rnd(),
     crown:rnd(),  crownH:rnd(), crownW:rnd(),
     plant:rnd(),  plantW:rnd(), plantD:rnd(), plantH:rnd(), plantX:rnd(), plantZ:rnd(),
-    plantV:rnd(), plantWm:rnd(), bandV:rnd(), bandWm:rnd(),
+    plantV:rnd(), plantWm:rnd(), bandJit:rnd(), bandH:rnd(),
+    bv0:rnd(), bw0:rnd(), bv1:rnd(), bw1:rnd(),
+    bv2:rnd(), bw2:rnd(), bv3:rnd(), bw3:rnd(),
   };
 
   const gap  = 0.22;                     // street width as a fraction of the block
@@ -2353,17 +2366,47 @@ function buildingSpec(rnd, ctx){
               tint:{ v:R.plantV, w:R.plantWm, amount:0.30, warm:0.7 } };
   }
 
-  /* ---- NIGHT BAND ----
-     Windows are never uniformly lit; varying the band per building is what stops a night skyline
-     reading as one applied stripe. It rides the TOP stage now rather than a fixed 0.62 of the
-     whole height, so on a setback tower it lands on the tower and not across a setback join. */
-  let band = null;
-  if (h > tallest * 0.28){
-    band = { y:top.y + top.h * 0.16, h:top.h * 0.34, w:top.w * 1.015, d:top.d * 0.72,
-             tint:{ v:R.bandV, w:R.bandWm, amount:0.70, warm:0.4 } };
+  /* ---- NIGHT BANDS ----
+
+     THE BAND WAS ONLY VISIBLE FROM TWO SIDES, WHICH IS THE WHOLE COMPLAINT. It was scaled
+     w * 1.015 by d * 0.72: proud of the wall by one and a half per cent in x, and buried
+     TWENTY-EIGHT PER CENT INSIDE THE BUILDING in z. Turn the camera ninety degrees and every
+     window in the district is hidden inside the block that owns it. That is why the ADNOC
+     approach glows and the same city from the other side is a silhouette — it was never the
+     moon, it was that half the light sources were interior geometry.
+
+     A RING, therefore: 1.02 on both axes, proud on all four faces. Same instance, same cost.
+
+     AND A STACK, DERIVED RATHER THAN CHOSEN. One band per building put a single stripe on a
+     44-unit tower and, because of the h > tallest * 0.28 gate, nothing at all on the entire
+     low-rise carpet — which at world zoom is most of the surface area of the city. Bands are now
+     spaced every BAND_PITCH of height, so a tall building earns more of them and a shed earns
+     one, and the count follows from the span exactly as the shoreline modules do. Capped at four
+     because past that they cost more than they read.
+
+     THIN, AND FIXED IN WORLD UNITS. The old band was 0.34 of a stage — on a tall tower that is a
+     glowing slab a third of its height. Half a unit is roughly a storey and a half, which is what
+     a lit floor looks like, and being an absolute height it does not stretch with the building.
+
+     nightOnly is set on the mesh, so none of this exists in Day, Silhouette or Plan. As a side
+     effect that removes the old band from the daytime massing, where it had no business being. */
+  const bands = [];
+  {
+    const n  = Math.max(1, Math.min(4, Math.floor(h / BAND_PITCH)));
+    const y0 = podH + (h - podH) * 0.10 + R.bandJit * 0.9;
+    const span = Math.max(0, (h - y0) * 0.84);
+    const bh = 0.38 + R.bandH * 0.22;
+    for (let i = 0; i < n; i++){
+      const by = y0 + span * (n === 1 ? 0.34 : i / (n - 1));
+      // Whichever stage this height falls in, so a band on a setback tower sits on the stage it
+      // belongs to rather than floating out where the stage below used to be.
+      const st = stages.find(g => by >= g.y - 1e-9 && by < g.y + g.h) || top;
+      bands.push({ y:by, h:bh, w:st.w * 1.02, d:st.d * 1.02,
+                   tint:{ v:R['bv' + i], w:R['bw' + i], amount:0.70, warm:0.4 } });
+    }
   }
 
-  return { x, z, h, w, dp, tier, mat, tint, podium, stages, crown, plant, band };
+  return { x, z, h, w, dp, tier, mat, tint, podium, stages, crown, plant, bands };
 }
 
 /* THE ONE WALKER, used by both the tally and the write so the two cannot disagree about how many
@@ -2395,9 +2438,14 @@ function walkSpec(sp, lod, fn){
     fn({ t:'roof', y:top_y(sp), w:sp.plant.w, h:sp.plant.h, d:sp.plant.d,
          ox:sp.plant.ox, oz:sp.plant.oz, tint:sp.plant.tint });
   }
-  if (sp.band){
-    fn({ t:'band', y:sp.band.y, w:sp.band.w, h:sp.band.h, d:sp.band.d, tint:sp.band.tint });
-  }
+  /* THE MASS LAYER TAKES TWO BANDS AT MOST, and this is a genuine LOD saving rather than a
+     compromise. At world zoom a twenty-unit tower is about fifteen pixels tall, so four rings on
+     it are sub-pixel banding that costs triangles and reads as nothing. What the world view needs
+     from a lit building is that it IS lit; two sources per building give that at half the cost,
+     and Al Reem and Al Maryah were the two islands where the stack outnumbered the buildings two
+     to one. First and last, so the lit extent of the tower is still honest. */
+  const bs = mass && sp.bands.length > 2 ? [sp.bands[0], sp.bands.at(-1)] : sp.bands;
+  bs.forEach(b => fn({ t:'band', y:b.y, w:b.w, h:b.h, d:b.d, tint:b.tint }));
 }
 function top_y(sp){ const t = sp.stages[sp.stages.length - 1]; return t.y + t.h; }
 
@@ -2462,6 +2510,10 @@ function urbanFabric(d, layer, opts){
   ['rend','stone','clad','glass','bronze','roof'].forEach(k => {
     meshes[k].castShadow = true; meshes[k].receiveShadow = true;
   });
+  /* The shell hides this outside night and dusk, so the rings cost nothing in the three
+     diagnostic modes and stop appearing in the daytime massing, which they should never have
+     done. They also cast no shadow: a lit window is a source, not an occluder. */
+  meshes.band.userData.nightOnly = true;
 
   const M   = new THREE.Object3D();
   const col = new THREE.Color();
