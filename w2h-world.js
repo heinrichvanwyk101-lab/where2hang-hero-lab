@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v46';
+export const BUILD = 'world v47';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2177,6 +2177,9 @@ const LOWRISE = 5.4;
    footprint kept under this is covered by a clearance that has already been tested. */
 const PLOT_DIAG = 1.081;
 
+/* Height over narrowest plan dimension. See the note at the height calculation. */
+const SLENDER = 22;
+
 function fitPlot(W, D, block){
   const lim = block * PLOT_DIAG, dg = Math.hypot(W, D);
   const k = dg > lim ? lim / dg : 1;
@@ -2232,7 +2235,19 @@ function buildingSpec(rnd, ctx){
   // cap keeps a landmark taller than the fabric standing next to it.
   const dc   = Math.hypot(jx - coreX, jy - coreZ);
   const fall = Math.max(0, 1 - Math.pow(dc / 0.9, 1.5));
-  const h    = Math.min(capH, 3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95));
+  /* A THIRD CEILING, AND IT IS NOT NEW DAMAGE — it is an old fault this version made visible.
+     `tallest` is chosen per district with no reference to the block pitch, so Al Reem asks for
+     44 units of height on a 2.65-unit plot: a slenderness of 17 at the median and 53 at the
+     worst. That is a wire, not a building, and it is why Al Reem has always read as a hairbrush
+     in the world view. Articulation multiplied it — a top stage is narrower still — which is how
+     it finally became impossible to ignore.
+     SLENDER is deliberately loose. Al Reem genuinely is a forest of slim towers and clamping to
+     anything realistic (nine or ten) would halve the island and destroy its character. At 22 it
+     bites only on the outliers: nothing at the median moves. Raise it to Infinity to see the
+     unclamped skyline, or drop it towards 12 if the diorama should read as buildings rather than
+     as a cluster of masts. */
+  const h    = Math.min(capH, SLENDER * Math.min(w, dp),
+                        3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95));
 
   const frac = h / tallest;
   const tier = h < LOWRISE ? 0 : frac < 0.42 ? 1 : 2;
@@ -2260,7 +2275,10 @@ function buildingSpec(rnd, ctx){
     const ph = Math.min(h * 0.28, 0.90 + R.podH * 1.30);
     const [pw, pd] = fitPlot(w * (1.00 + R.podW * 0.06), dp * (1.00 + R.podW * 0.06), block);
     podium = { h:ph, w:pw, d:pd };
-    inset  = 0.60 + R.inset * 0.22;
+    /* 0.60 TO 0.82 WAS TOO MUCH, and the first render said so plainly: forty per cent of the
+       plan lost at the podium, another fifteen at each setback, and the district read as a pin
+       cushion rather than a city. A podium tower in Abu Dhabi keeps most of its plate. */
+    inset  = 0.78 + R.inset * 0.14;
   } else if (tier === 1 && R.pod < 0.55){
     const ph = Math.min(h * 0.34, 0.50 + R.podH * 0.60);
     const [pw, pd] = fitPlot(w * (1.05 + R.podW * 0.07), dp * (1.05 + R.podW * 0.07), block);
@@ -2273,7 +2291,7 @@ function buildingSpec(rnd, ctx){
   const podH   = podium ? podium.h : 0;
   const shaftH = h - podH;
   let nStage = 1;
-  if (tier === 2)      nStage = frac > 0.62 ? (R.sb < 0.22 ? 1 : R.sb < 0.72 ? 2 : 3)
+  if (tier === 2)      nStage = frac > 0.62 ? (R.sb < 0.22 ? 1 : R.sb < 0.86 ? 2 : 3)
                                             : (R.sb < 0.58 ? 1 : 2);
   else if (tier === 1) nStage = R.sb < 0.82 ? 1 : 2;
 
@@ -2285,7 +2303,10 @@ function buildingSpec(rnd, ctx){
                                 : left * (0.55 + R.sbB * 0.22);
     stages.push({ y, h:sh, w:sw, d:sd });
     y += sh; left -= sh;
-    const step = Math.max(0.42 / cum, s === 0 ? 0.74 + R.sbRa * 0.14 : 0.76 + R.sbRb * 0.14);
+    /* Gentler steps and a much higher floor. 0.42 meant a three-stage tower finished at under
+       half its plate, which compounds with the podium inset and with fabricGeo's own five per
+       cent taper — three reductions stacked on one silhouette. */
+    const step = Math.max(0.62 / cum, s === 0 ? 0.86 + R.sbRa * 0.07 : 0.88 + R.sbRb * 0.06);
     cum *= Math.min(1, step); sw *= Math.min(1, step); sd *= Math.min(1, step);
   }
   const top = stages[stages.length - 1];
@@ -2295,7 +2316,11 @@ function buildingSpec(rnd, ctx){
      material is deliberately not the wall's: a dark deck on masonry, bright cladding on glass,
      so the top edge always carries a line. */
   let crown = null;
-  if (tier === 2 && frac > 0.72 && R.crown < 0.40){
+  /* MASTS ONLY WHERE ONE IS EARNED. frac is h / tallest, and a CAPPED building sits at a fixed
+     h — Corniche's cap of 12 against a tallest of 16 puts every capped block at frac 0.75, above
+     the old 0.72 gate, so the mast landed on exactly the stock the cap exists to hold DOWN. Rate
+     cut as well: 45 needles on one island is a hairbrush, not a skyline. */
+  if (tier === 2 && frac > 0.80 && h < capH - 1e-6 && R.crown < 0.28){
     const s = 0.07 + R.crownW * 0.05;
     /* Scaled to the building and then clamped, not a flat range. A flat 1.4-to-3.6 needle is a
        third of the height of a capped Corniche tower and eight per cent of ADNOC — the same
@@ -2303,7 +2328,7 @@ function buildingSpec(rnd, ctx){
     crown = { kind:'mast', h:Math.min(3.6, Math.max(0.9, h * (0.08 + R.crownH * 0.10))),
               w:top.w * s, d:top.d * s, mat:'clad' };
   } else if (tier === 2 && R.crown < 0.74){
-    const s = 0.54 + R.crownW * 0.22;
+    const s = 0.64 + R.crownW * 0.20;
     crown = { kind:'cap', h:0.35 + R.crownH * 0.85, w:top.w * s, d:top.d * s,
               mat:isGlass ? 'clad' : 'roof' };
   } else if (tier > 0 || R.crown < 0.70){
