@@ -174,7 +174,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v18', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v19', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -308,6 +308,23 @@ scene.add(sun.target, moon.target);
 const SUN_OFF  = new THREE.Vector3(-380, 210, 260);
 const MOON_OFF = new THREE.Vector3(-320, 220, -260);
 let shadowNote = 'world';
+/* HOW MUCH RIPPLE THE SEA SHOULD BE SHOWING, by state rather than by mode.
+
+   The tile is 123 units. At district and place range that is a comfortable few hundred pixels
+   and the chop reads as chop. At world range the camera is 600 units up looking across 1,400,
+   so a tile is under a hundred pixels and the finest components in it are well under one — and
+   a normal map sampled below a pixel per feature does not average to flat, it averages to
+   BLOTCHES, because neighbouring texels disagree about which way they face and the specular
+   term swings hard between them. That is the mottled grey haze over the world render.
+
+   Mipmaps and anisotropy reduce it; they do not remove it, because the error is in the
+   specular response rather than in the filtering. Fading the map out with distance does remove
+   it, and costs nothing anyone would want at that range: from 600 units up the sea should be
+   calm and the islands should be the subject.
+
+   Read in the frame loop rather than assigned here, because fitShadow runs long before the
+   water materials exist and touching them from it would be a temporal dead zone error. */
+let rippleGoal = 1, rippleNow = 1;
 
 function fitShadow(){
   const d = activeDistrict;
@@ -324,6 +341,7 @@ function fitShadow(){
     L.shadow.normalBias = 1.8 * (half * 2 / L.shadow.mapSize.x);
   });
   shadowNote = (d ? d.id : 'world') + ' ' + (half * 2 / sun.shadow.mapSize.x).toFixed(3) + 'u/tx';
+  rippleGoal = d ? 1 : 0.18;
 }
 
 
@@ -893,6 +911,13 @@ function frame(){
      look like the sea was moving in two unrelated ways. */
   if (waterNormal){
     waterNormal.offset.set(t * 0.0065, t * 0.0041);
+    // Eased rather than switched: the camera flight between world and district takes about a
+    // second, and a sea that changes surface in one frame during it is worse than either end.
+    if (Math.abs(rippleNow - rippleGoal) > 0.002){
+      rippleNow += (rippleGoal - rippleNow) * 0.06;
+      dayWater.normalScale.set(0.29 * rippleNow, 0.29 * rippleNow);
+      duskWater.normalScale.set(0.42 * rippleNow, 0.42 * rippleNow);
+    }
   }
 
   updateLabels();

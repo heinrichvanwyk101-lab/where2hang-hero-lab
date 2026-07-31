@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v24';
+export const BUILD = 'world v25';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1089,10 +1089,18 @@ const matBeach    = new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1
    skirt and the bevel above it cannot disagree, plus vertexColors so the wet-sand banding rides
    on top of whichever mode is live. The colours here are the base and the vertex colour is a
    MULTIPLIER, exactly as instanceColor is on the fabric. */
+/* SAND IS ITS OWN COLOUR NOW, not a multiplier off the bevel's.
+
+   v24 based these on matBeach, which is the dark brown of the platform's UNDERWATER edge, and
+   then tried to claw a pale beach back out of it with vertex colours up at 1.55. Multipliers
+   that large are a sign the base is wrong: they blow out the lit faces while the shaded ones
+   stay brown, so the skirt read as more pedestal on one side and nothing on the other. A beach
+   is a pale surface. Start from a pale surface and let the vertex colours do what they are for,
+   which is banding within it. */
 const beachSand = {
-  night: new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0, vertexColors:true }),
-  day:   new THREE.MeshStandardMaterial({ color:0xAB9A7C, roughness:1, metalness:0, vertexColors:true }),
-  dusk:  new THREE.MeshStandardMaterial({ color:0x9C8C6F, roughness:1, metalness:0, vertexColors:true }),
+  night: new THREE.MeshStandardMaterial({ color:0x5A5548, roughness:1, metalness:0, vertexColors:true }),
+  day:   new THREE.MeshStandardMaterial({ color:0xC9B896, roughness:1, metalness:0, vertexColors:true }),
+  dusk:  new THREE.MeshStandardMaterial({ color:0xB8A582, roughness:1, metalness:0, vertexColors:true }),
 };
 const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
@@ -1332,13 +1340,13 @@ DISTRICTS.forEach(d => {
        the eye read land, then edge, then sand, then sea. */
     const BW = 8 / d.r;                                    // 8 world units, normalised
     const P = [                                            // t, height, shade
-      [0.00, ISLE_DEPTH, 1.28],   // meets the platform at its widest point, not above it
-      [0.22, 2.28,       1.38],   // promenade, 1.8 units wide, falling 1:15 for drainage
-      [0.25, 1.75,       1.02],   // kerb face, in shadow against the sand
-      [0.55, 0.70,       1.55],   // dry sand: the palest thing on the island
-      [0.72, 0.10,       1.18],   // damp
-      [0.86, -0.35,      0.68],   // wet, and under the wave troughs from here down
-      [1.00, -1.20,      0.44],
+      [0.00, ISLE_DEPTH, 1.00],   // meets the platform at its widest point, not above it
+      [0.22, 2.28,       1.06],   // promenade, 1.8 units wide, falling 1:15 for drainage
+      [0.25, 1.75,       0.78],   // kerb face, the one band that wants to be dark
+      [0.55, 0.70,       1.22],   // dry sand: the palest thing on the island
+      [0.72, 0.10,       0.94],   // damp
+      [0.86, -0.35,      0.60],   // wet, and under the wave troughs from here down
+      [1.00, -1.20,      0.38],
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;
@@ -1374,6 +1382,19 @@ DISTRICTS.forEach(d => {
        beach is outside every line on it. */
     beach.userData.dayMats  = beachSand.day;
     beach.userData.duskMats = beachSand.dusk;
+    /* NO SHADOWS ON THE BEACH, for the reason already written above the sea.
+
+       The dusk sun sits thirteen degrees up, so an island shadows its own seaward skirt for the
+       whole width of it on the away side — physically correct and, in the render, a black rim
+       around the island reading as exactly the pedestal edge the beach was built to remove. The
+       water opted out of shadow receipt for the same reason and the same sun. A narrow strip of
+       nearly flat pale sand has nothing to gain from shadowing and everything to lose.
+
+       Casting is off too: a skirt this shallow throws nothing anyone would see, and every
+       triangle offered to the shadow pass is paid for at both light sources. This must be set
+       AFTER the one-sweep traverse further down, which turns both flags on for everything —
+       hence the flag on the object rather than a call here. */
+    beach.userData.noShadow = true;
     g.add(beach);
   }
 
@@ -1830,8 +1851,9 @@ DISTRICTS.forEach(d => {
 /* ---------- shadow flags, one sweep ---------- */
 world.traverse(o => {
   if (!o.isMesh || o.userData.helper) return;
-  o.castShadow = true;
-  o.receiveShadow = true;
+  const on = !o.userData.noShadow;
+  o.castShadow = on;
+  o.receiveShadow = on;
 });
 water.castShadow = false;
 
