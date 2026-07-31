@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v42';
+export const BUILD = 'world v43';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1352,11 +1352,17 @@ const shoreGeo = (() => {
     const ring = [[0.5,0],[0.30,0.42],[-0.30,0.42],[-0.5,0],[-0.30,-0.42],[0.30,-0.42]];
     ring.forEach(p => pos.push(p[0], 0, p[1]));
     ring.forEach(p => pos.push(p[0]*0.44, 1, p[1]*0.44));
+    /* WINDING, CHECKED RATHER THAN ASSUMED — and it was wrong, exactly as the beach skirt's was.
+       All sixteen faces pointed inward, signed volume -0.37, so FrontSide culled the whole module
+       from any camera above it. The breakwaters were not dark; they were the holes you could see
+       the water through. This is the second hand-built geometry in the file and the second one to
+       come out inside-out, which is a good argument for taking the cross product every time
+       rather than reasoning about the ring direction. */
     for (let i = 0; i < 6; i++){
       const j = (i+1)%6;
-      idx.push(i, j+6, i+6, i, j, j+6);
+      idx.push(i, i+6, j+6, i, j+6, j);
     }
-    for (let i = 1; i < 5; i++) idx.push(6, i+6, i+7);
+    for (let i = 1; i < 5; i++) idx.push(6, i+7, i+6);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setIndex(idx); g.computeVertexNormals();
