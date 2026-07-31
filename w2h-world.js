@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v22';
+export const BUILD = 'world v23';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -119,10 +119,66 @@ scene.add(world);
    would cost twenty thousand vertices a frame on a phone. Instead a second, static, unlit-ish
    plane sits just below it and runs out to 14,000. It never animates, it is one draw call, and
    by the time it is visible it is far enough away that the fog has most of it anyway. */
+/* A TILING RIPPLE NORMAL, GENERATED RATHER THAN LOADED.
+
+   The animated plane is 3200 units across 70 segments: 46 units, 357 metres, between vertices.
+   So the wave loop can only ever produce enormous smooth swells, and between them the surface is
+   a perfect mirror — which is most of why the sea reads as dark glass rather than as water.
+
+   Fine detail belongs in a normal map, not in geometry. This one is built the same way the
+   ground canvases are, on a 2D context at load, so there is no asset to fetch and nothing to go
+   stale. Tileability is the only constraint that matters and it comes free: every component uses
+   INTEGER frequencies across the canvas, so the height field is periodic by construction and the
+   seams cannot show however far it repeats.
+
+   Exported, because the material it belongs on is not this one. world-nav.html swaps in its own
+   water material per view mode, so a normal map assigned here would only ever be visible at
+   night. The shell assigns it to all four. */
+function makeWaterNormal(N = 256){
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const g = cv.getContext('2d');
+  const img = g.createImageData(N, N);
+  const waves = [
+    [ 3,  1, 1.00, 0.0], [ 1, -3, 0.85, 1.7], [ 5,  2, 0.45, 3.1],
+    [-2,  5, 0.40, 0.6], [ 7, -3, 0.22, 2.2], [ 4,  8, 0.16, 4.4],
+  ];
+  const H = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+    let h = 0;
+    for (const [fx, fy, a, ph] of waves)
+      h += a * Math.sin(2 * Math.PI * (fx * x + fy * y) / N + ph);
+    H[y * N + x] = h;
+  }
+  const S = 0.85;                       // slope gain: how steep the ripple reads
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+    // Wrapped differences, so the derivative is periodic too and the seam stays invisible.
+    const l = H[y * N + ((x - 1 + N) % N)], r = H[y * N + ((x + 1) % N)];
+    const u = H[((y - 1 + N) % N) * N + x], dn = H[((y + 1) % N) * N + x];
+    let nx = -(r - l) * S, ny = -(dn - u) * S, nz = 1;
+    const L = Math.hypot(nx, ny, nz);
+    const i = (y * N + x) * 4;
+    img.data[i]     = (nx / L * 0.5 + 0.5) * 255;
+    img.data[i + 1] = (ny / L * 0.5 + 0.5) * 255;
+    img.data[i + 2] = (nz / L * 0.5 + 0.5) * 255;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  // 3200 units over 140 tiles is a 22.9-unit tile, and the coarsest wave in it is three cycles
+  // across — a 7.6-unit crest spacing, about 60 metres. Chop, not swell: the vertices do swell.
+  t.repeat.set(140, 140);
+  t.colorSpace = THREE.NoColorSpace;    // a normal map is data, never sRGB
+  return t;
+}
+const waterNormal = makeWaterNormal();
+
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(3200, 3200, 70, 70),
   new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.58, metalness:0.05,
-    envMapIntensity:0.95 })
+    envMapIntensity:0.95, normalMap:waterNormal,
+    normalScale:new THREE.Vector2(0.42, 0.42) })
 );
 water.rotation.x = -Math.PI/2;
 /* NO SHADOWS ON THE SEA. The dusk sun sits 13 degrees up, so every island throws a shadow two
@@ -415,6 +471,46 @@ function inwardAt(id, pts, i, dist){
   let px = pts[i].x + nx * dist, py = pts[i].y + ny * dist;
   if (!insideIsle(id, px, py)){ px = pts[i].x - nx * dist; py = pts[i].y - ny * dist; }
   return [px, py];
+}
+
+/* The same sample, pushed the other way. inwardAt keeps whichever side lands inside the polygon;
+   this keeps whichever lands outside, which is all the difference between a ring road and a
+   beach. */
+function outwardAt(id, pts, i, dist){
+  const n = pts.length - 1;
+  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+  let tx = b.x - a.x, ty = b.y - a.y;
+  const L = Math.hypot(tx, ty) || 1;
+  tx /= L; ty /= L;
+  const nx = -ty, ny = tx;
+  let px = pts[i].x + nx * dist, py = pts[i].y + ny * dist;
+  if (insideIsle(id, px, py)){ px = pts[i].x - nx * dist; py = pts[i].y - ny * dist; }
+  return [px, py];
+}
+
+/* HOW FAR THE BEACH CAN ACTUALLY REACH AT ONE SAMPLE.
+
+   Offsetting outward has the mirror of the ring road's problem. At a CONCAVE point the outward
+   normals of neighbouring samples converge, and at the head of a narrow inlet they cross to the
+   far bank entirely — which put two of Yas's beach vertices INSIDE the island, sand growing up
+   through the land at the top of the marina, and squeezed Saadiyat's outer ring down to 0.037
+   units between adjacent points, a hair from folding.
+
+   The ring road could drop the folded samples and return open runs. A skirt cannot: every ring
+   needs the same vertex count or the strip between them has nothing to index. So this clamps
+   instead of pruning. It backs the distance off until the point is genuinely outside and
+   genuinely that far from the shore, and returns the largest distance that survives.
+
+   Which is also the physically right answer. A beach in a tight inlet IS narrower, and pinching
+   to nothing at the head of a channel is what the real coast does. */
+function beachReach(id, pts, i, want){
+  let dcur = want;
+  for (let k = 0; k < 5; k++){
+    const [px, py] = outwardAt(id, pts, i, dcur);
+    if (!insideIsle(id, px, py) && distToOutline(id, px, py) > dcur * 0.80) return dcur;
+    dcur *= 0.5;
+  }
+  return 0;
 }
 
 const RING_INSET = 0.085;      // normalised island units — about 6.5 on Corniche, 5.3 on Yas
@@ -964,6 +1060,16 @@ function paintGround(d, plan){
    convention rather than an oversight, but it is a convention, and dropping ISLE_DEPTH would
    carry the whole city with it since GROUND is derived from it. */
 const matBeach    = new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0 });
+
+/* THE BEACH SKIRT'S THREE MODES. Same three colours the platform's bevel already uses, so the
+   skirt and the bevel above it cannot disagree, plus vertexColors so the wet-sand banding rides
+   on top of whichever mode is live. The colours here are the base and the vertex colour is a
+   MULTIPLIER, exactly as instanceColor is on the fabric. */
+const beachSand = {
+  night: new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0, vertexColors:true }),
+  day:   new THREE.MeshStandardMaterial({ color:0xAB9A7C, roughness:1, metalness:0, vertexColors:true }),
+  dusk:  new THREE.MeshStandardMaterial({ color:0x9C8C6F, roughness:1, metalness:0, vertexColors:true }),
+};
 const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
 
 /* THREE STONES, AND THE REASON IS THE DUSK LIFT, NOT TASTE.
@@ -1161,6 +1267,74 @@ DISTRICTS.forEach(d => {
     layer.add(isle);
     d.isleMeshes.push(isle);
   });
+
+  /* THE BEACH, WHICH EXISTS TO STOP THE ISLAND LOOKING LIKE A CAKE STAND.
+
+     The platform is an extrusion: ISLE_DEPTH 2.4 plus a 0.5 bevel, so every island is a 2.9-unit
+     vertical wall standing in the sea. At 7.8 metres to the unit that is a twenty-three metre
+     cliff running the entire coastline, and it is the single strongest cue that these are
+     objects sitting on a pedestal rather than land meeting water.
+
+     A skirt fixes it without touching the platform. Rings of the coastline pushed progressively
+     OUTWARD and DOWN, from the top edge to well under the wave troughs, so what you see from a
+     low camera is sand sloping into water and the wall is behind it. Nothing else needs to know:
+     every placement rule in this file measures against the outline, and the beach lives entirely
+     outside it.
+
+     WIDTH IS SET BY THE TIGHTEST CHANNEL, NOT BY TASTE. Corniche and Al Reem pass within 22.8
+     units of each other. Two 8-unit beaches leave 6.8 units of open water between them, which
+     still reads as a strait; anything past 11 and they would merge into a sandbar joining two
+     islands that are meant to be separate.
+
+     THE PROFILE IS FIVE RINGS, and the two near y = 0 are the ones doing the work. A pale band
+     just above the waterline and a dark one just below it is what the eye reads as wet sand, and
+     it costs a vertex colour rather than a texture. The lowest ring sits at -1.2, below the
+     -0.97 wave trough, so the sand always terminates under water rather than in mid-air. */
+  {
+    const BW = 8 / d.r;                                    // 8 world units, normalised
+    const P = [                                            // t, height, shade
+      [0.00,  GROUND, 1.05],
+      [0.30,  1.30,   0.98],
+      [0.55,  0.35,   1.18],
+      [0.66,  0.02,   0.72],
+      [1.00, -1.20,   0.50],
+    ];
+    const o = isleOutline(d.id);
+    const n = o.length - 1;
+    /* Reach is solved ONCE per sample and every ring then scales the same clamped distance, so
+       the five rings can never cross each other however tight the coast gets — they all lie
+       along one direction from one origin. */
+    const reach = [];
+    for (let i = 0; i < n; i++) reach.push(beachReach(d.id, o, i, BW));
+    const pos = [], col = [], idx = [];
+    P.forEach(([t, y, sh]) => {
+      for (let i = 0; i < n; i++){
+        const [px, py] = t === 0 ? [o[i].x, o[i].y] : outwardAt(d.id, o, i, reach[i] * t);
+        pos.push(px * d.r, y, -py * d.r);
+        col.push(sh, sh, sh);
+      }
+    });
+    for (let r = 0; r < P.length - 1; r++){
+      for (let i = 0; i < n; i++){
+        const j = (i + 1) % n, a = r * n, b = (r + 1) * n;
+        idx.push(a + i, b + i, b + j, a + i, b + j, a + j);
+      }
+    }
+    const bg = new THREE.BufferGeometry();
+    bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    bg.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
+    bg.setIndex(idx);
+    bg.computeVertexNormals();
+    const beach = new THREE.Mesh(bg, beachSand.night);
+    /* dayMats and duskMats are not optional. A mesh carrying neither is handed the switcher's
+       generic pale dayMat in Day, and setting duskMats is also what keeps this out of the lift
+       registry — which would otherwise repaint the sand with DUSK_STONE along with the city.
+       userData.ground is deliberately NOT set: Plan is a drawing of the ground plan, and the
+       beach is outside every line on it. */
+    beach.userData.dayMats  = beachSand.day;
+    beach.userData.duskMats = beachSand.dusk;
+    g.add(beach);
+  }
 
   /* Generous invisible hit disc, sitting just clear of the ground. A fingertip is about 9mm;
      targets matched to the visual edge feel broken on a phone.
@@ -1620,6 +1794,6 @@ world.traverse(o => {
 });
 water.castShadow = false;
 
-return { world, water, farSea, waterPos, waterBase, DISTRICTS, pickTargets, corniche, GROUND,
-         propCount };
+return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets,
+         corniche, GROUND, propCount };
 }

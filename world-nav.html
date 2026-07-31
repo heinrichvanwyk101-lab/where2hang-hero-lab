@@ -174,7 +174,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v17', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v18', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -332,7 +332,7 @@ const kit     = createCityKit(renderer);
 const propKit = createPropKit();
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
-const { world, water, farSea, waterPos, waterBase, DISTRICTS, pickTargets, corniche,
+const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -475,6 +475,26 @@ const dayWater  = new THREE.MeshStandardMaterial({ color:0x6E9CB6, roughness:0.3
    swallows the frame. */
 const duskWater = new THREE.MeshStandardMaterial({ color:0x5E7A88, roughness:0.16,
   metalness:0.10, envMapIntensity:1.5 });
+
+/* THE RIPPLE GOES ON ALL OF THEM, and that is the whole reason it is built in the world module
+   and handed over rather than assigned there.
+
+   The animated plane has 46 units between vertices, so the wave loop can only make broad swells
+   and the surface between them is a perfect mirror. w2h-world.js generates a tiling ripple
+   normal at load and puts it on the material it owns — but this file REPLACES water.material in
+   Day, Dusk and Silhouette, so a map assigned only over there would have been visible at night
+   and nowhere else. Same reasoning as farSea: anything read out of another module is guarded, so
+   an older world.js that has no waterNormal degrades to the flat sea rather than throwing.
+
+   Silhouette is left alone deliberately. It is a diagnostic for massing and a rippled sea in it
+   would be noise. */
+if (waterNormal){
+  const nScale = new THREE.Vector2(0.42, 0.42);
+  // Day is high and bright, so the chop reads at a steeper angle and wants less of it.
+  dayWater.normalMap  = waterNormal; dayWater.normalScale  = nScale.clone().multiplyScalar(0.7);
+  duskWater.normalMap = waterNormal; duskWater.normalScale = nScale.clone();
+  dayWater.needsUpdate = duskWater.needsUpdate = true;
+}
 
 /* ===========================================================================
    THE DUSK LIFT.
@@ -865,6 +885,15 @@ function frame(){
   }
   waterPos.needsUpdate = true;
   water.geometry.computeVertexNormals();
+
+  /* THE RIPPLE SCROLLS, and it costs one vector assignment rather than five thousand vertices.
+     Two components pulling at different rates across the same tiling texture is enough to stop
+     the eye finding the repeat; a single offset scrolling in one direction reads as a conveyor
+     belt. Slow — the swell underneath is on a 14-second period and chop that outran it would
+     look like the sea was moving in two unrelated ways. */
+  if (waterNormal){
+    waterNormal.offset.set(t * 0.0065, t * 0.0041);
+  }
 
   updateLabels();
   renderer.info.reset();
