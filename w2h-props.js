@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v13';
+export const BUILD = 'props v14';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -139,6 +139,27 @@ carBody.translate(0, 0.62 * U_PER_M, 0);
 const carCabin = new THREE.BoxGeometry(2.3 * U_PER_M, 0.85 * U_PER_M, 1.60 * U_PER_M);
 carCabin.translate(-0.15 * U_PER_M, 1.45 * U_PER_M, 0);
 const carGeo = mergeGeometries([carBody, carCabin]);
+
+/* ---------- shrub ----------
+
+   THE CHEAP HALF OF VEGETATION, AND THE REASON IT IS NOT MORE PALMS.
+
+   A palm is 92 triangles — 56 of crown and 36 of trunk — so the 888 already in the scene are
+   about 82,000 of them. Doubling the count to get a landscaped read would cost more than the
+   entire shoreline pass, the roof decks and the material library put together.
+
+   Massed low planting does most of the same work for a twentieth of the price. What reads as
+   "landscaped" at district range is not individual trees, it is the GROUND being green and
+   uneven under them; a six-sided dome at twelve triangles supplies that, and four of them cost
+   less than half a frond. Palms stay where they are and keep doing the silhouette. */
+const shrubGeo = (() => {
+  const g = new THREE.CylinderGeometry(0.0, 0.115, 0.20, 6, 1);
+  g.translate(0, 0.10, 0);
+  g.scale(1, 1, 1.15);                       // very slightly oval, so a cluster is not six-fold
+  return g;
+})();
+const matShrub = new THREE.MeshStandardMaterial({ color:0x1B2415, roughness:1, metalness:0 });
+matShrub.userData.duskColor = 0x5E7440;
 
 /* ---------- lamp light pools ----------
 
@@ -251,12 +272,12 @@ function walk(pts, step, fn){
    THE PLACER
    ============================================================================================= */
 function addProps(d, layer, plan, budget = {}){
-  const B = Object.assign({ palms:420, lamps:280, cars:70, boats:14 }, budget);
+  const B = Object.assign({ palms:420, lamps:280, cars:70, boats:14, shrubs:300 }, budget);
   const R = plan.rndProps;
   const r = d.r;
   const inside = plan.inside;
 
-  const palms = [], lamps = [], cars = [], boats = [];
+  const palms = [], lamps = [], cars = [], boats = [], shrubs = [];
 
   /* plan.ring IS NOW AN ARRAY OF RUNS, not one closed loop.
 
@@ -307,6 +328,35 @@ function addProps(d, layer, plan, budget = {}){
       if (inside(px * 1.03, py * 1.03)) palms.push({ x:px, y:py });
     }
   });
+
+  /* SHRUBS GO WHERE THE PARKS ALREADY ARE, densely and in clumps, because the park blobs are
+     already the answer to "where is this island landscaped" — the painter drew them and nothing
+     three-dimensional has ever stood in them. Clustered around a few seed points per park rather
+     than scattered: planting is done in beds. */
+  plan.parks.forEach(p => {
+    const beds = 2 + Math.floor(R() * 3);
+    for (let b = 0; b < beds; b++){
+      const ba = R() * 6.2832, br = p.r * (0.2 + R() * 0.6);
+      const bx = p.x + Math.cos(ba) * br, by = p.y + Math.sin(ba) * br;
+      const n = 4 + Math.floor(R() * 7);
+      for (let i = 0; i < n && shrubs.length < B.shrubs; i++){
+        const a = R() * 6.2832, rr = p.r * 0.16 * Math.sqrt(R());
+        const px = bx + Math.cos(a) * rr, py = by + Math.sin(a) * rr;
+        if (inside(px * 1.03, py * 1.03)) shrubs.push({ x:px, y:py, s:0.7 + R() * 0.75 });
+      }
+    }
+  });
+
+  // And a thin line of them along the coast park, inside the palm avenue.
+  if (plan.coastLine){
+    walk(plan.coastLine, 0.018, (x, y, tx, ty, i) => {
+      if (shrubs.length >= B.shrubs) return;
+      const nx = -ty, ny = tx;
+      const o = 0.014 + R() * 0.016;
+      const px = x + nx * o, py = y + ny * o;
+      if (inside(px * 1.02, py * 1.02)) shrubs.push({ x:px, y:py, s:0.6 + R() * 0.6 });
+    });
+  }
 
   // The coast park gets a proper avenue of them — that stretch of shoreline is the one place
   // where a regular rhythm is right rather than wrong.
@@ -373,6 +423,12 @@ function addProps(d, layer, plan, budget = {}){
 
   const Y = plan.ground;
 
+  build(shrubGeo, matShrub, shrubs, (p) => {
+    M.position.set(p.x * r, Y, -p.y * r);
+    M.rotation.set(0, R() * 6.2832, 0);
+    M.scale.set(p.s, p.s * (0.7 + R() * 0.6), p.s);
+  });
+
   build(palmGeo, [matBark, matFrond], palms, (p) => {
     const s = 0.80 + R() * 0.48;
     M.position.set(p.x * r, Y, -p.y * r);
@@ -427,8 +483,9 @@ function addProps(d, layer, plan, budget = {}){
     M.scale.set(s, s, s);
   });
 
-  return { palms: palms.length, lamps: lamps.length, cars: cars.length, boats: boats.length };
+  return { palms: palms.length, lamps: lamps.length, cars: cars.length, boats: boats.length,
+           shrubs: shrubs.length };
 }
 
-return { addProps, materials: { matBark, matFrond, matPost, matGlow, matCar, matBoat } };
+return { addProps, materials: { matBark, matFrond, matPost, matGlow, matCar, matBoat, matShrub } };
 }

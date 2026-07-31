@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v43';
+export const BUILD = 'world v44';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -970,6 +970,59 @@ function paintGround(d, plan){
         correct order of operations for this city and reads that way. */
   g.fillStyle = SURF.sand;
   g.fillRect(0, 0, W, H);
+
+  /* GROUND VARIATION, AND IT IS ONE FILL THAT WAS DOING ALL THE WORK.
+
+     Every island began as a single flat #B7A78B, and everything painted afterwards — roads,
+     parks, patches — is an object ON that field rather than a variation OF it. So the moment the
+     lighting got good enough to see the ground properly, the ground read as one material, because
+     it was one material.
+
+     Reclaimed land is not one material. It is compacted fill where the plant ran, wind-blown sand
+     where it did not, gravel haul routes that were never taken up, and paler dust on the high
+     ground. None of it is dramatic and none of it should be: these are five to eight per cent
+     shifts, laid as soft blobs at a scale of tens of metres, and the whole point is that you
+     cannot see any individual one.
+
+     Painted before the roads and the parks so it sits UNDER them, which is also true to the
+     order it happened in. Costs nothing: fifty-four radial fills at load, no texture, no memory,
+     and the canvas was already being drawn. */
+  {
+    /* Five tones around the base: two compacted and darker, one gravelled and cooler, two
+       wind-blown and paler. Nothing here is more than about eight per cent off #B7A78B. */
+    const TONE = [SURF.sandDk, '#AFA083', '#A89A80', SURF.sandLt, '#C6B99E'];
+    const span = Math.max(W, H);
+    for (let i = 0; i < 54; i++){
+      const cx = R() * W, cy = R() * H;
+      const rr = span * (0.05 + R() * 0.15);
+      const col = TONE[(R() * TONE.length) | 0];
+      const gr = g.createRadialGradient(cx, cy, rr * 0.12, cx, cy, rr);
+      gr.addColorStop(0, col);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');   // alpha carries the falloff, so no edge lands
+      g.globalAlpha = 0.05 + R() * 0.06;
+      g.fillStyle = gr;
+      g.beginPath(); g.arc(cx, cy, rr, 0, 6.2832); g.fill();
+    }
+    /* HAUL ROUTES. Two or three long soft streaks in one direction: the tracks the plant left,
+       which is the one piece of ground grain on reclaimed land that has a DIRECTION and is
+       therefore the one the eye reads as history rather than as noise. */
+    const ang = R() * Math.PI;
+    for (let i = 0; i < 3; i++){
+      const cx = W * (0.2 + R() * 0.6), cy = H * (0.2 + R() * 0.6);
+      const L = span * (0.35 + R() * 0.3), wdt = span * (0.012 + R() * 0.02);
+      g.save();
+      g.translate(cx, cy); g.rotate(ang + (R() - 0.5) * 0.35);
+      const gr = g.createLinearGradient(0, -wdt, 0, wdt);
+      gr.addColorStop(0, 'rgba(0,0,0,0)');
+      gr.addColorStop(0.5, '#A2947A');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.globalAlpha = 0.07;
+      g.fillStyle = gr;
+      g.fillRect(-L/2, -wdt, L, wdt * 2);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+  }
 
   // Clip to the coastline once. Nothing painted after this can bleed into the sea.
   g.save();
@@ -2429,7 +2482,7 @@ const dayBeach   = new THREE.MeshStandardMaterial({ color:0xAB9A7C, roughness:1,
 const duskGround = new THREE.MeshStandardMaterial({ color:0xC6B99E, roughness:0.94, metalness:0 });
 const duskBeach  = new THREE.MeshStandardMaterial({ color:0x9C8C6F, roughness:1, metalness:0 });
 
-let propCount = { palms:0, lamps:0, cars:0, boats:0 };
+let propCount = { palms:0, lamps:0, cars:0, boats:0, shrubs:0 };
 DISTRICTS.forEach(d => {
   const f = d.fabric;
   if (!f) return;
