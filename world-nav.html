@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v26', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v27', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -413,12 +413,30 @@ let rippleGoal = 1, rippleNow = 1;
 
    Use the curve that matches the range. It is the same argument as fitting the shadow frustum to
    the active island rather than to the whole world. */
+/* BACK OFF FIFTEEN PER CENT, AND COOL THE COLOUR.
+
+   Two separate notes. The amount is a straight trim: near pushed out and far extended so the
+   fraction at any given distance falls by about a sixth. At the far islands that is 32 down to
+   27 per cent, which still separates them and stops the haze being the first thing in the frame.
+
+   The colour is the more interesting one. Fog in three is mix(fragment, fogColour, f), which is
+   exactly the physical model — object radiance times transmittance, plus inscattered light. So
+   the maths was never the problem. What makes it read as an overlay rather than as air is that
+   ONE colour is applied in every direction, and the value chosen was the horizon glow directly
+   under the sun. That is the brightest inscatter anywhere in the sky, and painting it across the
+   whole frame is what makes the haze look like a sheet of beige rather than like distance.
+
+   0xD2BEA4 sits between the sunward glow and the sky away from it: eight per cent darker and
+   noticeably cooler. Darker inscatter is also what keeps a silhouette readable — a dark tower
+   converges on a dark haze more slowly than on a bright one, which is the "landmarks stay legible
+   while the low city dissolves" behaviour, arrived at through the colour rather than through a
+   second mechanism. */
 const FOG = {
-  dusk:  { hex: 0xE2C79C, k: 0.00080, near: 250, far: 3000 },
-  day:   { hex: 0xB6CEDD, k: 0.00090, near: 350, far: 3600 },
-  night: { hex: 0x241D15, k: 0.00110, near: 150, far: 2400 },
+  dusk:  { hex: 0xD2BEA4, k: 0.00080, near: 300, far: 3300 },
+  day:   { hex: 0xAEC4D2, k: 0.00090, near: 400, far: 3900 },
+  night: { hex: 0x1E1913, k: 0.00110, near: 180, far: 2650 },
 };
-const FOG_STATE = { world: 1.00, district: 0.90, place: 0.75 };
+const FOG_STATE = { world: 1.00, district: 0.78, place: 0.68 };
 
 function makeFog(key, st){
   if (!key) return null;
@@ -716,7 +734,22 @@ const liftReg = [];
     });
   });
 }
-function applyLift(on){
+/* NIGHT SHOULD REVEAL THE CITY, NOT HIDE IT.
+
+   The night render loses the model: sea, ground and unlit faces all sit near black and the only
+   thing left is a scatter of windows. Aerial photography at night does the opposite — the water
+   goes to nothing and the city is the brightest thing in the frame.
+
+   The fix is emissive, not ambient. Raising the hemisphere or the exposure lifts the sea and the
+   sand along with the buildings and flattens the whole thing toward grey; multiplying the window
+   emissive lifts only the surfaces that are supposed to be sources. It is also free: emissive
+   intensity is a uniform, so nothing recompiles.
+
+   Passed in rather than derived, because applyLift's "off" branch covers Day, Plan and Silhouette
+   as well as Night, and boosting lit windows in a daytime diagnostic would be wrong. */
+const NIGHT_EMI = 1.5;
+
+function applyLift(on, night){
   liftReg.forEach(e => {
     if (on){
       e.m.color.setHex(e.glass ? DUSK_GLASS : (e.duskHex != null ? e.duskHex : DUSK_STONE));
@@ -730,7 +763,7 @@ function applyLift(on){
       }
     } else {
       e.m.color.setHex(e.nightHex);
-      e.m.emissiveIntensity = e.nightEmi;
+      e.m.emissiveIntensity = e.nightEmi * (night ? NIGHT_EMI : 1);
       e.m.roughness = e.nightRough;
       e.m.metalness = e.nightMetal;
       e.m.envMapIntensity = e.nightEnv;
@@ -794,7 +827,7 @@ function applyView(next){
     daySky.intensity = 0.55;
   }
 
-  applyLift(dusk);
+  applyLift(dusk, night);
 
   // Bloom is a lit-window effect. Against a pale sky it flares every edge and destroys the
   // profiles and massing that Day and Silhouette exist to judge.
@@ -809,7 +842,11 @@ function applyView(next){
      point of having the effect. Night can stay low: at night very little is above 0.46 except
      the windows anyway. */
   bloom.threshold = dusk ? 0.82 : 0.46;
-  renderer.toneMappingExposure = night ? 1.15 : dusk ? 1.02 : 1.0;
+  /* 1.15 -> 1.24 at night, and no further. Exposure lifts everything including the sea, so it is
+     the wrong lever for readability and the right one only for the small amount the emissive
+     boost cannot reach — the moonlit faces beside a lit window. Past about 1.3 the water starts
+     coming back and the frame flattens. */
+  renderer.toneMappingExposure = night ? 1.24 : dusk ? 1.02 : 1.0;
 
   world.traverse(o => {
     if (!o.isMesh) return;
