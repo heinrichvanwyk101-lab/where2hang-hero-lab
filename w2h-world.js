@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v38';
+export const BUILD = 'world v39';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1352,8 +1352,33 @@ matPlaceStone.userData.duskColor = 0xD3C4A6;      // precast concrete, neutral
 const matStoneRend  = new THREE.MeshStandardMaterial({ color:0x1A1A20, roughness:0.99, metalness:0.0 });
 matStoneRend.userData.duskColor  = 0xE0C79A;      // warm limestone
 
-const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x171B21, roughness:0.34, metalness:0.55 });
+const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x171B21, roughness:0.26, metalness:0.62 });
 matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
+
+/* A SECOND GLAZING, AND A ROOF THAT IS NOT A WALL.
+
+   Two additions, both aimed at the same thing: the render now lights well enough that every
+   building sharing one surface is the loudest fault in it.
+
+   BRONZE GLASS. Gulf curtain wall is not all one tint — the blue-green solar glass on Etihad's
+   generation sits beside a lot of bronze and grey from the decade before it, and the difference
+   is not only colour: bronze coatings are less specular, so they hold a duller, warmer sky. That
+   needs per-material roughness and metalness at dusk, which the lift did not allow until nav v31
+   because there was only ever one glass. Two now, split 62/38.
+
+   ROOF DECK. The plant rooms were built from matPlaceStone, so every roof was the same concrete
+   as the wall below it and read as an extrusion of the same block. Real roofs are the darkest
+   surface on a building — bitumen, gravel, ballast — and giving them their own material puts a
+   dark cap on two buildings in five, which is most of what stops a skyline reading as one
+   material seen from above.
+
+   Both keep blue-over-red on the NIGHT hex on the correct side of 1.75, since that is still what
+   the lift classifies on. */
+const matGlassBronze = new THREE.MeshStandardMaterial({ color:0x101A22, roughness:0.35, metalness:0.44 });
+Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, duskMetal:0.44, duskEnv:1.15 });
+
+const matRoofDeck = new THREE.MeshStandardMaterial({ color:0x101216, roughness:0.97, metalness:0.02 });
+matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
 const matLitWarm = new THREE.MeshStandardMaterial({
   color:0x0E141A, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.5 });
@@ -1880,17 +1905,18 @@ function urbanFabric(d, layer, opts){
      WEIGHTED TOWARDS THE WIDE ONES. A slender tower does not need one and would only look
      cluttered; a plot whose footprint is large against its height is precisely the case the eye
      is objecting to. */
-  const roofM  = new THREE.InstancedMesh(fabricGeo, matPlaceStone, cells.length);
+  const roofM  = new THREE.InstancedMesh(fabricGeo, matRoofDeck, cells.length);
   const rendM  = new THREE.InstancedMesh(fabricGeo, matStoneRend,  cells.length);
   const stoneM = new THREE.InstancedMesh(fabricGeo, matPlaceStone, cells.length);
   const cladM  = new THREE.InstancedMesh(fabricGeo, matStoneClad,  cells.length);
-  const glassM = new THREE.InstancedMesh(fabricGeo, matPlaceGlass, cells.length);
+  const glassM = new THREE.InstancedMesh(fabricGeo, matPlaceGlass,  cells.length);
+  const bronzeM = new THREE.InstancedMesh(fabricGeo, matGlassBronze, cells.length);
   const bandM  = new THREE.InstancedMesh(fabricGeo, cool ? matLitCool : matLitWarm, cells.length);
-  [roofM, rendM, stoneM, cladM, glassM].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
+  [roofM, rendM, stoneM, cladM, glassM, bronzeM].forEach(m => { m.castShadow = true; m.receiveShadow = true; });
 
   const M = new THREE.Object3D();
   const col = new THREE.Color();
-  let si = 0, gi = 0, bi = 0, ri = 0, ci = 0, fi = 0;
+  let si = 0, gi = 0, bi = 0, ri = 0, ci = 0, fi = 0, zi = 0;
   const gap = 0.22;                       // street width as a fraction of the block
 
   /* A MULTIPLIER NEAR WHITE, not an absolute colour. instanceColor MULTIPLIES the material's
@@ -1959,9 +1985,19 @@ function urbanFabric(d, layer, opts){
        disagree, which silently overwrites instances and leaves holes in the other buffer. */
     const isGlass = rnd() < (h > tallest * 0.50 ? 0.62 : 0.10);
     if (isGlass){
-      glassM.setMatrixAt(gi, M.matrix);
-      glassM.setColorAt(gi, tint(0.30, 0.2));   // glass varies less: it is one product
-      gi++;
+      /* WHICH GLASS. Not a free roll: bronze goes on the SHORTER of the glass towers, because
+         the tint dates the building and the older stock is the lower stock. Same reasoning as
+         the stone tiers, and it means the two tints separate by height rather than scattering,
+         which is what reads as eras instead of noise. */
+      if (rnd() < (h > tallest * 0.72 ? 0.14 : 0.55)){
+        bronzeM.setMatrixAt(zi, M.matrix);
+        bronzeM.setColorAt(zi, tint(0.26, 0.9));
+        zi++;
+      } else {
+        glassM.setMatrixAt(gi, M.matrix);
+        glassM.setColorAt(gi, tint(0.30, 0.2));   // glass varies less: it is one product
+        gi++;
+      }
     } else {
       /* Finish follows height, exactly as glass does, and for the same reason: a material that
          varies at random across neighbouring plots reads as noise, while one that varies with
@@ -2018,12 +2054,12 @@ function urbanFabric(d, layer, opts){
   });
 
   roofM.count = fi; rendM.count = ri; stoneM.count = si; cladM.count = ci;
-  glassM.count = gi; bandM.count = bi;
-  [roofM, rendM, stoneM, cladM, glassM, bandM].forEach(m => {
+  glassM.count = gi; bronzeM.count = zi; bandM.count = bi;
+  [roofM, rendM, stoneM, cladM, glassM, bronzeM, bandM].forEach(m => {
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   });
-  layer.add(roofM, rendM, stoneM, cladM, glassM, bandM);
+  layer.add(roofM, rendM, stoneM, cladM, glassM, bronzeM, bandM);
   return { cells, pitch };
 }
 

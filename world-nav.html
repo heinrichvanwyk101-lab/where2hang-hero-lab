@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v30', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v31', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -780,14 +780,24 @@ const NIGHT_EMI = 1.2;
 function applyLift(on, night){
   liftReg.forEach(e => {
     if (on){
-      e.m.color.setHex(e.glass ? DUSK_GLASS : (e.duskHex != null ? e.duskHex : DUSK_STONE));
+      /* GLASS CAN NOW VARY TOO, which it could not before.
+
+         duskHex was added for stone and the glass branch went on forcing one colour and one
+         roughness on every curtain wall in the scene. That was defensible while there was a
+         single glass material; it stops being defensible the moment the point is a library. A
+         bronze-tinted facade and a blue-green one differ in tint AND in how hard they reflect,
+         and both of those are what the eye reads as "different building".
+
+         The globals stay as the fallback, so anything that declares nothing behaves exactly as
+         it did. Still uniforms rather than defines: no recompile, so the mode switch is instant
+         however many variants the registry ends up holding. */
+      const u = e.m.userData || {};
+      e.m.color.setHex(e.duskHex != null ? e.duskHex : (e.glass ? DUSK_GLASS : DUSK_STONE));
       e.m.emissiveIntensity = e.nightEmi * 0.42;
       if (e.glass){
-        // Uniforms, not defines — none of these three force a shader recompile, so the mode
-        // switch stays instant however many materials the registry holds.
-        e.m.roughness = GLASS_ROUGH;
-        e.m.metalness = GLASS_METAL;
-        e.m.envMapIntensity = GLASS_ENV;
+        e.m.roughness = u.duskRough != null ? u.duskRough : GLASS_ROUGH;
+        e.m.metalness = u.duskMetal != null ? u.duskMetal : GLASS_METAL;
+        e.m.envMapIntensity = u.duskEnv != null ? u.duskEnv : GLASS_ENV;
       }
     } else {
       e.m.color.setHex(e.nightHex);
