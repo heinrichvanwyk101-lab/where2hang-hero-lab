@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v44';
+export const BUILD = 'world v45';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1623,8 +1623,13 @@ const DISTRICTS = [
          it read as a solid wall rather than a flight. Every run below is now span / len. */
       { kind:'step',  t:0.07, t1:0.38, reps:12, off: 3.4, y:1.55, len:9.4, wide:1.0 },
       { kind:'deck',  t:0.235,          off:16.0, y:0.0,  len:26.0, wide:5.0, turn:true },
-      { kind:'mound', t:0.985,          off:24.0, y:-0.4, len:34.0, h:2.1, wide:9.0 },
-      { kind:'mound', t:0.015,          off:31.0, y:-0.4, len:22.0, h:1.7, wide:7.0 },
+      /* PULLED IN FROM 24 AND 31 UNITS TO 14 AND 18. The beach skirt already reaches 12 units
+         out, so a breakwater at 24 sat a dozen units clear of it in open water and read as three
+         pieces of debris floating off the west tip rather than as protection for a shore. A
+         breakwater belongs at the toe of the beach it is protecting; anything further and there
+         is nothing between it and the land to explain why it is there. */
+      { kind:'mound', t:0.985,          off:14.0, y:-0.4, len:34.0, h:2.1, wide:9.0 },
+      { kind:'mound', t:0.015,          off:18.0, y:-0.4, len:22.0, h:1.7, wide:7.0 },
     ],
     ground:[
       // Palace GROUNDS, not a forecourt. Emirates Palace stands in a large landscaped estate

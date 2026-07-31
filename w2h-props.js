@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v14';
+export const BUILD = 'props v15';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -364,6 +364,29 @@ function addProps(d, layer, plan, budget = {}){
       if (inside(px * 1.02, py * 1.02)) shrubs.push({ x:px, y:py, s:0.6 + R() * 0.6 });
     });
   }
+
+  /* ROAD VERGES, WHICH IS WHERE THE PLANTING ACTUALLY IS.
+
+     The park pass only reached 239 shrubs across all five islands against a budget of 1,500,
+     because it is bounded by however many park blobs the ground plan happened to leave and those
+     are sparse on the four placeholder islands. The ring road is not sparse — every island has
+     one, it is the longest continuous line on the map, and in Abu Dhabi the strip between the
+     kerb and the plot line is planted for its entire length. Walking it fills the budget from a
+     source that always exists.
+
+     Offset past the kerb at 0.60 of the road width, matching what onRoad already clears, so a
+     shrub cannot land on tarmac. Alternating sides with a jittered offset, because a single file
+     down one edge reads as a hedge. */
+  plan.ring.forEach(seg => {
+    walk(seg, 0.020, (x, y, tx, ty, i) => {
+      if (shrubs.length >= B.shrubs) return;
+      const nx = -ty, ny = tx;
+      const side = (i % 2) ? 1 : -1;
+      const o = (0.034 + R() * 0.020) * side;
+      const px = x + nx * o, py = y + ny * o;
+      if (inside(px * 1.03, py * 1.03)) shrubs.push({ x:px, y:py, s:0.55 + R() * 0.55 });
+    });
+  });
 
   // The coast park gets a proper avenue of them — that stretch of shoreline is the one place
   // where a regular rhythm is right rather than wrong.
