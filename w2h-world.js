@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v23';
+export const BUILD = 'world v24';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -134,15 +134,36 @@ scene.add(world);
    Exported, because the material it belongs on is not this one. world-nav.html swaps in its own
    water material per view mode, so a normal map assigned here would only ever be visible at
    night. The shell assigns it to all four. */
-function makeWaterNormal(N = 256){
+function makeWaterNormal(N = 512){
   const cv = document.createElement('canvas');
   cv.width = cv.height = N;
   const g = cv.getContext('2d');
   const img = g.createImageData(N, N);
-  const waves = [
-    [ 3,  1, 1.00, 0.0], [ 1, -3, 0.85, 1.7], [ 5,  2, 0.45, 3.1],
-    [-2,  5, 0.40, 0.6], [ 7, -3, 0.22, 2.2], [ 4,  8, 0.16, 4.4],
-  ];
+
+  /* A SPECTRUM, NOT SIX WAVES, and the corduroy is why.
+
+     The first version used six components with the two lowest carrying almost all the amplitude,
+     which is a recipe for exactly what shipped: one dominant diagonal crest repeated across the
+     whole sea. Water has no dominant direction and no dominant wavelength — it has many, with
+     energy falling off as frequency rises. So this walks a ring of directions, gives each a
+     1/f amplitude, and detunes both the angle and the phase per component so nothing lines up
+     into a stripe. Integer frequencies are still forced at the end, because that is the only
+     thing keeping the tile seamless. */
+  const waves = [];
+  let seed = 0x9E3779B9;
+  const rr = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let k = 0; k < 26; k++){
+    const f = 2 + Math.pow(k / 25, 1.5) * 22;              // 2..24 cycles across the tile
+    /* HEADINGS COVER A HALF PLANE, not a full one: (fx, fy) and (-fx, -fy) are the same wave
+       with a phase shift, so walking the full circle spends half the components duplicating
+       directions already taken. The golden ratio steps through [0, pi) without ever revisiting,
+       which is the property that keeps two crests from lining up into a stripe. */
+    const th = (k * 1.9416 + rr() * 0.35) % Math.PI;
+    let fx = Math.round(Math.cos(th) * f), fy = Math.round(Math.sin(th) * f);
+    if (fx === 0 && fy === 0) fy = 1;
+    waves.push([fx, fy, Math.pow(2 / f, 0.85), rr() * 6.283]);
+  }
+
   const H = new Float32Array(N * N);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
     let h = 0;
@@ -150,9 +171,8 @@ function makeWaterNormal(N = 256){
       h += a * Math.sin(2 * Math.PI * (fx * x + fy * y) / N + ph);
     H[y * N + x] = h;
   }
-  const S = 0.85;                       // slope gain: how steep the ripple reads
+  const S = 1.35;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
-    // Wrapped differences, so the derivative is periodic too and the seam stays invisible.
     const l = H[y * N + ((x - 1 + N) % N)], r = H[y * N + ((x + 1) % N)];
     const u = H[((y - 1 + N) % N) * N + x], dn = H[((y + 1) % N) * N + x];
     let nx = -(r - l) * S, ny = -(dn - u) * S, nz = 1;
@@ -166,10 +186,14 @@ function makeWaterNormal(N = 256){
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  // 3200 units over 140 tiles is a 22.9-unit tile, and the coarsest wave in it is three cycles
-  // across — a 7.6-unit crest spacing, about 60 metres. Chop, not swell: the vertices do swell.
-  t.repeat.set(140, 140);
-  t.colorSpace = THREE.NoColorSpace;    // a normal map is data, never sRGB
+  /* REPEAT 140 WAS THE OTHER HALF OF IT. A 22.9-unit tile on a 3200-unit plane seen from the
+     world camera is a handful of pixels per tile, which is not detail — it is a moire generator,
+     and the wide diagonal banding in the world render was the beat between the tile and the
+     pixel grid rather than anything in the texture. 26 gives a 123-unit tile with the finest
+     component at 5 units, and it is filtered rather than aliased. */
+  t.repeat.set(26, 26);
+  t.anisotropy = MAX_ANISO;
+  t.colorSpace = THREE.NoColorSpace;
   return t;
 }
 const waterNormal = makeWaterNormal();
@@ -1291,13 +1315,30 @@ DISTRICTS.forEach(d => {
      it costs a vertex colour rather than a texture. The lowest ring sits at -1.2, below the
      -0.97 wave trough, so the sand always terminates under water rather than in mid-air. */
   {
+    /* THE FIRST PROFILE WAS INVISIBLE, FOR TWO REASONS WORTH RECORDING.
+
+       It started at GROUND, 2.9 — but ExtrudeGeometry insets the top cap by bevelSize, so the
+       island's widest point is the outline at ISLE_DEPTH, 2.4. The skirt therefore began half a
+       unit ABOVE the edge it was supposed to continue, floating clear of the land.
+
+       And it was the wrong colour. The base is matBeach, the same dark brown as the platform's
+       bevel, so a slope shaded 0.98 to 1.05 came out as more brown pedestal. A beach reads as a
+       beach because it is PALER than the land behind it and the water in front of it. The dry
+       sand is 1.55 now, not 1.0 — half again as bright as the bevel it grows out of.
+
+       THE WET BAND WAS 0.9 UNITS WIDE, which is sub-pixel at district range. It is 1.4 now, and
+       the promenade is the other half of the answer: a near-flat pale strip at the top of the
+       skirt with a kerb dropping off it, which is what the Corniche actually has and what makes
+       the eye read land, then edge, then sand, then sea. */
     const BW = 8 / d.r;                                    // 8 world units, normalised
     const P = [                                            // t, height, shade
-      [0.00,  GROUND, 1.05],
-      [0.30,  1.30,   0.98],
-      [0.55,  0.35,   1.18],
-      [0.66,  0.02,   0.72],
-      [1.00, -1.20,   0.50],
+      [0.00, ISLE_DEPTH, 1.28],   // meets the platform at its widest point, not above it
+      [0.22, 2.28,       1.38],   // promenade, 1.8 units wide, falling 1:15 for drainage
+      [0.25, 1.75,       1.02],   // kerb face, in shadow against the sand
+      [0.55, 0.70,       1.55],   // dry sand: the palest thing on the island
+      [0.72, 0.10,       1.18],   // damp
+      [0.86, -0.35,      0.68],   // wet, and under the wave troughs from here down
+      [1.00, -1.20,      0.44],
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;
