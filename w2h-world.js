@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v39';
+export const BUILD = 'world v40';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1317,6 +1317,88 @@ matBeach.userData.duskColor = 0x9C8C6F;           // the platform's wet lower ed
    stay brown, so the skirt read as more pedestal on one side and nothing on the other. A beach
    is a pale surface. Start from a pale surface and let the vertex colours do what they are for,
    which is banding within it. */
+/* ===========================================================================
+   SHORELINE MODULES.
+
+   The only geometry exemption in the build, and deliberately a small one. Everything else on the
+   coast is painted, and long continuous stretches stay painted — these exist only where a real
+   waterfront changes the SILHOUETTE, which paint cannot do, or creates a condition the eye
+   recognises instantly.
+
+   Five modules, low segment counts, each instanced once per district that uses it. A district
+   asks for the types it needs and gets one InstancedMesh per type, so the count scales with the
+   number of CONDITIONS rather than with the number of placements.
+
+   Placement is by outline fraction and a signed offset, the same coordinates the beach skirt
+   uses, so a quay and the sand it replaces cannot disagree about where the water is. */
+const shoreGeo = (() => {
+  const box = (w, h, d, y) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(0, y + h/2, 0); return g; };
+
+  /* STEPS. The formal Corniche condition: three tiers falling from the promenade to the sand.
+     Built as one geometry rather than three instances so a run reads as a continuous flight. */
+  const step = mergeShore([box(1, 0.50, 0.9, 0), box(1, 0.34, 0.62, 0.50), box(1, 0.30, 0.38, 0.84)]);
+
+  /* QUAY. A vertical face with a coping lip. The lip is the whole point — a plain wall reads as
+     a cut, and the 0.12 overhang is what casts the line of shadow that says harbour. */
+  const quay = mergeShore([box(1, 2.6, 1.0, -1.8), box(1.02, 0.26, 1.24, 0.80)]);
+
+  /* FINGER. A marina pontoon: thin, low, and long enough to berth against. */
+  const finger = box(1, 0.22, 1.0, 0.10);
+
+  /* MOUND. A breakwater, six-sided and tapered so it reads as tipped rock rather than as a wall.
+     The one module that exists purely to break the outline. */
+  const mound = (() => {
+    const pos = [], idx = [];
+    const ring = [[0.5,0],[0.30,0.42],[-0.30,0.42],[-0.5,0],[-0.30,-0.42],[0.30,-0.42]];
+    ring.forEach(p => pos.push(p[0], 0, p[1]));
+    ring.forEach(p => pos.push(p[0]*0.44, 1, p[1]*0.44));
+    for (let i = 0; i < 6; i++){
+      const j = (i+1)%6;
+      idx.push(i, j+6, i+6, i, j, j+6);
+    }
+    for (let i = 1; i < 5; i++) idx.push(6, i+6, i+7);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  })();
+
+  const deck = box(1, 0.28, 1.0, 1.05);          // jetty: a plate standing clear of the water
+  return { step, quay, finger, mound, deck };
+})();
+
+/* Tiny local merge so the modules can be authored as a few boxes without pulling in
+   BufferGeometryUtils, which this file has never imported. */
+function mergeShore(list){
+  let vc = 0; const pos = [], nor = [], idx = [];
+  list.forEach(g => {
+    const p = g.attributes.position.array, n = g.attributes.normal.array, ix = g.index.array;
+    for (let i = 0; i < p.length; i++){ pos.push(p[i]); nor.push(n[i]); }
+    for (let i = 0; i < ix.length; i++) idx.push(ix[i] + vc);
+    vc += p.length / 3;
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal',   new THREE.Float32BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  return g;
+}
+
+/* Three surfaces, matching the three conditions the brief asks to be visibly different. Same
+   night/day/dusk shape as the beach, since they sit on the same edge and go through the same
+   view switcher. */
+const shoreMat = {
+  stone: { night: new THREE.MeshStandardMaterial({ color:0x33322C, roughness:0.94 }),
+           day:   new THREE.MeshStandardMaterial({ color:0xBFB6A2, roughness:0.94 }),
+           dusk:  new THREE.MeshStandardMaterial({ color:0xAFA48D, roughness:0.94 }) },
+  rock:  { night: new THREE.MeshStandardMaterial({ color:0x2A2823, roughness:1.0 }),
+           day:   new THREE.MeshStandardMaterial({ color:0x9A9384, roughness:1.0 }),
+           dusk:  new THREE.MeshStandardMaterial({ color:0x8C8371, roughness:1.0 }) },
+  deck:  { night: new THREE.MeshStandardMaterial({ color:0x3A3830, roughness:0.8 }),
+           day:   new THREE.MeshStandardMaterial({ color:0xD6CDB6, roughness:0.8 }),
+           dusk:  new THREE.MeshStandardMaterial({ color:0xC6BBA1, roughness:0.8 }) },
+};
+
 const beachSand = {
   night: new THREE.MeshStandardMaterial({ color:0x5A5548, roughness:1, metalness:0, vertexColors:true }),
   day:   new THREE.MeshStandardMaterial({ color:0xC9B896, roughness:1, metalness:0, vertexColors:true }),
@@ -1472,6 +1554,15 @@ const DISTRICTS = [
     // Re-derived against the new outline. Index 0 is the west tip and the samples run east
     // along the north shore, so this is the Corniche itself, end to end.
     coastPark:[0.05, 0.40, 0.055],
+    /* CONDITION ONE: THE FORMAL PROMENADE. A flight of steps down the north shore, a pier out
+       into the gulf, and rock breakwaters off the west tip — which is what the west tip of Abu
+       Dhabi island is actually called. Thirty-two step segments, one draw call. */
+    shore:[
+      { kind:'step',  t:0.07, t1:0.38, reps:32, off: 3.4, y:1.55, len:9.4, wide:1.0 },
+      { kind:'deck',  t:0.235,          off:16.0, y:0.0,  len:5.0, wide:26.0, turn:true },
+      { kind:'mound', t:0.985,          off:24.0, y:-0.4, len:34.0, h:2.1, wide:9.0 },
+      { kind:'mound', t:0.015,          off:31.0, y:-0.4, len:22.0, h:1.7, wide:7.0 },
+    ],
     ground:[
       // Palace GROUNDS, not a forecourt. Emirates Palace stands in a large landscaped estate
       // and reads as a landmark because of the space around it, not its height — at 6.6 units
@@ -1496,7 +1587,9 @@ const DISTRICTS = [
          something on ground the fabric was forbidden to touch; the fabric reaches it now, and an
          apron under a real city block is only a paler street. */
     ] },
+  // A short quay on the south face: Al Maryah is reclaimed business waterfront with a hard edge.
   { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
+    shore:[{ kind:'quay', t:0.60, t1:0.76, reps:12, off:2.0, y:2.40, len:6.2, wide:1.0 }],
     built:false, coreN:[0.0, 0.0], places:[
       { label:'The Galleria', x:-10, z:  6, h:10, r:30 },
       { label:'Rosewood',     x: 12, z:-10, h:12, r:30 },
@@ -1518,13 +1611,29 @@ const DISTRICTS = [
      tightest: Reem moving east fixed Corniche to Reem, and Al Maryah to Saadiyat then became the
      binding constraint at 3.0 units of water between two beaches. This puts every channel in the
      world at 4.8 or better. */
+  /* CONDITION THREE: THE SOFT EDGE. Saadiyat's north-west run is the one genuinely straight coast
+     in the world and it is a beach, so it gets almost nothing — six low groynes at right angles
+     to the sand, which is what actually punctuates a beach of that length. The rest stays
+     painter-only, as the brief asks. */
   { id:'saadiyat', name:'Saadiyat',   x:-44, z:-116, r:56, rot: 0.15, tint:0xDDD3C0,
+    shore:[
+      { kind:'mound', t:0.03, t1:0.26, reps:6, off:13.0, y:-0.5, len:3.4, h:1.0, wide:17.0, turn:true },
+    ],
     built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.28, 0.070], places:[
       { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
       { label:'Saadiyat Beach',   x:-24, z: 22, h: 3, r:44 },
       { label:'Manarat',          x:  4, z:-18, h: 6, r:38 },
     ] },
+  /* CONDITION TWO: THE MARINA. A quay wall down one wall of the inlet with pontoon fingers off
+     it, and a mound across the mouth. The inlet is the only place on any island where the coast
+     is already concave, so it is the only place a marina reads as a marina rather than as
+     furniture parked on an open shore. */
   { id:'yas',      name:'Yas Island', x: 78, z:-196, r:62, rot:-0.10, tint:C.gold,
+    shore:[
+      { kind:'quay',   t:0.545, t1:0.605, reps:14, off: 2.2, y:2.40, len:8.0, wide:1.0 },
+      { kind:'finger', t:0.552, t1:0.598, reps:10, off:11.0, y:0.28, len:3.0, wide:15.0, turn:true },
+      { kind:'mound',  t:0.63,            off:14.0, y:-0.4, len:26.0, h:1.8, wide:8.0 },
+    ],
     built:false, coreN:[0.20, -0.10], places:[
       /* BOTH MOVED, because the marina inlet is now real water. Yas Marina was at x -28,
          which the new outline puts in the middle of the channel, and Ferrari World at x 34 sat
@@ -1733,6 +1842,53 @@ DISTRICTS.forEach(d => {
        hence the flag on the object rather than a call here. */
     beach.userData.noShadow = true;
     g.add(beach);
+  }
+
+  /* ---- shoreline modules -------------------------------------------------------------------
+     One InstancedMesh per module TYPE this district asks for, so the mesh count tracks the number
+     of conditions rather than the number of placements. A run of forty quay segments is still one
+     draw call.
+
+     Everything is positioned from an outline fraction and a signed offset in world units, with
+     the module rotated to the local tangent. Same coordinates as the beach, so a quay and the
+     sand it stands in cannot disagree about where the water is. */
+  if (d.shore && d.shore.length){
+    const o = isleOutline(d.id), n = o.length - 1;
+    const M2 = new THREE.Object3D();
+    const groups = {};
+    const need = {};
+    d.shore.forEach(sp => { need[sp.kind] = (need[sp.kind] || 0) + (sp.reps || 1); });
+    const MAT = { step:'stone', quay:'stone', finger:'deck', mound:'rock', deck:'deck' };
+    for (const k in need){
+      const m = new THREE.InstancedMesh(shoreGeo[k], shoreMat[MAT[k]].night, need[k]);
+      m.userData.dayMats  = shoreMat[MAT[k]].day;
+      m.userData.duskMats = shoreMat[MAT[k]].dusk;
+      m.count = 0;
+      groups[k] = m;
+      g.add(m);
+    }
+    d.shore.forEach(sp => {
+      const reps = sp.reps || 1;
+      for (let r = 0; r < reps; r++){
+        const f  = reps === 1 ? sp.t : sp.t + (sp.t1 - sp.t) * (r / (reps - 1 || 1));
+        const i  = Math.round(((f % 1) + 1) % 1 * n) % n;
+        const [px, py] = sp.off < 0 ? inwardAt(d.id, o, i, -sp.off / d.r)
+                                    : outwardAt(d.id, o, i,  sp.off / d.r);
+        // Tangent from the outline neighbours, so a module always lies along the coast.
+        const a = o[(i - 1 + n) % n], b = o[(i + 1) % n];
+        const ang = Math.atan2(-(b.y - a.y), b.x - a.x);
+        const im = groups[sp.kind];
+        M2.position.set(px * d.r, sp.y, -py * d.r);
+        M2.rotation.set(0, sp.turn ? ang + Math.PI/2 : ang, 0);
+        M2.scale.set(sp.len, sp.h || 1, sp.wide);
+        M2.updateMatrix();
+        im.setMatrixAt(im.count++, M2.matrix);
+      }
+    });
+    for (const k in groups){
+      groups[k].instanceMatrix.needsUpdate = true;
+      groups[k].castShadow = groups[k].receiveShadow = true;
+    }
   }
 
   /* Generous invisible hit disc, sitting just clear of the ground. A fingertip is about 9mm;
