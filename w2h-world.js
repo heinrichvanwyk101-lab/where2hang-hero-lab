@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v40';
+export const BUILD = 'world v41';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1558,8 +1558,12 @@ const DISTRICTS = [
        into the gulf, and rock breakwaters off the west tip — which is what the west tip of Abu
        Dhabi island is actually called. Thirty-two step segments, one draw call. */
     shore:[
-      { kind:'step',  t:0.07, t1:0.38, reps:32, off: 3.4, y:1.55, len:9.4, wide:1.0 },
-      { kind:'deck',  t:0.235,          off:16.0, y:0.0,  len:5.0, wide:26.0, turn:true },
+      /* REPS ARE SET FROM THE RUN LENGTH, NOT CHOSEN. Corniche's perimeter is 376 units, so t
+         0.07 to 0.38 is 117 units of coast; at 9.4 units a segment that is twelve. v40 asked for
+         thirty-two and laid 301 units of step into a 117-unit run — a 2.6x overlap, which is why
+         it read as a solid wall rather than a flight. Every run below is now span / len. */
+      { kind:'step',  t:0.07, t1:0.38, reps:12, off: 3.4, y:1.55, len:9.4, wide:1.0 },
+      { kind:'deck',  t:0.235,          off:16.0, y:0.0,  len:26.0, wide:5.0, turn:true },
       { kind:'mound', t:0.985,          off:24.0, y:-0.4, len:34.0, h:2.1, wide:9.0 },
       { kind:'mound', t:0.015,          off:31.0, y:-0.4, len:22.0, h:1.7, wide:7.0 },
     ],
@@ -1589,7 +1593,7 @@ const DISTRICTS = [
     ] },
   // A short quay on the south face: Al Maryah is reclaimed business waterfront with a hard edge.
   { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
-    shore:[{ kind:'quay', t:0.60, t1:0.76, reps:12, off:2.0, y:2.40, len:6.2, wide:1.0 }],
+    shore:[{ kind:'quay', t:0.60, t1:0.76, reps:5, off:2.0, y:2.40, len:6.2, wide:1.0 }],
     built:false, coreN:[0.0, 0.0], places:[
       { label:'The Galleria', x:-10, z:  6, h:10, r:30 },
       { label:'Rosewood',     x: 12, z:-10, h:12, r:30 },
@@ -1617,7 +1621,7 @@ const DISTRICTS = [
      painter-only, as the brief asks. */
   { id:'saadiyat', name:'Saadiyat',   x:-44, z:-116, r:56, rot: 0.15, tint:0xDDD3C0,
     shore:[
-      { kind:'mound', t:0.03, t1:0.26, reps:6, off:13.0, y:-0.5, len:3.4, h:1.0, wide:17.0, turn:true },
+      { kind:'mound', t:0.04, t1:0.25, reps:7, off: 7.0, y:-0.5, len:14.0, h:1.0, wide:2.6, turn:true },
     ],
     built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.28, 0.070], places:[
       { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
@@ -1630,8 +1634,8 @@ const DISTRICTS = [
      furniture parked on an open shore. */
   { id:'yas',      name:'Yas Island', x: 78, z:-196, r:62, rot:-0.10, tint:C.gold,
     shore:[
-      { kind:'quay',   t:0.545, t1:0.605, reps:14, off: 2.2, y:2.40, len:8.0, wide:1.0 },
-      { kind:'finger', t:0.552, t1:0.598, reps:10, off:11.0, y:0.28, len:3.0, wide:15.0, turn:true },
+      { kind:'quay',   t:0.545, t1:0.620, reps: 4, off: 2.2, y:2.40, len:8.0, wide:1.0 },
+      { kind:'finger', t:0.552, t1:0.612, reps: 6, off:11.0, y:0.28, len:15.0, wide:3.0, turn:true },
       { kind:'mound',  t:0.63,            off:14.0, y:-0.4, len:26.0, h:1.8, wide:8.0 },
     ],
     built:false, coreN:[0.20, -0.10], places:[
@@ -1879,6 +1883,12 @@ DISTRICTS.forEach(d => {
         const ang = Math.atan2(-(b.y - a.y), b.x - a.x);
         const im = groups[sp.kind];
         M2.position.set(px * d.r, sp.y, -py * d.r);
+        /* len IS ALWAYS THE MODULE'S LONG AXIS AND wide IS ALWAYS ACROSS IT, whichever way the
+           module is turned. Without this the two meanings swap the moment turn is set, and every
+           perpendicular piece in v40 was laid out the wrong way round: the Saadiyat groynes came
+           out as one 17-unit bar lying ALONG the beach instead of six 3-unit fingers crossing it,
+           and the Yas pontoons and the Corniche pier did the same. A run of shore-parallel
+           modules and a run of shore-perpendicular ones should be described in the same terms. */
         M2.rotation.set(0, sp.turn ? ang + Math.PI/2 : ang, 0);
         M2.scale.set(sp.len, sp.h || 1, sp.wide);
         M2.updateMatrix();
