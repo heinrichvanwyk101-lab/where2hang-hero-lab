@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v24', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v25', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -330,6 +330,7 @@ scene.add(sun.target, moon.target);
 const SUN_OFF  = new THREE.Vector3(-380, 210, 260);
 const MOON_OFF = new THREE.Vector3(-320, 220, -260);
 let shadowNote = 'world';
+let fogKey = 'dusk';
 /* HOW MUCH RIPPLE THE SEA SHOULD BE SHOWING, by state rather than by mode.
 
    The tile is 123 units. At district and place range that is a comfortable few hundred pixels
@@ -348,6 +349,57 @@ let shadowNote = 'world';
    water materials exist and touching them from it would be a temporal dead zone error. */
 let rippleGoal = 1, rippleNow = 1;
 
+/* ===========================================================================
+   AERIAL PERSPECTIVE, AND WHY ONE FOG DENSITY CANNOT DELIVER IT.
+
+   Fog was a single constant per view mode. But the three camera states look at the model from
+   721, 448 and 253 units, so the SAME density produces wildly different amounts of depth cue —
+   measured across the near and far edges of what is actually on screen:
+
+                       dusk            day           night
+       world        5 -> 22%       20 -> 64%      37 -> 88%
+       district     2 ->  9%        8 -> 32%      16 -> 56%
+       place        1 ->  3%        3 -> 12%       5 -> 23%
+
+   Seventeen points of separation across the world view at dusk, and two points at place. The
+   world view is the one that most needs air between the islands and it has the least, because
+   the density was tuned at district range where the far islands sit at 694 units.
+
+   FogExp2 is 1 - exp(-(d*k)^2), so it separates most strongly where d is around 1/k. At dusk
+   that is 2,222 units — the entire model sits deep in the near-linear toe of the curve, where
+   it can barely tell 500 from 1,100.
+
+   So density scales with the camera. The multiplier is per STATE rather than per view, because
+   what changes between world and place is not the light, it is how far away the subject is.
+   Place goes DOWN, not just less up: at 250 units you are looking through 250 units of air and
+   anything visible is a defect rather than a depth cue.
+
+   The colour matters as much as the amount. Dusk fog was 0xCBBFA8 against a horizon band of
+   0xF7D4A2 into 0xC9A882 — noticeably darker and greyer than the sky it was supposed to be
+   dissolving things into, which is what makes fog read as a veil laid over the scene rather
+   than as distance. Matched to the band now. */
+/* AND THE PER-MODE DENSITIES WERE INCONSISTENT WITH EACH OTHER, which is the larger of the two
+   faults. Working the far edge of the world view at each: dusk 22 per cent, day 64, night 88.
+   Three modes of the same scene disagreeing by a factor of four about how much air is between
+   the camera and Yas. Dusk was the outlier and dusk is the product state.
+
+   Sanity check in real units, since 1 unit is 7.8 m: the far edge of the world view is 8.7 km
+   out. Twenty-two per cent extinction over 8.7 km of humid Gulf air at sunset is far too clear;
+   somewhere around half is right. The place view's far edge is 3 km, where 3 per cent is too
+   clear and 6 to 8 is about right.
+
+   So dusk goes up by three quarters, night comes down slightly, and the STATE multiplier is
+   mild — because once the densities agree with each other, a fixed density already does most of
+   the work. Scaling it hard by state, which was the first attempt, put Day at 98 per cent across
+   the world view and erased the model. */
+const FOG = {
+  dusk:  { hex: 0xE2C79C, k: 0.00080 },
+  day:   { hex: 0xB6CEDD, k: 0.00090 },
+  night: { hex: 0x241D15, k: 0.00110 },
+};
+const FOG_STATE = { world: 1.00, district: 0.90, place: 0.75 };
+let fogScale = FOG_STATE.world;
+
 function fitShadow(){
   const d = activeDistrict;
   // 1.18r, not r: the coastline is a radius but the island is not a circle, and the bevel and
@@ -364,6 +416,9 @@ function fitShadow(){
   });
   shadowNote = (d ? d.id : 'world') + ' ' + (half * 2 / sun.shadow.mapSize.x).toFixed(3) + 'u/tx';
   rippleGoal = d ? 1 : 0.18;
+  fogScale = FOG_STATE[state === STATE.WORLD ? 'world'
+                     : state === STATE.PLACE ? 'place' : 'district'];
+  if (scene.fog && scene.fog.density != null && fogKey) scene.fog.density = FOG[fogKey].k * fogScale;
 }
 
 
@@ -670,8 +725,9 @@ function applyView(next){
                    : sil ? new THREE.Color(0xC8D8DF)
                    : day ? new THREE.Color(0x9FC4DA)
                    : dusk ? duskSkyTex : nightSkyTex;
+  fogKey = sil || plan ? null : day ? 'day' : dusk ? 'dusk' : 'night';
   scene.fog = (sil || plan) ? null
-            : day  ? new THREE.FogExp2(0xB6CEDD, 0.0009)
+            : day  ? new THREE.FogExp2(FOG.day.hex, FOG.day.k * fogScale)
             /* 0.00045, DOWN FROM 0.0012, and this was the single biggest fault in the first
                dusk render. FogExp2 is 1 - exp(-(distance * density)^2), so at 0.0012 the islands
                at 800 units were already 60 per cent fog and the far ones at 1,200 were 87 per
@@ -679,8 +735,8 @@ function applyView(next){
                haze it reads as a beige sheet pulled over the model. At 0.00045 the same
                distances are 12 and 25 per cent — enough to push the background city back, which
                is all it was ever supposed to do. */
-            : dusk ? new THREE.FogExp2(0xCBBFA8, 0.00045)
-            :        new THREE.FogExp2(C.haze, 0.0013);
+            : dusk ? new THREE.FogExp2(FOG.dusk.hex, FOG.dusk.k * fogScale)
+            :        new THREE.FogExp2(FOG.night.hex, FOG.night.k * fogScale);
   scene.environment = (sil || day || plan) ? null : dusk ? duskEnv : nightEnv;
 
   moon.visible = night;
