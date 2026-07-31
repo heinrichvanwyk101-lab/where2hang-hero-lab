@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v25', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v26', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -392,13 +392,40 @@ let rippleGoal = 1, rippleNow = 1;
    mild — because once the densities agree with each other, a fixed density already does most of
    the work. Scaling it hard by state, which was the first attempt, put Day at 98 per cent across
    the world view and erased the model. */
+/* AND THE WORLD VIEW WANTS A DIFFERENT CURVE, NOT A DIFFERENT NUMBER.
+
+   v25 raised the density and the islands separated correctly — but the sea vanished. The reason
+   is a mismatch of ranges. At world view the islands occupy 519 to 1,118 units and the SEA runs
+   past 2,300, so the frame is mostly water, and exp2 rises as the square of distance: any
+   density strong enough to put 39 points of separation across 600 units of islands is at 97 per
+   cent by 2,300 and has erased everything behind them.
+
+                        islands              sea
+                      near   far  sep    1200   1800   2300
+       exp2 .00045      5%   22%   17     25%    48%    66%
+       exp2 .00080     16%   55%   39     60%    87%    97%
+       linear 250/3000 10%   32%   22     35%    56%    75%
+
+   Linear fog does not accelerate, so it buys most of the island separation while leaving the sea
+   readable half again as far out. District and place keep exp2: there the subject fills the
+   frame, the depth range is small, and exp2's softer onset near the camera is exactly right —
+   both of those views came back correct.
+
+   Use the curve that matches the range. It is the same argument as fitting the shadow frustum to
+   the active island rather than to the whole world. */
 const FOG = {
-  dusk:  { hex: 0xE2C79C, k: 0.00080 },
-  day:   { hex: 0xB6CEDD, k: 0.00090 },
-  night: { hex: 0x241D15, k: 0.00110 },
+  dusk:  { hex: 0xE2C79C, k: 0.00080, near: 250, far: 3000 },
+  day:   { hex: 0xB6CEDD, k: 0.00090, near: 350, far: 3600 },
+  night: { hex: 0x241D15, k: 0.00110, near: 150, far: 2400 },
 };
 const FOG_STATE = { world: 1.00, district: 0.90, place: 0.75 };
-let fogScale = FOG_STATE.world;
+
+function makeFog(key, st){
+  if (!key) return null;
+  const F = FOG[key];
+  return st === STATE.WORLD ? new THREE.Fog(F.hex, F.near, F.far)
+                            : new THREE.FogExp2(F.hex, F.k * FOG_STATE[st === STATE.PLACE ? 'place' : 'district']);
+}
 
 function fitShadow(){
   const d = activeDistrict;
@@ -416,9 +443,9 @@ function fitShadow(){
   });
   shadowNote = (d ? d.id : 'world') + ' ' + (half * 2 / sun.shadow.mapSize.x).toFixed(3) + 'u/tx';
   rippleGoal = d ? 1 : 0.18;
-  fogScale = FOG_STATE[state === STATE.WORLD ? 'world'
-                     : state === STATE.PLACE ? 'place' : 'district'];
-  if (scene.fog && scene.fog.density != null && fogKey) scene.fog.density = FOG[fogKey].k * fogScale;
+  // The fog TYPE changes with the state, not just its strength, so it is rebuilt rather than
+  // retuned. One object per state change is nothing.
+  scene.fog = makeFog(fogKey, state);
 }
 
 
@@ -726,17 +753,7 @@ function applyView(next){
                    : day ? new THREE.Color(0x9FC4DA)
                    : dusk ? duskSkyTex : nightSkyTex;
   fogKey = sil || plan ? null : day ? 'day' : dusk ? 'dusk' : 'night';
-  scene.fog = (sil || plan) ? null
-            : day  ? new THREE.FogExp2(FOG.day.hex, FOG.day.k * fogScale)
-            /* 0.00045, DOWN FROM 0.0012, and this was the single biggest fault in the first
-               dusk render. FogExp2 is 1 - exp(-(distance * density)^2), so at 0.0012 the islands
-               at 800 units were already 60 per cent fog and the far ones at 1,200 were 87 per
-               cent. Against a near-black night haze that reads as depth; against a bright warm
-               haze it reads as a beige sheet pulled over the model. At 0.00045 the same
-               distances are 12 and 25 per cent — enough to push the background city back, which
-               is all it was ever supposed to do. */
-            : dusk ? new THREE.FogExp2(FOG.dusk.hex, FOG.dusk.k * fogScale)
-            :        new THREE.FogExp2(FOG.night.hex, FOG.night.k * fogScale);
+  scene.fog = makeFog(fogKey, state);
   scene.environment = (sil || day || plan) ? null : dusk ? duskEnv : nightEnv;
 
   moon.visible = night;
