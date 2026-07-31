@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v20';
+export const BUILD = 'world v21';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1039,7 +1039,21 @@ const DISTRICTS = [
        being re-examined, and between them they covered a third of the island. Five rects reserved
        69 per cent of Corniche, which is MORE than the band they were brought in to replace. */
     avoid:[
-      { x:-43, z:  0, w:62, d:24 },   // Emirates Palace and its estate
+      /* 36 WIDE, DOWN FROM 62, AND THE SAME MISTAKE AS THE v18 STRIPS AT SMALLER SCALE.
+
+         The palace is built from x -57 to -27: thirty units. The reservation ran -74 to -12,
+         which is sixty-two, and the difference was not clearance — it was two bands of buildable
+         ground held empty for nothing. West of the palace, 175 square units, about fourteen
+         blocks. Between the palace and Etihad, 821 square units and sixty-seven blocks. A
+         hundred blocks reserved to protect a building that touches none of them, on an island
+         carrying 254.
+
+         That is why the west third still reads bare in Plan and why the dusk render shows sand
+         between the palace and the water. The falloff already does the protecting out there: at
+         the west tip fall is 0, so anything the fabric puts down is 3.0 units against the
+         palace's 6.5 and cannot compete with it. The rectangle was doing a second job that was
+         already being done. */
+      { x:-42, z:  0, w:36, d:24 },   // Emirates Palace and its forecourt
       { x: -4, z:-16, w:48, d:20 },   // Etihad Towers and the plaza
       { x: 48, z: -6, w:20, d:20 },   // ADNOC HQ and its apron
     ],
@@ -1055,8 +1069,10 @@ const DISTRICTS = [
          to x -6, which is under Etihad's plaza. Clearance is still the tool that makes a 6.6-unit
          building a landmark; it just does not need to be the only thing on that third of the
          island. */
-      { kind:'lawn',   x:-44, z:  1, w:56, d:26 },
-      { kind:'paving', x:-42, z:  1, w:46, d:13 },
+      // Estate and forecourt follow the reservation in. A lawn wider than the ground the palace
+      // is allowed to own is just a pale rectangle with a hard edge, which is how Plan read it.
+      { kind:'lawn',   x:-42, z:  1, w:38, d:24 },
+      { kind:'paving', x:-42, z:  1, w:34, d:13 },
       { kind:'paving', x: -4, z:-15, w:40, d:13 },   // Etihad plaza
       { kind:'paving', x: 48, z: -6, w:17, d:13 },   // ADNOC apron
       // The low-rise band on the seaward side had no ground under it at all — twenty buildings
