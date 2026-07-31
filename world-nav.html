@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v29', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v30', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -411,57 +411,39 @@ let rippleGoal = 1, rippleNow = 1;
    mild — because once the densities agree with each other, a fixed density already does most of
    the work. Scaling it hard by state, which was the first attempt, put Day at 98 per cent across
    the world view and erased the model. */
-/* AND THE WORLD VIEW WANTS A DIFFERENT CURVE, NOT A DIFFERENT NUMBER.
+/* CONTINUOUS, NOT STEPPED — WHICH IS WHY THE TRANSITION WAS ABRUPT.
 
-   v25 raised the density and the islands separated correctly — but the sea vanished. The reason
-   is a mismatch of ranges. At world view the islands occupy 519 to 1,118 units and the SEA runs
-   past 2,300, so the frame is mostly water, and exp2 rises as the square of distance: any
-   density strong enough to put 39 points of separation across 600 units of islands is at 97 per
-   cent by 2,300 and has erased everything behind them.
+   v26 chose the fog per STATE: linear at world, exp2 at district and place, with a multiplier
+   each. That got each still frame right and made the flights wrong, because the state flips at
+   one instant while the camera takes about a second to arrive. Two discontinuities in the middle
+   of a move: the curve TYPE changed, and its strength jumped.
 
-                        islands              sea
-                      near   far  sep    1200   1800   2300
-       exp2 .00045      5%   22%   17     25%    48%    66%
-       exp2 .00080     16%   55%   39     60%    87%    97%
-       linear 250/3000 10%   32%   22     35%    56%    75%
+   So it is one curve now, linear everywhere, with near and far driven off the live camera
+   distance every frame. Nothing to blend between and nothing to switch — during a flight the
+   haze eases exactly as the camera does, because it is a function of where the camera is rather
+   than of which state it has been labelled.
 
-   Linear fog does not accelerate, so it buys most of the island separation while leaving the sea
-   readable half again as far out. District and place keep exp2: there the subject fills the
-   frame, the depth range is small, and exp2's softer onset near the camera is exactly right —
-   both of those views came back correct.
+   THE RELATIONSHIP IS AFFINE, NOT PROPORTIONAL, and that part matters. Scaling near and far by
+   the camera distance would hold the fog fraction constant across the states, which is wrong:
+   the far edge of the world view is 8.7 km away and the far edge of a place view is 3.1 km, and
+   3 km of Gulf air really is clearer than 9. The constant term carries that; the slope carries
+   the framing.
 
-   Use the curve that matches the range. It is the same argument as fitting the shadow frustum to
-   the active island rather than to the whole world. */
-/* BACK OFF FIFTEEN PER CENT, AND COOL THE COLOUR.
+       near = 120 + 0.25 d        far = 1400 + 3.3 d
 
-   Two separate notes. The amount is a straight trim: near pushed out and far extended so the
-   fraction at any given distance falls by about a sixth. At the far islands that is 32 down to
-   27 per cent, which still separates them and stops the haze being the first thing in the frame.
-
-   The colour is the more interesting one. Fog in three is mix(fragment, fogColour, f), which is
-   exactly the physical model — object radiance times transmittance, plus inscattered light. So
-   the maths was never the problem. What makes it read as an overlay rather than as air is that
-   ONE colour is applied in every direction, and the value chosen was the horizon glow directly
-   under the sun. That is the brightest inscatter anywhere in the sky, and painting it across the
-   whole frame is what makes the haze look like a sheet of beige rather than like distance.
-
-   0xD2BEA4 sits between the sunward glow and the sky away from it: eight per cent darker and
-   noticeably cooler. Darker inscatter is also what keeps a silhouette readable — a dark tower
-   converges on a dark haze more slowly than on a bright one, which is the "landmarks stay legible
-   while the low city dissolves" behaviour, arrived at through the colour rather than through a
-   second mechanism. */
+   which lands at 26 per cent across the world islands, 17 at district and 10 at place — close to
+   the values each state was individually tuned to, arrived at by one continuous rule. */
 const FOG = {
-  dusk:  { hex: 0xD2BEA4, k: 0.00080, near: 300, far: 3300 },
-  day:   { hex: 0xAEC4D2, k: 0.00090, near: 400, far: 3900 },
-  night: { hex: 0x151D27, k: 0.00060, near: 400, far: 4600 },
+  dusk:  { hex: 0xD2BEA4, mul: 1.00 },
+  day:   { hex: 0xAEC4D2, mul: 0.82 },
+  night: { hex: 0x151D27, mul: 0.55 },
 };
-const FOG_STATE = { world: 1.00, district: 0.78, place: 0.68 };
 
-function makeFog(key, st){
-  if (!key) return null;
+function fogFor(camDist, key){
   const F = FOG[key];
-  return st === STATE.WORLD ? new THREE.Fog(F.hex, F.near, F.far)
-                            : new THREE.FogExp2(F.hex, F.k * FOG_STATE[st === STATE.PLACE ? 'place' : 'district']);
+  const near = (120 + camDist * 0.25) / F.mul;
+  const far  = (1400 + camDist * 3.30) / F.mul;
+  return { near, far };
 }
 
 function fitShadow(){
@@ -480,9 +462,7 @@ function fitShadow(){
   });
   shadowNote = (d ? d.id : 'world') + ' ' + (half * 2 / sun.shadow.mapSize.x).toFixed(3) + 'u/tx';
   rippleGoal = d ? 1 : 0.18;
-  // The fog TYPE changes with the state, not just its strength, so it is rebuilt rather than
-  // retuned. One object per state change is nothing.
-  scene.fog = makeFog(fogKey, state);
+  // Nothing to do here any more: the fog follows the camera, and the camera is already moving.
 }
 
 
@@ -650,8 +630,12 @@ const duskWater = new THREE.MeshStandardMaterial({ color:0x5E7A88, roughness:0.1
 if (waterNormal){
   const nScale = new THREE.Vector2(0.42, 0.42);
   // Day is high and bright, so the chop reads at a steeper angle and wants less of it.
-  dayWater.normalMap  = waterNormal; dayWater.normalScale  = nScale.clone().multiplyScalar(0.7);
-  duskWater.normalMap = waterNormal; duskWater.normalScale = nScale.clone();
+  /* AND LESS OF IT. 0.42 was tuned on a still frame; in motion a strong normal on a repeating
+     tile is exactly what makes the repeat legible, because every crest catches the same highlight
+     in the same place relative to the pattern. Softer normals let the vertex swell carry the
+     movement and leave the map doing texture. */
+  dayWater.normalMap  = waterNormal; dayWater.normalScale  = nScale.clone().multiplyScalar(0.52);
+  duskWater.normalMap = waterNormal; duskWater.normalScale = nScale.clone().multiplyScalar(0.72);
   dayWater.needsUpdate = duskWater.needsUpdate = true;
 }
 
@@ -832,7 +816,7 @@ function applyView(next){
                    : day ? new THREE.Color(0x9FC4DA)
                    : dusk ? duskSkyTex : nightSkyTex;
   fogKey = sil || plan ? null : day ? 'day' : dusk ? 'dusk' : 'night';
-  scene.fog = makeFog(fogKey, state);
+  scene.fog = fogKey ? new THREE.Fog(FOG[fogKey].hex, 1, 2) : null;   // near/far set by the loop
   scene.environment = (sil || day || plan) ? null : dusk ? duskEnv : nightEnv;
 
   moon.visible = night;
@@ -1110,6 +1094,18 @@ function frame(){
     cur.target.z + Math.cos(a) * cur.dist
   );
   camera.lookAt(cur.target);
+
+  /* THE HAZE FOLLOWS THE CAMERA, EVERY FRAME. cur.dist and cur.elev are the damped values the
+     camera was just built from, so this is the distance actually being looked through rather
+     than the one the state nominally implies — during a flight it eases on the same curve as
+     the move, which is the whole point. */
+  if (scene.fog && fogKey){
+    const camDist = Math.hypot(cur.dist, cur.elev - GROUND);
+    const f = fogFor(camDist, fogKey);
+    scene.fog.near = f.near;
+    scene.fog.far  = f.far;
+  }
+
   if (Math.abs(camera.fov - cur.fov) > 0.01){
     camera.fov = cur.fov; camera.updateProjectionMatrix();
   }
@@ -1147,7 +1143,9 @@ function frame(){
      belt. Slow — the swell underneath is on a 14-second period and chop that outran it would
      look like the sea was moving in two unrelated ways. */
   if (waterNormal){
-    waterNormal.offset.set(t * 0.0065, t * 0.0041);
+    // Rates raised with the tile: the offset is in UV, so a 188-unit tile moving at the old rate
+    // would drift half again as slowly across the water as it used to.
+    waterNormal.offset.set(t * 0.0092, t * 0.0058);
     // Eased rather than switched: the camera flight between world and district takes about a
     // second, and a sea that changes surface in one frame during it is worse than either end.
     if (Math.abs(rippleNow - rippleGoal) > 0.002){

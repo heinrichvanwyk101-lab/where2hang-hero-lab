@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v36';
+export const BUILD = 'world v38';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -153,7 +153,12 @@ function makeWaterNormal(N = 512){
   let seed = 0x9E3779B9;
   const rr = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   for (let k = 0; k < 26; k++){
-    const f = 2 + Math.pow(k / 25, 1.5) * 22;              // 2..24 cycles across the tile
+    /* 3 TO 16 CYCLES, DOWN FROM 2 TO 24. In motion the fine end of the spectrum is what gives the
+       repeat away: at a 123-unit tile the smallest components were 5 units across, so they slid
+       past the camera fast enough to read as a moving pattern rather than as water. Dropping the
+       top of the band and enlarging the tile below makes the same energy sit in longer waves,
+       which move more slowly across the frame and read as swell. */
+    const f = 3 + Math.pow(k / 25, 1.5) * 13;              // 3..16 cycles across the tile
     /* HEADINGS COVER A HALF PLANE, not a full one: (fx, fy) and (-fx, -fy) are the same wave
        with a phase shift, so walking the full circle spends half the components duplicating
        directions already taken. The golden ratio steps through [0, pi) without ever revisiting,
@@ -191,7 +196,11 @@ function makeWaterNormal(N = 512){
      and the wide diagonal banding in the world render was the beat between the tile and the
      pixel grid rather than anything in the texture. 26 gives a 123-unit tile with the finest
      component at 5 units, and it is filtered rather than aliased. */
-  t.repeat.set(26, 26);
+  /* 17, NOT 26. A 188-unit tile instead of 123: the seam recurs half again as far apart, which
+     is what the eye was catching as the camera moved. Wavelengths now run 63 down to 12 units —
+     490 metres to 90 — which is swell and chop rather than ripple, and correct for a body of
+     water this size. */
+  t.repeat.set(17, 17);
   t.anisotropy = MAX_ANISO;
   t.colorSpace = THREE.NoColorSpace;
   return t;
@@ -1167,13 +1176,19 @@ function paintGround(d, plan){
     const W = Math.max(1.2, U * pitch * 0.16);
     g.strokeStyle = SURF.street; g.lineWidth = W; g.lineCap = 'round';
     g.beginPath();
-    const step = pitch;
+    /* DRAWN ON THE PLOT BOUNDARY, NOT THROUGH THE PLOT.
+
+       v36 centred the cross on the cell, which is where the BUILDING is. The footprint is 0.78
+       of the block, so all but the last 7 per cent of each arm was underneath a building and the
+       only thing that reached daylight was a pair of stubs at the tips — noise on the apron
+       rather than a grid. A service road runs between plots. Offsetting by half a pitch puts it
+       exactly there, and the run then reaches the neighbouring boundary instead of stopping
+       inside the neighbouring building. */
+    const step = pitch, off = pitch * 0.5;
     for (let k = 0; k < cells.length; k++){
-      const c = cells[k];
-      // A short run each way from the plot centre, stopping short of the next plot: the result
-      // is a broken grid that follows the fabric wherever the fabric actually went.
-      g.moveTo(PX(c.jx - step * 0.46), PY(c.jy)); g.lineTo(PX(c.jx + step * 0.46), PY(c.jy));
-      g.moveTo(PX(c.jx), PY(c.jy - step * 0.46)); g.lineTo(PX(c.jx), PY(c.jy + step * 0.46));
+      const bx = cells[k].jx + off, by = cells[k].jy + off;
+      g.moveTo(PX(bx - step * 0.52), PY(by)); g.lineTo(PX(bx + step * 0.52), PY(by));
+      g.moveTo(PX(bx), PY(by - step * 0.52)); g.lineTo(PX(bx), PY(by + step * 0.52));
     }
     g.stroke();
     g.lineCap = 'butt';
@@ -1213,23 +1228,45 @@ function paintGround(d, plan){
     });
   }
 
+  /* WHERE AN ARTERIAL ACTUALLY MEETS THE RING, which is not where it ends.
+
+     v36 put the junction roundabout on the arterial's LAST point. But the skeleton walks an
+     arterial outward from the core until it leaves the island or hits a reserved rectangle — so
+     the last point is the coastline, and the ring road is inset 0.085 from that. Every junction
+     roundabout was landing on the beach, about six units beyond the road it was meant to be
+     joining.
+
+     The junction is the point on the arterial CLOSEST TO THE RING. Found by search rather than
+     assumed, and the arterial is then painted only as far as that point, so it stops at the
+     roundabout instead of running through it and out over the sand. The skeleton itself is
+     untouched: buildings still keep clear of the full length, which is what onRoad already
+     tests and what stops a plot appearing in the gap. */
+  function ringJunction(a){
+    let best = Infinity, bi = a.length - 1;
+    for (let i = Math.floor(a.length * 0.4); i < a.length; i++){
+      let d = Infinity;
+      for (let r = 0; r < plan.ring.length; r++) d = Math.min(d, distToPolyline(a[i][0], a[i][1], plan.ring[r]));
+      if (d < best){ best = d; bi = i; }
+    }
+    return bi;
+  }
+
   // ---- draw, coarsest first so markings always land on top of tarmac ----
   roadService();
+  const junc = plan.arterials.map(ringJunction);
+  plan.arterials.forEach((a, i) => roadSecondary(a.slice(0, junc[i] + 1)));
   plan.ring.forEach(seg => roadPrimary(seg));
-  plan.arterials.forEach(a => roadSecondary(a));
 
-  /* Roundabouts where the arterials meet the ring as well as at the core. The junction is the
-     LAST point of each arterial — the skeleton walks them outward from the core until they leave
-     the island or hit a reserved rectangle, so the far end is where it met something. */
   const core = plan.core;
   const cr = U * 0.040;
   const coreApp = plan.arterials.map(a => {
     const p = a[Math.min(3, a.length - 1)];
     return Math.atan2(p[1] - core[1], p[0] - core[0]);
   });
-  plan.arterials.forEach(a => {
-    if (a.length < 6) return;
-    const e = a[a.length - 1], b = a[a.length - 4];
+  plan.arterials.forEach((a, i) => {
+    const bi = junc[i];
+    if (bi < 4) return;
+    const e = a[bi], b = a[bi - 3];
     roundabout(e[0], e[1], cr * 0.72, [Math.atan2(b[1] - e[1], b[0] - e[0])]);
   });
   roundabout(core[0], core[1], cr, coreApp);
