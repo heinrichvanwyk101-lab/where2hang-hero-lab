@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v60';
+export const BUILD = 'world v61';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1134,7 +1134,7 @@ function onRoad(d, x, y, pitch){
   return false;
 }
 
-function groundPlan(d, cells, pitch){
+function groundPlan(d, cells, blocks){
   const seed     = hashId(d.id);
   const rndPlan  = localRnd(seed ^ 0x2545F491);
   const outline  = isleOutline(d.id);
@@ -1170,7 +1170,8 @@ function groundPlan(d, cells, pitch){
       if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
       if (distToOutline(d.id, nx, ny) < 0.045) continue;   // real margin, not a radial scale
       if (inPatch(nx, ny)) continue;
-      if (onRoad(d, nx, ny, pitch)) continue;      // no lawns in the carriageway either
+      // A lawn's own half-size is its clearance; there is no lattice pitch to borrow any more.
+      if (onRoad(d, nx, ny, q * 1.6)) continue;    // no lawns in the carriageway either
       if (rndPlan() > 0.58) continue;
       parks.push({ x: nx + (rndPlan()-0.5)*q, y: ny + (rndPlan()-0.5)*q,
                    r: q * (1.2 + rndPlan() * 1.0) });
@@ -1187,7 +1188,7 @@ function groundPlan(d, cells, pitch){
   }
 
   return {
-    outline, core, inside, ring, arterials, parks, coastLine, cells, pitch,
+    outline, core, inside, ring, arterials, parks, coastLine, cells, blocks,
     beachN: BEACH_W / d.r,
     coastPark: d.coastPark, ground: GROUND,
     rndPaint: localRnd(seed ^ 0x9E3779B1),
@@ -1353,25 +1354,40 @@ function paintGround(d, plan){
     g.beginPath(); g.arc(x, y, rr, 0, 6.2832); g.fill();
   });
 
-  /* 5. THE CITY FLOOR, painted from the fabric's own cells.
+  /* 5. THE CITY FLOOR, painted from the blocks and the plots.
 
-        Two passes. First a tarmac rect at 1.24 of the block pitch, so neighbouring cells always
-        overlap however far the jitter pushed them and no sand slivers open up mid-block. Then
-        the paved lot at 0.78, centred on the cell. What is left between the lots IS the street,
-        the same width the fabric used for its gap, and it is a street rather than a painted
-        line because it was never painted at all. */
-  const bp = plan.pitch * U;
-  g.fillStyle = SURF.street;
-  plan.cells.forEach(c => {
-    g.fillRect(PX(c.jx) - bp*0.62, PY(c.jy) - bp*0.62, bp*1.24, bp*1.24);
-  });
+        This used to reconstruct the whole street layout from one number: every cell got a tarmac
+        square at 1.24 of the lattice pitch, and whatever the squares failed to cover was declared
+        to be the street. That worked while a plot was an identical axis-aligned square on a
+        regular grid, and stopped meaning anything the moment plots gained their own frontage,
+        depth and rotation.
+
+        Two passes still, but from the real shapes. The BLOCK is filled once as its apron — which
+        is what the interior of an Abu Dhabi superblock actually is, a car park behind the towers
+        — and then each PLOT is laid on top of it, rotated to its street. What is left between the
+        blocks is the carriageway, and it is a street because nothing was painted over it. */
   const kerbW = Math.max(1, U * 0.0045);
+  g.fillStyle = SURF.street;
+  (plan.blocks || []).forEach(q => {
+    g.beginPath();
+    g.moveTo(PX(q[0][0]), PY(q[0][1]));
+    for (let i = 1; i < q.length; i++) g.lineTo(PX(q[i][0]), PY(q[i][1]));
+    g.closePath(); g.fill();
+  });
   plan.cells.forEach(c => {
-    const s = bp * 0.78, X = PX(c.jx) - s/2, Y = PY(c.jy) - s/2;
+    /* PY negates, so a rotation that is anticlockwise in world space is clockwise on the canvas.
+       Getting this sign wrong lays every plot across its own frontage instead of along it, and it
+       is invisible on a square plot — which is exactly the kind of thing the old lattice hid. */
+    const w = (c.wN || 0) * U, h = (c.dN || 0) * U;
+    if (!w || !h) return;
+    g.save();
+    g.translate(PX(c.jx), PY(c.jy));
+    g.rotate(-(c.rot || 0));
     g.fillStyle = shade(SURF.paving, 0.90 + R() * 0.20);
-    g.fillRect(X, Y, s, s);
+    g.fillRect(-w/2, -h/2, w, h);
     g.strokeStyle = SURF.kerb; g.lineWidth = kerbW;
-    g.strokeRect(X + kerbW/2, Y + kerbW/2, s - kerbW, s - kerbW);
+    g.strokeRect(-w/2 + kerbW/2, -h/2 + kerbW/2, w - kerbW, h - kerbW);
+    g.restore();
   });
 
   /* 6. DISTRICT PATCHES. Ground under the hand-built landmarks, where there are no fabric cells
@@ -1496,33 +1512,16 @@ function paintGround(d, plan){
     strokePx(offsetPath(pts, 0), SURF.line, Math.max(1, W * 0.040), [U * 0.022, U * 0.026]);
   }
 
-  /* SERVICE. Drawn from the block grid rather than from the skeleton, because that is what a
-     service road is: the gap between plots. No casing and no markings — a painted lane the width
-     of a car and a half, which at district range is a texture rather than a road, and that is
-     exactly its job in the hierarchy. */
-  function roadService(){
-    const cells = plan.cells, pitch = plan.pitch;
-    if (!cells || !cells.length || !pitch) return;
-    const W = Math.max(1.2, U * pitch * 0.16);
-    g.strokeStyle = SURF.street; g.lineWidth = W; g.lineCap = 'round';
-    g.beginPath();
-    /* DRAWN ON THE PLOT BOUNDARY, NOT THROUGH THE PLOT.
+  /* SERVICE ROADS ARE GONE, and their absence is the point.
 
-       v36 centred the cross on the cell, which is where the BUILDING is. The footprint is 0.78
-       of the block, so all but the last 7 per cent of each arm was underneath a building and the
-       only thing that reached daylight was a pair of stubs at the tips — noise on the apron
-       rather than a grid. A service road runs between plots. Offsetting by half a pitch puts it
-       exactly there, and the run then reaches the neighbouring boundary instead of stopping
-       inside the neighbouring building. */
-    const step = pitch, off = pitch * 0.5;
-    for (let k = 0; k < cells.length; k++){
-      const bx = cells[k].jx + off, by = cells[k].jy + off;
-      g.moveTo(PX(bx - step * 0.52), PY(by)); g.lineTo(PX(bx + step * 0.52), PY(by));
-      g.moveTo(PX(bx), PY(by - step * 0.52)); g.lineTo(PX(bx), PY(by + step * 0.52));
-    }
-    g.stroke();
-    g.lineCap = 'butt';
-  }
+     They existed because the lattice had no streets: a service road was defined as "the gap
+     between plots", drawn as a cross centred half a pitch off each cell, and it was the only
+     thing in the whole plan that read as a street network. The grid supplies real streets now —
+     thirty-five runs on Corniche against three curved arterials — so a painted cross through the
+     middle of a superblock would be a second, fictional network laid over the true one.
+
+     What the block interior wants instead is nothing: it is already filled as apron above, which
+     is what a superblock courtyard is. */
 
   /* A ROUNDABOUT, AND THE SLIP LANES INTO IT. The hatching is the detail that reads as traffic
      engineering rather than as a drawn circle: a wedge of parallel strokes on the approach side,
@@ -1582,7 +1581,6 @@ function paintGround(d, plan){
   }
 
   // ---- draw, coarsest first so markings always land on top of tarmac ----
-  roadService();
   const junc = plan.arterials.map(ringJunction);
   plan.arterials.forEach((a, i) => roadSecondary(a.slice(0, junc[i] + 1)));
   plan.ring.forEach(seg => roadPrimary(seg));
@@ -3189,6 +3187,11 @@ function urbanFabric(d, layer, opts){
   const frontMax = roadW(d, PLOT_FRONT_M[1]);
 
   const cells = [];
+  /* The block outlines go back with the cells. The ground painter used to reconstruct the street
+     layout from a single `pitch`, which was possible only while every plot was an identical square
+     on a lattice; now that a plot has its own frontage, depth and rotation, the painter has to be
+     told the shape rather than allowed to infer it. */
+  const blocks = [];
   const reach = 1.45;
   const KU = Math.ceil(reach / su), KV = Math.ceil(reach / sv);
   for (let a = -KU; a < KU; a++){
@@ -3197,6 +3200,9 @@ function urbanFabric(d, layer, opts){
       const u0 = a * su + frontN, u1 = (a + 1) * su - frontN;
       const v0 = b * sv + frontN, v1 = (b + 1) * sv - frontN;
       if (u1 - u0 < plotDN * 2.2 || v1 - v0 < plotDN * 2.2) continue;
+      // The block's four corners, island-normalised, for the painter's apron.
+      const quad = [[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([qu, qv]) => toWorldN(qu, qv));
+      let used = false;
 
       /* Each of the four frontages, laid as a run of plots. side 0 and 2 face along u, 1 and 3
          along v; the building's long axis follows the street it fronts, which is why the
@@ -3224,11 +3230,15 @@ function urbanFabric(d, layer, opts){
           if (onRoad(d, jx, jy, plotDN)) continue;      // THE ROAD STILL WINS, as a backstop
           if (rnd() > 0.90) continue;                   // the occasional cleared plot
           // Frontage across the street, depth back from it: the two are not interchangeable.
+          used = true;
           cells.push({ jx, jy, rot,
+                       wN:(side % 2 === 0 ? fw : plotDN),
+                       dN:(side % 2 === 0 ? plotDN : fw),
                        w:(side % 2 === 0 ? fw : plotDN) * d.r,
                        dp:(side % 2 === 0 ? plotDN : fw) * d.r });
         }
       }
+      if (used) blocks.push(quad);
     }
   }
 
@@ -3309,7 +3319,7 @@ function urbanFabric(d, layer, opts){
     layer.add(m);
   });
 
-  return { cells, pitch };
+  return { cells, blocks };
 }
 
 /* ---------- CORNICHE: the finished island ----------
@@ -3509,7 +3519,7 @@ let propCount = { palms:0, lamps:0, cars:0, boats:0, shrubs:0 };
 DISTRICTS.forEach(d => {
   const f = d.fabric;
   if (!f) return;
-  const plan = groundPlan(d, f.cells, f.pitch);
+  const plan = groundPlan(d, f.cells, f.blocks);
   d.plan = plan;
   const tex = paintGround(d, plan);
   /* Props into the DETAIL layer only. At world scale a palm is a third of a pixel; paying for
