@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v54';
+export const BUILD = 'world v55';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -293,7 +293,18 @@ const waterBase = Float32Array.from(waterPos.array);
    =========================================================================== */
 const LM = {
   palace: { x:-42, z:  0 },
-  etihad: { x: -4, z:-16 },
+  /* MOVED 14.4 UNITS — 112 METRES — OFF THE RING ROAD. Four of the five towers were standing in
+     it, and three had the CENTRELINE running through them: measured road distance 0.0 against a
+     2.4-unit kerb half-width. Exactly the ADNOC fault, in the one cluster the whole district is
+     composed around, and it survived the ADNOC fix because I checked the tower I had been told
+     about and not the other two.
+
+     Solved the same way: nearest anchor clearing a three-unit floor on both coast and road.
+     Every tower now has 6.3 units or more of spare road clearance and 12.8 of coast. It also
+     happens to be geographically right — Etihad Towers stands immediately beside Emirates Palace
+     on the real Corniche, and the pair now read as the pair they are. Verified clear of the
+     palace: 3.0 units between the nearest tower and the palace block. */
+  etihad: { x: -17.5, z:-11 },
   adnoc:  { x: 42.25, z: 7.25 },
 };
 
@@ -1897,8 +1908,11 @@ const DISTRICTS = [
        cent of the frame HEIGHT from 138. That is the reference's framing, and it is the only
        state close enough for the props to be the subject. */
     places:[
-      { label:'Emirates Palace', x:-42, z:  0, h: 7,  r: 32 },
-      { label:'Etihad Towers',   x: -4, z:-16, h:18,  r: 28 },
+      /* DERIVED, like the ADNOC entry. These were literals, so moving a landmark would have left
+         its place camera aimed at the ground it used to stand on — the same five-copies fault
+         that put ADNOC in the road, one edit from happening again. */
+      { label:'Emirates Palace', x:LM.palace.x, z:LM.palace.z, h: 7,  r: 32 },
+      { label:'Etihad Towers',   x:LM.etihad.x, z:LM.etihad.z, h:18,  r: 28 },
       { label:'ADNOC HQ',        x: LM.adnoc.x, z: LM.adnoc.z, h:26,  r: 22 },
     ],
     /* THE HEIGHT CORE, AND IT WAS ON THE WRONG SHORE.
@@ -3079,16 +3093,24 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   }
 
   // Emirates Palace: wide, low, warm. Its horizontality is what makes the cluster read tall.
-  massBlock(-42,  0, 30, 6.5, 11, false, true, 0.34);
-  massBlock(-50,  2,  8, 9.0,  8, false, true, 0.40);   // the dome mass, slightly taller
+  /* Derived from the anchor, and 30 wide was wrong anyway: the detail palace reaches 12.4 units
+     either side of centre once the wings are counted, so a 30-wide mass block overhung its own
+     detail version by 2.6 units at each end and grew the island's west end on zoom-out. */
+  massBlock(LM.palace.x,     LM.palace.z,     25, 6.5, 11, false, true, 0.34);
+  massBlock(LM.palace.x - 8, LM.palace.z + 2,  8, 9.0,  8, false, true, 0.40);   // the dome mass
 
   // Etihad Towers: real spacing and real height ratios, slim and cool.
-  /* Offsets from the Etihad anchor, not absolute coordinates. The five towers were written
-     against z = -16 while the avoid rectangle and the detail kit read LM.etihad — the same
-     five-copies-of-one-number fault that put ADNOC in the road, one edit away from happening
-     again. The x values are the real spacing and stay as they are. */
-  [[-21,27.7],[-12.5,30.5],[-4,26.0],[4,23.4],[11.5,21.8]].forEach(t => {
-    massBlock(LM.etihad.x + (t[0] + 4), LM.etihad.z, 4.2, t[1], 4.2, true, false, 0.30);
+  /* THE MASS CLUSTER HAD NO DEPTH SCATTER AND THE DETAIL ONE DOES, so the outer towers jumped
+     3.0 units — 23 metres — the instant an island was tapped. That is the LOD contract broken in
+     the most visible object in the scene: tapping must ADD, never move.
+
+     This list is now the SAME dx and dz as w2h-city.js's etihadTowers spec, so the two layers
+     stand on one set of coordinates. It is duplicated across two modules, which is not ideal, but
+     the alternative is world.js importing a geometry kit's internal layout table; the guard is
+     that they are written identically and the audit measures the displacement. */
+  [[-17.0, 3.0, 27.7], [-8.5, 0.8, 30.5], [0.0, 0.0, 26.0],
+   [ 8.0, 0.8, 23.4], [15.5, 3.0, 21.8]].forEach(t => {
+    massBlock(LM.etihad.x + t[0], LM.etihad.z + t[1], 4.2, t[2], 4.2, true, false, 0.30);
   });
 
   // ADNOC HQ: the tall slim anchor at the eastern end.

@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v13';
+export const BUILD = 'city v14';
 
 export const C = {
   night:   0x0B1620,
@@ -457,7 +457,11 @@ function emiratesPalace(x0, z0){
   // Arcade along the front. Reads as a colonnade in silhouette, costs almost nothing.
   for (let i = 0; i < 26; i++){
     const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.15, 0.55), arch);
-    a.position.set(x0 - W*0.46 + i * (W*0.92/25), 0.58, z0 + 3.7); g.add(a);
+    /* THE COLONNADE RAN 8.6 UNITS PAST THE BUILDING AT EACH END. W*0.46 spans 42.3 units against
+       a palace that reaches 12.4 either side of centre once the wings are counted — so ten of the
+       twenty-six posts stood in open sand with nothing behind them, which from above reads as a
+       line of bollards rather than as an arcade. W*0.27 ends the run where the wings end. */
+    a.position.set(x0 - W*0.27 + i * (W*0.54/25), 0.58, z0 + 3.7); g.add(a);
   }
 
   function dome(dx, r, hy){
