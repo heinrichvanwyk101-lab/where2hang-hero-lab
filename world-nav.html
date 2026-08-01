@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v34', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v35', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -332,6 +332,39 @@ const daySky = new THREE.HemisphereLight(0xBBD6E8, 0x7A6E5C, 1.30);
 daySky.visible = false;
 scene.add(daySky);
 
+/* THE DAY COUNTER-KEY, AND WHY FREE LOOK IS WHAT REVEALED IT.
+
+   One sun at (-380, 210, 260) plus a 0.55 hemisphere gives, on the four cardinal walls:
+
+       west  (into the sun)   sun 1.35  fill 0.43   total 1.78
+       south (into the sun)   sun 0.92  fill 0.43   total 1.35
+       east  (away)           sun 0.00  fill 0.43   total 0.43
+       north (away)           sun 0.00  fill 0.43   total 0.43
+
+   With the counter in, Day goes to 1.78 / 1.35 / 0.89 / 0.79 — a wall contrast of 2.26:1 rather
+   than 4.14:1, which is a shaded side that still reads as shaded rather than as a hole.
+
+   TWO OF THE FOUR WALLS GET NO SUN AT ALL, at a 4.1:1 ratio against the lit ones. That was
+   invisible for as long as the camera was a state machine, because every composed shot was framed
+   from the sunlit side — and it became obvious the moment nav v34 let the camera go round the
+   back, which is exactly what free look is for.
+
+   It is also the same fault as the night rim, found the same way and fixed the same way: a single
+   key light, no fill, only ever judged from one angle. That one went 0.26 to 0.46 for the same
+   reason.
+
+   0.62 puts the shaded walls at roughly half the lit ones, which for a desert city is not
+   generous — sand at 0.4 albedo under a high sun throws a great deal of light back up onto the
+   north and east faces, and it is why Gulf towers photograph with such soft shadow sides.
+
+   NO SHADOW MAP. The comment on the sun stands: two 2048 maps resident all session to save four
+   property assignments is not a trade worth making, and a fill light that casts shadows is not a
+   fill light. It also means this costs one extra dot product per fragment and nothing else. */
+const sunFill = new THREE.DirectionalLight(0xCADCEA, 0.62);
+sunFill.visible = false;
+scene.add(sunFill);
+const FILL_OFF = new THREE.Vector3(360, 150, -280);
+
 /* THE TARGETS GO IN THE SCENE, and this is not optional once they move.
 
    A DirectionalLight aims at light.target, and three reads target.matrixWorld — which is only
@@ -464,6 +497,11 @@ function fitShadow(){
   // the ring road sit outside the places table's radius.
   const half = d ? Math.max(60, d.r * 1.18) : 340;
   const cx = d ? d.x : 0, cz = d ? d.z : -40;
+  /* The fill tracks the district like the others but has no shadow camera to fit, so it is
+     aimed separately rather than being given a fake one. */
+  sunFill.target.position.set(cx, GROUND, cz);
+  sunFill.position.set(cx + FILL_OFF.x, GROUND + FILL_OFF.y, cz + FILL_OFF.z);
+
   [[sun, SUN_OFF], [moon, MOON_OFF]].forEach(([L, off]) => {
     L.target.position.set(cx, GROUND, cz);
     L.position.set(cx + off.x, GROUND + off.y, cz + off.z);
@@ -872,10 +910,17 @@ function applyView(next){
   moon.visible = night;
   rim.visible  = night;
   hemiNight.visible = night;
-  sun.visible    = day || dusk;
-  daySky.visible = day || dusk;
+  sun.visible     = day || dusk;
+  daySky.visible  = day || dusk;
+  /* Not in Silhouette or Plan: both are diagnostics that want one unambiguous key so massing
+     reads as massing, and a fill light is the opposite of that. */
+  sunFill.visible = day || dusk;
   if (dusk){
     sun.color.setHex(0xFFC489); sun.intensity = 2.4;
+    /* Weaker and much cooler at dusk. The sky opposite a sunset is deep blue, not warm, and a
+       warm fill there would put a second sunset on the wrong side of every tower — which is the
+       single most common way a dusk render gives itself away. */
+    sunFill.color.setHex(0x8FAECB); sunFill.intensity = 0.40;
     // Lower than Day and further round. Long shadows across the ground plan are the single
     // cheapest cue that this is evening rather than noon. An OFFSET from the island being
     // looked at now, rather than an absolute position, so the shadow frustum can follow.
@@ -902,6 +947,7 @@ function applyView(next){
        Worth stating plainly: with a filmic curve, ADDING LIGHT REMOVES CONTRAST once you are
        past the knee. Every instinct says a diagnostic mode should be brightly lit. */
     sun.color.setHex(0xFFD9A8); sun.intensity = 1.8;
+    sunFill.color.setHex(0xCADCEA); sunFill.intensity = 0.62;
     SUN_OFF.set(-380, 210, 260);
     daySky.color.setHex(0xBBD6E8); daySky.groundColor.setHex(0x7A6E5C);
     daySky.intensity = 0.55;
