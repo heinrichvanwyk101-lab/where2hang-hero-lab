@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v20';
+export const BUILD = 'props v21';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -446,7 +446,11 @@ function addProps(d, layer, plan, budget = {}){
           const off = o2 * (0.93 + R() * 0.16);
           const px = x + nx * off * sgn + tx * jt;
           const py = y + ny * off * sgn + ty * jt;
-          if (inside(px * 1.02, py * 1.02))
+          /* A PALM IN A JUNCTION IS WORSE THAN A LAMP IN ONE. A lamp column is thin and reads as
+             street furniture wherever it stands; a palm is a seven-metre crown sitting in the
+             middle of an intersection, blocking the sightline the junction exists to keep open.
+             Same keep-clear radius, applied for the stronger reason. */
+          if (inside(px * 1.02, py * 1.02) && !nearCrossing(px, py, JUNCTION_KEEP))
             palms.push({ x:px, y:py, kind: R() < 0.62 ? 0 : (R() < 0.72 ? 2 : 1) });
         }
       });
@@ -461,6 +465,11 @@ function addProps(d, layer, plan, budget = {}){
       const o = rd.w * 0.42 * s;
       const cx = x + nx * o, cy = y + ny * o;
       if (!inside(cx, cy)) return;
+      /* PARKED CARS ARE PARKED, so one sitting in the middle of a signalised crossing is the most
+         obviously wrong object in the scene once the signals are there to be obeyed. A slightly
+         tighter radius than the lamps and palms: a car stopped AT the line is correct and only
+         one inside the junction box is not. */
+      if (nearCrossing(cx, cy, JUNCTION_KEEP * 0.78)) return;
       cars.push({ x:cx, y:cy, rot: Math.atan2(tx, ty) + (s < 0 ? Math.PI : 0) });
     });
   });
@@ -474,7 +483,7 @@ function addProps(d, layer, plan, budget = {}){
       /* Parkland skews YOUNGER than an avenue: a park is planted at once and thins over decades,
          whereas a street is replanted tree by tree. Different mixes in different places is most of
          what stops the three variants reading as a shuffled deck. */
-      if (inside(px * 1.03, py * 1.03))
+      if (inside(px * 1.03, py * 1.03) && !nearCrossing(px, py, JUNCTION_KEEP))
         palms.push({ x:px, y:py, kind: R() < 0.34 ? 0 : (R() < 0.70 ? 1 : 2) });
     }
   });
@@ -539,7 +548,7 @@ function addProps(d, layer, plan, budget = {}){
       const nx = -ty, ny = tx;
       const o = 0.030 * ((i % 2) ? 1 : -1);
       const px = x + nx * o, py = y + ny * o;
-      if (inside(px * 1.02, py * 1.02))
+      if (inside(px * 1.02, py * 1.02) && !nearCrossing(px, py, JUNCTION_KEEP))
         palms.push({ x:px, y:py, kind: R() < 0.55 ? 0 : (R() < 0.80 ? 1 : 2) });
     });
   }

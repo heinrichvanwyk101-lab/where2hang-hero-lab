@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v68';
+export const BUILD = 'world v69';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1783,6 +1783,10 @@ function paintGround(d, plan){
      corner is the gap between them. A fillet larger than that would put tarmac under a building,
      which is the fault this build has already paid for four times. */
   const SLIP_R_M = 34;
+  /* A FLOOR, NOT A TASTE JUDGEMENT. The street stops at the ring's inner kerb, so a fillet shorter
+     than that half-width leaves a gap between the end of the street and the start of the slip —
+     the same dead end, moved to the other end of the curve. Ring half-kerb plus a car length. */
+  const SLIP_MIN_M = ROAD_RING_M * 0.5 * ROAD_KERB + 6;
 
   /* Distance from a point to the nearest plot edge, in normalised units. Negative inside a plot.
      The painter has plan.cells, so the slip lane can be fitted against the buildings that actually
@@ -1825,6 +1829,19 @@ function paintGround(d, plan){
     let tx = rn[0] - rp[0], ty = rn[1] - rp[1];
     const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
 
+    /* THE CORNER IS ON THE RING, NOT ON THE STREET, and getting that wrong is what made these
+       dead-end.
+
+       v66 made grid streets terminate at the ring's INNER KERB, so a street's last point sits
+       18.6 metres short of the ring centreline. The fillet was then built as e plus offsets, which
+       put its far end 18.6 metres out in the verge — running parallel to the Corniche and stopping
+       in the shoulder. From the plan camera that is exactly "an internal road running dead into
+       main", because that is what it was.
+
+       A fillet joins two CENTRELINES. The corner is the nearest point on the ring polyline, and
+       both arms are measured from it, so all three control points lie on roads that exist. */
+    const corner = rp;
+
     const laneN = roadW(d, 9);                    // one lane of segregated tarmac
     const lane  = U * laneN;
     /* THE RADIUS IS FITTED, NOT CHOSEN, and 34 metres was too big: measured against the real
@@ -1833,32 +1850,33 @@ function paintGround(d, plan){
        constant cannot be right everywhere. Largest radius that clears, stepped down from the
        nominal, which is the same shape of answer as the ADNOC and Etihad anchors: solve it
        against the geometry rather than nudge it until it looks right. */
-    const eN = [e[0] / U, e[1] / U];
+    const cN = [corner[0], corner[1]];
     const sN = [sx, sy], tN = [tx, ty];
     [1, -1].forEach(sgn => {
       let Rm = SLIP_R_M;
-      for (; Rm >= 12; Rm -= 2){
+      for (; Rm >= SLIP_MIN_M; Rm -= 2){
         const Rn = roadW(d, Rm);
-        const aN = [eN[0] - sN[0]*Rn, eN[1] - sN[1]*Rn];
-        const bN = [eN[0] + tN[0]*Rn*sgn, eN[1] + tN[1]*Rn*sgn];
+        const aN = [cN[0] - sN[0]*Rn, cN[1] - sN[1]*Rn];
+        const bN = [cN[0] + tN[0]*Rn*sgn, cN[1] + tN[1]*Rn*sgn];
         let ok = true;
         for (let k = 0; k <= 12 && ok; k++){
           const t = k / 12, u = 1 - t;
-          const X = u*u*aN[0] + 2*u*t*eN[0] + t*t*bN[0];
-          const Y = u*u*aN[1] + 2*u*t*eN[1] + t*t*bN[1];
+          const X = u*u*aN[0] + 2*u*t*cN[0] + t*t*bN[0];
+          const Y = u*u*aN[1] + 2*u*t*cN[1] + t*t*bN[1];
           if (plotClear(X, Y) < laneN * 0.6 + roadW(d, 3)) ok = false;   // lane half-width + kerb
         }
         if (ok) break;
       }
-      if (Rm < 12) return;                        // no room for a slip lane at this corner
+      if (Rm < SLIP_MIN_M) return;                // no room here
       const Rpx = U * roadW(d, Rm);
-      // Start back along the street, end away along the ring in the turning direction.
-      const ax = e[0] - sx * Rpx,       ay = e[1] - sy * Rpx;
-      const bx = e[0] + tx * Rpx * sgn, by = e[1] + ty * Rpx * sgn;
+      const cx = PX(corner[0]), cy = PY(corner[1]);
+      // Start back along the street from the corner, end away along the ring.
+      const ax = cx - sx * Rpx,       ay = cy - sy * Rpx;
+      const bx = cx + tx * Rpx * sgn, by = cy + ty * Rpx * sgn;
       const pts = [];
       for (let k = 0; k <= 12; k++){
         const t = k / 12, u = 1 - t;
-        pts.push([u*u*ax + 2*u*t*e[0] + t*t*bx, u*u*ay + 2*u*t*e[1] + t*t*by]);
+        pts.push([u*u*ax + 2*u*t*cx + t*t*bx, u*u*ay + 2*u*t*cy + t*t*by]);
       }
       strokePx(pts, SURF.kerb, lane * ROAD_KERB);
       strokeAsphalt(pts, SURF.road, lane);
@@ -1870,7 +1888,7 @@ function paintGround(d, plan){
       g.beginPath();
       g.moveTo(ax, ay);
       for (let k = 1; k <= 12; k++) g.lineTo(pts[k][0], pts[k][1]);
-      g.lineTo(bx, by); g.lineTo(e[0], e[1]);
+      g.lineTo(bx, by); g.lineTo(cx, cy);
       g.closePath();
       g.fillStyle = SURF.pavingLt; g.fill();
       g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(1, U * 0.0045); g.stroke();
