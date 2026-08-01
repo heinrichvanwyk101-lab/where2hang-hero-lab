@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v49';
+export const BUILD = 'world v50';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2107,8 +2107,34 @@ DISTRICTS.forEach(d => {
       with exactly parallel vertical edges reads as a bar chart.
 
    32 triangles against 12. About 28k extra across a district, against 92k. */
-const fabricGeo = (() => {
-  const C = 0.22 * 0.5, H = 0.5, T = 0.95;
+/* ===========================================================================
+   PROFILE FAMILY.
+
+   Every fabric building in v49 is the same solid: a chamfered box with a five per cent taper,
+   scaled. The stage system articulates it into podium, shaft and crown, which are STEPS — and
+   steps are the one thing Abu Dhabi's towers mostly do not do. Measuring the reference
+   photograph's barrel tower down its silhouette gives widths of 15, 24, 42, 51, 53, 55, 56 —
+   a CONTINUOUS CURVE narrowing to a rounded top, with no step anywhere in it. Etihad is a sail:
+   pinched at the base, bulging through the lower third, tapering to a slim crown. Stacking
+   rectangles will never produce either of those, no matter how the fractions are tuned.
+
+   So the section is now swept along a RADIUS CURVE rather than between two levels. Same chamfered
+   octagon, same arc-length UVs, same winding; the only change is that the ring is sampled at
+   several heights instead of two, and each sample carries its own x and z scale.
+
+   NORMALISED TO A MAXIMUM OF EXACTLY 1, WHICH IS THE SAFETY PROPERTY. onRoad's clearance is sized
+   from the plot's half-diagonal, and every argument about kerbs from v47 depends on the footprint
+   never exceeding the plot. A curve whose widest point is 1.0 is inscribed in the same box the
+   old prism occupied, so a bulging tower is still narrower than its plot everywhere. Nothing
+   about the road maths has to be revisited — which is the whole reason the curves are written as
+   shapes first and normalised afterwards rather than being hand-tuned to fit.
+
+   SIDE COUNT IS THE COST. A box is 32 triangles; an eight-ring sweep is 144. Profiles are
+   therefore given only to the tall stock, where the silhouette is what the eye is reading, and
+   only to a share of it — a district where every tower curves looks like a theme park.
+   =========================================================================== */
+const SECTION = (() => {
+  const C = 0.22 * 0.5, H = 0.5;
   /* The chamfered square, written out in order rather than generated per quadrant. A loop over
      [±1, ±1] emits the eight points in an order that is NOT angular, and indexing a ring in the
      wrong order gives a self-intersecting bow-tie prism that still passes a syntax check and
@@ -2117,46 +2143,81 @@ const fabricGeo = (() => {
     [ H, -H + C], [ H,  H - C], [ H - C,  H], [-H + C,  H],
     [-H,  H - C], [-H, -H + C], [-H + C, -H], [ H - C, -H],
   ];
-
-  /* UVS, ADDED FOR ONE CUSTOMER: the lit band needs a window map, and a map needs coordinates.
-
-     u IS ARC LENGTH ROUND THE PERIMETER, not vertex index. The chamfer segments are a fifth the
+  /* u IS ARC LENGTH ROUND THE PERIMETER, not vertex index. The chamfer segments are a fifth the
      length of the wall segments, so indexing would give them the same slice of texture as a full
-     wall and the windows would bunch at every corner.
-
-     AND THE SEAM GETS ITS OWN COLUMN. Sharing vertex zero between the first and last side quad
-     forces u to run 0.875 back to 0 across that one face, which draws the entire texture into it,
-     mirrored. Nine columns for eight faces; the ninth is vertex zero again at u = 1.
-
-     The caps carry their own vertices at the centre of the map, so nothing about the top and
-     bottom faces disturbs the side coordinates. Triangle count is unchanged at 32; this adds
-     eighteen vertices to a geometry instanced thousands of times, which is 216 bytes total. */
-  let per = 0;
-  const seg = [0];
+     wall and the windows would bunch at every corner. */
+  let per = 0; const seg = [0];
   for (let i = 0; i < 8; i++){
     const a = ring[i], b = ring[(i + 1) % 8];
     per += Math.hypot(b[0] - a[0], b[1] - a[1]);
     seg.push(per);
   }
+  return { ring, seg, per };
+})();
+
+/* Radius curves. t runs 0 at the pavement to 1 at the parapet; each returns [sx, sz] before
+   normalisation. Keep them as readable shapes — the normaliser handles the scaling. */
+const PROFILE_CURVE = {
+  // The original solid, and still the great majority of the city.
+  box:   { rings: 1, f: t => [1 - 0.05 * t, 1 - 0.05 * t] },
+
+  /* ETIHAD. Pinched at the base, widest at about a third, then a long taper to a slim rounded
+     top. The asymmetry matters: a symmetrical lens reads as a rugby ball, and what makes these
+     towers is that the bulge sits LOW and the taper above it is much longer than the flare below.
+     The two axes differ slightly so the plan is a soft lens rather than a circle. */
+  sail:  { rings: 8, f: t => { const k = Math.sin(Math.PI * Math.pow(t, 0.62));
+                               return [0.70 + 0.34 * k - 0.16 * t, 0.74 + 0.28 * k - 0.20 * t]; } },
+
+  /* THE BARREL, measured off the reference: a wide shaft holding almost constant through the
+     middle and drawing in over the top third. Narrower at the very base than at mid, which is
+     what gives it the vase line rather than a cooling-tower one. */
+  vase:  { rings: 8, f: t => { const c = 1 - Math.pow(Math.max(0, t - 0.30) / 0.70, 1.8) * 0.52;
+                               const base = 0.86 + 0.14 * Math.min(1, t / 0.30);
+                               const r = Math.min(base, c); return [r, r]; } },
+
+  /* A CONTINUOUS TAPER with no bulge — the plain obelisk that sits behind the sculpted towers in
+     every skyline and stops the profiled stock all looking related. */
+  spire: { rings: 6, f: t => { const r = 1 - 0.46 * Math.pow(t, 1.25); return [r, r]; } },
+};
+
+function buildProfileGeo(curve, rings){
+  const { ring, seg, per } = SECTION;
+  // Sample first, then normalise, so the curves above can be written as shapes and the guarantee
+  // that the widest point is exactly 1.0 comes out of the arithmetic rather than out of tuning.
+  const lv = [];
+  for (let i = 0; i <= rings; i++){ const t = i / rings; lv.push([t, ...curve(t)]); }
+  const mx = Math.max(...lv.map(l => Math.max(l[1], l[2])));
+  lv.forEach(l => { l[1] /= mx; l[2] /= mx; });
 
   const pos = [], uv = [], idx = [];
   const push = (x, y, z, u, v) => { pos.push(x, y, z); uv.push(u, v); return pos.length / 3 - 1; };
-  const bot = [], top = [];
-  for (let i = 0; i <= 8; i++){
-    const p = ring[i % 8], u = seg[i] / per;
-    bot.push(push(p[0],     0, p[1],     u, 0));
-    top.push(push(p[0] * T, 1, p[1] * T, u, 1));
+
+  /* THE SEAM GETS ITS OWN COLUMN. Sharing vertex zero between the first and last side quad forces
+     u to run 0.875 back to 0 across that one face, which draws the entire texture into it,
+     mirrored. Nine columns for eight faces; the ninth is vertex zero again at u = 1. */
+  const rows = lv.map(([t, sx, sz]) => {
+    const r = [];
+    for (let i = 0; i <= 8; i++){
+      const p = ring[i % 8];
+      r.push(push(p[0] * sx, t, p[1] * sz, seg[i] / per, t));
+    }
+    return r;
+  });
+  for (let k = 0; k < rings; k++){
+    const lo = rows[k], hi = rows[k + 1];
+    for (let i = 0; i < 8; i++){
+      idx.push(lo[i], hi[i], hi[i + 1], lo[i], hi[i + 1], lo[i + 1]);
+    }
   }
-  for (let i = 0; i < 8; i++){
-    idx.push(bot[i], top[i], top[i + 1], bot[i], top[i + 1], bot[i + 1]);
-  }
-  const cb = push(0, 0, 0, 0.5, 0.5), ct = push(0, 1, 0, 0.5, 0.5);
-  const bc = ring.map(p => push(p[0],     0, p[1],     0.5, 0.5));
-  const tc = ring.map(p => push(p[0] * T, 1, p[1] * T, 0.5, 0.5));
+  // Caps carry their own vertices at the centre of the map, so nothing about the top and bottom
+  // faces disturbs the side coordinates.
+  const mk = (t, sx, sz) => ({ c: push(0, t, 0, 0.5, 0.5),
+                               r: ring.map(p => push(p[0] * sx, t, p[1] * sz, 0.5, 0.5)) });
+  const B = mk(0, lv[0][1], lv[0][2]), T = mk(1, lv[rings][1], lv[rings][2]);
   for (let i = 0; i < 8; i++){
     const j = (i + 1) % 8;
-    idx.push(cb, bc[i], bc[j]);
-    idx.push(ct, tc[j], tc[i]);
+    idx.push(B.c, B.r[i], B.r[j]);
+    idx.push(T.c, T.r[j], T.r[i]);
   }
 
   const g = new THREE.BufferGeometry();
@@ -2165,7 +2226,21 @@ const fabricGeo = (() => {
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
-})();
+}
+
+const PROFILES = {};
+Object.entries(PROFILE_CURVE).forEach(([k, v]) => { PROFILES[k] = buildProfileGeo(v.f, v.rings); });
+/* Normalised curves kept alongside the geometry, because the lit rings have to sample the shaft's
+   ACTUAL width at their own height. Wrapping a 1.02 ring round a sail at nine tenths of its
+   height, where the shaft is at half width, would put a lit collar twice the size of the tower
+   it belongs to. */
+const PROFILE_W = {};
+Object.entries(PROFILE_CURVE).forEach(([k, v]) => {
+  const s = []; for (let i = 0; i <= 24; i++){ const t = i / 24; s.push(v.f(t)); }
+  const mx = Math.max(...s.map(p => Math.max(p[0], p[1])));
+  PROFILE_W[k] = t => { const p = v.f(Math.max(0, Math.min(1, t))); return [p[0] / mx, p[1] / mx]; };
+});
+const fabricGeo = PROFILES.box;
 
 /* ONE CITY, DRAWN TWICE — WHICH IT WAS NOT, AND THAT IS THE WHOLE LOD PROBLEM.
 
@@ -2315,7 +2390,7 @@ function buildingSpec(rnd, ctx){
     sb:rnd(),     sbA:rnd(),    sbB:rnd(),    sbRa:rnd(),  sbRb:rnd(),
     crown:rnd(),  crownH:rnd(), crownW:rnd(),
     plant:rnd(),  plantW:rnd(), plantD:rnd(), plantH:rnd(), plantX:rnd(), plantZ:rnd(),
-    plantV:rnd(), plantWm:rnd(), bandJit:rnd(), bandH:rnd(), bandPick:rnd(),
+    prof:rnd(),   plantV:rnd(), plantWm:rnd(), bandJit:rnd(), bandH:rnd(), bandPick:rnd(),
     bv0:rnd(), bw0:rnd(), bv1:rnd(), bw1:rnd(),
     bv2:rnd(), bw2:rnd(), bv3:rnd(), bw3:rnd(),
   };
@@ -2354,10 +2429,31 @@ function buildingSpec(rnd, ctx){
   const frac = h / tallest;
   const tier = h < LOWRISE ? 0 : frac < 0.42 ? 1 : 2;
 
+  /* WHICH BUILDINGS ARE SCULPTED.
+
+     Only the tall stock, and only a fifth of that. Everything the reference shows curving is a
+     landmark tower; the fabric around them is boxes, and a district where every tower is a sail
+     stops reading as a city. The R.prof thresholds are the parameter to move if it looks thin or
+     busy. DECIDED HERE, above the material, because the material now depends on it. */
+  const prof = tier === 2 && frac > 0.52
+    ? (R.prof < 0.66 ? 'box' : R.prof < 0.80 ? 'sail' : R.prof < 0.91 ? 'vase' : 'spire')
+    : 'box';
+  const sculpt = prof !== 'box';
+
   /* MATERIAL FOLLOWS HEIGHT, unchanged in intent from v45: glass on the tall stock, render on
      the low, and bronze on the shorter of the glass towers because the tint dates the building.
      Varying finish with height reads as eras; varying it at random reads as noise. */
-  const isGlass = R.glass < (h > tallest * 0.50 ? 0.62 : 0.10);
+  /* SCULPTED TOWERS ARE ALWAYS CURTAIN WALL, and that is an architectural fact before it is an
+     optimisation: masonry does not curve. Every swept tower in the reference — the sails, the
+     barrel, the leaning pair — is glass, because a continuously varying profile can only be clad
+     in a unitised system refabricated per floor. A rendered-block vase would look wrong for a
+     reason the viewer could not name.
+
+     It also halves the bucket count. Instancing is per geometry, so each profile needs its own
+     mesh in every material it appears in; holding the swept stock to two materials means three
+     profiles cost six buckets instead of eighteen. Both arguments point the same way, which is
+     the only kind of optimisation worth taking. */
+  const isGlass = sculpt || R.glass < (h > tallest * 0.50 ? 0.62 : 0.10);
   let mat, tAmount, tWarm;
   if (isGlass){
     if (R.glassKind < (h > tallest * 0.72 ? 0.14 : 0.55)){ mat = 'bronze'; tAmount = 0.26; tWarm = 0.9; }
@@ -2392,8 +2488,12 @@ function buildingSpec(rnd, ctx){
      width is floored so a three-stage tower does not taper away to nothing. */
   const podH   = podium ? podium.h : 0;
   const shaftH = h - podH;
+  /* A SCULPTED TOWER GETS ONE STAGE, ALWAYS. Setbacks and a swept profile are two different
+     languages for the same job, and using both on one building gives a stepped sail, which is
+     neither. */
   let nStage = 1;
-  if (tier === 2)      nStage = frac > 0.62 ? (R.sb < 0.22 ? 1 : R.sb < 0.86 ? 2 : 3)
+  if (sculpt)          nStage = 1;
+  else if (tier === 2) nStage = frac > 0.62 ? (R.sb < 0.22 ? 1 : R.sb < 0.86 ? 2 : 3)
                                             : (R.sb < 0.58 ? 1 : 2);
   else if (tier === 1) nStage = R.sb < 0.82 ? 1 : 2;
 
@@ -2422,7 +2522,13 @@ function buildingSpec(rnd, ctx){
      h — Corniche's cap of 12 against a tallest of 16 puts every capped block at frac 0.75, above
      the old 0.72 gate, so the mast landed on exactly the stock the cap exists to hold DOWN. Rate
      cut as well: 45 needles on one island is a hairbrush, not a skyline. */
-  if (tier === 2 && frac > 0.80 && h < capH - 1e-6 && R.crown < 0.28){
+  /* A SCULPTED TOP IS ALREADY A CROWN. The whole point of the taper is that the building resolves
+     itself, and setting a parapet ring or a cap block on top of it puts a flat lid on the one
+     silhouette that did not need one. Masts are still allowed — a needle on a tapered top is what
+     the reference actually shows — and everything else is left alone. */
+  if (sculpt && !(frac > 0.80 && h < capH - 1e-6 && R.crown < 0.45)){
+    crown = null;
+  } else if (tier === 2 && frac > 0.80 && h < capH - 1e-6 && R.crown < 0.28){
     const s = 0.07 + R.crownW * 0.05;
     /* Scaled to the building and then clamped, not a flat range. A flat 1.4-to-3.6 needle is a
        third of the height of a capped Corniche tower and eight per cent of ADNOC — the same
@@ -2509,13 +2615,16 @@ function buildingSpec(rnd, ctx){
       // Whichever stage this height falls in, so a band on a setback tower sits on the stage it
       // belongs to rather than floating out where the stage below used to be.
       const st = stages.find(g => by >= g.y - 1e-9 && by < g.y + g.h) || top;
-      bands.push({ y:by, h:bh, w:st.w * 1.02, d:st.d * 1.02,
+      // Sampled at this ring's own height within its own stage, so a lit floor on a sail sits
+      // against the glass rather than floating out where the widest part of the tower is.
+      const [px, pz] = PROFILE_W[prof]((by - st.y) / Math.max(1e-6, st.h));
+      bands.push({ y:by, h:bh, w:st.w * px * 1.02, d:st.d * pz * 1.02,
                    tint:{ v:R['bv' + i], amount:0.70, warm:0.4,
                           w:Math.max(0, (wr - BAND_DARK) / (1 - BAND_DARK)) } });
     }
   }
 
-  return { x, z, h, w, dp, tier, mat, tint, podium, stages, crown, plant, bands };
+  return { x, z, h, w, dp, tier, mat, tint, prof, podium, stages, crown, plant, bands };
 }
 
 /* THE ONE WALKER, used by both the tally and the write so the two cannot disagree about how many
@@ -2533,8 +2642,14 @@ function walkSpec(sp, lod, fn){
   if (!mass && sp.podium){
     fn({ t:sp.mat, y:0, w:sp.podium.w, h:sp.podium.h, d:sp.podium.d, tint:sp.tint });
   }
+  /* ONLY THE SHAFT IS SWEPT. A podium, a crown and a plant room are boxes on any building — the
+     profile describes the tower, not everything attached to it — so `g` defaults to box
+     everywhere and is set on the stages alone. The mass layer absorbs a podium into stage one as
+     before, and on a sculpted tower that means the swept solid starts at the pavement instead of
+     at the podium top: a one-stage building has nowhere else to put the absorbed height. It is a
+     slightly fatter base at world zoom, and at world zoom the podium is under a pixel anyway. */
   sp.stages.forEach((s, i) => {
-    fn({ t:sp.mat,
+    fn({ t:sp.mat, g:sp.prof,
          y: i === 0 ? s.y - absB : s.y,
          w: s.w, d: s.d,
          h: s.h + (i === 0 ? absB : 0) + (i === nTop ? absT : 0),
@@ -2553,6 +2668,11 @@ function walkSpec(sp, lod, fn){
      from a lit building is that it IS lit; two sources per building give that at half the cost,
      and Al Reem and Al Maryah were the two islands where the stack outnumbered the buildings two
      to one. First and last, so the lit extent of the tower is still honest. */
+  /* BANDS PASS NO `g`, so they stay on the box on a sculpted tower as much as a straight one.
+     Their width is already sampled from the profile at their own height, so the only error a box
+     ring introduces is the curvature it misses across its own thickness — under half a unit, over
+     which a sail changes width by about two per cent. Invisible, and it saves three buckets and
+     three draw calls per island. */
   const bs = mass && sp.bands.length > 2 ? [sp.bands[0], sp.bands.at(-1)] : sp.bands;
   bs.forEach(b => fn({ t:'band', y:b.y, w:b.w, h:b.h, d:b.d, tint:b.tint }));
 }
@@ -2603,48 +2723,55 @@ function urbanFabric(d, layer, opts){
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
      No random numbers below this line. */
   const keep = specs.filter(sp => sp.h >= minH);
-  const need = { rend:0, stone:0, clad:0, glass:0, bronze:0, roof:0, band:0 };
-  keep.forEach(sp => walkSpec(sp, lod, o => { need[o.t]++; }));
 
-  const mk = (m, n) => new THREE.InstancedMesh(fabricGeo, m, Math.max(1, n));
-  const meshes = {
-    rend:   mk(matStoneRend,   need.rend),
-    stone:  mk(matPlaceStone,  need.stone),
-    clad:   mk(matStoneClad,   need.clad),
-    glass:  mk(matPlaceGlass,  need.glass),
-    bronze: mk(matGlassBronze, need.bronze),
-    roof:   mk(matRoofDeck,    need.roof),
-    band:   mk(cool ? matLitCool : matLitWarm, need.band),
-  };
-  ['rend','stone','clad','glass','bronze','roof'].forEach(k => {
-    meshes[k].castShadow = true; meshes[k].receiveShadow = true;
+  /* ONE MESH PER MATERIAL AND GEOMETRY PAIR, ALLOCATED LAZILY.
+
+     Instancing is per geometry, so a swept tower cannot share a mesh with a box even in the same
+     stone. The naive version of this is materials times profiles — twenty-eight buckets, most of
+     them empty, and twenty-eight draw calls whether or not anything is in them. Counting first
+     and creating only the pairs that have instances means an island with no bronze sails simply
+     has no such mesh, and the draw-call line stays a measure of what is actually being drawn.
+
+     KEY ORDER IS FIXED as material then geometry, because it is also the allocation order and
+     two passes have to agree on it exactly. */
+  const MATS = { rend:matStoneRend, stone:matPlaceStone, clad:matStoneClad, glass:matPlaceGlass,
+                 bronze:matGlassBronze, roof:matRoofDeck, band:cool ? matLitCool : matLitWarm };
+  const need = new Map();
+  const key = o => o.t + '|' + (o.g || 'box');
+  keep.forEach(sp => walkSpec(sp, lod, o => { const k = key(o); need.set(k, (need.get(k) || 0) + 1); }));
+
+  const meshes = new Map();
+  need.forEach((n, k) => {
+    const [t, g] = k.split('|');
+    const m = new THREE.InstancedMesh(PROFILES[g], MATS[t], n);
+    if (t === 'band'){
+      /* The shell hides this outside night and dusk, so the rings cost nothing in the three
+         diagnostic modes and stop appearing in the daytime massing, which they should never have
+         done. They also cast no shadow: a lit window is a source, not an occluder. */
+      m.userData.nightOnly = true;
+    } else {
+      m.castShadow = true; m.receiveShadow = true;
+    }
+    meshes.set(k, m);
   });
-  /* The shell hides this outside night and dusk, so the rings cost nothing in the three
-     diagnostic modes and stop appearing in the daytime massing, which they should never have
-     done. They also cast no shadow: a lit window is a source, not an occluder. */
-  meshes.band.userData.nightOnly = true;
 
   const M   = new THREE.Object3D();
   const col = new THREE.Color();
-  const idx = { rend:0, stone:0, clad:0, glass:0, bronze:0, roof:0, band:0 };
+  const idx = new Map();
 
   keep.forEach(sp => walkSpec(sp, lod, o => {
     M.position.set(sp.x + (o.ox || 0), GROUND + o.y, sp.z + (o.oz || 0));
     M.rotation.set(0, 0, 0);              // grid-aligned: the whole point
     M.scale.set(o.w, o.h, o.d);
     M.updateMatrix();
-    const m = meshes[o.t], i = idx[o.t]++;
+    const k = key(o), m = meshes.get(k), i = idx.get(k) || 0;
+    idx.set(k, i + 1);
     m.setMatrixAt(i, M.matrix);
     m.setColorAt(i, tintFrom(col, o.tint));
   }));
 
-  /* An empty bucket is not added. A count-0 InstancedMesh still costs a traversal and, depending
-     on the driver, a zero-instance draw — and it would sit in the overlay's calls figure looking
-     like work. Small islands genuinely produce none of some materials. */
-  Object.keys(meshes).forEach(k => {
-    const m = meshes[k];
-    if (!idx[k]) return;
-    m.count = idx[k];
+  meshes.forEach((m, k) => {
+    m.count = idx.get(k) || 0;
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
     layer.add(m);
