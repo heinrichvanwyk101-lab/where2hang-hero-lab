@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v48';
+export const BUILD = 'world v49';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1521,16 +1521,72 @@ Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, dus
 const matRoofDeck = new THREE.MeshStandardMaterial({ color:0x101216, roughness:0.97, metalness:0.02 });
 matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
+/* WINDOWS, NOT TAPE.
+
+   v48 made the band a ring so it reads from every direction, which was right, and the place-zoom
+   renders then showed the cost of it: an UNBROKEN ring round tightly packed blocks joins up with
+   its neighbours into continuous horizontal lines, and the city reads as barcode. Thinning it or
+   dimming it does not help — an unbroken line of any weight is still a line.
+
+   What separates a window from a stripe is the mullion. So the band gets a map: a strip of lit
+   cells with dark gaps between them, and roughly a third of the cells dark outright because
+   nobody is in that office. Wrapped once round the perimeter, 32 cells — at a 27-metre block
+   that is a four-metre bay, which is the real module.
+
+   Authored with a FIXED generator, not Math.random. Every other pattern in this file is
+   deterministic and this one has to be too, or the city relights itself differently on every
+   reload and no two screenshots can be compared. */
+function makeWindowStrip(){
+  const W = 128, H = 16, cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  let h = 0x9E3779B1;
+  const rnd = () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
+  // A dark line top and bottom, so the ring keeps a defined edge and reads as one storey rather
+  // than as a glowing bar with no thickness.
+  for (let i = 0; i < 32; i++){
+    if (rnd() < 0.34) continue;                     // an unlit bay
+    const v = 0.62 + rnd() * 0.38;
+    g.fillStyle = `rgba(255,255,255,${v.toFixed(3)})`;
+    g.fillRect(i * 4, 3, 3, H - 6);                 // 3 of every 4 pixels: the fourth is mullion
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+}
+const windowStrip = makeWindowStrip();
+
 /* THE LIT BAND WAS BEING CLASSIFIED AS GLASS, and nobody had checked. The lift decides glass by
    blue over red on the night hex at a ratio of 1.75; 0x0E141A is 14 red against 26 blue, a ratio
    of 1.857. So every window band has been taking DUSK_GLASS, metalness 0.62 and roughness 0.24 —
    a polished blue-grey mirror where a lit window should be. The override exists for exactly this
-   and ADNOC's waist was the first customer. */
+   and ADNOC's waist was the first customer.
+
+   THE BASE COLOUR COMES DOWN AS WELL, and that is a direct consequence of fixing the override.
+   Off the glass path the band now takes NIGHT_ALBEDO at 5.0 rather than the glass 2.4, and
+   0x0E141A multiplied by five is (70, 100, 130) — a distinctly blue slab under the emissive,
+   which is most of why Al Reem's bands came out cyan. At 0x06080B the lift lands on (30, 40, 55)
+   and the unlit cells of the window map stay genuinely unlit, which is the entire point of having
+   a map.
+
+   EMISSIVE UP TO COMPENSATE. The map removes about sixty per cent of the lit area — mullions,
+   dark bays, the top and bottom edge — so holding intensity would have handed back the darkness
+   v48 was built to fix. Nearly doubling it restores the emitted energy while leaving it
+   structured instead of flat, and small bright sources through the bloom pass are what a city
+   looks like from a distance anyway. */
 const matLitWarm = new THREE.MeshStandardMaterial({
-  color:0x0E141A, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.5 });
+  color:0x06080B, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.95,
+  emissiveMap:windowStrip });
 Object.assign(matLitWarm.userData, { glassOverride:false, duskColor:0xC7B398 });
 const matLitCool = new THREE.MeshStandardMaterial({
-  color:0x0E141A, roughness:0.5, emissive:0x8FD3E8, emissiveIntensity:0.45 });
+  color:0x06080B, roughness:0.5, emissive:0x8FD3E8, emissiveIntensity:0.85,
+  emissiveMap:windowStrip });
 Object.assign(matLitCool.userData, { glassOverride:false, duskColor:0xB6BFC4 });
 
 /* ===========================================================================
@@ -2061,22 +2117,51 @@ const fabricGeo = (() => {
     [ H, -H + C], [ H,  H - C], [ H - C,  H], [-H + C,  H],
     [-H,  H - C], [-H, -H + C], [-H + C, -H], [ H - C, -H],
   ];
-  const pos = [], idx = [];
-  const push = (x, y, z) => { pos.push(x, y, z); return pos.length / 3 - 1; };
-  const bot = ring.map(p => push(p[0], 0, p[1]));
-  const top = ring.map(p => push(p[0] * T, 1, p[1] * T));
+
+  /* UVS, ADDED FOR ONE CUSTOMER: the lit band needs a window map, and a map needs coordinates.
+
+     u IS ARC LENGTH ROUND THE PERIMETER, not vertex index. The chamfer segments are a fifth the
+     length of the wall segments, so indexing would give them the same slice of texture as a full
+     wall and the windows would bunch at every corner.
+
+     AND THE SEAM GETS ITS OWN COLUMN. Sharing vertex zero between the first and last side quad
+     forces u to run 0.875 back to 0 across that one face, which draws the entire texture into it,
+     mirrored. Nine columns for eight faces; the ninth is vertex zero again at u = 1.
+
+     The caps carry their own vertices at the centre of the map, so nothing about the top and
+     bottom faces disturbs the side coordinates. Triangle count is unchanged at 32; this adds
+     eighteen vertices to a geometry instanced thousands of times, which is 216 bytes total. */
+  let per = 0;
+  const seg = [0];
+  for (let i = 0; i < 8; i++){
+    const a = ring[i], b = ring[(i + 1) % 8];
+    per += Math.hypot(b[0] - a[0], b[1] - a[1]);
+    seg.push(per);
+  }
+
+  const pos = [], uv = [], idx = [];
+  const push = (x, y, z, u, v) => { pos.push(x, y, z); uv.push(u, v); return pos.length / 3 - 1; };
+  const bot = [], top = [];
+  for (let i = 0; i <= 8; i++){
+    const p = ring[i % 8], u = seg[i] / per;
+    bot.push(push(p[0],     0, p[1],     u, 0));
+    top.push(push(p[0] * T, 1, p[1] * T, u, 1));
+  }
+  for (let i = 0; i < 8; i++){
+    idx.push(bot[i], top[i], top[i + 1], bot[i], top[i + 1], bot[i + 1]);
+  }
+  const cb = push(0, 0, 0, 0.5, 0.5), ct = push(0, 1, 0, 0.5, 0.5);
+  const bc = ring.map(p => push(p[0],     0, p[1],     0.5, 0.5));
+  const tc = ring.map(p => push(p[0] * T, 1, p[1] * T, 0.5, 0.5));
   for (let i = 0; i < 8; i++){
     const j = (i + 1) % 8;
-    idx.push(bot[i], top[i], top[j], bot[i], top[j], bot[j]);
+    idx.push(cb, bc[i], bc[j]);
+    idx.push(ct, tc[j], tc[i]);
   }
-  const cb = push(0, 0, 0), ct = push(0, 1, 0);
-  for (let i = 0; i < 8; i++){
-    const j = (i + 1) % 8;
-    idx.push(cb, bot[i], bot[j]);
-    idx.push(ct, top[j], top[i]);
-  }
+
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
@@ -2191,6 +2276,10 @@ const SLENDER = 22;
    city and a larger night instance count; the relationship is linear. */
 const BAND_PITCH = 4.5;
 
+/* Share of FLOORS that are dark, on top of the roughly one bay in three the window map already
+   leaves unlit. Raise it for a sparser, later-night city; zero gives a band on every level. */
+const BAND_DARK = 0.30;
+
 function fitPlot(W, D, block){
   const lim = block * PLOT_DIAG, dg = Math.hypot(W, D);
   const k = dg > lim ? lim / dg : 1;
@@ -2226,7 +2315,7 @@ function buildingSpec(rnd, ctx){
     sb:rnd(),     sbA:rnd(),    sbB:rnd(),    sbRa:rnd(),  sbRb:rnd(),
     crown:rnd(),  crownH:rnd(), crownW:rnd(),
     plant:rnd(),  plantW:rnd(), plantD:rnd(), plantH:rnd(), plantX:rnd(), plantZ:rnd(),
-    plantV:rnd(), plantWm:rnd(), bandJit:rnd(), bandH:rnd(),
+    plantV:rnd(), plantWm:rnd(), bandJit:rnd(), bandH:rnd(), bandPick:rnd(),
     bv0:rnd(), bw0:rnd(), bv1:rnd(), bw1:rnd(),
     bv2:rnd(), bw2:rnd(), bv3:rnd(), bw3:rnd(),
   };
@@ -2395,14 +2484,34 @@ function buildingSpec(rnd, ctx){
     const n  = Math.max(1, Math.min(4, Math.floor(h / BAND_PITCH)));
     const y0 = podH + (h - podH) * 0.10 + R.bandJit * 0.9;
     const span = Math.max(0, (h - y0) * 0.84);
-    const bh = 0.38 + R.bandH * 0.22;
+    const bh = 0.30 + R.bandH * 0.16;
+    /* UNLIT FLOORS, WHICH IS THE ONE THING A REAL SKYLINE HAS THAT THIS DID NOT.
+
+       Every band lit, at every level, on every building, is a barcode — and that is exactly what
+       the place-zoom renders showed: continuous tape wrapped round the city. In any real tower a
+       large share of the floors are dark and the pattern is irregular, and that irregularity is
+       most of what reads as windows rather than as paint.
+
+       So a band with a low warmth roll is simply NOT EMITTED. It costs negative triangles, it
+       breaks the rhythm, and it needs no new geometry. One band per building is exempt and always
+       lit, chosen by its own roll rather than fixed at the lowest — a guaranteed band at index
+       zero would put a lit floor at roughly the same height on every building in the district,
+       which is the fault seen from the other side.
+
+       The warmth roll is REMAPPED over the surviving range instead of being consumed twice at
+       face value. Reusing it raw would leave every lit band drawn from the top 62 per cent of the
+       warmth distribution, quietly warming the whole city. */
+    const keep = Math.floor(R.bandPick * n);
     for (let i = 0; i < n; i++){
+      const wr = R['bw' + i];
+      if (i !== keep && wr < BAND_DARK) continue;
       const by = y0 + span * (n === 1 ? 0.34 : i / (n - 1));
       // Whichever stage this height falls in, so a band on a setback tower sits on the stage it
       // belongs to rather than floating out where the stage below used to be.
       const st = stages.find(g => by >= g.y - 1e-9 && by < g.y + g.h) || top;
       bands.push({ y:by, h:bh, w:st.w * 1.02, d:st.d * 1.02,
-                   tint:{ v:R['bv' + i], w:R['bw' + i], amount:0.70, warm:0.4 } });
+                   tint:{ v:R['bv' + i], amount:0.70, warm:0.4,
+                          w:Math.max(0, (wr - BAND_DARK) / (1 - BAND_DARK)) } });
     }
   }
 
