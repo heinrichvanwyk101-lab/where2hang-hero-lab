@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v72';
+export const BUILD = 'world v73';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1040,6 +1040,7 @@ function roadSkeleton(d){
   const arterials = [];
   const crossings = [];
   const ringJunctions = [];
+  const gridRefs = [];
   {
     const th = (d.gridRot !== undefined ? d.gridRot : d.rot || 0);
     const ca = Math.cos(th), sa = Math.sin(th);
@@ -1080,6 +1081,27 @@ function roadSkeleton(d){
          already takes a list of point runs, and a fourth return value would have to be threaded
          through the painter, onRoad and the props placer to reach the two places that want it. */
       runs.forEach(r => { r.major = major; arterials.push(r); });
+
+      /* GRID REFERENCES. A label at each end of every major line, just outside the coast, so any
+         point on the island can be named as the pair of majors it lies between — "Corniche C4".
+
+         This exists because identifying a spot from a screenshot has cost several rounds: a pale
+         slab near ADNOC, buildings apparently over a road, arrowheads on the ring. Each time the
+         answer was findable but only after guessing which object was meant. Letters on one family
+         and numbers on the other turn "that thing there" into a coordinate, and because the letter
+         IS the grid index the label maps straight back to the (a, b) loop that generated the
+         block. */
+      if (major && runs.length){
+        const lab = horiz ? String(Math.round(fixed / sv) + 6)
+                          : String.fromCharCode(65 + Math.round(fixed / su) + 6);
+        [[runs[0], 0], [runs[runs.length - 1], -1]].forEach(([r, at]) => {
+          const p = at === 0 ? r[0] : r[r.length - 1];
+          const q = at === 0 ? r[Math.min(4, r.length - 1)] : r[Math.max(0, r.length - 5)];
+          // Pushed outward along the line so the label sits off the land, not on the fabric.
+          const dx = p[0] - q[0], dy = p[1] - q[1], L = Math.hypot(dx, dy) || 1;
+          gridRefs.push({ x: p[0] + dx / L * 0.085, y: p[1] + dy / L * 0.085, label: lab });
+        });
+      }
     };
     /* STREET HIERARCHY. Every third line is a major, which at this block size puts a dual
        carriageway roughly every 600 metres — the spacing of Abu Dhabi's numbered main streets
@@ -1159,7 +1181,7 @@ function roadSkeleton(d){
       }
     }
   }
-  return { ring, arterials, crossings: crossings.concat(ringJunctions), core, rndPlan };
+  return { ring, arterials, crossings: crossings.concat(ringJunctions), gridRefs, core, rndPlan };
 }
 
 /* Point to polyline, squared until the last step. Called for every candidate block against every
@@ -4045,6 +4067,37 @@ DISTRICTS.forEach(d => {
   if (!f) return;
   const plan = groundPlan(d, f.cells, f.blocks);
   d.plan = plan;
+
+  /* ---------- grid reference labels, Plan view only ----------
+
+     One tiny canvas per label rather than a shared atlas: there are about a dozen per island, each
+     is 64 by 32, and an atlas would need UV bookkeeping to save well under a megabyte. Sprites, so
+     they face the camera at any orbit angle and stay readable from directly above, which is the
+     one view they exist for.
+
+     Sized in WORLD units off the island radius, not in pixels, so a label is the same physical
+     size on a 190-unit island and an 85-unit one — a screen-space label would be unreadable on the
+     large islands and enormous on the small. */
+  (d.roads.gridRefs || []).forEach(g => {
+    const cv = document.createElement('canvas');
+    cv.width = 64; cv.height = 32;
+    const c2 = cv.getContext('2d');
+    c2.fillStyle = 'rgba(16,20,24,0.82)';
+    c2.fillRect(0, 0, 64, 32);
+    c2.fillStyle = '#7FE3C8';
+    c2.font = 'bold 22px monospace';
+    c2.textAlign = 'center'; c2.textBaseline = 'middle';
+    c2.fillText(g.label, 32, 17);
+    const tx = new THREE.CanvasTexture(cv);
+    tx.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tx, depthTest:false, transparent:true }));
+    sp.position.set(g.x * d.r, GROUND + 2, -g.y * d.r);
+    const sc = d.r * 0.075;
+    sp.scale.set(sc, sc * 0.5, 1);
+    sp.userData.planOnly = true;
+    sp.renderOrder = 20;
+    d.group.add(sp);
+  });
   const tex = paintGround(d, plan);
   /* Props into the DETAIL layer only. At world scale a palm is a third of a pixel; paying for
      four hundred of them per island at exactly the moment five islands are on screen would be

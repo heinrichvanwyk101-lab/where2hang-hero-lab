@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v39', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v40', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -1045,6 +1045,12 @@ function applyView(next){
        massing. So they are checked before all of it, and simply switched off.
 
        Plan is covered for free: it is neither night nor dusk. */
+    /* PLAN-ONLY MESHES: the grid reference labels. Same argument as nightOnly in reverse — they
+       exist for one view and there is no version of them for the others, so they are switched
+       before any of the material branches can hand them a material for a mode they never appear
+       in. Checked ahead of the ground test below, which would otherwise hide them along with the
+       buildings. */
+    if (o.userData.planOnly){ o.visible = plan; return; }
     if (o.userData.nightOnly){
       o.visible = night || dusk;
       if (o.visible) o.material = dusk && o.userData.duskMats ? o.userData.duskMats
