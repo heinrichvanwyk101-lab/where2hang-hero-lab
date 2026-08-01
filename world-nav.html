@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v37', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v38', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -478,10 +478,25 @@ let rippleGoal = 1, rippleNow = 1;
 
    which lands at 26 per cent across the world islands, 17 at district and 10 at place — close to
    the values each state was individually tuned to, arrived at by one continuous rule. */
+/* NIGHT HAZE IS THE CITY'S OWN LIGHT, and that is the second half of making it glow.
+
+   0x151D27 is a cold blue-grey — the colour of night air with nothing in it. But the air over a
+   lit city is not empty: it is full of that city's sodium and LED spill scattered back down, which
+   is why every night photograph of a skyline has a warm band sitting on the horizon and a sky that
+   gets browner as it approaches the buildings rather than darker. Aviation calls it skyglow and it
+   is the single most recognisable thing about a city seen from outside it.
+
+   0x241F24 is the same value lifted a little and pulled well off blue. It stays dark enough that
+   the sea does not come back — the thing every previous exposure and albedo experiment fell foul
+   of — because the change is almost entirely HUE, not level: the two colours differ by 0.02 in
+   luminance and by a great deal in warmth.
+
+   The multiplier drops 0.55 to 0.46, which pulls the haze in closer. Glow that only appears at the
+   horizon reads as a sunset; glow that starts a few hundred metres out reads as air. */
 const FOG = {
   dusk:  { hex: 0xD2BEA4, mul: 1.00 },
   day:   { hex: 0xAEC4D2, mul: 0.82 },
-  night: { hex: 0x151D27, mul: 0.55 },
+  night: { hex: 0x241F24, mul: 0.46 },
 };
 
 function fogFor(camDist, key){
@@ -976,13 +991,38 @@ function applyView(next){
   // NoToneMapping in Plan so the render is the canvas, byte for byte. Tone mapping is part of the
   // program cache key, so three recompiles for us and the switch costs one frame.
   renderer.toneMapping = plan ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-  bloom.strength = dusk ? 0.26 : 0.60;
+  /* ===========================================================================
+     GLOW IS RADIUS, NOT STRENGTH — and the numbers on the device say we can afford it.
+
+     Measured on the Fold at the place camera on Corniche: 3.4 ms median / 6.0 p95 in the light
+     case and 9.4 / 12.1 in the heaviest. Against a 60 Hz budget of 16.7 ms that is between four
+     and thirteen milliseconds of headroom in every frame, so the question stops being whether to
+     spend and becomes what to spend it on.
+
+     A city glows because the light LEAVES the source. A lit window at this distance is a couple of
+     pixels; at radius 0.55 its bloom is a couple of pixels too, so the window gets brighter and
+     nothing around it changes — which is precisely "brighter windows, no glow". Widening the
+     radius spreads each source into the air around it, and because the sources are dense the
+     halos overlap and become a wash over the whole downtown. That wash is the effect.
+
+     STRENGTH COMES DOWN AS RADIUS GOES UP. They multiply, so holding strength while widening
+     turns the city into a smear. 0.60 at radius 0.55 and 0.46 at radius 0.95 put roughly the same
+     energy on screen, distributed very differently.
+
+     THRESHOLD DOWN AT NIGHT, 0.46 to 0.34. The facades sit just under the old bar, so only the
+     brightest windows were blooming at all. Dusk stays at 0.82 for the reason already written
+     below it: at dusk the stone is bright and a low bar glows the entire city.
+
+     Bloom is a full-screen pass, so the cost is resolution and iteration count, not scene
+     complexity — a wider radius is very close to free at this frame time. */
+  bloom.radius   = dusk ? 0.62 : 0.95;
+  bloom.strength = dusk ? 0.24 : 0.46;
   /* THRESHOLD IS THE OTHER HALF OF THE MILKY LOOK. At 0.46 almost every sunlit stone face in a
      dusk frame clears the bar, so the bloom pass was not picking out windows and lamps, it was
      glowing the entire city. At 0.82 only the emissive surfaces qualify, which is the whole
      point of having the effect. Night can stay low: at night very little is above 0.46 except
      the windows anyway. */
-  bloom.threshold = dusk ? 0.82 : 0.46;
+  bloom.threshold = dusk ? 0.82 : 0.34;
   /* 1.15 -> 1.24 at night, and no further. Exposure lifts everything including the sea, so it is
      the wrong lever for readability and the right one only for the small amount the emissive
      boost cannot reach — the moonlit faces beside a lit window. Past about 1.3 the water starts
