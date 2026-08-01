@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v38', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v39', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -537,7 +537,7 @@ const propKit = createPropKit();
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount } =
+        propCount, tickSignals } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -1316,6 +1316,12 @@ function frame(){
 
   /* The idle drift stops the moment the camera is touched. Two things moving the view at once
      reads as a bug, and on a still frame the drift is what makes a held angle look unsteady. */
+  /* THE SIGNALS RUN ON WALL TIME, every frame, in every view. It is tempting to skip this at world
+     zoom where a lens is sub-pixel — but the tick only writes when an aspect actually changes, so
+     the per-frame cost is a loop over 416 signals doing one modulo and one compare, and skipping
+     it would mean every junction jumping to a new state the moment an island is tapped. */
+  if (tickSignals) tickSignals(t);
+
   const drift = (state === STATE.WORLD && !orbit.on) ? Math.sin(t * 0.045) * 0.09 : 0;
   const a = cur.angle + drift + orbit.yaw;
   const dist = cur.dist * orbit.zoom;
@@ -1405,7 +1411,8 @@ function frame(){
       'tris   ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
       'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n' +
       'props  ' + propCount.palms + ' palm  ' + (propCount.shrubs||0) + ' shrub  ' + propCount.lamps + ' lamp  ' +
-        propCount.cars + ' car  ' + propCount.boats + ' boat\n' +
+        propCount.cars + ' car  ' + propCount.boats + ' boat  ' +
+        (propCount.signals || 0) + ' signal\n' +
       'build  ' + B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS + '\n' +
       /* V, WHICH THE OVERLAY NEVER SHOWED. The four stamps tell you which module CONTENT is
          live, which does catch a stale module — but not which query string fetched it, so a

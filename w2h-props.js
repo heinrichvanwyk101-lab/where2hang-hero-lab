@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v18';
+export const BUILD = 'props v19';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -200,12 +200,28 @@ const sigBack = new THREE.BoxGeometry(0.055, 0.150, 0.055);
 sigBack.translate(SIG_ARM * 0.92, SIG_H - 0.115, 0);
 const signalGeo = mergeGeometries([sigMast, sigArm, sigBack], true);
 
-/* The three lenses as one small emissive box. Separating them into three would triple the
-   instance count for detail nobody resolves at this distance; what reads is that there is a
-   coloured light up there, not which of the three is lit. */
-const sigLens = new THREE.BoxGeometry(0.038, 0.115, 0.026);
-sigLens.translate(SIG_ARM * 0.92, SIG_H - 0.115, 0.030);
-const signalLensGeo = sigLens;
+/* THREE ASPECTS, AND THEY HAVE TO BE THREE MESHES.
+
+   The first pass drew one amber box and argued that nobody resolves which lens is lit. That is
+   true of a still frame and false of a moving one: a junction where the lights never change is
+   more obviously wrong than one whose lenses are a pixel too small, because the eye is far more
+   sensitive to a thing that should move and does not.
+
+   Emissive colour cannot vary per instance — setColorAt writes instanceColor, which multiplies
+   the DIFFUSE and leaves the emissive alone — so a per-signal colour is not available on one mesh.
+   Three meshes, one per aspect, each carrying every signal, and an instance is HIDDEN BY SCALING
+   IT TO ZERO. That makes switching an aspect a matrix write rather than a material change, which
+   is the only version of this that stays inside one draw call per aspect. */
+const LENS = [
+  { key:'red',   y:0.052, hex:0xE0442C },
+  { key:'amber', y:0.000, hex:0xFFA23C },
+  { key:'green', y:-0.052, hex:0x35D06A },
+];
+const signalLensGeo = LENS.map(l => {
+  const g = new THREE.BoxGeometry(0.034, 0.040, 0.026);
+  g.translate(SIG_ARM * 0.92, SIG_H - 0.115 + l.y, 0.030);
+  return g;
+});
 
 /* ---------- car ---------- */
 const carBody  = new THREE.BoxGeometry(4.6 * U_PER_M, 1.15 * U_PER_M, 1.85 * U_PER_M);
@@ -328,8 +344,8 @@ const matGlow  = new THREE.MeshStandardMaterial({ color:0xF2E6C8, roughness:0.4,
    three-colour signal would need three meshes for a detail that is under a pixel at district
    range — and an amber cluster is what a signal looks like from any distance where you cannot
    read which aspect is lit. */
-const matSignal = new THREE.MeshStandardMaterial({ color:0x2A2118, roughness:0.35,
-  emissive:0xFFA23C, emissiveIntensity:2.4 });
+const matSignal = LENS.map(l => new THREE.MeshStandardMaterial({
+  color:0x1A1610, roughness:0.35, emissive:l.hex, emissiveIntensity:2.4 }));
 const matCar   = new THREE.MeshStandardMaterial({ color:0xBFC4C8, roughness:0.42, metalness:0.25 });
 const matBoat  = new THREE.MeshStandardMaterial({ color:0xE2E4E0, roughness:0.5 });
 
@@ -543,8 +559,14 @@ function addProps(d, layer, plan, budget = {}){
      Guarded, because plan.crossings arrived in world v65 and props must not require it — an older
      world.js would otherwise take the whole scene down rather than lose one prop. */
   const signals = [];
-  (plan.crossings || []).forEach(c => {
+  (plan.crossings || []).forEach((c, ji) => {
     if (!c.major) return;
+    /* EVERY JUNCTION RUNS ON ITS OWN CLOCK. A city where all the lights change together is a
+       parade, not traffic — and it is the specific thing that gives away a scripted scene. Each
+       junction gets a random phase and its own period, so at any instant the island shows a
+       scatter of reds and greens rather than a state. */
+    const phase  = R();
+    const period = 9 + R() * 7;                   // seconds for a full two-way cycle
     const setback = SIGNAL_SETBACK;
     for (let q = 0; q < 4; q++){
       const a = c.th + q * Math.PI / 2;
@@ -554,8 +576,11 @@ function addProps(d, layer, plan, budget = {}){
       const sx = c.x + dx * setback + nx * setback;
       const sy = c.y + dy * setback + ny * setback;
       if (!inside(sx, sy)) continue;
-      // The arm points back across the carriageway it faces, which is the -n direction.
-      signals.push({ x:sx, y:sy, rot: Math.atan2(-nx, -ny) });
+      /* The arm points back across the carriageway it faces, which is the -n direction. `axis` is
+         which of the two crossing streets this head controls: opposite arms share an aspect and
+         the perpendicular pair is its complement, which is what makes a junction legible rather
+         than four independent lights. */
+      signals.push({ x:sx, y:sy, rot: Math.atan2(-nx, -ny), axis: q % 2, phase, period });
     }
   });
 
@@ -613,11 +638,15 @@ function addProps(d, layer, plan, budget = {}){
     M.rotation.set(0, p.rot, 0);
     M.scale.set(1, 1, 1);
   });
-  build(signalLensGeo, matSignal, signals, (p) => {
+  /* The three aspect meshes are kept so the tick can rewrite their matrices. Every instance is
+     written at full scale here and the tick immediately corrects it, so a signal is never left in
+     an undefined state even if the tick is never called — an older nav that does not know about
+     signals gets all three lit, which is visibly wrong but not broken. */
+  const lensMeshes = signalLensGeo.map((geo, k) => build(geo, matSignal[k], signals, (p) => {
     M.position.set(p.x * r, Y, -p.y * r);
     M.rotation.set(0, p.rot, 0);
     M.scale.set(1, 1, 1);
-  });
+  }));
 
   build(lampGeo, [matPost, matGlow], lamps, (p) => {
     M.position.set(p.x * r, Y, -p.y * r);
@@ -666,9 +695,47 @@ function addProps(d, layer, plan, budget = {}){
     M.scale.set(s, s, s);
   });
 
+  /* ---------- the signal clock ----------
+
+     Called from the frame loop, but it only WRITES when an aspect actually changes: a junction
+     sits in one state for several seconds, so rewriting 312 matrices every frame would be pure
+     waste. Tracking the previous aspect per signal turns a per-frame cost into an event.
+
+     STANDARD TIMINGS as fractions of the cycle: green for 40 per cent, amber for 7, then red
+     while the other axis has its turn. Amber only on the way to red — a UK-style red-and-amber
+     start would need a fourth state and reads as a flicker at this scale. */
+  const prev = new Int8Array(signals.length).fill(-1);
+  const SM = new THREE.Object3D();
+  function tickSignals(t){
+    if (!signals.length) return;
+    const dirty = [false, false, false];
+    for (let i = 0; i < signals.length; i++){
+      const s = signals[i];
+      let u = ((t / s.period) + s.phase + (s.axis ? 0.5 : 0)) % 1;
+      const aspect = u < 0.40 ? 2 : u < 0.47 ? 1 : 0;      // green, amber, red
+      if (aspect === prev[i]) continue;
+      prev[i] = aspect;
+      for (let k = 0; k < 3; k++){
+        const m = lensMeshes[k];
+        if (!m) continue;
+        SM.position.set(s.x * r, Y, -s.y * r);
+        SM.rotation.set(0, s.rot, 0);
+        // Zero scale rather than a visibility flag: an InstancedMesh has no per-instance visible.
+        const on = (k === aspect) ? 1 : 0;
+        SM.scale.set(on, on, on);
+        SM.updateMatrix();
+        m.setMatrixAt(i, SM.matrix);
+        dirty[k] = true;
+      }
+    }
+    for (let k = 0; k < 3; k++)
+      if (dirty[k] && lensMeshes[k]) lensMeshes[k].instanceMatrix.needsUpdate = true;
+  }
+  tickSignals(0);
+
   return { palms: palms.length, lamps: lamps.length, cars: cars.length, boats: boats.length,
-           shrubs: shrubs.length };
+           shrubs: shrubs.length, signals: signals.length, tickSignals };
 }
 
-return { addProps, materials: { matBark, matFrond, matPost, matGlow, matSignal, matCar, matBoat, matShrub } };
+return { addProps, materials: { matBark, matFrond, matPost, matGlow, matCar, matBoat, matShrub } };
 }
