@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v11';
+export const BUILD = 'city v12';
 
 export const C = {
   night:   0x0B1620,
@@ -122,9 +122,65 @@ const TEX_BLOCK = windowTexture(18, 14, 0.22, true);
    Etihad is deliberately not here: it is glass, and glass gets a material treatment rather than a
    colour. */
 const DUSK_BY_NIGHT = {
-  0x14161A: 0xC7B49A,   // ADNOC HQ: bronze-toned stone, warmer and darker than the fabric
+  /* WAS 0xC7B49A, AND IT MADE ADNOC A BEACON. That is a pale warm tan, and once world v51 gave
+     the surrounding fabric lit facades the tower became the one large unbroken light surface in a
+     blue-grey city — brighter than anything near it and reading as bare stone rather than as the
+     bronze-glass tower it is. The real building is markedly DARKER than the concrete around it,
+     which is the whole reason it stands out on the Corniche. */
+  0x14161A: 0x8E7B60,   // ADNOC HQ: dark bronze, deliberately below the fabric's stone
   0x151A1F: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
+  0x111C22: 0xB9BCC0,   // Etihad's solar glass reads as brushed metal against a low sun
 };
+
+/* DAY COLOURS, WHICH DID NOT EXIST AND SHOULD HAVE.
+
+   world v53 gave the generated fabric day materials so the five wall types stay five wall types
+   under the sun. The LANDMARKS were left behind: nothing in this file sets userData.dayMats, so
+   the view switcher hands every one of them its fallback dayMat — a single flat 0xC9C2B2 with no
+   map at all. In Day, ADNOC and the palace are therefore untextured pale boxes standing in a
+   fabric that now has glazing, floor lines and five distinct wall colours. The landmarks look
+   less resolved than the background city, which is precisely backwards. */
+const DAY_BY_NIGHT = {
+  0x14161A: 0x9C8F79,   // ADNOC: bronze, and darker than the sand it stands on
+  0x151A1F: 0xD2CBBE,   // generic mass: matches the fabric's precast
+  0x111C22: 0xA8BAC4,   // Etihad: the same blue-green glass the fabric's towers use
+};
+
+/* The daylight counterpart of the window texture: a pale wall with DARK glazing, because in
+   daylight a window is a hole in a bright facade rather than a light source. Mean brightness near
+   1.0 so it modulates the colour above rather than replacing it. */
+function facadeDayTexture(cols, rows){
+  const cv = document.createElement('canvas');
+  cv.width = cols * 4; cv.height = rows * 4;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = 'rgba(120,116,110,0.55)';
+  for (let y = 0; y < rows; y++) g.fillRect(0, y * 4 + 3, cv.width, 1);
+  g.fillStyle = 'rgba(120,116,110,0.30)';
+  for (let x = 0; x < cols; x++) g.fillRect(x * 4 + 3, 0, 1, cv.height);
+  // Deterministic, like everything else here: a landmark that reshuffles its glazing on reload
+  // makes two screenshots incomparable.
+  let h = 0x2545F491;
+  const rnd = () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
+  for (let y = 0; y < rows; y++){
+    for (let x = 0; x < cols; x++){
+      g.fillStyle = 'rgba(74,84,92,' + (0.30 + rnd() * 0.16).toFixed(2) + ')';
+      g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = MAX_ANISO;
+  return t;
+}
+// Matched to the two window textures so the repeat counts computed at every call site stay valid
+// for the day map without a second set of arithmetic.
+const DAY_TOWER = facadeDayTexture(14, 46);
+const DAY_BLOCK = facadeDayTexture(18, 14);
 
 const matCache = new Map();
 function cityMaterial(tex, repX, repY, emissive, colour){
@@ -143,8 +199,22 @@ function cityMaterial(tex, repX, repY, emissive, colour){
     roughness: 0.72, metalness: 0.14,
     emissive: 0xffffff, emissiveMap: t, emissiveIntensity: emissive,
   });
-  const dc = DUSK_BY_NIGHT[colour === undefined ? C.mass : colour];
+  const base = colour === undefined ? C.mass : colour;
+  const dc = DUSK_BY_NIGHT[base];
   if (dc !== undefined) m.userData.duskColor = dc;
+
+  /* The Day counterpart, built here so it shares this call's repeat counts exactly. The day map
+     is a different texture but the SAME tiling: get that wrong and the glazing changes size
+     between modes on the same building, which reads as the building changing scale. */
+  const dt = (tex === TEX_TOWER ? DAY_TOWER : DAY_BLOCK).clone();
+  dt.anisotropy = MAX_ANISO;
+  dt.minFilter = THREE.LinearMipmapLinearFilter;
+  dt.needsUpdate = true; dt.repeat.set(repX, repY);
+  m.userData.dayMats = new THREE.MeshStandardMaterial({
+    color: DAY_BY_NIGHT[base] !== undefined ? DAY_BY_NIGHT[base] : 0xC9C2B2,
+    roughness: 0.86, metalness: 0.0, map: dt,
+  });
+
   matCache.set(key, m);
   return m;
 }
@@ -281,12 +351,20 @@ function emiratesPalace(x0, z0){
   const stone = new THREE.MeshStandardMaterial({
     color:0x14110C, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
   stone.userData.duskColor = 0xE7D5B0;
+  /* The palace has its own three materials rather than going through cityMaterial, so it needs
+     its Day colours set here or it falls through to the switcher's flat fallback exactly as the
+     towers did. No map: this is limestone with arcades cut into it, not a curtain wall, and a
+     window grid on it would be wrong at any hour. The relief comes from the geometry. */
+  stone.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0xE4D7BE, roughness:0.92, metalness:0.03 });
   const arch = new THREE.MeshStandardMaterial({
     color:0x1A150E, roughness:0.9, emissive:C.gold, emissiveIntensity:0.10 });
   arch.userData.duskColor = 0xEFE0C0;
+  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEDE2C9, roughness:0.9 });
   const glow = new THREE.MeshStandardMaterial({
     color:0x2A2216, roughness:0.7, emissive:C.gold, emissiveIntensity:0.34 });
   glow.userData.duskColor = 0xF4E4BC;
+  glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2E6C6, roughness:0.7 });
 
   const W = 46;
   const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 3.0, 6.5), stone);
@@ -350,6 +428,11 @@ function adnocHQ(x0, z0){
   const waistMat = new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 });
   waistMat.userData.glassOverride = false;
   waistMat.userData.duskColor = 0x6B6659;
+  // Dark in every mode, because the waist is a shadow line and its whole job is to separate the
+  // shaft from the cap. Without this it takes the flat pale fallback in Day and the separation —
+  // the only thing that stops ADNOC reading as one extruded stick — disappears at noon.
+  waistMat.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0x5E574A, roughness:0.9, metalness:0 });
   const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 16), waistMat);
   waist.position.set(x0, 44, z0); waist.rotation.y = rot; g.add(waist);
 
@@ -358,6 +441,7 @@ function adnocHQ(x0, z0){
     emissive:0x9FBDC8, emissiveIntensity:0.14 });
   // Cooler and paler than the shaft: the overhang catches sky rather than sun.
   capMat.userData.duskColor = 0xD6DADC;
+  capMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCBD1D4, roughness:0.55 });
   const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 16), capMat);
   cap.position.set(x0, 45.6, z0); cap.rotation.y = rot; g.add(cap);
   return g;
