@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v56';
+export const BUILD = 'world v58';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -291,6 +291,31 @@ const waterBase = Float32Array.from(waterPos.array);
    is what a city looks like, and the palace's own apron paving is drawn over that ground anyway.
    Only ADNOC had a road running through its middle.
    =========================================================================== */
+/* THE ETIHAD CLUSTER LAYOUT, declared once and consumed three times: the mass blocks, the plaza
+   paving, and the audit. It was already duplicated between this file and w2h-city.js; there is no
+   need for it to be duplicated a third time inside the districts table as a hand-fitted rectangle
+   that then has to be remembered whenever the anchor moves. */
+const ETIHAD_SPEC = [
+  { dx:-17.0, dz: 3.0, h:27.7, r:2.85 },
+  { dx: -8.5, dz: 0.8, h:30.5, r:3.00 },
+  { dx:  0.0, dz: 0.0, h:26.0, r:2.80 },
+  { dx:  8.0, dz: 0.8, h:23.4, r:2.65 },
+  { dx: 15.5, dz: 3.0, h:21.8, r:2.50 },
+];
+
+/* The plaza is the cluster's own bounding box plus a margin, computed rather than fitted. ELL is
+   the towers' plan ellipse factor from w2h-city.js, so the depth is the real depth of the lens
+   rather than its width. */
+const ETIHAD_PLAZA = (() => {
+  const ELL = 0.62, M = 3.0;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  ETIHAD_SPEC.forEach(s => {
+    x0 = Math.min(x0, s.dx - s.r);       x1 = Math.max(x1, s.dx + s.r);
+    z0 = Math.min(z0, s.dz - s.r * ELL); z1 = Math.max(z1, s.dz + s.r * ELL);
+  });
+  return { dx:(x0 + x1) / 2, dz:(z0 + z1) / 2, w:(x1 - x0) + 2 * M, d:(z1 - z0) + 2 * M };
+})();
+
 const LM = {
   palace: { x:-42, z:  0 },
   /* MOVED 14.4 UNITS — 112 METRES — OFF THE RING ROAD. Four of the five towers were standing in
@@ -1581,8 +1606,22 @@ const shoreGeo = (() => {
     return g;
   })();
 
-  const deck = box(1, 0.28, 1.0, 1.05);          // jetty: a plate standing clear of the water
-  return { step, quay, finger, mound, deck };
+  const deck = box(1, 0.28, 1.0, 1.05);          // jetty: the deck plate itself
+
+  /* PILES. A jetty deck is a plate held up by legs, and without them it is a plank hovering over
+     the sea — which is exactly how the Corniche jetty has read in every top-down shot.
+
+     Authored as a UNIT column, one wide and one tall, so the placement code can scale it in world
+     units directly. That matters because the deck plate is scaled non-uniformly by (len, 1, wide)
+     — 26 by 5 on Corniche — so a leg merged into the plate's own geometry would come out five
+     times wider in one axis than the other. The piles are therefore placed as their own instances
+     rather than being part of the deck, which is also what lets the count be derived. */
+  const pile = (() => {
+    const g = new THREE.CylinderGeometry(0.5, 0.42, 1, 8, 1);
+    g.translate(0, 0.5, 0);                     // origin at the foot, so y is the seabed
+    return g;
+  })();
+  return { step, quay, finger, mound, deck, pile };
 })();
 
 /* Tiny local merge so the modules can be authored as a few boxes without pulling in
@@ -1989,7 +2028,12 @@ const DISTRICTS = [
          thirty-two and laid 301 units of step into a 117-unit run — a 2.6x overlap, which is why
          it read as a solid wall rather than a flight. Every run below is now span / len. */
       { kind:'step',  t:0.07, t1:0.38, reps:12, off: 3.4, y:1.55, len:9.4, wide:1.0 },
-      { kind:'deck',  t:0.235,          off:16.0, y:0.0,  len:26.0, wide:5.0, turn:true },
+      /* PULLED IN FROM 16 AND SHORTENED FROM 26, on the argument already made for the breakwaters
+         two lines below: a structure belongs in a defensible relationship to the beach it stands
+         on. At off 16 with len 26 the deck ran from 3 to 29 units out — 133 metres of it past the
+         toe of a 94-metre beach, which is a causeway to nowhere rather than a jetty. At 10 and 18
+         it runs from 1 to 19: it starts at the promenade and finishes 55 metres past the sand. */
+      { kind:'deck',  t:0.235,          off:10.0, y:0.0,  len:18.0, wide:5.0, turn:true, piles:true },
       /* PULLED IN FROM 24 AND 31 UNITS TO 14 AND 18. The beach skirt already reaches 12 units
          out, so a breakwater at 24 sat a dozen units clear of it in open water and read as three
          pieces of debris floating off the west tip rather than as protection for a shore. A
@@ -2009,9 +2053,17 @@ const DISTRICTS = [
          island. */
       // Estate and forecourt follow the reservation in. A lawn wider than the ground the palace
       // is allowed to own is just a pale rectangle with a hard edge, which is how Plan read it.
-      { kind:'lawn',   x:-42, z:  1, w:38, d:24 },
-      { kind:'paving', x:-42, z:  1, w:34, d:13 },
-      { kind:'paving', x: -4, z:-15, w:40, d:13 },   // Etihad plaza
+      /* ANOTHER COPY OF THE SAME FAULT, and this one was live. v55 moved Etihad 110 metres and
+         updated the anchor, the avoid rectangle, the mass blocks and the place camera — and
+         missed the ground painter entirely. So the plaza stayed at the old anchor: a 40 by 13
+         paved rectangle sitting empty in the middle of the fabric with only two of the five
+         towers standing on it, and the other three on bare desert.
+
+         Derived now, from the cluster's own bounds, so it cannot be left behind again. */
+      { kind:'lawn',   x:LM.palace.x, z:LM.palace.z + 1, w:34, d:20 },
+      { kind:'paving', x:LM.palace.x, z:LM.palace.z + 1, w:30, d:12 },
+      { kind:'paving', x:LM.etihad.x + ETIHAD_PLAZA.dx, z:LM.etihad.z + ETIHAD_PLAZA.dz,
+                       w:ETIHAD_PLAZA.w, d:ETIHAD_PLAZA.d },   // Etihad plaza
       { kind:'paving', x: LM.adnoc.x, z: LM.adnoc.z, w:17, d:13 },   // ADNOC apron
       // The low-rise band on the seaward side had no ground under it at all — twenty buildings
       // standing on open desert between the corniche road and the towers.
@@ -2322,9 +2374,20 @@ DISTRICTS.forEach(d => {
       sp.t1 === undefined ? 1
         : Math.max(1, Math.round(Math.abs(sp.t1 - sp.t) * perim / sp.len)));
 
+    /* Piles are spaced along the module's own long axis, so the count comes from len, not from a
+       coastline fraction — same rule, different span. Two rows, one down each side. */
+    const PILE_SPACING = 4.5;                 // world units between pile rows, about 35 m
+    const PILE_FOOT    = -1.9;               // seabed: below the water plane, so no leg floats
+    const PILE_R       = 0.42;               // a 3.3 m column, which is a jetty pile at this scale
+    const pilesFor = sp => sp.piles ? 2 * Math.max(2, Math.round(sp.len / PILE_SPACING)) : 0;
+
     const need = {};
-    d.shore.forEach((sp, k) => { need[sp.kind] = (need[sp.kind] || 0) + REPS[k]; });
-    const MAT = { step:'stone', quay:'stone', finger:'deck', mound:'rock', deck:'deck' };
+    d.shore.forEach((sp, k) => {
+      need[sp.kind] = (need[sp.kind] || 0) + REPS[k];
+      const np = pilesFor(sp) * REPS[k];
+      if (np) need.pile = (need.pile || 0) + np;
+    });
+    const MAT = { step:'stone', quay:'stone', finger:'deck', mound:'rock', deck:'deck', pile:'rock' };
     for (const k in need){
       const m = new THREE.InstancedMesh(shoreGeo[k], shoreMat[MAT[k]].night, need[k]);
       m.userData.dayMats  = shoreMat[MAT[k]].day;
@@ -2365,10 +2428,34 @@ DISTRICTS.forEach(d => {
            out as one 17-unit bar lying ALONG the beach instead of six 3-unit fingers crossing it,
            and the Yas pontoons and the Corniche pier did the same. A run of shore-parallel
            modules and a run of shore-perpendicular ones should be described in the same terms. */
-        M2.rotation.set(0, sp.turn ? ang + Math.PI/2 : ang, 0);
+        const rot = sp.turn ? ang + Math.PI/2 : ang;
+        M2.rotation.set(0, rot, 0);
         M2.scale.set(sp.len, sp.h || 1, sp.wide);
         M2.updateMatrix();
         im.setMatrixAt(im.count++, M2.matrix);
+
+        if (sp.piles){
+          /* The module's local +X after a Y rotation of rot is (cos rot, 0, -sin rot), and its
+             local +Z is (sin rot, 0, cos rot). Deriving both from the same angle the plate used is
+             the only way the legs cannot end up under a different jetty than the one they hold up.
+
+             Rows sit at (i + 0.5) / rows along the length, the same centred tiling the shore runs
+             now use, so the end pairs stand inside the deck rather than off its ends. */
+          const rows = Math.max(2, Math.round(sp.len / PILE_SPACING));
+          const cx = Math.cos(rot), sx = Math.sin(rot);
+          const pm = groups.pile;
+          for (let i = 0; i < rows; i++){
+            const u = (-0.5 + (i + 0.5) / rows) * sp.len;
+            for (const v of [-sp.wide * 0.34, sp.wide * 0.34]){
+              M2.position.set(px * d.r + u * cx + v * sx, PILE_FOOT,
+                              -py * d.r - u * sx + v * cx);
+              M2.rotation.set(0, 0, 0);
+              M2.scale.set(PILE_R, sp.y - PILE_FOOT + 1.2, PILE_R);
+              M2.updateMatrix();
+              pm.setMatrixAt(pm.count++, M2.matrix);
+            }
+          }
+        }
       }
     });
     for (const k in groups){
@@ -3155,9 +3242,8 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      stand on one set of coordinates. It is duplicated across two modules, which is not ideal, but
      the alternative is world.js importing a geometry kit's internal layout table; the guard is
      that they are written identically and the audit measures the displacement. */
-  [[-17.0, 3.0, 27.7], [-8.5, 0.8, 30.5], [0.0, 0.0, 26.0],
-   [ 8.0, 0.8, 23.4], [15.5, 3.0, 21.8]].forEach(t => {
-    massBlock(LM.etihad.x + t[0], LM.etihad.z + t[1], 4.2, t[2], 4.2, true, false, 0.30);
+  ETIHAD_SPEC.forEach(t => {
+    massBlock(LM.etihad.x + t.dx, LM.etihad.z + t.dz, 4.2, t.h, 4.2, true, false, 0.30);
   });
 
   // ADNOC HQ: the tall slim anchor at the eastern end.
