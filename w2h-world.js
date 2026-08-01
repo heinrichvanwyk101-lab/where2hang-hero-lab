@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v50';
+export const BUILD = 'world v52';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -260,6 +260,43 @@ const waterBase = Float32Array.from(waterPos.array);
    extrusion points up and the shape's +Y maps to -Z. So in these tables, +Y is NORTH, and a
    local z of -30 is 30 units toward the north coast.
    =========================================================================== */
+/* ===========================================================================
+   LANDMARK ANCHORS.
+
+   ADNOC WAS STANDING IN THE ROAD, and had been since it was placed. Its centre sits 1.6 units
+   from the ring-road centreline against a kerb half-width of 2.4 — so the centreline runs INSIDE
+   the tower's footprint, and the painter draws tarmac straight through the plot a 44-unit tower
+   is standing on. Its 4.5-unit half-diagonal overlaps the kerb by 5.3 units, and it clears the
+   coastline by 0.4, which is why the base reads as if it is on the water's edge.
+
+   The fabric has been tested against the roads since the beginning — onRoad is the reason the
+   generated city has clean streets — but the three hand-placed landmarks never were. massBlock
+   and the city kit take a literal x and z and put a building there. A rule that only applies to
+   the generated half of the city is not a rule.
+
+   THE ANCHOR IS NOW ONE CONSTANT, which is the other half of the fault: (48, -6) was written out
+   five separate times — the place camera, the avoid rectangle, the ground-paint apron, the detail
+   kit call and the mass block. Moving it meant finding all five and any one missed puts the apron
+   in a different place from the tower. Derived from a single source, that cannot happen.
+
+   ADNOC'S NEW ANCHOR was solved rather than nudged: a search over the eastern third for the point
+   that maximises the SMALLER of its two clearances, with a hard floor of three units on both and
+   a penalty on displacement. (42.25, 7.25) — 14.4 units from the old spot — gives 14.8 units of
+   spare coast clearance and 6.0 of spare road clearance, and stays clear even if the footprint
+   grows to 11 x 9. The nearest merely-legal point, (44, 1.5), had 0.0 units of road margin and
+   failed the moment the footprint widened at all; a fix with no headroom is a fix that comes back.
+
+   Etihad and the palace overlap the kerb too, by 3.3 and 8.5 units, and both are LEFT ALONE. The
+   distinction is that their centres are outside the casing — a tower whose plaza meets the kerb
+   is what a city looks like, and the palace's own apron paving is drawn over that ground anyway.
+   Only ADNOC had a road running through its middle.
+   =========================================================================== */
+const LM = {
+  palace: { x:-42, z:  0 },
+  etihad: { x: -4, z:-16 },
+  adnoc:  { x: 42.25, z: 7.25 },
+};
+
 const ISLE_SHAPES = {
   /* ABU DHABI ISLAND. Long WSW-ENE wedge. Three features carry the recognition: the west tip at
      the Breakwater, the long shallow arc of the Corniche along the whole north shore, and the
@@ -1521,73 +1558,141 @@ Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, dus
 const matRoofDeck = new THREE.MeshStandardMaterial({ color:0x101216, roughness:0.97, metalness:0.02 });
 matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
 const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
-/* WINDOWS, NOT TAPE.
+/* ===========================================================================
+   FACADE WINDOWS, AND THE END OF THE BAND.
 
-   v48 made the band a ring so it reads from every direction, which was right, and the place-zoom
-   renders then showed the cost of it: an UNBROKEN ring round tightly packed blocks joins up with
-   its neighbours into continuous horizontal lines, and the city reads as barcode. Thinning it or
-   dimming it does not help — an unbroken line of any weight is still a line.
+   The rings were wrong and the reference photograph says so plainly: on a real tower the lit
+   floors run the FULL HEIGHT of the glass, sparse and irregular. Measured down one of the
+   reference towers, the lit-pixel share sits between 22 and 29 per cent at every level from crown
+   to podium — no concentration anywhere, no gaps. There is nothing in that image a ring could
+   approximate. v48 made the ring visible from four sides and v49 gave it a window texture, and
+   both made it a better-drawn ring; the deployed screenshots show the result reads as tape
+   wrapped round the buildings, at dusk especially, where it sits against pale stone.
 
-   What separates a window from a stripe is the mullion. So the band gets a map: a strip of lit
-   cells with dark gaps between them, and roughly a third of the cells dark outright because
-   nobody is in that office. Wrapped once round the perimeter, 32 cells — at a 27-metre block
-   that is a four-metre bay, which is the real module.
+   So the map goes on the BUILDING, not on a collar around it, and the band system is deleted
+   outright. This costs nothing: no extra instances, no extra triangles, and one fewer mesh per
+   island than v50 had. It is strictly cheaper than what it replaces, which is unusual enough to
+   be worth stating.
 
-   Authored with a FIXED generator, not Math.random. Every other pattern in this file is
-   deterministic and this one has to be too, or the city relights itself differently on every
-   reload and no two screenshots can be compared. */
-function makeWindowStrip(){
-  const W = 128, H = 16, cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
+   WHY THIS ONLY BECAME POSSIBLE NOW. An emissive map needs UVs, and the fabric prism had none
+   until v49 — it was eight quads with position and nothing else. The arc-length seam work done
+   for the band strip is what this is built on.
+
+   THE ROW COUNT PROBLEM, WHICH IS THE ONLY HARD PART. One geometry is shared by every building
+   and scaled, so v runs 0 to 1 over whatever height the instance happens to be. A fixed texture
+   would put the same number of storeys on a three-unit shed and a forty-four-unit tower — the
+   shed at half a metre a floor, the tower at eleven. city.js hit this exact wall and solved it
+   per-landmark with texture.repeat, which instancing cannot do.
+
+   The answer is to CLASS BY ABSOLUTE INSTANCE HEIGHT and hold one material per class. Absolute,
+   not by tier: tier is measured against the district's `tallest`, so Corniche's tall stock is
+   twelve units and Al Reem's is forty-four, and a tier-based split would put the same storey
+   count on both. Storey height is a real quantity in metres and has to be classed as one.
+
+   Classed on the INSTANCE, not the building, which falls out for free from the fact that walkSpec
+   already emits podium, stages and crown separately. A podium takes the low class and the shaft
+   above it takes the tall one, automatically, and a two-stage tower does not get its floor count
+   doubled — which it would if the class were a property of the spec. */
+const FLOOR_U = 7.8;                    // metres per world unit
+const FLOOR_M = 4.0;                    // the storey height we are aiming at
+
+/* FOUR CLASSES, SPACED GEOMETRICALLY, and the row counts derived rather than chosen — the rule
+   this file has applied to shoreline modules and repeat counts since the beginning, and which I
+   broke here on the first attempt by picking three round numbers. Three linearly spaced classes
+   gave a median storey of 2.3 m and a fifth percentile of 0.2 m, because the spread of instance
+   heights inside one class was five to one and the small end is crowded.
+
+   Bounds double, so the worst case inside any class is a factor of two on storey height. Rows
+   come from the GEOMETRIC MEAN of each class's bounds, which is the height that minimises the
+   worst-case ratio across the class rather than the arithmetic mean, which favours the top end. */
+const WBOUND = [3, 7, 16, Infinity];
+const WCLASS = WBOUND.map((hi, i) => {
+  const lo = i === 0 ? 1.2 : WBOUND[i - 1];
+  const mid = isFinite(hi) ? Math.sqrt(lo * hi) : lo * 1.7;
+  return { max: hi, rows: Math.max(3, Math.round(mid * FLOOR_U / FLOOR_M)) };
+});
+const wClass = h => { for (let i = 0; i < WCLASS.length; i++) if (h < WCLASS[i].max) return i;
+                      return WCLASS.length - 1; };
+
+/* Lifted from w2h-city.js, which worked this out the expensive way and whose reasoning holds
+   here unchanged:
+
+   1. FLOOR LINES. A continuous faint horizontal line on every storey, lit or not. Real curtain
+      wall has a spandrel band at every slab edge and it is visible from a mile away — it is the
+      strongest single cue that a surface is a building.
+   2. RUNS, NOT DOTS. Offices are lit in blocks. Painting two to five adjacent cells groups the
+      lights into horizontal streaks along the floor lines instead of scattering them, which at
+      the place camera is the difference between a building and dirt on the glass.
+   3. ANISOTROPY. A tower face seen at a shallow angle is minified hard along one axis; without
+      it the GPU picks a mip for the worst axis and the window rows smear.
+
+   DETERMINISTIC, unlike the original. Every other pattern in this file is seeded and this one has
+   to be too, or the city relights itself on every reload and no two screenshots can be compared.
+   16 columns because u is arc length round the WHOLE perimeter: a typical block is eight units
+   round, so sixteen bays is about half a unit each, matching the storey height. */
+function fabricWindows(rows, warm){
+  const cols = 16;
+  const cv = document.createElement('canvas');
+  cv.width = cols * 4; cv.height = rows * 4;
   const g = cv.getContext('2d');
-  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  let h = 0x9E3779B1;
-  const rnd = () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
-  // A dark line top and bottom, so the ring keeps a defined edge and reads as one storey rather
-  // than as a glowing bar with no thickness.
-  for (let i = 0; i < 32; i++){
-    if (rnd() < 0.34) continue;                     // an unlit bay
-    const v = 0.62 + rnd() * 0.38;
-    g.fillStyle = `rgba(255,255,255,${v.toFixed(3)})`;
-    g.fillRect(i * 4, 3, 3, H - 6);                 // 3 of every 4 pixels: the fourth is mullion
+  g.fillStyle = '#05080b'; g.fillRect(0, 0, cv.width, cv.height);
+
+  let hsh = 0x9E3779B1 ^ (rows * 2654435761) ^ (warm ? 0x5bf03635 : 0);
+  const rnd = () => { hsh = (Math.imul(hsh, 1664525) + 1013904223) >>> 0; return hsh / 4294967296; };
+
+  g.fillStyle = 'rgba(190,205,215,0.10)';
+  for (let y = 0; y < rows; y++) g.fillRect(0, y * 4 + 3, cv.width, 1);
+  g.fillStyle = 'rgba(190,205,215,0.045)';
+  for (let x = 0; x < cols; x++) g.fillRect(x * 4 + 3, 0, 1, cv.height);
+
+  for (let y = 0; y < rows; y++){
+    let x = 0;
+    while (x < cols){
+      if (rnd() < 0.17 * 0.55){
+        const run = 2 + Math.floor(rnd() * 4);
+        const base = 0.45 + rnd() * 0.55;
+        for (let k = 0; k < run && x < cols; k++, x++){
+          const a = Math.min(1, base * (0.82 + rnd() * 0.36));
+          g.fillStyle = warm ? 'rgba(232,181,71,' + a.toFixed(2) + ')'
+                             : 'rgba(214,226,232,' + (a * 0.82).toFixed(2) + ')';
+          g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+        }
+      } else x++;
+    }
   }
   const t = new THREE.CanvasTexture(cv);
-  t.wrapS = THREE.RepeatWrapping;
-  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
-  t.generateMipmaps = true;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
   t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = MAX_ANISO;
   return t;
 }
-const windowStrip = makeWindowStrip();
 
-/* THE LIT BAND WAS BEING CLASSIFIED AS GLASS, and nobody had checked. The lift decides glass by
-   blue over red on the night hex at a ratio of 1.75; 0x0E141A is 14 red against 26 blue, a ratio
-   of 1.857. So every window band has been taking DUSK_GLASS, metalness 0.62 and roughness 0.24 —
-   a polished blue-grey mirror where a lit window should be. The override exists for exactly this
-   and ADNOC's waist was the first customer.
+/* One texture per class per temperature. Warm is the default city; cool is the option the
+   district registry already carried for the glassier islands, and it now selects a texture
+   rather than a whole separate material. */
+const WIN_TEX = WCLASS.map((c, i) => [fabricWindows(c.rows, true), fabricWindows(c.rows, false)]);
 
-   THE BASE COLOUR COMES DOWN AS WELL, and that is a direct consequence of fixing the override.
-   Off the glass path the band now takes NIGHT_ALBEDO at 5.0 rather than the glass 2.4, and
-   0x0E141A multiplied by five is (70, 100, 130) — a distinctly blue slab under the emissive,
-   which is most of why Al Reem's bands came out cyan. At 0x06080B the lift lands on (30, 40, 55)
-   and the unlit cells of the window map stay genuinely unlit, which is the entire point of having
-   a map.
+/* GLAZED VARIANTS OF EVERY BODY MATERIAL.
 
-   EMISSIVE UP TO COMPENSATE. The map removes about sixty per cent of the lit area — mullions,
-   dark bays, the top and bottom edge — so holding intensity would have handed back the darkness
-   v48 was built to fix. Nearly doubling it restores the emitted energy while leaving it
-   structured instead of flat, and small bright sources through the bloom pass are what a city
-   looks like from a distance anyway. */
-const matLitWarm = new THREE.MeshStandardMaterial({
-  color:0x06080B, roughness:0.5, emissive:0xE8B547, emissiveIntensity:0.95,
-  emissiveMap:windowStrip });
-Object.assign(matLitWarm.userData, { glassOverride:false, duskColor:0xC7B398 });
-const matLitCool = new THREE.MeshStandardMaterial({
-  color:0x06080B, roughness:0.5, emissive:0x8FD3E8, emissiveIntensity:0.85,
-  emissiveMap:windowStrip });
-Object.assign(matLitCool.userData, { glassOverride:false, duskColor:0xB6BFC4 });
+   Cloned rather than modified in place, and the userData copied by hand: duskColor, the dusk
+   material overrides and glassOverride all have to survive, or the lift stops honouring the
+   palette work and every building goes back to beige. Object.assign on a fresh object rather
+   than sharing the reference, so a later edit to one cannot reach the original.
+
+   emissiveIntensity 0.80 is the NIGHT figure; the shell scales it by NIGHT_EMI at night and by
+   0.42 at dusk, which is what keeps blue hour reading as daylight with lights coming on rather
+   than as a dark city. */
+function glazed(base, tex){
+  const m = base.clone();
+  m.emissive = new THREE.Color(0xffffff);
+  m.emissiveMap = tex;
+  m.emissiveIntensity = 0.80;
+  m.userData = Object.assign({}, base.userData);
+  return m;
+}
 
 /* ===========================================================================
    THE FIVE DISTRICTS
@@ -1623,7 +1728,7 @@ const DISTRICTS = [
     places:[
       { label:'Emirates Palace', x:-42, z:  0, h: 7,  r: 32 },
       { label:'Etihad Towers',   x: -4, z:-16, h:18,  r: 28 },
-      { label:'ADNOC HQ',        x: 48, z: -6, h:26,  r: 22 },
+      { label:'ADNOC HQ',        x: LM.adnoc.x, z: LM.adnoc.z, h:26,  r: 22 },
     ],
     /* THE HEIGHT CORE, AND IT WAS ON THE WRONG SHORE.
 
@@ -1669,9 +1774,9 @@ const DISTRICTS = [
          the west tip fall is 0, so anything the fabric puts down is 3.0 units against the
          palace's 6.5 and cannot compete with it. The rectangle was doing a second job that was
          already being done. */
-      { x:-42, z:  0, w:36, d:24 },   // Emirates Palace and its forecourt
-      { x: -4, z:-16, w:48, d:20 },   // Etihad Towers and the plaza
-      { x: 48, z: -6, w:20, d:20 },   // ADNOC HQ and its apron
+      { x:LM.palace.x, z:LM.palace.z, w:36, d:24 },   // Emirates Palace and its forecourt
+      { x:LM.etihad.x, z:LM.etihad.z, w:48, d:20 },   // Etihad Towers and the plaza
+      { x: LM.adnoc.x, z: LM.adnoc.z, w:20, d:20 },   // ADNOC HQ and its apron
     ],
     // Re-derived against the new outline. Index 0 is the west tip and the samples run east
     // along the north shore, so this is the Corniche itself, end to end.
@@ -1708,7 +1813,7 @@ const DISTRICTS = [
       { kind:'lawn',   x:-42, z:  1, w:38, d:24 },
       { kind:'paving', x:-42, z:  1, w:34, d:13 },
       { kind:'paving', x: -4, z:-15, w:40, d:13 },   // Etihad plaza
-      { kind:'paving', x: 48, z: -6, w:17, d:13 },   // ADNOC apron
+      { kind:'paving', x: LM.adnoc.x, z: LM.adnoc.z, w:17, d:13 },   // ADNOC apron
       // The low-rise band on the seaward side had no ground under it at all — twenty buildings
       // standing on open desert between the corniche road and the towers.
       // The mixed-tower row behind the landmarks. Sloped to match cityRow's zSlope, and
@@ -2347,14 +2452,6 @@ const PLOT_DIAG = 1.081;
 /* Height over narrowest plan dimension. See the note at the height calculation. */
 const SLENDER = 22;
 
-/* One lit ring per this much height. 4.5 units is about eleven storeys. Lower it for a brighter
-   city and a larger night instance count; the relationship is linear. */
-const BAND_PITCH = 4.5;
-
-/* Share of FLOORS that are dark, on top of the roughly one bay in three the window map already
-   leaves unlit. Raise it for a sparser, later-night city; zero gives a band on every level. */
-const BAND_DARK = 0.30;
-
 function fitPlot(W, D, block){
   const lim = block * PLOT_DIAG, dg = Math.hypot(W, D);
   const k = dg > lim ? lim / dg : 1;
@@ -2390,9 +2487,7 @@ function buildingSpec(rnd, ctx){
     sb:rnd(),     sbA:rnd(),    sbB:rnd(),    sbRa:rnd(),  sbRb:rnd(),
     crown:rnd(),  crownH:rnd(), crownW:rnd(),
     plant:rnd(),  plantW:rnd(), plantD:rnd(), plantH:rnd(), plantX:rnd(), plantZ:rnd(),
-    prof:rnd(),   plantV:rnd(), plantWm:rnd(), bandJit:rnd(), bandH:rnd(), bandPick:rnd(),
-    bv0:rnd(), bw0:rnd(), bv1:rnd(), bw1:rnd(),
-    bv2:rnd(), bw2:rnd(), bv3:rnd(), bw3:rnd(),
+    prof:rnd(),   plantV:rnd(), plantWm:rnd(),
   };
 
   const gap  = 0.22;                     // street width as a fraction of the block
@@ -2561,70 +2656,7 @@ function buildingSpec(rnd, ctx){
               tint:{ v:R.plantV, w:R.plantWm, amount:0.30, warm:0.7 } };
   }
 
-  /* ---- NIGHT BANDS ----
-
-     THE BAND WAS ONLY VISIBLE FROM TWO SIDES, WHICH IS THE WHOLE COMPLAINT. It was scaled
-     w * 1.015 by d * 0.72: proud of the wall by one and a half per cent in x, and buried
-     TWENTY-EIGHT PER CENT INSIDE THE BUILDING in z. Turn the camera ninety degrees and every
-     window in the district is hidden inside the block that owns it. That is why the ADNOC
-     approach glows and the same city from the other side is a silhouette — it was never the
-     moon, it was that half the light sources were interior geometry.
-
-     A RING, therefore: 1.02 on both axes, proud on all four faces. Same instance, same cost.
-
-     AND A STACK, DERIVED RATHER THAN CHOSEN. One band per building put a single stripe on a
-     44-unit tower and, because of the h > tallest * 0.28 gate, nothing at all on the entire
-     low-rise carpet — which at world zoom is most of the surface area of the city. Bands are now
-     spaced every BAND_PITCH of height, so a tall building earns more of them and a shed earns
-     one, and the count follows from the span exactly as the shoreline modules do. Capped at four
-     because past that they cost more than they read.
-
-     THIN, AND FIXED IN WORLD UNITS. The old band was 0.34 of a stage — on a tall tower that is a
-     glowing slab a third of its height. Half a unit is roughly a storey and a half, which is what
-     a lit floor looks like, and being an absolute height it does not stretch with the building.
-
-     nightOnly is set on the mesh, so none of this exists in Day, Silhouette or Plan. As a side
-     effect that removes the old band from the daytime massing, where it had no business being. */
-  const bands = [];
-  {
-    const n  = Math.max(1, Math.min(4, Math.floor(h / BAND_PITCH)));
-    const y0 = podH + (h - podH) * 0.10 + R.bandJit * 0.9;
-    const span = Math.max(0, (h - y0) * 0.84);
-    const bh = 0.30 + R.bandH * 0.16;
-    /* UNLIT FLOORS, WHICH IS THE ONE THING A REAL SKYLINE HAS THAT THIS DID NOT.
-
-       Every band lit, at every level, on every building, is a barcode — and that is exactly what
-       the place-zoom renders showed: continuous tape wrapped round the city. In any real tower a
-       large share of the floors are dark and the pattern is irregular, and that irregularity is
-       most of what reads as windows rather than as paint.
-
-       So a band with a low warmth roll is simply NOT EMITTED. It costs negative triangles, it
-       breaks the rhythm, and it needs no new geometry. One band per building is exempt and always
-       lit, chosen by its own roll rather than fixed at the lowest — a guaranteed band at index
-       zero would put a lit floor at roughly the same height on every building in the district,
-       which is the fault seen from the other side.
-
-       The warmth roll is REMAPPED over the surviving range instead of being consumed twice at
-       face value. Reusing it raw would leave every lit band drawn from the top 62 per cent of the
-       warmth distribution, quietly warming the whole city. */
-    const keep = Math.floor(R.bandPick * n);
-    for (let i = 0; i < n; i++){
-      const wr = R['bw' + i];
-      if (i !== keep && wr < BAND_DARK) continue;
-      const by = y0 + span * (n === 1 ? 0.34 : i / (n - 1));
-      // Whichever stage this height falls in, so a band on a setback tower sits on the stage it
-      // belongs to rather than floating out where the stage below used to be.
-      const st = stages.find(g => by >= g.y - 1e-9 && by < g.y + g.h) || top;
-      // Sampled at this ring's own height within its own stage, so a lit floor on a sail sits
-      // against the glass rather than floating out where the widest part of the tower is.
-      const [px, pz] = PROFILE_W[prof]((by - st.y) / Math.max(1e-6, st.h));
-      bands.push({ y:by, h:bh, w:st.w * px * 1.02, d:st.d * pz * 1.02,
-                   tint:{ v:R['bv' + i], amount:0.70, warm:0.4,
-                          w:Math.max(0, (wr - BAND_DARK) / (1 - BAND_DARK)) } });
-    }
-  }
-
-  return { x, z, h, w, dp, tier, mat, tint, prof, podium, stages, crown, plant, bands };
+  return { x, z, h, w, dp, tier, mat, tint, prof, podium, stages, crown, plant };
 }
 
 /* THE ONE WALKER, used by both the tally and the write so the two cannot disagree about how many
@@ -2655,28 +2687,36 @@ function walkSpec(sp, lod, fn){
          h: s.h + (i === 0 ? absB : 0) + (i === nTop ? absT : 0),
          tint:sp.tint });
   });
+  /* A CROWN IS NOT A FACADE. Parapets, caps and masts are metal and concrete, and they are the
+     smallest instances in the scene — a 0.4-unit parapet handed the low class was getting twelve
+     storeys across thirty centimetres, which is the 0.2 m tail in the measurements. `raw` sends
+     it to the unglazed base material instead. */
   if (!mass && sp.crown){
-    fn({ t:sp.crown.mat, y:top_y(sp), w:sp.crown.w, h:sp.crown.h, d:sp.crown.d, tint:sp.tint });
+    fn({ t:sp.crown.mat, raw:true, y:top_y(sp), w:sp.crown.w, h:sp.crown.h, d:sp.crown.d,
+         tint:sp.tint });
   }
   if (!mass && sp.plant){
     fn({ t:'roof', y:top_y(sp), w:sp.plant.w, h:sp.plant.h, d:sp.plant.d,
          ox:sp.plant.ox, oz:sp.plant.oz, tint:sp.plant.tint });
   }
-  /* THE MASS LAYER TAKES TWO BANDS AT MOST, and this is a genuine LOD saving rather than a
-     compromise. At world zoom a twenty-unit tower is about fifteen pixels tall, so four rings on
-     it are sub-pixel banding that costs triangles and reads as nothing. What the world view needs
-     from a lit building is that it IS lit; two sources per building give that at half the cost,
-     and Al Reem and Al Maryah were the two islands where the stack outnumbered the buildings two
-     to one. First and last, so the lit extent of the tower is still honest. */
-  /* BANDS PASS NO `g`, so they stay on the box on a sculpted tower as much as a straight one.
-     Their width is already sampled from the profile at their own height, so the only error a box
-     ring introduces is the curvature it misses across its own thickness — under half a unit, over
-     which a sail changes width by about two per cent. Invisible, and it saves three buckets and
-     three draw calls per island. */
-  const bs = mass && sp.bands.length > 2 ? [sp.bands[0], sp.bands.at(-1)] : sp.bands;
-  bs.forEach(b => fn({ t:'band', y:b.y, w:b.w, h:b.h, d:b.d, tint:b.tint }));
 }
 function top_y(sp){ const t = sp.stages[sp.stages.length - 1]; return t.y + t.h; }
+
+/* Keyed on the cool flag alone; see the note at the call site. */
+const FABRIC_MATS = new Map();
+function fabricMats(cool){
+  const k = cool ? 'cool' : 'warm';
+  if (FABRIC_MATS.has(k)) return FABRIC_MATS.get(k);
+  const base = { rend:matStoneRend, stone:matPlaceStone, clad:matStoneClad,
+                 glass:matPlaceGlass, bronze:matGlassBronze };
+  const out = {};
+  Object.entries(Object.assign({ roof:matRoofDeck }, base)).forEach(([n, m]) => {
+    out[n] = WCLASS.map((_, i) => n === 'roof' ? m : glazed(m, WIN_TEX[i][cool ? 1 : 0]));
+    out[n].raw = m;                       // crowns, plant rooms and anything else not a wall
+  });
+  FABRIC_MATS.set(k, out);
+  return out;
+}
 
 function urbanFabric(d, layer, opts){
   const { density, coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
@@ -2734,24 +2774,30 @@ function urbanFabric(d, layer, opts){
 
      KEY ORDER IS FIXED as material then geometry, because it is also the allocation order and
      two passes have to agree on it exactly. */
-  const MATS = { rend:matStoneRend, stone:matPlaceStone, clad:matStoneClad, glass:matPlaceGlass,
-                 bronze:matGlassBronze, roof:matRoofDeck, band:cool ? matLitCool : matLitWarm };
+  /* THE GLAZED VARIANTS, BUILT ONCE PER ISLAND AND MEMOISED.
+
+     Six body materials times three storey classes is eighteen clones, and building them per
+     island would be eighteen more every time an island is assembled. Cached on the cool flag
+     because that is the only thing that varies between islands — everything else about a glazed
+     material is a function of its base and its class.
+
+     ROOF IS NEVER GLAZED, and neither is anything flagged `raw`. Plant rooms, parapets, caps and
+     masts are bitumen, concrete and metal; lighting them would put windows on the one set of
+     surfaces that are definitively not facades. */
+  const MATS = fabricMats(cool);
+
   const need = new Map();
-  const key = o => o.t + '|' + (o.g || 'box');
+  // Class is decided on the INSTANCE height, so a podium and the shaft above it get different
+  // storey counts without the spec having to know anything about it.
+  const key = o => o.t + '#' + (o.raw || o.t === 'roof' ? 'r' : wClass(o.h)) + '|' + (o.g || 'box');
   keep.forEach(sp => walkSpec(sp, lod, o => { const k = key(o); need.set(k, (need.get(k) || 0) + 1); }));
 
   const meshes = new Map();
   need.forEach((n, k) => {
-    const [t, g] = k.split('|');
-    const m = new THREE.InstancedMesh(PROFILES[g], MATS[t], n);
-    if (t === 'band'){
-      /* The shell hides this outside night and dusk, so the rings cost nothing in the three
-         diagnostic modes and stop appearing in the daytime massing, which they should never have
-         done. They also cast no shadow: a lit window is a source, not an occluder. */
-      m.userData.nightOnly = true;
-    } else {
-      m.castShadow = true; m.receiveShadow = true;
-    }
+    const [tc, g] = k.split('|');
+    const [t, c] = tc.split('#');
+    const m = new THREE.InstancedMesh(PROFILES[g], c === 'r' ? MATS[t].raw : MATS[t][+c], n);
+    m.castShadow = true; m.receiveShadow = true;
     meshes.set(k, m);
   });
 
@@ -2801,9 +2847,9 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      island, which now provides a real ground plane with a real coastline. It was left over from
      home-world.html, where there was no island at all. */
 
-  const palace = kit.emiratesPalace(-42, 0);
-  const etihad = kit.etihadTowers(-4, -16);
-  const adnoc  = kit.adnocHQ(48, -6);
+  const palace = kit.emiratesPalace(LM.palace.x, LM.palace.z);
+  const etihad = kit.etihadTowers(LM.etihad.x, LM.etihad.z);
+  const adnoc  = kit.adnocHQ(LM.adnoc.x, LM.adnoc.z);
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
   [palace, etihad, adnoc].forEach(o => { o.position.y = GROUND; D.add(o); });
@@ -2860,12 +2906,16 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   massBlock(-50,  2,  8, 9.0,  8, false, true, 0.40);   // the dome mass, slightly taller
 
   // Etihad Towers: real spacing and real height ratios, slim and cool.
+  /* Offsets from the Etihad anchor, not absolute coordinates. The five towers were written
+     against z = -16 while the avoid rectangle and the detail kit read LM.etihad — the same
+     five-copies-of-one-number fault that put ADNOC in the road, one edit away from happening
+     again. The x values are the real spacing and stay as they are. */
   [[-21,27.7],[-12.5,30.5],[-4,26.0],[4,23.4],[11.5,21.8]].forEach(t => {
-    massBlock(t[0], -16, 4.2, t[1], 4.2, true, false, 0.30);
+    massBlock(LM.etihad.x + (t[0] + 4), LM.etihad.z, 4.2, t[1], 4.2, true, false, 0.30);
   });
 
   // ADNOC HQ: the tall slim anchor at the eastern end.
-  massBlock(48, -6, 7.6, 44, 4.8, true, false, 0.14);
+  massBlock(LM.adnoc.x, LM.adnoc.z, 7.6, 44, 4.8, true, false, 0.14);
 
   /* THE SUPPORTING SKYLINE IS GONE, AND IT IS WHAT THE BIG BLOCKS WERE.
 
