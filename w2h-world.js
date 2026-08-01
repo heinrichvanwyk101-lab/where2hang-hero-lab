@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v58';
+export const BUILD = 'world v60';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -316,8 +316,36 @@ const ETIHAD_PLAZA = (() => {
   return { dx:(x0 + x1) / 2, dz:(z0 + z1) / 2, w:(x1 - x0) + 2 * M, d:(z1 - z0) + 2 * M };
 })();
 
+/* ISLAND SCALE, THE OTHER HALF OF THE FIX.
+
+   With roads finally held in metres, enlarging an island buys blocks instead of buying wider
+   roads. At the old size Corniche is 1.17 km long and holds seven superblocks — a village plan
+   drawn at true building scale, which is why the city never read as a city however the fabric was
+   tuned. The real island is 11 km; nine times is not available in a five-island diorama, but the
+   grain is. Measured:
+
+       scale   length    blocks   plots   instances
+        1.0    1.17 km      7       41       135
+        1.5    1.76 km     17      119       390
+        2.0    2.35 km     36      240       747
+        2.5    2.93 km     59      444      1397
+        3.0    3.52 km     91      681      2133
+
+   2.5 is the pick. Fifty-nine blocks is a downtown you can read a plan from, and at 2.93 km the
+   island is a quarter of Abu Dhabi's real length rather than a ninth — still a miniature, but one
+   whose streets and blocks are at their true size relative to the towers standing on them.
+
+   APPLIED TO r AND TO THE ISLAND POSITIONS TOGETHER, so the archipelago keeps its composition and
+   only its scale changes. Everything downstream is already derived from d.r: the camera distances,
+   the shadow fit, the fog, the coastline point count, the road widths and the grid. What is NOT
+   scaled is anything sized to a BUILDING — the Etihad spec, the avoid rectangles, the ground pads,
+   the beach — because those are at true scale already and that is the entire point. */
+const ISLE_SCALE = 2.5;
+
+/* Positions ON the island, so they scale with it — unlike the buildings standing on them, which
+   are already at true scale and must not. */
 const LM = {
-  palace: { x:-42, z:  0 },
+  palace: { x:-42 * ISLE_SCALE, z:  0 * ISLE_SCALE },
   /* MOVED 14.4 UNITS — 112 METRES — OFF THE RING ROAD. Four of the five towers were standing in
      it, and three had the CENTRELINE running through them: measured road distance 0.0 against a
      2.4-unit kerb half-width. Exactly the ADNOC fault, in the one cluster the whole district is
@@ -329,8 +357,8 @@ const LM = {
      happens to be geographically right — Etihad Towers stands immediately beside Emirates Palace
      on the real Corniche, and the pair now read as the pair they are. Verified clear of the
      palace: 3.0 units between the nearest tower and the palace block. */
-  etihad: { x: -17.5, z:-11 },
-  adnoc:  { x: 42.25, z: 7.25 },
+  etihad: { x: -17.5 * ISLE_SCALE, z:-11 * ISLE_SCALE },
+  adnoc:  { x: 42.25 * ISLE_SCALE, z: 7.25 * ISLE_SCALE },
 };
 
 const ISLE_SHAPES = {
@@ -901,7 +929,20 @@ function roundRect(g, x, y, w, h, r){
    data for the skeleton and generating the fabric inside it: the network is the armature, and
    nothing that stands up gets to ignore it.
    =========================================================================== */
-const ROAD_RING = 0.052, ROAD_ART = 0.044;   // normalised widths, shared by paint and clearance
+/* ROAD WIDTHS IN METRES, AND THIS WAS THE ROOT OF THE LAYOUT PROBLEM.
+
+   These were normalised fractions of the island radius — 0.052 and 0.044 — which means the same
+   street came out 31 metres wide on Corniche and 19 on Al Maryah, purely because one island is
+   bigger than the other. Roads do not work that way; a dual carriageway is a dual carriageway.
+
+   Worse, it made the island unfixable by scaling. Enlarging an island to hold a proper downtown
+   widened its roads in exact step, so the block-to-street ratio never moved and not one extra
+   block fitted. Every other quantity in this file that means something physical — storey height,
+   bay width, superblock, plot depth, coastline segment — is already held in metres, and the roads
+   were the last thing still expressed as a share of an island. */
+const M_PER_UNIT  = 7.8;                     // the scene's one scale constant
+const ROAD_RING_M = 31, ROAD_ART_M = 22, CORE_R_M = 118;
+const roadW = (d, m) => m / (M_PER_UNIT * d.r);      // metres -> normalised, per district
 const COAST_CLEAR = 0.050;                   // no building closer than this to the waterline
 /* THE BEACH WIDTH, HOISTED, because three things have to agree about it: the skirt geometry, the
    plan handed to the prop kit so boats do not moor on dry sand, and the spacing of the islands
@@ -952,27 +993,63 @@ function roadSkeleton(d){
 
   const ring = insetRing(d.id, RING_INSET);   // an ARRAY of open runs, not one closed loop
 
-  /* Arterials out of the core, TRIMMED at the coastline and at the district's reserved band.
-     The coast trim is obvious — the painter draws inside a clip so it could get away with running
-     into the sea, but a car placed on the clipped part would be a car in the water. The band trim
-     is Corniche's: its landmarks occupy a strip right across the island, and an arterial driven
-     through Emirates Palace is no better than a tower standing in a road. */
+  /* ===========================================================================
+     THE SUPERBLOCK GRID.
+
+     Three curved arterials radiating from a core is a European market town, not Abu Dhabi. The
+     island's downtown is one of the most rigid orthogonal plans anywhere: a grid of superblocks
+     bounded by numbered streets, held at a constant angle across the whole island, running
+     parallel and perpendicular to the Corniche. That grid IS the recognition — more than any
+     single tower, it is what an aerial photograph of Abu Dhabi looks like.
+
+     It also fixes the fault underneath the last four rounds of layout work. The old fabric laid a
+     lattice over the whole island and DELETED the cells that hit a road. That is collision
+     avoidance, not town planning: nothing fronts a street, nothing aligns to one, and a block is
+     bounded by wherever the lattice happened to survive rather than by the roads around it. Once
+     the streets are generated first and the buildings derived from the space between them, the
+     roads become the structure instead of a painted decoration threaded through a field of
+     towers.
+
+     STRAIGHT LINES, CLIPPED TO THE ISLAND. Each street is one family member swept across the
+     island and cut wherever it leaves land or enters a reserved band. A line that survives in two
+     separate pieces is returned as two runs, which is correct — that is a street interrupted by a
+     palace, and the painter and onRoad both already take an array of open runs.
+
+     ANGLE. Taken from the district's own rot so the grid sits with the island rather than with
+     the world axes, which is what keeps the blocks parallel to the Corniche.
+     =========================================================================== */
   const arterials = [];
-  for (let i = 0; i < 3; i++){
-    const a  = (i / 3) * Math.PI * 2 + rndPlan() * 0.7;
-    const ex = core[0] + Math.cos(a) * 1.30, ey = core[1] + Math.sin(a) * 1.30;
-    const mx = core[0] + Math.cos(a) * 0.62 + (rndPlan() - 0.5) * 0.30;
-    const my = core[1] + Math.sin(a) * 0.62 + (rndPlan() - 0.5) * 0.30;
-    const pts = [];
-    for (let t = 0; t <= 1.0001; t += 1/28){
-      const u = 1 - t;
-      const x = u*u*core[0] + 2*u*t*mx + t*t*ex;
-      const y = u*u*core[1] + 2*u*t*my + t*t*ey;
-      if (!inside(x, y)) break;
-      if (inAvoid(d, x, y, 0.01)) break;   // no arterial through the palace or the Etihad plaza
-      pts.push([x, y]);
-    }
-    if (pts.length > 1) arterials.push(pts);
+  {
+    const th = (d.gridRot !== undefined ? d.gridRot : d.rot || 0);
+    const ca = Math.cos(th), sa = Math.sin(th);
+    // Normalised grid pitches. SB is the superblock centre-to-centre spacing.
+    const su = roadW(d, d.sb ? d.sb[0] : SUPERBLOCK_M[0]);
+    const sv = roadW(d, d.sb ? d.sb[1] : SUPERBLOCK_M[1]);
+
+    /* Sweep far enough to cross the island whatever the angle: the half-diagonal of the
+       normalised bounding box, rounded out to a whole number of pitches so the grid is
+       symmetric about the core rather than about an arbitrary edge. */
+    const reach = 1.45;
+    const line = (fixed, along, horiz) => {
+      // Walk the line in small steps, emitting runs of consecutive points that are on land.
+      const runs = [];
+      let cur = [];
+      const N = 220;
+      for (let i = 0; i <= N; i++){
+        const t = -reach + 2 * reach * i / N;
+        const u = horiz ? t : fixed, v = horiz ? fixed : t;
+        const x = core[0] + u * ca - v * sa;
+        const y = core[1] + u * sa + v * ca;
+        const ok = inside(x, y) && distToOutline(d.id, x, y) > RING_INSET * 0.55
+                   && !inAvoid(d, x, y, 0.012);
+        if (ok) cur.push([x, y]);
+        else { if (cur.length > 3) runs.push(cur); cur = []; }
+      }
+      if (cur.length > 3) runs.push(cur);
+      runs.forEach(r => arterials.push(r));
+    };
+    for (let k = -Math.ceil(reach / sv); k <= Math.ceil(reach / sv); k++) line(k * sv, 0, true);
+    for (let k = -Math.ceil(reach / su); k <= Math.ceil(reach / su); k++) line(k * su, 0, false);
   }
   return { ring, arterials, core, rndPlan };
 }
@@ -1025,19 +1102,35 @@ function distToPolyline(x, y, pts){
    so the single most conspicuous piece of road on the island was the one thing buildings were
    free to stand in. */
 const ROAD_KERB = 1.20;                      // the casing the painter strokes under the tarmac
-const CORE_R    = 0.040 * 1.18;              // roundabout outer kerb, matching the painter
+
+/* THE SUPERBLOCK, IN METRES, because that is the only unit in which it means anything. Abu Dhabi's
+   downtown blocks run roughly 200 by 130 metres between street centrelines, and holding that in
+   metres rather than in normalised island units is what makes the grain the same on a 76-unit
+   island and a 46-unit one. Al Maryah with Corniche's normalised pitch would have blocks two
+   thirds the size for no reason other than being a smaller island. */
+const SUPERBLOCK_M = [200, 130];
+
+/* THE PLOT, ALSO IN METRES. A 30 to 46 metre frontage on a 34 metre depth is a Gulf tower plot —
+   deep enough for a floorplate, narrow enough that a block edge carries five or six buildings
+   rather than one slab. PAVEMENT_M is the setback from the kerb: it is what stops a tower growing
+   out of the tarmac, and it is added to the same ROAD_ART clearance figure onRoad tests against,
+   so the two cannot drift apart. */
+const PLOT_FRONT_M = [30, 46];
+const PLOT_DEPTH_M = 34;
+const PAVEMENT_M   = 9;
+const coreR = d => roadW(d, CORE_R_M);       // roundabout outer kerb, matching the painter
 
 function onRoad(d, x, y, pitch){
   const R = d.roads;
   if (!R) return false;
   const pad = pitch * 0.62;
   for (let i = 0; i < R.ring.length; i++){
-    if (distToPolyline(x, y, R.ring[i]) < ROAD_RING * 0.5 * ROAD_KERB + pad) return true;
+    if (distToPolyline(x, y, R.ring[i]) < roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB + pad) return true;
   }
   for (let i = 0; i < R.arterials.length; i++){
-    if (distToPolyline(x, y, R.arterials[i]) < ROAD_ART * 0.5 * ROAD_KERB + pad) return true;
+    if (distToPolyline(x, y, R.arterials[i]) < roadW(d, ROAD_ART_M) * 0.5 * ROAD_KERB + pad) return true;
   }
-  if (R.core && Math.hypot(x - R.core[0], y - R.core[1]) < CORE_R + pad) return true;
+  if (R.core && Math.hypot(x - R.core[0], y - R.core[1]) < coreR(d) + pad) return true;
   return false;
 }
 
@@ -1373,7 +1466,7 @@ function paintGround(d, plan){
      tarmac as two bands rather than one wide band with a median painted over it means the median
      has real kerbs on both faces, which is what it looks like from above. */
   function roadPrimary(pts){
-    const W = U * ROAD_RING;                      // full corridor, kerb to kerb
+    const W = U * roadW(d, ROAD_RING_M);          // full corridor, kerb to kerb
     const med = W * 0.16;                         // planted median
     const car = (W - med) / 2;                    // each carriageway
     const halfC = (med + car) / 2;                // centre of each carriageway from the axis
@@ -1394,7 +1487,7 @@ function paintGround(d, plan){
   /* SECONDARY. One carriageway, still kerbed, edge lines and a dashed centre. Narrower casing
      than the ring so the hierarchy shows even where the two run parallel. */
   function roadSecondary(pts){
-    const W = U * ROAD_ART;
+    const W = U * roadW(d, ROAD_ART_M);
     g.lineCap = 'butt'; g.lineJoin = 'round';
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     strokePx(offsetPath(pts, 0), SURF.road, W);
@@ -1948,7 +2041,7 @@ function glazed(base, tex){
    barely moved (262 units wide before, 254 after), so the portrait framing is unaffected.
    =========================================================================== */
 const DISTRICTS = [
-  { id:'corniche', name:'Corniche',   x:-40, z:  66, r:76, rot: 0.10, tint:C.gold,
+  { id:'corniche', name:'Corniche',   x:-40*ISLE_SCALE, z:66*ISLE_SCALE, r:76*ISLE_SCALE, rot: 0.10, tint:C.gold,
     built:true,
     /* Re-placed onto the island. Emirates Palace west, Etihad centre, ADNOC at the eastern end,
        all in a band just inland of the north coast, with the supporting city behind them to the
@@ -2075,7 +2168,7 @@ const DISTRICTS = [
          apron under a real city block is only a paler street. */
     ] },
   // A short quay on the south face: Al Maryah is reclaimed business waterfront with a hard edge.
-  { id:'maryah',   name:'Al Maryah',  x:  2, z: -22, r:34, rot: 0.30, tint:0x8FD3E8,
+  { id:'maryah',   name:'Al Maryah',  x:2*ISLE_SCALE, z:-22*ISLE_SCALE, r:34*ISLE_SCALE, rot: 0.30, tint:0x8FD3E8,
     shore:[{ kind:'quay', t:0.60, t1:0.76, reps:5, off:2.0, y:2.40, len:6.2, wide:1.0 }],
     built:false, coreN:[0.0, 0.0], places:[
       { label:'The Galleria', x:-10, z:  6, h:10, r:30 },
@@ -2088,7 +2181,7 @@ const DISTRICTS = [
      Buying the width meant buying the channel first. Nothing depends on Reem's exact position:
      the camera heading is derived from it, and every rule on the island is relative to its own
      centre. */
-  { id:'reem',     name:'Al Reem',    x: 88, z:  34, r:44, rot:-0.20, tint:0xBFD3E0,
+  { id:'reem',     name:'Al Reem',    x:88*ISLE_SCALE, z:34*ISLE_SCALE, r:44*ISLE_SCALE, rot:-0.20, tint:0xBFD3E0,
     built:false, coreN:[-0.25, 0.05], places:[
       { label:'Reem Central', x:  0, z:  0, h:12, r:36 },
       { label:'Shams Boutik', x: 22, z: 10, h:10, r:34 },
@@ -2102,7 +2195,7 @@ const DISTRICTS = [
      in the world and it is a beach, so it gets almost nothing — six low groynes at right angles
      to the sand, which is what actually punctuates a beach of that length. The rest stays
      painter-only, as the brief asks. */
-  { id:'saadiyat', name:'Saadiyat',   x:-44, z:-116, r:56, rot: 0.15, tint:0xDDD3C0,
+  { id:'saadiyat', name:'Saadiyat',   x:-44*ISLE_SCALE, z:-116*ISLE_SCALE, r:56*ISLE_SCALE, rot: 0.15, tint:0xDDD3C0,
     shore:[
       /* Saadiyat's straight run is the NORTH-WEST coast, t 0.02 to 0.28 by the same measurement.
          Groynes are shorter and lower than v41's: fourteen units out was a pier, not a groyne. */
@@ -2117,7 +2210,7 @@ const DISTRICTS = [
      it, and a mound across the mouth. The inlet is the only place on any island where the coast
      is already concave, so it is the only place a marina reads as a marina rather than as
      furniture parked on an open shore. */
-  { id:'yas',      name:'Yas Island', x: 78, z:-196, r:62, rot:-0.10, tint:C.gold,
+  { id:'yas',      name:'Yas Island', x:78*ISLE_SCALE, z:-196*ISLE_SCALE, r:62*ISLE_SCALE, rot:-0.10, tint:C.gold,
     shore:[
       /* THE INLET IS AT t 0.65 TO 0.81, NOT 0.55 TO 0.62. I guessed the fractions from the shape
          array, but the outline is resampled at equal ARC LENGTH, so an index in that array is not
@@ -2793,7 +2886,10 @@ function tintFrom(col, t){
 }
 
 function buildingSpec(rnd, ctx){
-  const { jx, jy, x, z, block, tallest, capH, coreX, coreZ } = ctx;
+  const { jx, jy, x, z, rot, plotW, plotD, tallest, capH, coreX, coreZ } = ctx;
+  // The block figure the podium and setback maths are written against is the plot's smaller
+  // dimension: those rules are about how far a mass may step relative to its own ground.
+  const block = Math.min(plotW, plotD);
 
   /* ONE UNCONDITIONAL DRAW. Every number this building will ever need is taken here, in a fixed
      order, with no branch above it. Nothing below may call rnd(). This is the whole mechanism —
@@ -2809,18 +2905,24 @@ function buildingSpec(rnd, ctx){
     prof:rnd(),   plantV:rnd(), plantWm:rnd(),
   };
 
-  const gap  = 0.22;                     // street width as a fraction of the block
-  const plot = block * (1 - gap);
+  /* Site coverage: the share of the plot the building may occupy, the rest being the gap to the
+     boundary. It replaces the old `gap` fraction, which was a street width — the streets are real
+     now and this is a party-wall setback, which is a different thing at a different size. */
+  const COVER = 0.86;
 
   /* ASPECT. One roll decides slab, turned slab or ordinary block, and the two dimensions are
      then set against each other — independent rolls regress to square, which is what made the
      fabric read as crystal growth. Three numbers spent in every branch, unlike v45, which spent
      three or five depending on the branch. */
+  /* THE PLOT IS GIVEN NOW, so the aspect roll no longer invents a shape from nothing — it decides
+     how much of a real plot the building takes. A tower on a deep plot leaves a yard behind it; a
+     slab fills the frontage. Both are drawn from the plot's own proportions, which is why a
+     narrow corner plot can no longer produce a wide slab that overhangs its neighbour. */
   let aw, ad;
-  if (R.shape < 0.26){ aw = 0.92 + R.aw * 0.06; ad = 0.34 + R.ad * 0.20; }
-  else if (R.shape < 0.44){ aw = 0.34 + R.aw * 0.20; ad = 0.92 + R.ad * 0.06; }
-  else { aw = 0.72 + R.aw * 0.26; ad = 0.72 + R.ad * 0.26; }
-  const w = plot * aw, dp = plot * ad;
+  if (R.shape < 0.26){ aw = 0.90 + R.aw * 0.08; ad = 0.46 + R.ad * 0.24; }
+  else if (R.shape < 0.44){ aw = 0.50 + R.aw * 0.24; ad = 0.88 + R.ad * 0.09; }
+  else { aw = 0.74 + R.aw * 0.22; ad = 0.74 + R.ad * 0.22; }
+  const w = plotW * COVER * aw, dp = plotD * COVER * ad;
 
   // Height falls away from the core. The exponent controls how abruptly downtown ends, and the
   // cap keeps a landmark taller than the fabric standing next to it.
@@ -2975,7 +3077,7 @@ function buildingSpec(rnd, ctx){
               tint:{ v:R.plantV, w:R.plantWm, amount:0.30, warm:0.7 } };
   }
 
-  return { x, z, h, w, dp, tier, mat, tint, prof, podium, stages, crown, plant };
+  return { x, z, rot, h, w, dp, tier, mat, tint, prof, podium, stages, crown, plant };
 }
 
 /* THE ONE WALKER, used by both the tally and the write so the two cannot disagree about how many
@@ -3041,8 +3143,12 @@ function fabricMats(cool){
 }
 
 function urbanFabric(d, layer, opts){
-  const { density, coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
+  const { coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
           cap = Infinity, avoid = false, minH = 0 } = opts;
+  /* The grid is anchored on the district's core so the streets and the height falloff agree about
+     where downtown is. `density` is no longer read: grain is now a metre figure on the superblock,
+     not a normalised multiplier, and leaving the option in the call sites is harmless. */
+  const core0 = d.coreN || [0, 0];
   /* Derived, so the two existing call sites need no change: the mass layer is exactly the one
      that sets a floor. Pass lod explicitly to override. */
   const lod = opts.lod || (minH > 0 ? 'mass' : 'detail');
@@ -3051,36 +3157,87 @@ function urbanFabric(d, layer, opts){
      call order — adding an island upstream must not reshuffle every island after it. */
   const rnd = fabricRnd(d.id);
 
-  /* ---------- PASS 1: CELLS ----------
-     Block pitch in normalised island units. Smaller pitch = finer grain = denser city. Nothing
-     in this loop knows about minH or lod, so both layers produce the identical list. */
-  const pitch = 0.085 / density;
+  /* ---------- PASS 1: BLOCKS, THEN PLOTS ----------
+
+     PLOTS COME FROM THE STREETS, NOT FROM A LATTICE. The grid built in roadSkeleton defines
+     superblocks; this walks each one and lays plots around its PERIMETER, facing outward onto the
+     street that bounds it. That is how the block is occupied in Abu Dhabi — towers on the street
+     frontage, the middle of the block given over to parking and low-rise — and it is the reason
+     the roads finally read as structure rather than as paint.
+
+     THE CENTRE IS LEFT EMPTY ON PURPOSE. A superblock filled solid is a mesa; the courtyard is
+     what makes a block a block, and at this scale it also reads as the car parks that actually
+     occupy those interiors.
+
+     THE ANGLE IS THE GRID'S, so every building on a street is parallel to it and to its
+     neighbours. The old lattice used rotation zero and called it grid-aligned, which was true of
+     a lattice and false of a city. */
+  const th = (d.gridRot !== undefined ? d.gridRot : d.rot || 0);
+  const CA = Math.cos(th), SA = Math.sin(th);
+  const toWorldN = (u, v) => [core0[0] + u * CA - v * SA, core0[1] + u * SA + v * CA];
+
+  const su = roadW(d, d.sb ? d.sb[0] : SUPERBLOCK_M[0]);
+  const sv = roadW(d, d.sb ? d.sb[1] : SUPERBLOCK_M[1]);
+
+  /* Street half-width plus a pavement, in normalised units: the distance from the street
+     centreline to the front of a plot. Taken from the same ROAD_ART figure onRoad clears against,
+     so a plot laid at exactly this distance passes the road test by construction rather than by
+     being nudged until it does. */
+  const frontN = roadW(d, ROAD_ART_M) * 0.5 * ROAD_KERB + roadW(d, PAVEMENT_M);
+  const plotDN = roadW(d, PLOT_DEPTH_M);
+  const frontMin = roadW(d, PLOT_FRONT_M[0]);
+  const frontMax = roadW(d, PLOT_FRONT_M[1]);
+
   const cells = [];
-  for (let nx = -0.95; nx <= 0.95; nx += pitch){
-    for (let ny = -0.95; ny <= 0.95; ny += pitch){
-      // Jitter the CELL, not the building, so blocks stay aligned but the grid is not a
-      // chessboard. A perfectly regular grid reads as Manhattan, which Abu Dhabi is not.
-      const jx = nx + (rnd() - 0.5) * pitch * 0.35;
-      const jy = ny + (rnd() - 0.5) * pitch * 0.35;
-      if (!insideIsle(d.id, jx, jy)) continue;
-      // Real distance to the outline: the old radial scale gave a margin that grew with distance
-      // from the centre and pointed the wrong way inside every notch.
-      if (distToOutline(d.id, jx, jy) < COAST_CLEAR + pitch * 0.30) continue;
-      if (avoid && inAvoid(d, jx, jy, pitch * 0.5)) continue;
-      if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
-      if (onRoad(d, jx, jy, pitch)) continue;          // THE ROAD WINS: it is placed first
-      if (rnd() > 0.88) continue;                      // occasional gap: a square, a car park
-      cells.push({ jx, jy });
+  const reach = 1.45;
+  const KU = Math.ceil(reach / su), KV = Math.ceil(reach / sv);
+  for (let a = -KU; a < KU; a++){
+    for (let b = -KV; b < KV; b++){
+      // Block interior in grid space, inset from both bounding streets.
+      const u0 = a * su + frontN, u1 = (a + 1) * su - frontN;
+      const v0 = b * sv + frontN, v1 = (b + 1) * sv - frontN;
+      if (u1 - u0 < plotDN * 2.2 || v1 - v0 < plotDN * 2.2) continue;
+
+      /* Each of the four frontages, laid as a run of plots. side 0 and 2 face along u, 1 and 3
+         along v; the building's long axis follows the street it fronts, which is why the
+         rotation differs by a quarter turn between the two pairs. */
+      for (let side = 0; side < 4; side++){
+        const along = (side % 2 === 0) ? (u1 - u0) : (v1 - v0);
+        // DERIVED, not chosen: fit whole plots into the frontage and let the width absorb the
+        // remainder, so a frontage never ends with a sliver or a gap.
+        const nP = Math.max(1, Math.floor(along / ((frontMin + frontMax) / 2)));
+        const fw = along / nP;
+        if (fw < frontMin * 0.7) continue;
+        for (let i = 0; i < nP; i++){
+          const t = (side % 2 === 0 ? u0 : v0) + (i + 0.5) * fw;
+          let u, v, rot;
+          if (side === 0){ u = t; v = v0 + plotDN / 2;  rot = th; }
+          else if (side === 2){ u = t; v = v1 - plotDN / 2; rot = th; }
+          else if (side === 1){ v = t; u = u1 - plotDN / 2; rot = th + Math.PI / 2; }
+          else { v = t; u = u0 + plotDN / 2; rot = th + Math.PI / 2; }
+
+          const [jx, jy] = toWorldN(u, v);
+          if (!insideIsle(d.id, jx, jy)) continue;
+          if (distToOutline(d.id, jx, jy) < COAST_CLEAR + plotDN * 0.6) continue;
+          if (avoid && inAvoid(d, jx, jy, plotDN * 0.5)) continue;
+          if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
+          if (onRoad(d, jx, jy, plotDN)) continue;      // THE ROAD STILL WINS, as a backstop
+          if (rnd() > 0.90) continue;                   // the occasional cleared plot
+          // Frontage across the street, depth back from it: the two are not interchangeable.
+          cells.push({ jx, jy, rot,
+                       w:(side % 2 === 0 ? fw : plotDN) * d.r,
+                       dp:(side % 2 === 0 ? plotDN : fw) * d.r });
+        }
+      }
     }
   }
 
   /* ---------- PASS 2: SPECS ----------
-     The entire remaining stream is consumed here, one fixed-size draw per cell, with no
+     The entire remaining stream is consumed here, one fixed-size draw per plot, with no
      knowledge of minH or lod. This is what makes the two layers the same city. */
-  const block = pitch * d.r;
   const specs = cells.map(c => buildingSpec(rnd, {
-    jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r,
-    block, tallest, capH:cap, coreX, coreZ }));
+    jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r, rot:c.rot,
+    plotW:c.w, plotD:c.dp, tallest, capH:cap, coreX, coreZ }));
 
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
      No random numbers below this line. */
@@ -3131,8 +3288,12 @@ function urbanFabric(d, layer, opts){
   const idx = new Map();
 
   keep.forEach(sp => walkSpec(sp, lod, o => {
-    M.position.set(sp.x + (o.ox || 0), GROUND + o.y, sp.z + (o.oz || 0));
-    M.rotation.set(0, 0, 0);              // grid-aligned: the whole point
+    /* The plant room's offset is in the BUILDING's frame, so it has to be rotated with it. Adding
+       it in world axes put roof plant off the side of every rotated tower. */
+    const cr = Math.cos(sp.rot), sr = Math.sin(sp.rot);
+    const ox = o.ox || 0, oz = o.oz || 0;
+    M.position.set(sp.x + ox * cr - oz * sr, GROUND + o.y, sp.z + ox * sr + oz * cr);
+    M.rotation.set(0, -sp.rot, 0);        // aligned to the STREET, which is the whole point now
     M.scale.set(o.w, o.h, o.d);
     M.updateMatrix();
     const k = key(o), m = meshes.get(k), i = idx.get(k) || 0;

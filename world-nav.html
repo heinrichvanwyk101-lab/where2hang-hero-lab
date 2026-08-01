@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v35', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v36', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -575,11 +575,26 @@ function applyLOD(){
   fitShadow();
 }
 
+/* The half-extent of the whole archipelago, measured from the districts themselves. */
+function worldBounds(){
+  let m = 0;
+  DISTRICTS.forEach(d => { m = Math.max(m, Math.hypot(d.x, d.z + 40) + d.r); });
+  return Math.max(120, m);
+}
+
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   resetOrbit();
   goal.target.set(0, 0, -40);
-  goal.dist = 600; goal.elev = 400; goal.angle = 0; goal.fov = 52;
+  /* SCALED WITH THE ISLANDS. world v60 put the archipelago on an ISLE_SCALE constant so the street
+     grid could hold real superblocks; these two numbers are the only camera figures in the file
+     that were absolute rather than derived from d.r, so they are the only ones that had to follow.
+     Derived from the world bounds rather than multiplied by a copy of the constant, since a second
+     copy is exactly what has gone wrong five times in this build already. The two ratios are the
+     ones the old literals implied at the old scale — 600 and 400 against a half-extent of 258 —
+     so the framing that was tuned by eye is preserved exactly and only the scale changes. */
+  const B = worldBounds();
+  goal.dist = B * 2.32; goal.elev = B * 1.55; goal.angle = 0; goal.fov = 52;
   applyLOD();
   ui('Abu Dhabi', 'Tap an island');
 }
