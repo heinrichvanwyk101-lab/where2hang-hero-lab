@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v70';
+export const BUILD = 'world v72';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1101,8 +1101,30 @@ function roadSkeleton(d){
        Only the majors. A minor street meeting the ring gets a slip lane instead, which is the
        whole point of the distinction: side streets MERGE onto a seafront road, they do not stop
        at it. */
-    ringJunctions.push(...arterials.filter(r => r.major).map(r => {
-      const e = r[r.length - 1];
+    /* BOTH ENDS OF EVERY RUN, AND ONLY IF IT REALLY REACHES THE RING.
+
+       A street crosses the island, so a major line meets the Corniche TWICE — and this only ever
+       looked at r[length - 1]. Measured: 30 ends were being handled and 31 were not, so almost
+       exactly half of every dual carriageway arrived at the seafront with no junction, no signals
+       and no markings at all. That is the asymmetry in the renders.
+
+       And the far end is not always the ring. A run cut short by the palace or the Etihad plaza
+       ends in the middle of the island, and taking its last point on faith planted 3 fully
+       signalised junctions in open ground. Both ends are now tested against the ring's actual
+       distance, so an end that is not a junction is not treated as one. */
+    const ringDistN = p => {
+      let b = Infinity;
+      ring.forEach(run => { for (let i = 0; i < run.length - 1; i++)
+        b = Math.min(b, distToPolyline(p[0], p[1], [run[i], run[i+1]])); });
+      return b;
+    };
+    const RING_END = roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB + roadW(d, 22);
+    const ends = [];
+    arterials.filter(r => r.major).forEach(r => {
+      if (ringDistN(r[r.length - 1]) <= RING_END) ends.push(r[r.length - 1]);
+      if (ringDistN(r[0])               <= RING_END) ends.push(r[0]);
+    });
+    ringJunctions.push(...ends.map(e => {
       /* TWO AXES, NOT FOUR ARMS AT NINETY DEGREES. A lattice crossing is two streets at the grid
          angle, so one number describes it. A ring junction is a grid street meeting a CURVE, and
          the ring's local tangent has nothing to do with the grid — assuming a right angle there
@@ -1770,26 +1792,24 @@ function paintGround(d, plan){
      roundabout instead of running through it and out over the sand. The skeleton itself is
      untouched: buildings still keep clear of the full length, which is what onRoad already
      tests and what stops a plot appearing in the gap. */
-  function ringJunction(a){
-    let best = Infinity, bi = a.length - 1;
-    for (let i = Math.floor(a.length * 0.4); i < a.length; i++){
-      let d = Infinity;
-      for (let r = 0; r < plan.ring.length; r++) d = Math.min(d, distToPolyline(a[i][0], a[i][1], plan.ring[r]));
-      if (d < best){ best = d; bi = i; }
-    }
-    return bi;
-  }
+  /* ringJunction is gone. It answered "which index of this run is nearest the ring", which was the
+     right question while streets overran the seafront and had to be cut back. Now that the
+     skeleton terminates them at the kerb, both ends ARE the junction and the question is instead
+     "is this end actually at the ring" — which is a distance test, not a search, and lives at the
+     two places that ask it. */
+
 
   // ---- draw, coarsest first so markings always land on top of tarmac ----
-  const junc = plan.arterials.map(ringJunction);
   /* A major street is drawn as a PRIMARY — dual carriageway, median, shoulders — and a side street
-     as a secondary with parking bays. The hierarchy was only in the widths until now; the two
-     actually being different kinds of road is what makes it read. `slice` drops the run's `major`
-     flag, so the test reads the original run rather than the slice. */
-  plan.arterials.forEach((a, i) => {
-    const run = a.slice(0, junc[i] + 1);
-    if (a.major) roadPrimary(run); else roadSecondary(run);
-  });
+     as a secondary with parking bays.
+
+     NO TRUNCATION ANY MORE. This used to slice the run at ringJunction's index, which dates from
+     when streets ran past the ring and had to be cut back. v66 made them terminate at the ring's
+     inner kerb in the SKELETON, so the run is already exactly the right length — and the slice was
+     now a hazard rather than a help, because ringJunction searches from 40 per cent along and
+     returns the nearest index to the ring, which on a curved shore can be a MIDDLE point. When it
+     was, the street lost its far half and quietly stopped in the fabric. */
+  plan.arterials.forEach(a => { if (a.major) roadPrimary(a); else roadSecondary(a); });
   plan.ring.forEach(seg => roadPrimary(seg));
 
   /* ===========================================================================
@@ -1837,11 +1857,15 @@ function paintGround(d, plan){
     return best;
   }
 
-  function slipLanes(a, bi){
-    if (bi < 4) return;
+  /* SLIPS AT BOTH ENDS TOO, for the same reason: a minor street also crosses the island and also
+     meets the ring twice. `step` is +1 at the far end and -1 at the near one, which is all that
+     changes — the approach direction is read three points back along the street either way. */
+  function slipLanes(a, bi, step){
+    const p0i = bi - 3 * step;
+    if (p0i < 0 || p0i >= a.length) return;
     const e = a[bi];
     // Street direction, pointing INTO the junction.
-    const p0 = a[bi - 3];
+    const p0 = a[p0i];
     let sx = e[0] - p0[0], sy = e[1] - p0[1];
     const sl = Math.hypot(sx, sy) || 1; sx /= sl; sy /= sl;
 
@@ -1881,7 +1905,18 @@ function paintGround(d, plan){
        against the geometry rather than nudge it until it looks right. */
     const cN = [corner[0], corner[1]];
     const sN = [sx, sy], tN = [tx, ty];
-    [1, -1].forEach(sgn => {
+
+    /* ONE SLIP, NOT TWO. Both turning directions gave 144 wedges round five islands and, more to
+       the point, is not what gets built: a side street joining a seafront artery gets a free-flow
+       merge in the DIRECTION OF TRAVEL, and the opposing turn either waits at the give-way or is
+       banned outright. The UAE drives on the right, so the merge is the right turn.
+
+       The sign is derived from the geometry rather than picked: cross the street's inbound
+       direction with the ring's tangent and take the sign, so the slip is on the correct side
+       whichever way round the ring the polyline happens to run at this junction. Getting that from
+       a constant would put half of them on the wrong side of the road. */
+    const handed = (sx * ty - sy * tx) >= 0 ? 1 : -1;
+    [handed].forEach(sgn => {
       let Rm = SLIP_R_M;
       for (; Rm >= SLIP_MIN_M; Rm -= 2){
         const Rn = roadW(d, Rm);
@@ -1914,13 +1949,30 @@ function paintGround(d, plan){
       /* THE NOSE ISLAND. The area between the fillet and the corner, filled as kerbed paving. It
          is drawn from the SAME three points the curve was built from, so the island cannot drift
          away from the lane that defines it. */
+      /* THE NOSE ISLAND, INSET AND TONED DOWN.
+
+         It was filled with SURF.pavingLt at luminance 0.88 — the brightest surface anywhere on the
+         island — across the whole 34-metre wedge, with a 0.92 kerb outlining it. Against tarmac at
+         0.22 that inverts the whole junction: from the plan camera it reads as a white arrowhead
+         with a thin dark lane around it, which is the opposite of what a slip lane looks like.
+
+         Two corrections. It shrinks toward its own centroid so there is tarmac on BOTH sides of it
+         — an island with road only on one side is a verge, not an island — and it takes the
+         ordinary paving tone, a little darker again, because a traffic island is concrete and dust,
+         not a lightbox. */
+      const tri = [[ax, ay], pts[6], [bx, by], [cx, cy]];
+      const gx = (tri[0][0] + tri[1][0] + tri[2][0] + tri[3][0]) / 4;
+      const gy = (tri[0][1] + tri[1][1] + tri[2][1] + tri[3][1]) / 4;
+      const K = 0.62;                            // shrink toward the centroid
+      const inset = p => [gx + (p[0] - gx) * K, gy + (p[1] - gy) * K];
+      const isl = [inset([ax, ay])].concat(
+        [2, 4, 6, 8, 10].map(k => inset(pts[k])), [inset([bx, by]), inset([cx, cy])]);
       g.beginPath();
-      g.moveTo(ax, ay);
-      for (let k = 1; k <= 12; k++) g.lineTo(pts[k][0], pts[k][1]);
-      g.lineTo(bx, by); g.lineTo(cx, cy);
+      g.moveTo(isl[0][0], isl[0][1]);
+      for (let k = 1; k < isl.length; k++) g.lineTo(isl[k][0], isl[k][1]);
       g.closePath();
-      g.fillStyle = SURF.pavingLt; g.fill();
-      g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(1, U * 0.0045); g.stroke();
+      g.fillStyle = shade(SURF.paving, 0.88); g.fill();
+      g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(1, U * 0.0032); g.stroke();
     });
   }
 
@@ -2051,12 +2103,20 @@ function paintGround(d, plan){
      THE ARTERIAL ROUNDABOUTS ARE GONE with the same reasoning. A roundabout is a third kind of
      junction and there is no room for one where a major meets the ring once that junction is
      signalised. The core roundabout stays: it is the one place with the space for it. */
-  plan.arterials.forEach((a, i) => {
-    if (a.major) return;
-    const bi = junc[i];
-    if (bi < 4) return;
-    slipLanes(a, bi);
-  });
+  {
+    const RING_END = roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB + roadW(d, 22);
+    const ringDistN = p => {
+      let b = Infinity;
+      plan.ring.forEach(run => { for (let i = 0; i < run.length - 1; i++)
+        b = Math.min(b, distToPolyline(p[0], p[1], [run[i], run[i+1]])); });
+      return b;
+    };
+    plan.arterials.forEach(a => {
+      if (a.major || a.length < 5) return;
+      if (ringDistN(a[a.length - 1]) <= RING_END) slipLanes(a, a.length - 1,  1);
+      if (ringDistN(a[0])            <= RING_END) slipLanes(a, 0,            -1);
+    });
+  }
   roundabout(core[0], core[1], cr, coreApp);
 
   g.restore();
