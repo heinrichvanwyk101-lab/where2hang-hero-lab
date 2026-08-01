@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v33', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v34', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -502,6 +502,27 @@ const goal = { target:new THREE.Vector3(0,0,-40), dist:430, elev:300, angle:0, f
 const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
                angle:goal.angle, fov:goal.fov };
 
+/* ===========================================================================
+   FREE LOOK.
+
+   The state machine owns the camera and that stays true: world, district and place each aim it,
+   and every transition is a damped move toward a goal. What was missing is any way to look at the
+   result from somewhere the state machine did not choose — which makes a fault visible from one
+   angle impossible to show, and a build impossible to inspect.
+
+   SO ORBIT IS AN OFFSET, NOT A REPLACEMENT. yaw, lift and zoom are added on top of the damped
+   goal every frame. The state machine keeps full authority over where the camera is nominally
+   pointing, transitions still work while a drag is in progress, and there is no second source of
+   truth to get out of step. Reset on every state change, so tapping an island always gives the
+   composed shot rather than whatever angle was left over.
+
+   LIMITS ARE PART OF THE DESIGN. Elevation is clamped above the horizon: this is a diorama on a
+   dark ground plane and there is nothing underneath it to see, so allowing the camera below the
+   waterline only ever produces a broken frame. Zoom is bounded either side of the state's own
+   distance rather than absolutely, so the same gesture means the same thing at every scale. */
+const orbit = { yaw:0, lift:0, zoom:1, on:false };
+function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; }
+
 function applyLOD(){
   DISTRICTS.forEach(d => {
     const on = (d === activeDistrict);
@@ -518,12 +539,18 @@ function applyLOD(){
 
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
+  resetOrbit();
   goal.target.set(0, 0, -40);
   goal.dist = 600; goal.elev = 400; goal.angle = 0; goal.fov = 52;
   applyLOD();
   ui('Abu Dhabi', 'Tap an island');
 }
 function setDistrict(d){
+  /* Every state change composes a shot, so a leftover angle from the last one would arrive as a
+     camera that lands somewhere the transition did not intend. orbit.on stays as it is: once the
+     user has taken hold of the camera, the idle drift should not come back for the rest of the
+     session. */
+  resetOrbit();
   state = STATE.DISTRICT; activeDistrict = d; activePlace = null;
   goal.target.set(d.x, GROUND + 8, d.z);
   /* THE PORTRAIT FIELD CAUGHT ME TWICE. I corrected the world view for it and then set the
@@ -549,6 +576,7 @@ function setDistrict(d){
      d.built ? 'Tap a place, or Back' : 'Placeholder island — Back');
 }
 function setPlace(d, anchor){
+  resetOrbit();
   state = STATE.PLACE; activeDistrict = d; activePlace = anchor;
   const wx = d.x + anchor.x * Math.cos(d.rot) + anchor.z * Math.sin(d.rot);
   const wz = d.z - anchor.x * Math.sin(d.rot) + anchor.z * Math.cos(d.rot);
@@ -965,10 +993,64 @@ document.getElementById('vMode').addEventListener('click',
 /* ---------- tap ---------- */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 let dx0=0, dy0=0, dt0=0;
-canvas.addEventListener('pointerdown', e => { dx0=e.clientX; dy0=e.clientY; dt0=performance.now(); });
+
+/* A Map, not a pair of variables. Two fingers on a phone arrive as two independent pointer
+   streams and the second one can be released first; keeping them by pointerId is the only way
+   the pinch distance stays meaningful when that happens. */
+const pointers = new Map();
+let pinch0 = 0, zoom0 = 1, lx = 0, ly = 0;
+
+canvas.addEventListener('pointerdown', e => {
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  canvas.setPointerCapture(e.pointerId);
+  if (pointers.size === 1){
+    dx0 = e.clientX; dy0 = e.clientY; dt0 = performance.now();
+    lx = e.clientX; ly = e.clientY;
+  } else if (pointers.size === 2){
+    const [a, b] = [...pointers.values()];
+    pinch0 = Math.hypot(a.x - b.x, a.y - b.y);
+    zoom0  = orbit.zoom;
+  }
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+  if (pointers.size >= 2){
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch0 > 8){
+      // Pinching APART should move the camera closer, so the ratio is inverted.
+      orbit.zoom = Math.max(0.35, Math.min(2.6, zoom0 * (pinch0 / d)));
+      orbit.on = true;
+    }
+    return;
+  }
+  /* Scaled by viewport width, so the same swipe turns the model by the same amount on any
+     screen — a fixed pixels-per-radian figure makes the gesture feel twice as fast on a folded
+     Z Fold as on an unfolded one. */
+  orbit.yaw  -= (e.clientX - lx) / window.innerWidth * 3.2;
+  orbit.lift += (e.clientY - ly) / window.innerHeight * 1.9;
+  orbit.lift  = Math.max(-0.55, Math.min(1.5, orbit.lift));
+  lx = e.clientX; ly = e.clientY;
+  if (Math.hypot(e.clientX - dx0, e.clientY - dy0) > 12) orbit.on = true;
+});
+
+const endPointer = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch0 = 0; };
+canvas.addEventListener('pointercancel', endPointer);
+
+// Desktop convenience while working on the thing; harmless on a phone.
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  orbit.zoom = Math.max(0.35, Math.min(2.6, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.10)));
+  orbit.on = true;
+}, { passive:false });
 canvas.addEventListener('pointerup', e => {
-  // Tap, not drag. Without this every camera drag also fires a selection.
-  if (Math.hypot(e.clientX-dx0, e.clientY-dy0) > 12 || performance.now()-dt0 > 600) return;
+  const many = pointers.size > 1;
+  endPointer(e);
+  // Tap, not drag, and not the tail of a pinch. Without this every camera drag fires a selection.
+  if (many || Math.hypot(e.clientX-dx0, e.clientY-dy0) > 12 || performance.now()-dt0 > 600) return;
   ndc.x =  (e.clientX / window.innerWidth) * 2 - 1;
   ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
   ray.setFromCamera(ndc, camera);
@@ -1108,12 +1190,19 @@ function frame(){
   cur.angle += (goal.angle - cur.angle) * e;
   cur.fov   += (goal.fov   - cur.fov)   * e;
 
-  const drift = state === STATE.WORLD ? Math.sin(t * 0.045) * 0.09 : 0;
-  const a = cur.angle + drift;
+  /* The idle drift stops the moment the camera is touched. Two things moving the view at once
+     reads as a bug, and on a still frame the drift is what makes a held angle look unsteady. */
+  const drift = (state === STATE.WORLD && !orbit.on) ? Math.sin(t * 0.045) * 0.09 : 0;
+  const a = cur.angle + drift + orbit.yaw;
+  const dist = cur.dist * orbit.zoom;
+  /* Elevation scales with distance rather than adding to it, so a zoomed-in camera does not end
+     up looking down from the height the world view wanted. Floored just above the ground plane:
+     this is a diorama and there is nothing under it to look at. */
+  const elev = Math.max(GROUND + 4, (cur.elev - GROUND) * orbit.zoom * (1 + orbit.lift) + GROUND);
   camera.position.set(
-    cur.target.x + Math.sin(a) * cur.dist,
-    cur.elev,
-    cur.target.z + Math.cos(a) * cur.dist
+    cur.target.x + Math.sin(a) * dist,
+    elev,
+    cur.target.z + Math.cos(a) * dist
   );
   camera.lookAt(cur.target);
 
@@ -1122,7 +1211,9 @@ function frame(){
      than the one the state nominally implies — during a flight it eases on the same curve as
      the move, which is the whole point. */
   if (scene.fog && fogKey){
-    const camDist = Math.hypot(cur.dist, cur.elev - GROUND);
+    // The orbited distance, not the state's nominal one, or the haze stops matching the view
+    // the moment anything is zoomed.
+    const camDist = Math.hypot(dist, elev - GROUND);
     const f = fogFor(camDist, fogKey);
     scene.fog.near = f.near;
     scene.fog.far  = f.far;

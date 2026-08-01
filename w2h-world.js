@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v52';
+export const BUILD = 'world v53';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1670,7 +1670,81 @@ function fabricWindows(rows, warm){
   return t;
 }
 
-/* One texture per class per temperature. Warm is the default city; cool is the option the
+/* DAYTIME IS WHERE THE SAND CASTLES COME FROM, and it is not only the missing windows.
+
+   The view switcher hands every mesh without a `dayMats` override the shell's single `dayMat` —
+   one flat 0xC9C2B2 at roughness 0.88. The fabric has never set that override, so in Day the
+   limestone, the precast, the brushed aluminium, the blue-green glass and the bronze all collapse
+   into ONE colour. Every distinction the material work buys at dusk and night disappears the
+   moment the sun comes up, and what is left is a pile of identical tan blocks. The windows are
+   the visible half of the complaint; the material collapse is the half that made it look like
+   sand rather than like a city with no windows.
+
+   TWO FIXES, ONE MECHANISM. A day albedo map that darkens the glazing, and a per-family day
+   colour so the five wall types stay five wall types. Both ride on `dayMats`, which is a per-MESH
+   userData override, so this costs no extra draw calls at all — the bucket structure built for
+   the night materials already gives every material-and-class pair its own mesh to hang them on.
+
+   THE MAP MODULATES, IT DOES NOT REPLACE. Mean brightness near 1.0, so the family colour still
+   sets the tone and the per-instance tint still multiplies on top exactly as it does at night.
+   Glazing is drawn DARKER than the wall, which is what glass does in daylight — it is a hole in
+   a bright facade, not a light source. That is the opposite of the emissive map and the reason
+   it has to be a second texture rather than the same one reused. */
+function fabricFacadeDay(rows){
+  const cols = 16;
+  const cv = document.createElement('canvas');
+  cv.width = cols * 4; cv.height = rows * 4;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+
+  // Spandrel and mullion lines, the strongest cue that a surface is a building.
+  g.fillStyle = 'rgba(120,116,110,0.55)';
+  for (let y = 0; y < rows; y++) g.fillRect(0, y * 4 + 3, cv.width, 1);
+  g.fillStyle = 'rgba(120,116,110,0.30)';
+  for (let x = 0; x < cols; x++) g.fillRect(x * 4 + 3, 0, 1, cv.height);
+
+  /* Glazing. Deterministic, and deliberately NOT the same pattern as the night map: a window is
+     dark by day whether or not anyone is in it, so this is a full grid with a little variation
+     rather than the sparse lit runs. */
+  let h = 0x2545F491;
+  const rnd = () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
+  for (let y = 0; y < rows; y++){
+    for (let x = 0; x < cols; x++){
+      const a = 0.30 + rnd() * 0.16;
+      g.fillStyle = 'rgba(74,84,92,' + a.toFixed(2) + ')';
+      g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = MAX_ANISO;
+  return t;
+}
+const DAY_TEX = WCLASS.map(c => fabricFacadeDay(c.rows));
+
+/* The five wall types as they read at midday. These are the DAY equivalents of the duskColor
+   entries the lift already honours, and they exist for the same reason: a skyline of one material
+   is the loudest fault in any render of it. */
+const DAY_FAMILY = {
+  rend:   0xE2D6BB,      // warm limestone render
+  stone:  0xD2CBBE,      // precast concrete, neutral
+  clad:   0xC4C8CC,      // brushed aluminium, faintly cool
+  glass:  0xA8BAC4,      // blue-green solar glass, darker than the stone around it
+  bronze: 0xBCA88C,      // bronze coating, warm and duller
+  roof:   0x9A9384,      // ballast and plant
+};
+function dayFacade(family, tex){
+  const m = new THREE.MeshStandardMaterial({
+    color: DAY_FAMILY[family], roughness: 0.86, metalness: 0.0 });
+  if (tex) m.map = tex;
+  return m;
+}
+
+/* One texture per class per temperature./* One texture per class per temperature. Warm is the default city; cool is the option the
    district registry already carried for the glassier islands, and it now selects a texture
    rather than a whole separate material. */
 const WIN_TEX = WCLASS.map((c, i) => [fabricWindows(c.rows, true), fabricWindows(c.rows, false)]);
@@ -2713,6 +2787,9 @@ function fabricMats(cool){
   Object.entries(Object.assign({ roof:matRoofDeck }, base)).forEach(([n, m]) => {
     out[n] = WCLASS.map((_, i) => n === 'roof' ? m : glazed(m, WIN_TEX[i][cool ? 1 : 0]));
     out[n].raw = m;                       // crowns, plant rooms and anything else not a wall
+    // The Day counterparts, hung on the same buckets and therefore free.
+    out[n].day = WCLASS.map((_, i) => dayFacade(n, n === 'roof' ? null : DAY_TEX[i]));
+    out[n].dayRaw = dayFacade(n, null);
   });
   FABRIC_MATS.set(k, out);
   return out;
@@ -2797,6 +2874,9 @@ function urbanFabric(d, layer, opts){
     const [tc, g] = k.split('|');
     const [t, c] = tc.split('#');
     const m = new THREE.InstancedMesh(PROFILES[g], c === 'r' ? MATS[t].raw : MATS[t][+c], n);
+    /* Without this the switcher falls back to its own single dayMat and the whole city goes one
+       colour in Day. Set per mesh, so it costs nothing beyond the material objects themselves. */
+    m.userData.dayMats = c === 'r' ? MATS[t].dayRaw : MATS[t].day[+c];
     m.castShadow = true; m.receiveShadow = true;
     meshes.set(k, m);
   });
