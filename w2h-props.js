@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v16';
+export const BUILD = 'props v17';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -110,14 +110,31 @@ function frondGeometry(){
   return g;
 }
 
-function crownGeometry(n){
+/* ===========================================================================
+   THREE PALMS, NOT ONE SCALED THREE WAYS.
+
+   Every palm in the scene was one geometry — eleven fronds at fixed angles — with a uniform
+   per-instance scale of 0.80 to 1.28 on top. Uniform scale is the problem: it changes how BIG a
+   palm is and cannot change what KIND of palm it is, so the crown-to-trunk ratio was identical on
+   all two thousand of them and the same eleven fronds sat at the same eleven bearings. At two
+   thousand instances that is not a tree, it is a stamp, and the eye finds a repeated stamp long
+   before it counts how many there are.
+
+   A young date palm is not a small mature one. It is a short thick stub carrying a tight upright
+   crown; the trunk lengthens and thins with age while the crown spreads and droops. Those are
+   different SHAPES, which means different geometries — three of them, at 8, 11 and 14 fronds.
+
+   The bearing offset is per-variant too. Without it the three share a first frond pointing the
+   same way, and a mixed avenue still shows a rhythm.
+   =========================================================================== */
+function crownGeometry(n, droop, phase){
   const parts = [];
   for (let i = 0; i < n; i++){
     const f = frondGeometry();
     // Alternate the droop. A crown where every frond leaves at the same angle reads as an
     // umbrella; real palms have a ragged upper tier and a heavier lower one.
-    f.rotateZ(-0.10 + (i % 2) * 0.34);
-    f.rotateY(i * (Math.PI * 2 / n) + (i % 3) * 0.09);
+    f.rotateZ(-0.10 + (i % 2) * 0.34 * droop);
+    f.rotateY(i * (Math.PI * 2 / n) + (i % 3) * 0.09 + phase);
     parts.push(f);
   }
   const g = mergeGeometries(parts);
@@ -125,19 +142,29 @@ function crownGeometry(n){
   return g;
 }
 
-const PALM_H = 15 * U_PER_M;                       // trunk height, 1.92 units
-/* A SIX-SIDED TRUNK IS A HEXAGON, and on a lit cylinder that is six flat facets with hard
-   shading steps down every one. Ten reads as round at the distance these are actually seen from.
-   Four extra side quads on a geometry that is instanced, so the cost is eight triangles times the
-   palm count and nothing at all in draw calls. */
-const trunkGeo = new THREE.CylinderGeometry(0.075, 0.125, PALM_H, 10, 1);
-trunkGeo.translate(0, PALM_H / 2, 0);
-/* ELEVEN FRONDS. A date palm carries thirty or more and seven reads as a spider — the gaps
-   between fronds are wider than the fronds. Eleven is where the crown closes up into a canopy
-   from the district camera while still showing separate leaves from the place camera. */
-const crownGeo = crownGeometry(11);
-crownGeo.translate(0, PALM_H, 0);
-const palmGeo = mergeGeometries([trunkGeo, crownGeo], true);
+const PALM_H = 15 * U_PER_M;                       // a mature trunk, 1.92 units
+
+/* trunkH, topR, botR, fronds, crownScale, droop, phase — a real growth sequence rather than three
+   arbitrary sizes. The young palm's trunk is 40 per cent of the mature one but its trunk is
+   THICKER at the top relative to its height, and its crown is upright and tight. */
+const PALM_KINDS = [
+  { key:'mature', h:1.00, top:0.075, bot:0.125, n:14, cs:1.00, droop:1.00, ph:0.0  },
+  { key:'medium', h:0.74, top:0.082, bot:0.120, n:11, cs:0.82, droop:0.78, ph:0.7  },
+  { key:'young',  h:0.42, top:0.095, bot:0.115, n: 8, cs:0.60, droop:0.42, ph:1.9  },
+];
+
+const PALM_GEO = PALM_KINDS.map(k => {
+  const th = PALM_H * k.h;
+  /* A SIX-SIDED TRUNK IS A HEXAGON, and on a lit cylinder that is six flat facets with hard
+     shading steps down every one. Ten reads as round at the distance these are actually seen
+     from, and costs eight triangles on a geometry that is instanced. */
+  const t = new THREE.CylinderGeometry(k.top, k.bot, th, 10, 1);
+  t.translate(0, th / 2, 0);
+  const c = crownGeometry(k.n, k.droop, k.ph);
+  c.scale(k.cs, k.cs, k.cs);
+  c.translate(0, th, 0);
+  return mergeGeometries([t, c], true);
+});
 
 /* ---------- lamp column ----------
    The head is a separate group so it can be given an emissive material. At night these are the
@@ -323,9 +350,27 @@ function addProps(d, layer, plan, budget = {}){
       const lx = x + nx * o1 * s, ly = y + ny * o1 * s;
       if (lamps.length < B.lamps && inside(lx * 1.02, ly * 1.02))
         lamps.push({ x:lx, y:ly, rot: Math.atan2(tx, ty) });
-      [[x + nx*o2, y + ny*o2], [x - nx*o2, y - ny*o2]].forEach(p => {
-        if (palms.length < B.palms && inside(p[0] * 1.02, p[1] * 1.02))
-          palms.push({ x:p[0], y:p[1] });
+      /* THE AVENUE WAS A PAIR AT EVERY STEP, both sides, at exactly the same offset — which is
+         the single most visible repetition in the scene, because a road is a straight line and a
+         perfectly periodic thing on a straight line is a comb.
+
+         Real planting has gaps where a driveway or a junction interrupts it, runs of two or three
+         where one has been replaced, and a metre or two of slop in the setback. Each side is now
+         rolled independently, a third of the steps are skipped, and where planting does happen it
+         is sometimes a small group rather than a single tree. */
+      [1, -1].forEach(sgn => {
+        if (R() < 0.34) return;                        // a gap: a crossing, an entrance
+        const n = R() < 0.18 ? 2 + Math.floor(R() * 2) : 1;
+        for (let k = 0; k < n; k++){
+          if (palms.length >= B.palms) break;
+          // Jitter along the road as well as across it, so a group is a group and not a row.
+          const jt = (k - (n - 1) / 2) * 0.016 + (R() - 0.5) * 0.010;
+          const off = o2 * (0.93 + R() * 0.16);
+          const px = x + nx * off * sgn + tx * jt;
+          const py = y + ny * off * sgn + ty * jt;
+          if (inside(px * 1.02, py * 1.02))
+            palms.push({ x:px, y:py, kind: R() < 0.62 ? 0 : (R() < 0.72 ? 2 : 1) });
+        }
       });
     });
 
@@ -348,7 +393,11 @@ function addProps(d, layer, plan, budget = {}){
     for (let i = 0; i < n && palms.length < B.palms; i++){
       const a = R() * 6.2832, rr = p.r * (0.25 + R() * 0.8);
       const px = p.x + Math.cos(a) * rr, py = p.y + Math.sin(a) * rr;
-      if (inside(px * 1.03, py * 1.03)) palms.push({ x:px, y:py });
+      /* Parkland skews YOUNGER than an avenue: a park is planted at once and thins over decades,
+         whereas a street is replanted tree by tree. Different mixes in different places is most of
+         what stops the three variants reading as a shuffled deck. */
+      if (inside(px * 1.03, py * 1.03))
+        palms.push({ x:px, y:py, kind: R() < 0.34 ? 0 : (R() < 0.70 ? 1 : 2) });
     }
   });
 
@@ -412,7 +461,8 @@ function addProps(d, layer, plan, budget = {}){
       const nx = -ty, ny = tx;
       const o = 0.030 * ((i % 2) ? 1 : -1);
       const px = x + nx * o, py = y + ny * o;
-      if (inside(px * 1.02, py * 1.02)) palms.push({ x:px, y:py });
+      if (inside(px * 1.02, py * 1.02))
+        palms.push({ x:px, y:py, kind: R() < 0.55 ? 0 : (R() < 0.80 ? 1 : 2) });
     });
   }
 
@@ -475,11 +525,24 @@ function addProps(d, layer, plan, budget = {}){
     M.scale.set(p.s, p.s * (0.7 + R() * 0.6), p.s);
   });
 
-  build(palmGeo, [matBark, matFrond], palms, (p) => {
-    const s = 0.80 + R() * 0.48;
-    M.position.set(p.x * r, Y, -p.y * r);
-    M.rotation.set((R() - 0.5) * 0.14, R() * 6.2832, (R() - 0.5) * 0.14);
-    M.scale.set(s, s * (0.9 + R() * 0.3), s);
+  /* ONE MESH PER VARIANT. Instancing is per geometry, so three shapes is three draw calls where
+     there was one — the cheapest possible price for the variation, and three calls against the
+     three hundred this district already issues.
+
+     The per-instance scale stays, but NARROWER than before: it was doing all the variation work
+     and had to span 0.80 to 1.28 to manage it. With the shape carrying the difference, scale goes
+     back to being what it should be — two trees of the same age are not the same height, but they
+     are not half again as tall either. */
+  PALM_GEO.forEach((geo, k) => {
+    const list = palms.filter(p => (p.kind || 0) === k);
+    build(geo, [matBark, matFrond], list, (p) => {
+      const s = 0.88 + R() * 0.26;
+      M.position.set(p.x * r, Y, -p.y * r);
+      M.rotation.set((R() - 0.5) * 0.16, R() * 6.2832, (R() - 0.5) * 0.16);
+      // Height and girth vary independently: a wind-drawn palm is tall and thin, a sheltered one
+      // squat. A single uniform factor cannot say that.
+      M.scale.set(s * (0.94 + R() * 0.14), s * (0.88 + R() * 0.34), s * (0.94 + R() * 0.14));
+    });
   });
 
   build(lampGeo, [matPost, matGlow], lamps, (p) => {

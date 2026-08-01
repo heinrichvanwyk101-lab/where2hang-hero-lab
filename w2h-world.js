@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v62';
+export const BUILD = 'world v63';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1498,6 +1498,50 @@ function paintGround(d, plan){
     g.setLineDash([]);
   }
 
+  /* ===========================================================================
+     ASPHALT IS NOT ONE COLOUR, and this is the strongest single reason the roads read as drawn
+     while the landscaping and the city read as grown.
+
+     Every carriageway in the scene was one flat SURF.road along its entire length. Real tarmac is
+     a patchwork: it is laid in runs, resurfaced in sections decades apart, patched at trenches,
+     and bleached unevenly by the sun. From above that is the dominant texture of a road — more
+     than the markings, which is why a satellite photo of a motorway is a mosaic of grey-browns
+     rather than a grey ribbon.
+
+     So a carriageway is stroked in SEGMENTS with a jittered shade instead of once. Segment length
+     is derived from the surfacing run — about 120 metres, which is a day's paving — and the shade
+     walks rather than jumps, because a resurfaced section abuts the old one and the two differ by
+     a little, not by a lot. Two per cent of segments take a bigger step: that is the recent patch.
+
+     Deterministic through rndPaint, like every other pattern in the painter, so the same city
+     resurfaces the same way on every reload. */
+  const SURFACE_RUN_M = 120;
+  function strokeAsphalt(pts, style, width){
+    if (pts.length < 2) return;
+    /* DERIVED FROM THE PATH'S OWN LENGTH, not from its point count. My first attempt mixed
+       normalised units, metres and an invented 0.06 and produced a segment longer than the street,
+       so every road came out in exactly one tone — the bug the whole function exists to fix,
+       reintroduced inside the fix. pts are in canvas pixels and U is pixels per normalised unit,
+       so the conversion back to metres is one division and two multiplications, all of them
+       quantities this file already holds. */
+    let px = 0;
+    for (let i = 0; i < pts.length - 1; i++)
+      px += Math.hypot(pts[i+1][0] - pts[i][0], pts[i+1][1] - pts[i][1]);
+    const metres = px / U * d.r * M_PER_UNIT;
+    const runs = Math.max(1, Math.round(metres / SURFACE_RUN_M));
+    const seg = Math.max(1, Math.ceil((pts.length - 1) / runs));
+    let tone = 0.94 + R() * 0.12;
+    for (let i = 0; i < pts.length - 1; i += seg){
+      // Overlap by one point so consecutive runs share a joint and no sand shows between them.
+      const run = pts.slice(i, Math.min(pts.length, i + seg + 1));
+      if (run.length < 2) break;
+      tone += (R() - 0.5) * 0.05;
+      if (R() < 0.02) tone += (R() - 0.5) * 0.22;     // a patch, or a recently relaid section
+      tone = Math.max(0.82, Math.min(1.14, tone));
+      strokePx(run, shade(style, tone), width);
+    }
+  }
+
   /* PRIMARY. Two carriageways with a median between them, so the geometry is: kerb casing, one
      tarmac band per direction, a planted median filling the gap, then markings. Drawing the
      tarmac as two bands rather than one wide band with a median painted over it means the median
@@ -1510,15 +1554,30 @@ function paintGround(d, plan){
     g.lineCap = 'butt'; g.lineJoin = 'round';
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     [-1, 1].forEach(sgn => {
-      strokePx(offsetPath(pts, sgn * halfC), SURF.road, car);
+      /* THE SHOULDER, outside the carriageway and inside the kerb casing. It is the strip that
+         makes a road sit IN the ground rather than on it: grit and dust swept off the lanes,
+         paler and warmer than the tarmac, and the thing whose absence made every edge a hard
+         line between black and sand. */
+      strokePx(offsetPath(pts, sgn * (halfC + car * 0.56)), SURF.sandDk, car * 0.30);
+      strokeAsphalt(offsetPath(pts, sgn * halfC), SURF.road, car);
       // Edge line hard against the kerb, dashed divider down the middle of the two lanes.
       strokePx(offsetPath(pts, sgn * (halfC + car * 0.40)), SURF.line, Math.max(1, W * 0.035));
       strokePx(offsetPath(pts, sgn * halfC), SURF.line, Math.max(1, W * 0.030),
                [U * 0.026, U * 0.030]);
     });
-    // The median itself: kerb faces with planting between them.
+    // The median: kerb faces the full length, but the PLANTING breaks for turning bays.
     strokePx(offsetPath(pts, 0), SURF.kerb, med);
-    strokePx(offsetPath(pts, 0), SURF.lawn + '0.92)', med * 0.52);
+    /* A continuous green strip down a dual carriageway is the giveaway. A real median is
+       interrupted every few hundred metres by a U-turn slot, and the planting stops short of each
+       one — so the green is a series of beds, not a ribbon. Bed length is derived from the run. */
+    {
+      const mp = offsetPath(pts, 0);
+      const bed = Math.max(3, Math.round(mp.length / 7));
+      for (let i = 0; i < mp.length - 1; i += bed){
+        const run = mp.slice(i, Math.min(mp.length, i + Math.round(bed * 0.74)));
+        if (run.length > 1) strokePx(run, SURF.lawn + '0.92)', med * 0.52);
+      }
+    }
   }
 
   /* SECONDARY. One carriageway, still kerbed, edge lines and a dashed centre. Narrower casing
@@ -1527,10 +1586,33 @@ function paintGround(d, plan){
     const W = U * roadW(d, pts.major ? ROAD_MAJOR_M : ROAD_ART_M);
     g.lineCap = 'butt'; g.lineJoin = 'round';
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
-    strokePx(offsetPath(pts, 0), SURF.road, W);
+    strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
     [-1, 1].forEach(sgn => strokePx(offsetPath(pts, sgn * W * 0.40), SURF.line,
                                     Math.max(1, W * 0.045)));
     strokePx(offsetPath(pts, 0), SURF.line, Math.max(1, W * 0.040), [U * 0.022, U * 0.026]);
+
+    /* PARKING BAYS. A side street in Abu Dhabi is lined with echelon parking, and the ticks
+       between the bays are the finest regular detail visible from the district camera — the thing
+       that says "cars park here" without drawing a single car.
+
+       Placed in RUNS with gaps rather than continuously, because a bay run stops at every
+       crossing and driveway, and a perfectly continuous comb would be the same repetition the
+       palms were just taken off. */
+    const bay = offsetPath(pts, 0);
+    const kw = Math.max(0.8, W * 0.05);
+    g.strokeStyle = SURF.line; g.lineWidth = kw;
+    g.beginPath();
+    for (let i = 1; i < bay.length - 1; i++){
+      if (R() < 0.30) continue;                       // a crossing, an entrance, a hydrant
+      const ax = bay[i+1][0] - bay[i-1][0], ay = bay[i+1][1] - bay[i-1][1];
+      const L = Math.hypot(ax, ay) || 1;
+      const nx = -ay / L, ny = ax / L;
+      const sgn = (i % 2) ? 1 : -1;
+      const in0 = W * 0.52, in1 = W * 0.52 + W * 0.42;
+      g.moveTo(bay[i][0] + nx * in0 * sgn, bay[i][1] + ny * in0 * sgn);
+      g.lineTo(bay[i][0] + nx * in1 * sgn, bay[i][1] + ny * in1 * sgn);
+    }
+    g.stroke();
   }
 
   /* SERVICE ROADS ARE GONE, and their absence is the point.
@@ -1603,7 +1685,14 @@ function paintGround(d, plan){
 
   // ---- draw, coarsest first so markings always land on top of tarmac ----
   const junc = plan.arterials.map(ringJunction);
-  plan.arterials.forEach((a, i) => roadSecondary(a.slice(0, junc[i] + 1)));
+  /* A major street is drawn as a PRIMARY — dual carriageway, median, shoulders — and a side street
+     as a secondary with parking bays. The hierarchy was only in the widths until now; the two
+     actually being different kinds of road is what makes it read. `slice` drops the run's `major`
+     flag, so the test reads the original run rather than the slice. */
+  plan.arterials.forEach((a, i) => {
+    const run = a.slice(0, junc[i] + 1);
+    if (a.major) roadPrimary(run); else roadSecondary(run);
+  });
   plan.ring.forEach(seg => roadPrimary(seg));
 
   const core = plan.core;
