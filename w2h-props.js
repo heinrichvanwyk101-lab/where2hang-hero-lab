@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v19';
+export const BUILD = 'props v20';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -190,13 +190,19 @@ const lampGeo = mergeGeometries([postGeo, headGeo], true);
    A MAST ARM, not just a pole. A vertical post with a box on top reads as a parking meter; the
    cantilever out over the carriageway is the silhouette everyone recognises, and it is two boxes.
    The head hangs at the arm's end, which is where the lens actually is. */
-const SIG_H   = 6.2 * U_PER_M;                     // 0.79 units to the arm
-const SIG_ARM = 3.4 * U_PER_M;
+/* TALLER AND FATTER THAN LIFE, deliberately. A 6.2-metre mast with a 40-centimetre lens is
+   correct and, at the place camera, about two pixels of light — which is why they were "hiding".
+   Everything else in this scene that has to read at distance is exaggerated for the same reason:
+   the palm crowns are seven metres across, the lamp heads are oversized, the kerbs are wider than
+   kerbs. 8.5 metres with a lens twice the width is still small against a 40-metre podium and is
+   the smallest thing that survives being drawn at this range. */
+const SIG_H   = 8.5 * U_PER_M;
+const SIG_ARM = 4.6 * U_PER_M;
 const sigMast = new THREE.CylinderGeometry(0.022, 0.030, SIG_H, 6, 1);
 sigMast.translate(0, SIG_H / 2, 0);
 const sigArm  = new THREE.BoxGeometry(SIG_ARM, 0.030, 0.030);
 sigArm.translate(SIG_ARM / 2, SIG_H - 0.02, 0);
-const sigBack = new THREE.BoxGeometry(0.055, 0.150, 0.055);
+const sigBack = new THREE.BoxGeometry(0.090, 0.245, 0.070);   // three lenses at 0.075 plus a margin
 sigBack.translate(SIG_ARM * 0.92, SIG_H - 0.115, 0);
 const signalGeo = mergeGeometries([sigMast, sigArm, sigBack], true);
 
@@ -213,13 +219,16 @@ const signalGeo = mergeGeometries([sigMast, sigArm, sigBack], true);
    IT TO ZERO. That makes switching an aspect a matrix write rather than a material change, which
    is the only version of this that stays inside one draw call per aspect. */
 const LENS = [
-  { key:'red',   y:0.052, hex:0xE0442C },
-  { key:'amber', y:0.000, hex:0xFFA23C },
-  { key:'green', y:-0.052, hex:0x35D06A },
+  { key:'red',   y: 0.075, hex:0xFF4A2E },
+  { key:'amber', y: 0.000, hex:0xFFB040 },
+  { key:'green', y:-0.075, hex:0x3BE87A },
 ];
 const signalLensGeo = LENS.map(l => {
-  const g = new THREE.BoxGeometry(0.034, 0.040, 0.026);
-  g.translate(SIG_ARM * 0.92, SIG_H - 0.115 + l.y, 0.030);
+  const g = new THREE.BoxGeometry(0.070, 0.062, 0.040);
+  // On the FACE of the backboard, not inside it: the board is 0.070 deep, so half of that plus
+  // half the lens. A lens buried in its own housing is invisible from every angle, which is the
+  // kind of thing that reads as "the lights are not working" rather than as a bug.
+  g.translate(SIG_ARM * 0.92, SIG_H - 0.115 + l.y, 0.070 / 2 + 0.040 / 2);
   return g;
 });
 
@@ -345,7 +354,7 @@ const matGlow  = new THREE.MeshStandardMaterial({ color:0xF2E6C8, roughness:0.4,
    range — and an amber cluster is what a signal looks like from any distance where you cannot
    read which aspect is lit. */
 const matSignal = LENS.map(l => new THREE.MeshStandardMaterial({
-  color:0x1A1610, roughness:0.35, emissive:l.hex, emissiveIntensity:2.4 }));
+  color:0x1A1610, roughness:0.35, emissive:l.hex, emissiveIntensity:3.6 }));
 const matCar   = new THREE.MeshStandardMaterial({ color:0xBFC4C8, roughness:0.42, metalness:0.25 });
 const matBoat  = new THREE.MeshStandardMaterial({ color:0xE2E4E0, roughness:0.5 });
 
@@ -378,6 +387,16 @@ function addProps(d, layer, plan, budget = {}){
   const B = Object.assign({ palms:420, lamps:280, cars:70, boats:14, shrubs:300 }, budget);
   // Metres from the junction centre to the signal mast, across and along the approach.
   const SIGNAL_SETBACK = 16 / 7.8 / d.r;
+  // Clear radius round a crossing centre in which no lamp, palm or car may stand.
+  const JUNCTION_KEEP  = 26 / 7.8 / d.r;
+  const XS = plan.crossings || [];
+  function nearCrossing(nx, ny, rad){
+    for (let i = 0; i < XS.length; i++){
+      const dx = nx - XS[i].x, dy = ny - XS[i].y;
+      if (dx*dx + dy*dy < rad*rad) return true;
+    }
+    return false;
+  }
   const R = plan.rndProps;
   const r = d.r;
   const inside = plan.inside;
@@ -403,7 +422,11 @@ function addProps(d, layer, plan, budget = {}){
       const s = (i % 2) ? 1 : -1;
       const o1 = rd.w * 1.45, o2 = rd.w * 2.35;
       const lx = x + nx * o1 * s, ly = y + ny * o1 * s;
-      if (lamps.length < B.lamps && inside(lx * 1.02, ly * 1.02))
+      /* NOT IN THE JUNCTION. Lamps are walked along the road at a fixed spacing with no idea
+         where the crossings are, so roughly one in eight landed inside an intersection — standing
+         in the carriageway, which is visible from the plan camera and wrong from every other one.
+         A junction is lit from its signal masts and its corners, never from its middle. */
+      if (lamps.length < B.lamps && inside(lx * 1.02, ly * 1.02) && !nearCrossing(lx, ly, JUNCTION_KEEP))
         lamps.push({ x:lx, y:ly, rot: Math.atan2(tx, ty) });
       /* THE AVENUE WAS A PAIR AT EVERY STEP, both sides, at exactly the same offset — which is
          the single most visible repetition in the scene, because a road is a straight line and a
@@ -558,9 +581,18 @@ function addProps(d, layer, plan, budget = {}){
 
      Guarded, because plan.crossings arrived in world v65 and props must not require it — an older
      world.js would otherwise take the whole scene down rather than lose one prop. */
+  /* FOUR HEADS AT EVERY CROSSING, not one junction in nine.
+
+     v67 signalised only major-by-major, which is defensible traffic engineering and gave 26
+     junctions across the whole archipelago — eight on Corniche. On screen that is nothing: you
+     have to hunt for them. The honest reading is that this is a diorama of a Gulf city, where
+     essentially every grid intersection IS signalised, and that the earlier restraint was solving
+     a problem (the roundabout necklace) that does not apply to something four metres tall.
+
+     270 crossings, 1,080 masts, about 65,000 triangles across five islands — against a p95 of
+     12 ms in the heaviest view, which is the measurement that makes this an easy call. */
   const signals = [];
-  (plan.crossings || []).forEach((c, ji) => {
-    if (!c.major) return;
+  XS.forEach((c, ji) => {
     /* EVERY JUNCTION RUNS ON ITS OWN CLOCK. A city where all the lights change together is a
        parade, not traffic — and it is the specific thing that gives away a scripted scene. Each
        junction gets a random phase and its own period, so at any instant the island shows a

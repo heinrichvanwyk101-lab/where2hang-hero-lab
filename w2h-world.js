@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v67';
+export const BUILD = 'world v68';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1887,6 +1887,50 @@ function paintGround(d, plan){
 
      A zebra on every approach at a major crossing, a stop bar only at a minor one — which is the
      real hierarchy: signalised junctions get crossings, side-street junctions get give-way. */
+  /* THE JUNCTION PAD, drawn before the markings and after the carriageways.
+
+     Two streets crossing were exactly that — two strokes laid over each other — and once each
+     street got its own asphalt age the overlap became visible as a rectangular patch of whichever
+     street happened to be painted second. From the plan view that is the dominant artefact at
+     every crossing: not a junction, a printing error.
+
+     A real intersection is resurfaced as one piece, so it is one pad in one tone, sized from both
+     roads' kerb widths and rotated to the grid. Drawn over the two carriageways, under the paint.
+
+     CORNER FILLETS. The kerb line at a junction is a quarter circle, never a right angle — a
+     square corner is the single clearest sign that a road network was drawn rather than built.
+     Four arcs of the same radius the pad is sized from. */
+  function junctionPads(){
+    const aw = U * roadW(d, ROAD_ART_M)   * 0.5 * ROAD_KERB;
+    const mw = U * roadW(d, ROAD_MAJOR_M) * 0.5 * ROAD_KERB;
+    const fil = U * roadW(d, 11);                 // kerb corner radius
+    (plan.crossings || []).forEach(c => {
+      const hw = c.major ? mw : aw;
+      const px = PX(c.x), py = PY(c.y);
+      g.save();
+      g.translate(px, py);
+      g.rotate(-c.th);
+      // The pad, in a tone of its own so it reads as one resurfaced square.
+      g.fillStyle = shade(SURF.road, 0.96);
+      g.fillRect(-hw, -hw, hw * 2, hw * 2);
+      /* The four corners: fill the wedge OUTSIDE the arc with kerb, which rounds the tarmac
+         without having to redraw the tarmac itself. */
+      g.fillStyle = SURF.kerb;
+      for (let q = 0; q < 4; q++){
+        const sx = (q === 0 || q === 3) ? 1 : -1;
+        const sy = (q < 2) ? 1 : -1;
+        g.beginPath();
+        g.moveTo(sx * hw, sy * hw);
+        g.lineTo(sx * hw, sy * (hw - fil));
+        g.arc(sx * (hw - fil), sy * (hw - fil), fil,
+              sy > 0 ? 0 : -Math.PI / 2, sy > 0 ? Math.PI / 2 : 0, sx * sy < 0);
+        g.closePath(); g.fill();
+      }
+      g.restore();
+    });
+  }
+  junctionPads();
+
   function junctions(){
     const cw = U * roadW(d, ROAD_ART_M) * 0.5 * ROAD_KERB;
     (plan.crossings || []).forEach(c => {
