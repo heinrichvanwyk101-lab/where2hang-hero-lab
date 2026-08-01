@@ -196,7 +196,7 @@ const PROPS = await import('./w2h-props.js' + V);
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v36', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v37', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -1235,8 +1235,31 @@ setWorld();
 
 /* ---------- frame ---------- */
 const clock = new THREE.Clock();
+/* ===========================================================================
+   FRAME PROFILER.
+
+   "Profile rather than guess" needs a number on the device, and a mean frame rate is the wrong
+   number: it hides exactly the thing that ruins a diorama, which is the occasional 40 ms hitch
+   while the rest of the second sits at 60. So the overlay carries a rolling window and reports
+   the MEDIAN and the 95th percentile, which between them say both how it usually feels and how
+   bad the bad frames are.
+
+   120 samples is about two seconds at 60 Hz — long enough to be stable, short enough to respond
+   while the camera is being moved, which is when the cost actually changes. */
+const FT = new Float32Array(120);
+let ftI = 0, ftN = 0, ftStat = '';
+function frameStats(ms){
+  FT[ftI] = ms; ftI = (ftI + 1) % FT.length; ftN = Math.min(ftN + 1, FT.length);
+  if (ftI % 20) return;
+  const a = Array.from(FT.slice(0, ftN)).sort((x, y) => x - y);
+  const med = a[Math.floor(a.length * 0.5)], p95 = a[Math.floor(a.length * 0.95)];
+  ftStat = med.toFixed(1) + 'ms med / ' + p95.toFixed(1) + ' p95   ' +
+           (1000 / med).toFixed(0) + 'fps';
+}
+
 function frame(){
   requestAnimationFrame(frame);
+  const t0 = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   const t  = clock.elapsedTime;
 
@@ -1332,6 +1355,7 @@ function frame(){
   updateLabels();
   renderer.info.reset();
   composer.render();
+  frameStats(performance.now() - t0);
 
   if (DEBUG){
     const info = renderer.info;
@@ -1346,7 +1370,9 @@ function frame(){
       /* V, WHICH THE OVERLAY NEVER SHOWED. The four stamps tell you which module CONTENT is
          live, which does catch a stale module — but not which query string fetched it, so a
          forgotten bump and a Pages cache miss looked identical from here. */
-      'cache  ' + V + '   shadow ' + shadowNote;
+      'cache  ' + V + '   shadow ' + shadowNote + '\n' +
+      // The number to tune against, on the device rather than in an estimate.
+      'frame  ' + ftStat;
   }
 }
 frame();

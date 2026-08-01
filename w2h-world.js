@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v63';
+export const BUILD = 'world v64';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1695,6 +1695,120 @@ function paintGround(d, plan){
   });
   plan.ring.forEach(seg => roadPrimary(seg));
 
+  /* ===========================================================================
+     SLIP LANES.
+
+     Where a major street meets the Corniche, the turning traffic does not go round the roundabout
+     — it peels off early onto a segregated lane, and the wedge of ground left between that lane
+     and the junction becomes a kerbed nose island. That triangle is the single most recognisable
+     piece of traffic engineering from the air, and its absence is a large part of why the
+     junctions still read as two strokes crossing rather than as a junction.
+
+     THE GEOMETRY IS A FILLET, WHICH MEANS IT IS DERIVED RATHER THAN DRAWN. A slip lane is the arc
+     that leaves the side street at SLIP_R before the corner, meets the ring at SLIP_R after it,
+     and is tangent to both — so a quadratic Bézier with its control point AT the corner is
+     exactly right, and needs no fitting. Both turning directions get one, which is why the ring
+     tangent is taken rather than assumed.
+
+     SLIP_R IS IN METRES and clamped against the corner it has to fit in: the plots are set back
+     frontN from the street centreline and the ring kerb reaches its own half-width, so the free
+     corner is the gap between them. A fillet larger than that would put tarmac under a building,
+     which is the fault this build has already paid for four times. */
+  const SLIP_R_M = 34;
+
+  /* Distance from a point to the nearest plot edge, in normalised units. Negative inside a plot.
+     The painter has plan.cells, so the slip lane can be fitted against the buildings that actually
+     exist rather than against an assumed corner. */
+  function plotClear(nx, ny){
+    let best = Infinity;
+    const cells = plan.cells;
+    for (let i = 0; i < cells.length; i++){
+      const c = cells[i];
+      const dx = nx - c.jx, dy = ny - c.jy;
+      // Cheap reject before the rotation: nothing further than a plot diagonal can be the nearest.
+      const rr = (c.wN + c.dN) * 0.75;
+      if (dx*dx + dy*dy > rr*rr + best*best) continue;
+      const cr = Math.cos(c.rot), sr = Math.sin(c.rot);
+      const lx = Math.abs(dx * cr - dy * sr) - c.wN / 2;
+      const ly = Math.abs(dx * sr + dy * cr) - c.dN / 2;
+      best = Math.min(best, Math.max(lx, ly));
+    }
+    return best;
+  }
+
+  function slipLanes(a, bi){
+    if (bi < 4) return;
+    const e = a[bi];
+    // Street direction, pointing INTO the junction.
+    const p0 = a[bi - 3];
+    let sx = e[0] - p0[0], sy = e[1] - p0[1];
+    const sl = Math.hypot(sx, sy) || 1; sx /= sl; sy /= sl;
+
+    // Ring tangent at the nearest ring point, found the same way ringJunction found the corner.
+    let best = Infinity, rp = null, rn = null;
+    plan.ring.forEach(run => {
+      for (let i = 0; i < run.length - 1; i++){
+        const dx = run[i][0] - e[0], dy = run[i][1] - e[1];
+        const dd = dx*dx + dy*dy;
+        if (dd < best){ best = dd; rp = run[i]; rn = run[Math.min(i + 1, run.length - 1)]; }
+      }
+    });
+    if (!rp || rp === rn) return;
+    let tx = rn[0] - rp[0], ty = rn[1] - rp[1];
+    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+
+    const laneN = roadW(d, 9);                    // one lane of segregated tarmac
+    const lane  = U * laneN;
+    /* THE RADIUS IS FITTED, NOT CHOSEN, and 34 metres was too big: measured against the real
+       plots, sixteen samples put tarmac fifteen metres inside a building. The free corner varies —
+       the ring curves, and a plot may sit closer on one junction than another — so a single
+       constant cannot be right everywhere. Largest radius that clears, stepped down from the
+       nominal, which is the same shape of answer as the ADNOC and Etihad anchors: solve it
+       against the geometry rather than nudge it until it looks right. */
+    const eN = [e[0] / U, e[1] / U];
+    const sN = [sx, sy], tN = [tx, ty];
+    [1, -1].forEach(sgn => {
+      let Rm = SLIP_R_M;
+      for (; Rm >= 12; Rm -= 2){
+        const Rn = roadW(d, Rm);
+        const aN = [eN[0] - sN[0]*Rn, eN[1] - sN[1]*Rn];
+        const bN = [eN[0] + tN[0]*Rn*sgn, eN[1] + tN[1]*Rn*sgn];
+        let ok = true;
+        for (let k = 0; k <= 12 && ok; k++){
+          const t = k / 12, u = 1 - t;
+          const X = u*u*aN[0] + 2*u*t*eN[0] + t*t*bN[0];
+          const Y = u*u*aN[1] + 2*u*t*eN[1] + t*t*bN[1];
+          if (plotClear(X, Y) < laneN * 0.6 + roadW(d, 3)) ok = false;   // lane half-width + kerb
+        }
+        if (ok) break;
+      }
+      if (Rm < 12) return;                        // no room for a slip lane at this corner
+      const Rpx = U * roadW(d, Rm);
+      // Start back along the street, end away along the ring in the turning direction.
+      const ax = e[0] - sx * Rpx,       ay = e[1] - sy * Rpx;
+      const bx = e[0] + tx * Rpx * sgn, by = e[1] + ty * Rpx * sgn;
+      const pts = [];
+      for (let k = 0; k <= 12; k++){
+        const t = k / 12, u = 1 - t;
+        pts.push([u*u*ax + 2*u*t*e[0] + t*t*bx, u*u*ay + 2*u*t*e[1] + t*t*by]);
+      }
+      strokePx(pts, SURF.kerb, lane * ROAD_KERB);
+      strokeAsphalt(pts, SURF.road, lane);
+      strokePx(pts, SURF.line, Math.max(1, lane * 0.10), [U * 0.020, U * 0.024]);
+
+      /* THE NOSE ISLAND. The area between the fillet and the corner, filled as kerbed paving. It
+         is drawn from the SAME three points the curve was built from, so the island cannot drift
+         away from the lane that defines it. */
+      g.beginPath();
+      g.moveTo(ax, ay);
+      for (let k = 1; k <= 12; k++) g.lineTo(pts[k][0], pts[k][1]);
+      g.lineTo(bx, by); g.lineTo(e[0], e[1]);
+      g.closePath();
+      g.fillStyle = SURF.pavingLt; g.fill();
+      g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(1, U * 0.0045); g.stroke();
+    });
+  }
+
   const core = plan.core;
   const cr = U * roadW(d, ROUNDABOUT_M);
   const coreApp = plan.arterials.map(a => {
@@ -1710,6 +1824,9 @@ function paintGround(d, plan){
     if (!a.major) return;
     const bi = junc[i];
     if (bi < 4) return;
+    // Slips first: the roundabout is drawn over them, so the nose island reads as tucked into the
+    // corner rather than sitting on top of the circulatory carriageway.
+    slipLanes(a, bi);
     const e = a[bi], b = a[bi - 3];
     roundabout(e[0], e[1], cr * 0.72, [Math.atan2(b[1] - e[1], b[0] - e[0])]);
   });
