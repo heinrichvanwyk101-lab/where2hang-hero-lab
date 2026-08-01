@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v55';
+export const BUILD = 'world v56';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -533,6 +533,20 @@ function isleCoast(id){
     const R = (DISTRICTS.find(x => x.id === id) || {}).r || 60;
     const n = Math.max(96, Math.ceil(per * R * 7.8 / COAST_SEG_M));
     c = closedSpline(sm, n);
+    /* THE CLOSING DUPLICATE, AND v54 DROPPED IT.
+
+       getSpacedPoints returns divisions + 1 points with the last equal to the first, and half
+       this file is written against that contract: `const n = o.length - 1` appears at the beach
+       ring, the road inset, the ground painter and the shore placement, every one of them
+       meaning "the number of SEGMENTS". closedSpline returns n DISTINCT points, so every one of
+       those consumers silently started dropping the last real point and closing the ring a
+       segment short — a 0.95-unit chord across the join, which is 7.4 metres of coastline that
+       simply is not there.
+
+       Appending the duplicate restores the contract rather than editing five call sites to a new
+       one. It is also the safer direction: a consumer written against either convention behaves
+       correctly on a closed array, and none of them has to be found. */
+    c.push(c[0]);
     coastCache.set(id, c);
   }
   return c;
@@ -2289,8 +2303,27 @@ DISTRICTS.forEach(d => {
     const o = isleOutline(d.id), n = o.length - 1;
     const M2 = new THREE.Object3D();
     const groups = {};
+
+    /* REPS ARE DERIVED HERE, NOT READ FROM THE TABLE.
+
+       The rule has been written down in this file since v40 — set rep counts from span divided by
+       length, never choose them — and the data had drifted straight back off it. Measured against
+       the real arc length: the Corniche steps ask for twelve and want twelve, but the quay asks
+       for five where the run holds ten, and the mound run asks for seven where it holds nine. A
+       rule enforced by a comment above a literal is not enforced.
+
+       Measuring the arc length here also makes every run immune to the coastline resolution,
+       which has now changed twice. A t-fraction is a position on a curve; how many points that
+       curve is sampled at should never reach the answer. */
+    let perim = 0;
+    for (let i = 0; i < n; i++) perim += Math.hypot(o[i+1].x - o[i].x, o[i+1].y - o[i].y);
+    perim *= d.r;
+    const REPS = d.shore.map(sp =>
+      sp.t1 === undefined ? 1
+        : Math.max(1, Math.round(Math.abs(sp.t1 - sp.t) * perim / sp.len)));
+
     const need = {};
-    d.shore.forEach(sp => { need[sp.kind] = (need[sp.kind] || 0) + (sp.reps || 1); });
+    d.shore.forEach((sp, k) => { need[sp.kind] = (need[sp.kind] || 0) + REPS[k]; });
     const MAT = { step:'stone', quay:'stone', finger:'deck', mound:'rock', deck:'deck' };
     for (const k in need){
       const m = new THREE.InstancedMesh(shoreGeo[k], shoreMat[MAT[k]].night, need[k]);
@@ -2300,10 +2333,24 @@ DISTRICTS.forEach(d => {
       groups[k] = m;
       g.add(m);
     }
-    d.shore.forEach(sp => {
-      const reps = sp.reps || 1;
+    d.shore.forEach((sp, k) => {
+      const reps = REPS[k];
       for (let r = 0; r < reps; r++){
-        const f  = reps === 1 ? sp.t : sp.t + (sp.t1 - sp.t) * (r / (reps - 1 || 1));
+        /* CENTRES AT (r + 0.5) / reps, NOT r / (reps - 1).
+
+           The reps counts are derived as span / length — the file's rule, and correct — but the
+           interpolation then spread those modules from t to t1 INCLUSIVE, which is reps - 1
+           gaps for reps modules. On Corniche's steps that is a 116.6-unit run holding twelve
+           9.4-unit segments at 10.6-unit spacing: a 1.2-unit hole between every pair, 9 metres
+           of missing staircase twelve times over, which is why the flight reads as a row of
+           separate dark bars lying on the sand rather than as steps. Al Maryah's quay was worse
+           — 6.2-unit segments at 10.7-unit spacing, 42 per cent gaps.
+
+           Tiling wants reps intervals, not reps - 1, with the modules sitting at the CENTRE of
+           each interval so the run starts and ends half a module inside its own bounds instead
+           of hanging half a module past each end. */
+        const f  = reps === 1 ? sp.t
+                 : sp.t + (sp.t1 - sp.t) * ((r + 0.5) / reps);
         const i  = Math.round(((f % 1) + 1) % 1 * n) % n;
         const [px, py] = sp.off < 0 ? inwardAt(d.id, o, i, -sp.off / d.r)
                                     : outwardAt(d.id, o, i,  sp.off / d.r);
