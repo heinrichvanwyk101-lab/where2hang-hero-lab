@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v64';
+export const BUILD = 'world v66';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -865,6 +865,12 @@ const SURF = {
   pavingLt: '#E6E0CE',
   kerb:     '#EFEBDF',
   line:     'rgba(250,246,236,0.92)',
+  /* THE CYCLE TRACK IS RED-BROWN, and that colour is doing recognition work rather than decoration:
+     coloured surfacing is how a segregated track is distinguished from a footway everywhere it is
+     built, and on the Corniche it is the strongest single line of colour on the island. Warm enough
+     to read against grey tarmac and pale paving, dark enough not to compete with the lit windows. */
+  cycle:    '#8A5340',
+  foot:     '#CFC7B2',          // a shade under the plot paving, so a footway is not a forecourt
 };
 
 // Texture covers a little more than the island so the beach edge is never clipped by the canvas.
@@ -1032,6 +1038,7 @@ function roadSkeleton(d){
      the world axes, which is what keeps the blocks parallel to the Corniche.
      =========================================================================== */
   const arterials = [];
+  const crossings = [];
   {
     const th = (d.gridRot !== undefined ? d.gridRot : d.rot || 0);
     const ca = Math.cos(th), sa = Math.sin(th);
@@ -1043,6 +1050,15 @@ function roadSkeleton(d){
        normalised bounding box, rounded out to a whole number of pitches so the grid is
        symmetric about the core rather than about an arbitrary edge. */
     const reach = 1.45;
+    /* A GRID STREET STOPS AT THE RING ROAD. It was clipped at RING_INSET * 0.55, which is 69 metres
+       in from the coast against a ring whose inner kerb is at 145 — so every street crossed the
+       Corniche, ran seventy-five metres across the coastal park and stopped in the sand. A street
+       that crosses the seafront road and then simply ends is the most obviously wrong thing in an
+       aerial view, because no city has ever built one.
+
+       The terminus is the ring's inner kerb, derived from the ring's own width rather than from a
+       fraction of the inset — the two are different quantities and only one of them is a road. */
+    const stopAt = RING_INSET + roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB;
     const line = (fixed, along, horiz, major) => {
       // Walk the line in small steps, emitting runs of consecutive points that are on land.
       const runs = [];
@@ -1053,7 +1069,7 @@ function roadSkeleton(d){
         const u = horiz ? t : fixed, v = horiz ? fixed : t;
         const x = core[0] + u * ca - v * sa;
         const y = core[1] + u * sa + v * ca;
-        const ok = inside(x, y) && distToOutline(d.id, x, y) > RING_INSET * 0.55
+        const ok = inside(x, y) && distToOutline(d.id, x, y) > stopAt
                    && !inAvoid(d, x, y, 0.012);
         if (ok) cur.push([x, y]);
         else { if (cur.length > 3) runs.push(cur); cur = []; }
@@ -1070,8 +1086,29 @@ function roadSkeleton(d){
        identical lines carry no information about how the city is used. */
     for (let k = -Math.ceil(reach / sv); k <= Math.ceil(reach / sv); k++) line(k * sv, 0, true,  k % 3 === 0);
     for (let k = -Math.ceil(reach / su); k <= Math.ceil(reach / su); k++) line(k * su, 0, false, k % 3 === 0);
+
+    /* THE CROSSINGS, TAKEN FROM THE LATTICE RATHER THAN SEARCHED FOR. The grid is orthogonal in
+       (u, v), so every street intersection is at a known pair of indices — there is no reason to
+       run thirty-five polylines against each other looking for what the construction already
+       knows. Each carries the grid angle and whether both arms are majors, which is what decides
+       how a junction is marked. */
+    for (let a = -Math.ceil(reach / su); a <= Math.ceil(reach / su); a++){
+      for (let b = -Math.ceil(reach / sv); b <= Math.ceil(reach / sv); b++){
+        const u = a * su, v = b * sv;
+        const x = core[0] + u * ca - v * sa, y = core[1] + u * sa + v * ca;
+        if (!inside(x, y)) continue;
+        if (distToOutline(d.id, x, y) < stopAt) continue;
+        if (inAvoid(d, x, y, 0.012)) continue;
+        /* BOTH arms, not either. A signal goes where two main roads meet; a main road crossing a
+           side street is a give-way, and every junction in the city being signalised is the same
+           kind of over-application as the necklace of roundabouts. Either-arm flagged 146 of 270
+           crossings; both-arms gives 30, which is a main-road grid every 600 metres crossing
+           another one — the real spacing. */
+        crossings.push({ x, y, th, major: (a % 3 === 0) && (b % 3 === 0) });
+      }
+    }
   }
-  return { ring, arterials, core, rndPlan };
+  return { ring, arterials, crossings, core, rndPlan };
 }
 
 /* Point to polyline, squared until the last step. Called for every candidate block against every
@@ -1209,7 +1246,7 @@ function groundPlan(d, cells, blocks){
   }
 
   return {
-    outline, core, inside, ring, arterials, parks, coastLine, cells, blocks,
+    outline, core, inside, ring, arterials, crossings:d.roads.crossings, parks, coastLine, cells, blocks,
     beachN: BEACH_W / d.r,
     coastPark: d.coastPark, ground: GROUND,
     rndPaint: localRnd(seed ^ 0x9E3779B1),
@@ -1530,14 +1567,24 @@ function paintGround(d, plan){
     const metres = px / U * d.r * M_PER_UNIT;
     const runs = Math.max(1, Math.round(metres / SURFACE_RUN_M));
     const seg = Math.max(1, Math.ceil((pts.length - 1) / runs));
-    let tone = 0.94 + R() * 0.12;
+    /* TWO SCALES OF AGEING, and the first version only had one.
+
+       A ±5 per cent walk along a single street is invisible: the whole network still averaged to
+       one grey because every street STARTED at the same tone. What the eye reads from the air is
+       that THIS street was resurfaced and the one beside it was not — so the base tone is drawn
+       per street, over a wide range, and the segment walk then varies within it.
+
+       0.74 to 1.22 is a real spread: fresh binder against twenty-year-old oxidised tarmac is
+       darker by about that much, and putting the whole range on screen at once is what makes the
+       network look maintained by a council rather than printed. */
+    let tone = 0.74 + R() * 0.48;                     // this street's own age
     for (let i = 0; i < pts.length - 1; i += seg){
       // Overlap by one point so consecutive runs share a joint and no sand shows between them.
       const run = pts.slice(i, Math.min(pts.length, i + seg + 1));
       if (run.length < 2) break;
-      tone += (R() - 0.5) * 0.05;
-      if (R() < 0.02) tone += (R() - 0.5) * 0.22;     // a patch, or a recently relaid section
-      tone = Math.max(0.82, Math.min(1.14, tone));
+      tone += (R() - 0.5) * 0.11;                     // section to section within the street
+      if (R() < 0.06) tone += (R() - 0.5) * 0.34;     // a patch, or a recently relaid length
+      tone = Math.max(0.70, Math.min(1.26, tone));
       strokePx(run, shade(style, tone), width);
     }
   }
@@ -1559,6 +1606,18 @@ function paintGround(d, plan){
          paler and warmer than the tarmac, and the thing whose absence made every edge a hard
          line between black and sand. */
       strokePx(offsetPath(pts, sgn * (halfC + car * 0.56)), SURF.sandDk, car * 0.30);
+
+      /* FOOTWAY AND CYCLE TRACK. The Corniche's cycle track is one of the most recognisable
+         things about the road — an eight-kilometre red-brown ribbon running the whole seafront
+         with a pale paved footway beside it — and its absence is a large part of why the ring
+         reads as a carriageway rather than as the Corniche.
+
+         Both sit OUTSIDE the kerb casing, so they are on the verge where they belong rather than
+         eating carriageway. Widths in metres like everything else that is a real dimension. */
+      const vergeO = W * ROAD_KERB * 0.5;
+      const cycW = U * roadW(d, 3.0), footW = U * roadW(d, 4.0);
+      strokePx(offsetPath(pts, sgn * (vergeO + cycW * 0.7)),  SURF.cycle, cycW);
+      strokePx(offsetPath(pts, sgn * (vergeO + cycW * 1.5 + footW * 0.6)), SURF.foot, footW);
       strokeAsphalt(offsetPath(pts, sgn * halfC), SURF.road, car);
       // Edge line hard against the kerb, dashed divider down the middle of the two lanes.
       strokePx(offsetPath(pts, sgn * (halfC + car * 0.40)), SURF.line, Math.max(1, W * 0.035));
@@ -1598,6 +1657,15 @@ function paintGround(d, plan){
        Placed in RUNS with gaps rather than continuously, because a bay run stops at every
        crossing and driveway, and a perfectly continuous comb would be the same repetition the
        palms were just taken off. */
+    /* A side street gets a footway on both sides and no cycle track: the track is a seafront and
+       main-road facility, and putting one down every residential street would be as wrong as
+       leaving it off the Corniche. */
+    {
+      const vergeO = W * ROAD_KERB * 0.5, footW = U * roadW(d, 3.0);
+      [-1, 1].forEach(sgn =>
+        strokePx(offsetPath(pts, sgn * (vergeO + footW * 0.6)), SURF.foot, footW));
+    }
+
     const bay = offsetPath(pts, 0);
     const kw = Math.max(0.8, W * 0.05);
     g.strokeStyle = SURF.line; g.lineWidth = kw;
@@ -1808,6 +1876,54 @@ function paintGround(d, plan){
       g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(1, U * 0.0045); g.stroke();
     });
   }
+
+  /* ===========================================================================
+     JUNCTIONS. Every grid crossing was two strokes laid over each other and nothing else — no stop
+     line, no crossing, no indication that anything happens there. From the air a junction is
+     mostly WHITE PAINT, and its absence is why the grid still read as ruled lines.
+
+     Drawn from the crossings list the skeleton already computed off the lattice, so this is not
+     searching thirty-five polylines for intersections that the construction knew about all along.
+
+     A zebra on every approach at a major crossing, a stop bar only at a minor one — which is the
+     real hierarchy: signalised junctions get crossings, side-street junctions get give-way. */
+  function junctions(){
+    const cw = U * roadW(d, ROAD_ART_M) * 0.5 * ROAD_KERB;
+    (plan.crossings || []).forEach(c => {
+      const px = PX(c.x), py = PY(c.y);
+      const setback = cw * 1.20;
+      for (let q = 0; q < 4; q++){
+        // PY negates, so the canvas angle runs the other way round from the world one.
+        const a = -c.th + q * Math.PI / 2;
+        const dx = Math.cos(a), dy = Math.sin(a);
+        const nx = -dy, ny = dx;
+        const bx = px + dx * setback, by = py + dy * setback;
+        if (c.major){
+          /* A zebra: bars ACROSS the direction of travel, drawn along the approach. Six bars is
+             what fits a two-lane arm at this scale, and they are derived from the road half-width
+             rather than counted out, so a wider arm gets more of them. */
+          const halfW = cw * 0.86;
+          const bars = Math.max(4, Math.round(halfW / (U * roadW(d, 1.4))));
+          g.strokeStyle = SURF.line; g.lineWidth = Math.max(1, U * roadW(d, 0.9));
+          g.beginPath();
+          for (let i = 0; i < bars; i++){
+            const t = (-0.5 + (i + 0.5) / bars) * halfW * 2;
+            g.moveTo(bx + nx * t, by + ny * t);
+            g.lineTo(bx + nx * t + dx * cw * 0.55, by + ny * t + dy * cw * 0.55);
+          }
+          g.stroke();
+        } else {
+          // Give-way: a single bar across the near half of the arm.
+          g.strokeStyle = SURF.line; g.lineWidth = Math.max(1, U * roadW(d, 1.1));
+          g.beginPath();
+          g.moveTo(bx, by);
+          g.lineTo(bx + nx * cw * 0.80, by + ny * cw * 0.80);
+          g.stroke();
+        }
+      }
+    });
+  }
+  junctions();
 
   const core = plan.core;
   const cr = U * roadW(d, ROUNDABOUT_M);

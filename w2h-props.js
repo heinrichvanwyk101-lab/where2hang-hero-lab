@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v17';
+export const BUILD = 'props v18';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -176,6 +176,37 @@ const headGeo = new THREE.BoxGeometry(0.16, 0.055, 0.10);
 headGeo.translate(0, LAMP_H + 0.02, 0);
 const lampGeo = mergeGeometries([postGeo, headGeo], true);
 
+/* ---------- traffic signal ----------
+
+   A junction reads as a junction because of the hardware standing at it. The painted stop bars and
+   zebras added in world v65 say where the traffic stops; the signal heads say WHY, and at the
+   place camera they are the difference between a crossing and two roads laid over each other.
+
+   TWO PARTS, TWO MATERIALS, ONE MESH EACH. The mast is dark metal and the lamp cluster is
+   emissive, which is exactly the lamp column's arrangement, so this reuses matPost and a signal
+   lamp rather than inventing a second lighting path — and at night the heads come on with
+   everything else for free.
+
+   A MAST ARM, not just a pole. A vertical post with a box on top reads as a parking meter; the
+   cantilever out over the carriageway is the silhouette everyone recognises, and it is two boxes.
+   The head hangs at the arm's end, which is where the lens actually is. */
+const SIG_H   = 6.2 * U_PER_M;                     // 0.79 units to the arm
+const SIG_ARM = 3.4 * U_PER_M;
+const sigMast = new THREE.CylinderGeometry(0.022, 0.030, SIG_H, 6, 1);
+sigMast.translate(0, SIG_H / 2, 0);
+const sigArm  = new THREE.BoxGeometry(SIG_ARM, 0.030, 0.030);
+sigArm.translate(SIG_ARM / 2, SIG_H - 0.02, 0);
+const sigBack = new THREE.BoxGeometry(0.055, 0.150, 0.055);
+sigBack.translate(SIG_ARM * 0.92, SIG_H - 0.115, 0);
+const signalGeo = mergeGeometries([sigMast, sigArm, sigBack], true);
+
+/* The three lenses as one small emissive box. Separating them into three would triple the
+   instance count for detail nobody resolves at this distance; what reads is that there is a
+   coloured light up there, not which of the three is lit. */
+const sigLens = new THREE.BoxGeometry(0.038, 0.115, 0.026);
+sigLens.translate(SIG_ARM * 0.92, SIG_H - 0.115, 0.030);
+const signalLensGeo = sigLens;
+
 /* ---------- car ---------- */
 const carBody  = new THREE.BoxGeometry(4.6 * U_PER_M, 1.15 * U_PER_M, 1.85 * U_PER_M);
 carBody.translate(0, 0.62 * U_PER_M, 0);
@@ -293,6 +324,12 @@ const matPost  = new THREE.MeshStandardMaterial({ color:0x3A4048, roughness:0.6,
 // on its own to produce a pool of light rather than just a pale box.
 const matGlow  = new THREE.MeshStandardMaterial({ color:0xF2E6C8, roughness:0.4,
   emissive:0xFFD8A0, emissiveIntensity:1.8 });
+/* Amber rather than a red/green mix. Instancing shares one material across every head, so a
+   three-colour signal would need three meshes for a detail that is under a pixel at district
+   range — and an amber cluster is what a signal looks like from any distance where you cannot
+   read which aspect is lit. */
+const matSignal = new THREE.MeshStandardMaterial({ color:0x2A2118, roughness:0.35,
+  emissive:0xFFA23C, emissiveIntensity:2.4 });
 const matCar   = new THREE.MeshStandardMaterial({ color:0xBFC4C8, roughness:0.42, metalness:0.25 });
 const matBoat  = new THREE.MeshStandardMaterial({ color:0xE2E4E0, roughness:0.5 });
 
@@ -323,6 +360,8 @@ function walk(pts, step, fn){
    ============================================================================================= */
 function addProps(d, layer, plan, budget = {}){
   const B = Object.assign({ palms:420, lamps:280, cars:70, boats:14, shrubs:300 }, budget);
+  // Metres from the junction centre to the signal mast, across and along the approach.
+  const SIGNAL_SETBACK = 16 / 7.8 / d.r;
   const R = plan.rndProps;
   const r = d.r;
   const inside = plan.inside;
@@ -496,6 +535,30 @@ function addProps(d, layer, plan, budget = {}){
     i++;
   }
 
+  /* SIGNALS AT THE MAJOR CROSSINGS ONLY, which is the same hierarchy the painted markings use: a
+     signalised junction gets zebras and heads, a side-street junction gets a give-way bar and
+     nothing standing. Four heads per junction, one per approach, each on the near right-hand kerb
+     with its arm reaching out over the traffic it controls.
+
+     Guarded, because plan.crossings arrived in world v65 and props must not require it — an older
+     world.js would otherwise take the whole scene down rather than lose one prop. */
+  const signals = [];
+  (plan.crossings || []).forEach(c => {
+    if (!c.major) return;
+    const setback = SIGNAL_SETBACK;
+    for (let q = 0; q < 4; q++){
+      const a = c.th + q * Math.PI / 2;
+      const dx = Math.cos(a), dy = Math.sin(a);
+      // Right-hand kerb of this approach: along the arm's own direction, offset across it.
+      const nx = -dy, ny = dx;
+      const sx = c.x + dx * setback + nx * setback;
+      const sy = c.y + dy * setback + ny * setback;
+      if (!inside(sx, sy)) continue;
+      // The arm points back across the carriageway it faces, which is the -n direction.
+      signals.push({ x:sx, y:sy, rot: Math.atan2(-nx, -ny) });
+    }
+  });
+
   /* ---------- build the instanced meshes ---------- */
   const M = new THREE.Object3D();
   const col = new THREE.Color();
@@ -543,6 +606,17 @@ function addProps(d, layer, plan, budget = {}){
       // squat. A single uniform factor cannot say that.
       M.scale.set(s * (0.94 + R() * 0.14), s * (0.88 + R() * 0.34), s * (0.94 + R() * 0.14));
     });
+  });
+
+  build(signalGeo, matPost, signals, (p) => {
+    M.position.set(p.x * r, Y, -p.y * r);
+    M.rotation.set(0, p.rot, 0);
+    M.scale.set(1, 1, 1);
+  });
+  build(signalLensGeo, matSignal, signals, (p) => {
+    M.position.set(p.x * r, Y, -p.y * r);
+    M.rotation.set(0, p.rot, 0);
+    M.scale.set(1, 1, 1);
   });
 
   build(lampGeo, [matPost, matGlow], lamps, (p) => {
@@ -596,5 +670,5 @@ function addProps(d, layer, plan, budget = {}){
            shrubs: shrubs.length };
 }
 
-return { addProps, materials: { matBark, matFrond, matPost, matGlow, matCar, matBoat, matShrub } };
+return { addProps, materials: { matBark, matFrond, matPost, matGlow, matSignal, matCar, matBoat, matShrub } };
 }
