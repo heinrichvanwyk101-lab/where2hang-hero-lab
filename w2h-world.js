@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v61';
+export const BUILD = 'world v62';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -941,7 +941,20 @@ function roundRect(g, x, y, w, h, r){
    bay width, superblock, plot depth, coastline segment — is already held in metres, and the roads
    were the last thing still expressed as a share of an island. */
 const M_PER_UNIT  = 7.8;                     // the scene's one scale constant
-const ROAD_RING_M = 31, ROAD_ART_M = 22, CORE_R_M = 118;
+const ROAD_RING_M = 31, ROAD_MAJOR_M = 28, ROAD_ART_M = 18;
+
+/* THE ROUNDABOUT, AND I GOT THIS ONE WRONG IN v60. Converting the roads to metres, I read the old
+   `CORE_R = 0.040 * 1.18` as though it were already a metre figure and wrote 118. It is normalised:
+   at the old r=76 it was a 28-metre kerb radius, which is a large but real roundabout. 118 metres
+   is a 236-metre circle, and with the island then scaled to r=190 the painter's own `U * 0.040`
+   grew to a 59-metre carriageway on top of it — which is the necklace of enormous discs round the
+   coastal park.
+
+   Both figures are now the one number in metres. 24 m of carriageway inside a 28 m kerb is what
+   the original produced at the original scale, so this restores a shape that was right rather than
+   inventing a new one. */
+const ROUNDABOUT_M = 24;
+const CORE_R_M     = ROUNDABOUT_M * 1.18;
 const roadW = (d, m) => m / (M_PER_UNIT * d.r);      // metres -> normalised, per district
 const COAST_CLEAR = 0.050;                   // no building closer than this to the waterline
 /* THE BEACH WIDTH, HOISTED, because three things have to agree about it: the skirt geometry, the
@@ -1030,7 +1043,7 @@ function roadSkeleton(d){
        normalised bounding box, rounded out to a whole number of pitches so the grid is
        symmetric about the core rather than about an arbitrary edge. */
     const reach = 1.45;
-    const line = (fixed, along, horiz) => {
+    const line = (fixed, along, horiz, major) => {
       // Walk the line in small steps, emitting runs of consecutive points that are on land.
       const runs = [];
       let cur = [];
@@ -1046,10 +1059,17 @@ function roadSkeleton(d){
         else { if (cur.length > 3) runs.push(cur); cur = []; }
       }
       if (cur.length > 3) runs.push(cur);
-      runs.forEach(r => arterials.push(r));
+      /* A property on the array rather than a parallel structure: every consumer of `arterials`
+         already takes a list of point runs, and a fourth return value would have to be threaded
+         through the painter, onRoad and the props placer to reach the two places that want it. */
+      runs.forEach(r => { r.major = major; arterials.push(r); });
     };
-    for (let k = -Math.ceil(reach / sv); k <= Math.ceil(reach / sv); k++) line(k * sv, 0, true);
-    for (let k = -Math.ceil(reach / su); k <= Math.ceil(reach / su); k++) line(k * su, 0, false);
+    /* STREET HIERARCHY. Every third line is a major, which at this block size puts a dual
+       carriageway roughly every 600 metres — the spacing of Abu Dhabi's numbered main streets
+       against its side streets. Without a hierarchy a grid reads as graph paper: thirty-five
+       identical lines carry no information about how the city is used. */
+    for (let k = -Math.ceil(reach / sv); k <= Math.ceil(reach / sv); k++) line(k * sv, 0, true,  k % 3 === 0);
+    for (let k = -Math.ceil(reach / su); k <= Math.ceil(reach / su); k++) line(k * su, 0, false, k % 3 === 0);
   }
   return { ring, arterials, core, rndPlan };
 }
@@ -1128,7 +1148,8 @@ function onRoad(d, x, y, pitch){
     if (distToPolyline(x, y, R.ring[i]) < roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB + pad) return true;
   }
   for (let i = 0; i < R.arterials.length; i++){
-    if (distToPolyline(x, y, R.arterials[i]) < roadW(d, ROAD_ART_M) * 0.5 * ROAD_KERB + pad) return true;
+    const aw = R.arterials[i].major ? ROAD_MAJOR_M : ROAD_ART_M;
+    if (distToPolyline(x, y, R.arterials[i]) < roadW(d, aw) * 0.5 * ROAD_KERB + pad) return true;
   }
   if (R.core && Math.hypot(x - R.core[0], y - R.core[1]) < coreR(d) + pad) return true;
   return false;
@@ -1503,7 +1524,7 @@ function paintGround(d, plan){
   /* SECONDARY. One carriageway, still kerbed, edge lines and a dashed centre. Narrower casing
      than the ring so the hierarchy shows even where the two run parallel. */
   function roadSecondary(pts){
-    const W = U * roadW(d, ROAD_ART_M);
+    const W = U * roadW(d, pts.major ? ROAD_MAJOR_M : ROAD_ART_M);
     g.lineCap = 'butt'; g.lineJoin = 'round';
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     strokePx(offsetPath(pts, 0), SURF.road, W);
@@ -1586,12 +1607,18 @@ function paintGround(d, plan){
   plan.ring.forEach(seg => roadPrimary(seg));
 
   const core = plan.core;
-  const cr = U * 0.040;
+  const cr = U * roadW(d, ROUNDABOUT_M);
   const coreApp = plan.arterials.map(a => {
     const p = a[Math.min(3, a.length - 1)];
     return Math.atan2(p[1] - core[1], p[0] - core[0]);
   });
+  /* ONE PER MAJOR STREET, NOT ONE PER STREET. This placed a roundabout wherever an arterial met
+     the ring, which was four of them when there were three curved arterials and became thirty-six
+     the moment the grid arrived — a necklace of identical discs round the whole island, several of
+     them sitting in the coastal park. A roundabout is a junction of two important roads, so it
+     belongs where a MAJOR meets the ring and nowhere else. */
   plan.arterials.forEach((a, i) => {
+    if (!a.major) return;
     const bi = junc[i];
     if (bi < 4) return;
     const e = a[bi], b = a[bi - 3];
@@ -3181,7 +3208,10 @@ function urbanFabric(d, layer, opts){
      centreline to the front of a plot. Taken from the same ROAD_ART figure onRoad clears against,
      so a plot laid at exactly this distance passes the road test by construction rather than by
      being nudged until it does. */
-  const frontN = roadW(d, ROAD_ART_M) * 0.5 * ROAD_KERB + roadW(d, PAVEMENT_M);
+  /* Set back from the WIDEST street a plot might face, since a block edge does not know in advance
+     whether its bounding line is a major. Half a metre of extra pavement on a side street is not a
+     fault; a tower in a dual carriageway is. */
+  const frontN = roadW(d, ROAD_MAJOR_M) * 0.5 * ROAD_KERB + roadW(d, PAVEMENT_M);
   const plotDN = roadW(d, PLOT_DEPTH_M);
   const frontMin = roadW(d, PLOT_FRONT_M[0]);
   const frontMax = roadW(d, PLOT_FRONT_M[1]);
