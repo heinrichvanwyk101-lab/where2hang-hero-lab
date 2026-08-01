@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v12';
+export const BUILD = 'city v13';
 
 export const C = {
   night:   0x0B1620,
@@ -281,7 +281,85 @@ function roundedSlab(w, d, h, r, seg){
   const g = new THREE.ExtrudeGeometry(sh, { depth:h, bevelEnabled:false, curveSegments: seg || 16 });
   g.rotateX(-Math.PI/2);
   g.computeVertexNormals();
+  writeSlabUVs(g, sh, seg || 16, h);
   return g;
+}
+
+/* ===========================================================================
+   ADNOC'S WINDOWS WERE 8 CENTIMETRES APART.
+
+   ExtrudeGeometry's default WorldUVGenerator writes RAW SHAPE COORDINATES into the uv attribute.
+   Measured on the real geometry: u runs -3.80 to 3.80 and v runs -43.00 to 2.40 — the shape's own
+   half-width and the extrude depth, in world units, not a normalised 0 to 1. The repeat of (3, 2)
+   at the call site was chosen as though those were normalised, so it multiplied a 45-unit v span
+   by two: ninety tiles of forty-six rows each, or 4,177 window rows over a 44-unit tower.
+
+   That is a storey height of eight centimetres. Far below one pixel per row at any camera in this
+   scene, so it minifies straight to its own mean and the tower renders as a flat untextured
+   column — which is exactly what the close-range Day shot shows, next to fabric buildings whose
+   glazing reads perfectly. w2h-world.js has this same failure written up on the ground painter,
+   in the same words: the failure is silent and total, and every pass of colour work fails to
+   shift it because the colour was never the problem.
+
+   THE FIX IS TO WRITE THE UVs IN METRES. Bay and storey are real quantities, so the tile is sized
+   in world units from the texture's own cell counts and a 4 m target, and the call site's repeat
+   goes to (1, 1). Verified against three 169: 86 rows over the shaft and 43 bays round the
+   perimeter, which is 4.00 m and 4.00 m.
+
+   THE SEAM NEEDS REPAIRING AND IT IS NOT OPTIONAL. The contour closes, so the last wall quad runs
+   from u = perimeter back to u = 0 and draws the whole texture into one face, mirrored. The
+   geometry is non-indexed, so the repair is local: any wall triangle spanning more than half the
+   perimeter has its low corners pushed up by one full wrap. Two triangles on ADNOC, and without
+   it there is a visible band of compressed glazing down one corner.
+   =========================================================================== */
+const SLAB_BAY_M = 4.0;                       // metres per window bay and per storey
+const M_PER_U    = 7.8;                       // the scene's one scale constant, stated once here
+function writeSlabUVs(g, sh, seg, h){
+  // TEX_TOWER and DAY_TOWER are both 14 columns by 46 rows, so one tile is that many bays.
+  const F = SLAB_BAY_M / M_PER_U;
+  const TW = 14 * F, TH = 46 * F;
+
+  const pts = sh.extractPoints(seg).shape;
+  const cum = [0];
+  let per = 0;
+  for (let i = 0; i < pts.length - 1; i++){ per += pts[i].distanceTo(pts[i+1]); cum.push(per); }
+
+  // Arc length round the contour, not angle: on a rounded rectangle the corners occupy a large
+  // share of the angular sweep and almost none of the length, so angle would crush the glazing
+  // into the corners and stretch it along the flats.
+  const uAt = (x, z) => {
+    let best = Infinity, bu = 0;
+    for (let i = 0; i < pts.length - 1; i++){
+      const ax = pts[i].x, ay = pts[i].y;
+      const dx = pts[i+1].x - ax, dy = pts[i+1].y - ay, L2 = dx*dx + dy*dy;
+      let t = L2 > 0 ? ((x - ax)*dx + (z - ay)*dy) / L2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = ax + t*dx - x, py = ay + t*dy - z, d2 = px*px + py*py;
+      if (d2 < best){ best = d2; bu = cum[i] + t * Math.sqrt(L2); }
+    }
+    return bu;
+  };
+
+  const pos = g.attributes.position, nrm = g.attributes.normal;
+  const uv = new Float32Array(pos.count * 2);
+  let ymin = Infinity;
+  for (let i = 0; i < pos.count; i++) ymin = Math.min(ymin, pos.getY(i));
+  for (let i = 0; i < pos.count; i++){
+    // Caps fold to the middle of the texture. A roof is not a facade and a window grid laid
+    // across it in plan is the giveaway on every top-down shot.
+    if (Math.abs(nrm.getY(i)) > 0.7){ uv[i*2] = 0.5; uv[i*2+1] = 0.5; continue; }
+    uv[i*2]     = uAt(pos.getX(i), pos.getZ(i)) / TW;
+    uv[i*2 + 1] = (pos.getY(i) - ymin) / TH;
+  }
+
+  const wrap = per / TW, half = wrap / 2;
+  for (let t = 0; t + 2 < pos.count; t += 3){
+    if (Math.abs(nrm.getY(t)) > 0.7) continue;
+    const a = uv[t*2], b = uv[(t+1)*2], c = uv[(t+2)*2];
+    if (Math.max(a, b, c) - Math.min(a, b, c) <= half) continue;
+    for (let k = 0; k < 3; k++) if (uv[(t+k)*2] < half) uv[(t+k)*2] += wrap;
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
 /* ETIHAD TOWERS — five curved towers, unequal heights, all leaning the same way with slanted
@@ -416,7 +494,9 @@ function adnocHQ(x0, z0){
   // Graphite glazing: denser and less blue than Etihad, so the two towers no longer read as the
   // same building at different sizes. Emissive third in the hierarchy, behind palace and Etihad.
   const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 16),
-    cityMaterial(TEX_TOWER, 3, 2, 0.60, 0x14161A));
+    /* REPEAT (1, 1). The tiling is baked into the geometry's UVs in metres now, so a repeat here
+       would multiply a scale that is already correct — which is precisely how this went wrong. */
+    cityMaterial(TEX_TOWER, 1, 1, 0.60, 0x14161A));
   body.position.set(x0, 0, z0); body.rotation.y = rot;
   body.userData.hero = true; g.add(body);
 
