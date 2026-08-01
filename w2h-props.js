@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v21';
+export const BUILD = 'props v22';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -609,8 +609,14 @@ function addProps(d, layer, plan, budget = {}){
     const phase  = R();
     const period = 9 + R() * 7;                   // seconds for a full two-way cycle
     const setback = SIGNAL_SETBACK;
+    /* THE SAME TWO AXES THE PAINTER USES. A ring junction is a grid street meeting a curve, so its
+       second axis is the ring's tangent and not a right angle off the first — signals placed on an
+       assumed 90 degrees would stand in the coastal park at every seafront junction. */
+    const axes = [c.th, c.th2 === undefined ? c.th + Math.PI / 2 : c.th2];
     for (let q = 0; q < 4; q++){
-      const a = c.th + q * Math.PI / 2;
+      // Arm 2 is the street continuing past a ring junction, and it does not.
+      if (c.ring && q === 2) continue;
+      const a = axes[q % 2] + (q >= 2 ? Math.PI : 0);
       const dx = Math.cos(a), dy = Math.sin(a);
       // Right-hand kerb of this approach: along the arm's own direction, offset across it.
       const nx = -dy, ny = dx;

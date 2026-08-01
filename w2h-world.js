@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v69';
+export const BUILD = 'world v70';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1039,6 +1039,7 @@ function roadSkeleton(d){
      =========================================================================== */
   const arterials = [];
   const crossings = [];
+  const ringJunctions = [];
   {
     const th = (d.gridRot !== undefined ? d.gridRot : d.rot || 0);
     const ca = Math.cos(th), sa = Math.sin(th);
@@ -1092,6 +1093,33 @@ function roadSkeleton(d){
        run thirty-five polylines against each other looking for what the construction already
        knows. Each carries the grid angle and whether both arms are majors, which is what decides
        how a junction is marked. */
+    /* THE RING JUNCTIONS, ADDED TO THE SAME LIST. A major street meeting the Corniche is a formal
+       signalised crossroads and has to be marked and signalled like one — but it is not a lattice
+       intersection, so the (a, b) loop below never saw it and every one of them was getting a
+       give-way bar and no hardware.
+
+       Only the majors. A minor street meeting the ring gets a slip lane instead, which is the
+       whole point of the distinction: side streets MERGE onto a seafront road, they do not stop
+       at it. */
+    ringJunctions.push(...arterials.filter(r => r.major).map(r => {
+      const e = r[r.length - 1];
+      /* TWO AXES, NOT FOUR ARMS AT NINETY DEGREES. A lattice crossing is two streets at the grid
+         angle, so one number describes it. A ring junction is a grid street meeting a CURVE, and
+         the ring's local tangent has nothing to do with the grid — assuming a right angle there
+         would put two of the four zebras and two of the four signal heads out over the water.
+         Every crossing therefore carries th and th2, and a lattice crossing simply has
+         th2 = th + 90. */
+      let bd = Infinity, tp = null, tn = null;
+      ring.forEach(run => {
+        for (let i = 0; i < run.length - 1; i++){
+          const dx = run[i][0] - e[0], dy = run[i][1] - e[1], dd = dx*dx + dy*dy;
+          if (dd < bd){ bd = dd; tp = run[i]; tn = run[i+1]; }
+        }
+      });
+      const th2 = tp && tn ? Math.atan2(tn[1] - tp[1], tn[0] - tp[0]) : th + Math.PI / 2;
+      return { x:e[0], y:e[1], th, th2, major:true, ring:true };
+    }));
+
     for (let a = -Math.ceil(reach / su); a <= Math.ceil(reach / su); a++){
       for (let b = -Math.ceil(reach / sv); b <= Math.ceil(reach / sv); b++){
         const u = a * su, v = b * sv;
@@ -1104,11 +1132,12 @@ function roadSkeleton(d){
            kind of over-application as the necklace of roundabouts. Either-arm flagged 146 of 270
            crossings; both-arms gives 30, which is a main-road grid every 600 metres crossing
            another one — the real spacing. */
-        crossings.push({ x, y, th, major: (a % 3 === 0) && (b % 3 === 0) });
+        crossings.push({ x, y, th, th2: th + Math.PI / 2,
+                         major: (a % 3 === 0) && (b % 3 === 0) });
       }
     }
   }
-  return { ring, arterials, crossings, core, rndPlan };
+  return { ring, arterials, crossings: crossings.concat(ringJunctions), core, rndPlan };
 }
 
 /* Point to polyline, squared until the last step. Called for every candidate block against every
@@ -1927,7 +1956,9 @@ function paintGround(d, plan){
       const px = PX(c.x), py = PY(c.y);
       g.save();
       g.translate(px, py);
-      g.rotate(-c.th);
+      // Rotated to the RING at a ring junction: the pad is the piece of carriageway the two roads
+      // share, and at the seafront that piece belongs to the Corniche.
+      g.rotate(-(c.ring && c.th2 !== undefined ? c.th2 : c.th));
       // The pad, in a tone of its own so it reads as one resurfaced square.
       g.fillStyle = shade(SURF.road, 0.96);
       g.fillRect(-hw, -hw, hw * 2, hw * 2);
@@ -1954,12 +1985,19 @@ function paintGround(d, plan){
     (plan.crossings || []).forEach(c => {
       const px = PX(c.x), py = PY(c.y);
       const setback = cw * 1.20;
+      const axes = [c.th, c.th2 === undefined ? c.th + Math.PI / 2 : c.th2];
       for (let q = 0; q < 4; q++){
-        // PY negates, so the canvas angle runs the other way round from the world one.
-        const a = -c.th + q * Math.PI / 2;
+        // PY negates, so the canvas angle runs the other way round from the world one. Arms 0 and
+        // 2 run along the first axis, 1 and 3 along the second — which for a ring junction is the
+        // ring's own tangent rather than a right angle off the street.
+        const a = -axes[q % 2] + (q >= 2 ? Math.PI : 0);
         const dx = Math.cos(a), dy = Math.sin(a);
         const nx = -dy, ny = dx;
         const bx = px + dx * setback, by = py + dy * setback;
+        // The street ARRIVES at a ring junction and does not continue past it, so arm 2 — the
+        // continuation of the street on the far side — does not exist. Marking it puts a zebra in
+        // the coastal park.
+        if (c.ring && q === 2) continue;
         if (c.major){
           /* A zebra: bars ACROSS the direction of travel, drawn along the approach. Six bars is
              what fits a two-lane arm at this scale, and they are derived from the road half-width
@@ -1998,15 +2036,26 @@ function paintGround(d, plan){
      the moment the grid arrived — a necklace of identical discs round the whole island, several of
      them sitting in the coastal park. A roundabout is a junction of two important roads, so it
      belongs where a MAJOR meets the ring and nowhere else. */
+  /* SLIPS ON THE MINOR STREETS, FORMAL JUNCTIONS ON THE MAJORS — and I had this exactly inverted.
+
+     v64 put slip lanes on the majors because those were the important roads, which is the wrong
+     reading of what a slip lane is FOR. A slip lane exists so that traffic can join a road without
+     stopping, which is what a side street does when it meets a seafront artery. A main road
+     crossing another main road is the opposite case: it stops, it is signalised, and it gets a
+     square junction with paint and hardware.
+
+     So the minors slip in, the majors are formal crossings — and the majors are now entries in the
+     crossings list, so the junction pad, the zebras and the four signal heads all reach them
+     through machinery that already exists rather than through a special case here.
+
+     THE ARTERIAL ROUNDABOUTS ARE GONE with the same reasoning. A roundabout is a third kind of
+     junction and there is no room for one where a major meets the ring once that junction is
+     signalised. The core roundabout stays: it is the one place with the space for it. */
   plan.arterials.forEach((a, i) => {
-    if (!a.major) return;
+    if (a.major) return;
     const bi = junc[i];
     if (bi < 4) return;
-    // Slips first: the roundabout is drawn over them, so the nose island reads as tucked into the
-    // corner rather than sitting on top of the circulatory carriageway.
     slipLanes(a, bi);
-    const e = a[bi], b = a[bi - 3];
-    roundabout(e[0], e[1], cr * 0.72, [Math.atan2(b[1] - e[1], b[0] - e[0])]);
   });
   roundabout(core[0], core[1], cr, coreApp);
 
