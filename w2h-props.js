@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v15';
+export const BUILD = 'props v16';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -73,10 +73,19 @@ function frondGeometry(){
      A miniature exaggerates silhouette for exactly this reason — the crown is now roughly seven
      metres across, which is a real palm crown and which also happens to be the smallest thing
      that survives being drawn at this size. */
+  /* NINE STATIONS, NOT FIVE. The droop is the shape of a frond and five stations render it as
+     three straight chords with two kinks — at place distance a palm is a couple of hundred pixels
+     and the kinks are plainly visible. Nine gives a curve. It is eight triangles a frond instead
+     of four, against a directive to spend geometry where it shows, and a palm crown is about the
+     most-looked-at small object in the scene. */
   const st = [[0.00, 0.000, 0.032],
+              [0.16, 0.048, 0.066],
               [0.30, 0.075, 0.090],
+              [0.46, 0.072, 0.084],
               [0.62, 0.055, 0.070],
+              [0.76, 0.010, 0.055],
               [0.90,-0.100, 0.034],
+              [0.99,-0.195, 0.020],
               [1.06,-0.300, 0.000]];
   const pos = [], uv = [], idx = [];
   st.forEach(([x, y, w], i) => {
@@ -117,9 +126,16 @@ function crownGeometry(n){
 }
 
 const PALM_H = 15 * U_PER_M;                       // trunk height, 1.92 units
-const trunkGeo = new THREE.CylinderGeometry(0.075, 0.125, PALM_H, 6, 1);
+/* A SIX-SIDED TRUNK IS A HEXAGON, and on a lit cylinder that is six flat facets with hard
+   shading steps down every one. Ten reads as round at the distance these are actually seen from.
+   Four extra side quads on a geometry that is instanced, so the cost is eight triangles times the
+   palm count and nothing at all in draw calls. */
+const trunkGeo = new THREE.CylinderGeometry(0.075, 0.125, PALM_H, 10, 1);
 trunkGeo.translate(0, PALM_H / 2, 0);
-const crownGeo = crownGeometry(7);
+/* ELEVEN FRONDS. A date palm carries thirty or more and seven reads as a spider — the gaps
+   between fronds are wider than the fronds. Eleven is where the crown closes up into a canopy
+   from the district camera while still showing separate leaves from the place camera. */
+const crownGeo = crownGeometry(11);
 crownGeo.translate(0, PALM_H, 0);
 const palmGeo = mergeGeometries([trunkGeo, crownGeo], true);
 

@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v10';
+export const BUILD = 'city v11';
 
 export const C = {
   night:   0x0B1620,
@@ -173,7 +173,7 @@ function cityMaterial(tex, repX, repY, emissive, colour){
      shear  — the slanted crown, applied only near the top so the base stays plumb
      ell    — elliptical footprint                                                            */
 function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
-  const g = new THREE.CylinderGeometry(rTop, rBot, h, segs || 26, 16, false);
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, segs || 44, 24, false);
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++){
     let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
@@ -204,7 +204,11 @@ function roundedSlab(w, d, h, r, seg){
   sh.lineTo(w/2, hd);   sh.quadraticCurveTo(w/2, d/2, hw, d/2);
   sh.lineTo(-hw, d/2);  sh.quadraticCurveTo(-w/2, d/2, -w/2, hd);
   sh.lineTo(-w/2, -hd); sh.quadraticCurveTo(-w/2, -d/2, -hw, -d/2);
-  const g = new THREE.ExtrudeGeometry(sh, { depth:h, bevelEnabled:false, curveSegments: seg || 6 });
+  /* curveSegments applies to each of the FOUR corner quadratics, so 7 was 28 segments round the
+     whole slab — an ADNOC corner radius of 1.7 units drawn with seven chords, visibly faceted at
+     the place camera on the tallest object on the island. 16 costs a few hundred triangles on
+     three meshes. */
+  const g = new THREE.ExtrudeGeometry(sh, { depth:h, bevelEnabled:false, curveSegments: seg || 16 });
   g.rotateX(-Math.PI/2);
   g.computeVertexNormals();
   return g;
@@ -240,7 +244,12 @@ function etihadTowers(x0, z0){
   spec.forEach((s, i) => {
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
     // they are broad curved slabs, and the width is as much of the signature as the lean.
-    const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 26);
+    /* 26 RADIAL SEGMENTS ON THE SIGNATURE SILHOUETTE OF THE CITY. Etihad's towers are lens-shaped
+       in plan and the ellipse factor is 0.62, so the tight ends of that lens get the same angular
+       spacing as the broad flanks and are where the faceting shows — and the tight ends are
+       exactly the edges that read against the sky. 44 segments and 24 height rings; these are
+       five meshes in the whole scene, and they are the five the eye goes to first. */
+    const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 44);
     // MATERIAL IDENTITY. Every landmark previously shared one near-black mass tone, so the only
     // thing separating them was outline. Etihad is blue-green curtain glass and now reads that
     // way — cool and slightly reflective against the warm haze behind it.
@@ -328,7 +337,7 @@ function adnocHQ(x0, z0){
   const rot = 0.20;
   // Graphite glazing: denser and less blue than Etihad, so the two towers no longer read as the
   // same building at different sizes. Emissive third in the hierarchy, behind palace and Etihad.
-  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 7),
+  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 16),
     cityMaterial(TEX_TOWER, 3, 2, 0.60, 0x14161A));
   body.position.set(x0, 0, z0); body.rotation.y = rot;
   body.userData.hero = true; g.add(body);
@@ -341,7 +350,7 @@ function adnocHQ(x0, z0){
   const waistMat = new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 });
   waistMat.userData.glassOverride = false;
   waistMat.userData.duskColor = 0x6B6659;
-  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 7), waistMat);
+  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 16), waistMat);
   waist.position.set(x0, 44, z0); waist.rotation.y = rot; g.add(waist);
 
   // Step two: the lit cap, WIDER than the shaft so the overhang shows in pure black.
@@ -349,7 +358,7 @@ function adnocHQ(x0, z0){
     emissive:0x9FBDC8, emissiveIntensity:0.14 });
   // Cooler and paler than the shaft: the overhang catches sky rather than sun.
   capMat.userData.duskColor = 0xD6DADC;
-  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 7), capMat);
+  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 16), capMat);
   cap.position.set(x0, 45.6, z0); cap.rotation.y = rot; g.add(cap);
   return g;
 }

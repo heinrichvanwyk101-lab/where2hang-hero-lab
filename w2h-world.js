@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v53';
+export const BUILD = 'world v54';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -409,7 +409,9 @@ function isleSmooth(id){
 }
 
 function isleShape(id, r){
-  const pts = isleSmooth(id);
+  // The SAME points the inside-test and the road inset use. Drawing one coastline and reasoning
+  // about another is the fault this file has already paid for once.
+  const pts = isleCoast(id);
   const shape = new THREE.Shape();
   shape.moveTo(pts[0][0]*r, pts[0][1]*r);
   for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0]*r, pts[i][1]*r);
@@ -430,10 +432,105 @@ function isleShape(id, r){
    hunting for indices. Note that getPoints on a SplineCurve returns divisions * pointCount —
    2,880 points at the default — and a point-in-polygon test runs thousands of times during
    fabric generation. 180 is plenty and roughly sixteen times cheaper. */
+/* ===========================================================================
+   COASTLINE RESOLUTION.
+
+   The coastline is the most-looked-at line in the diorama and it was 128 points on Corniche —
+   a 23 metre segment, with Al Maryah and Saadiyat at 31. The palm crowns are 7 metres across, so
+   the shore was faceted at four times the size of the trees standing on it, and every render
+   since the beginning has shown a polygon where a beach should be.
+
+   getSpacedPoints(180) did not help and could not: isleShape builds the outline with lineTo over
+   the Chaikin points, so the Shape is a POLYLINE. Resampling a polyline at 180 points only inserts
+   collinear points along segments that were already straight. The number 180 has been buying
+   nothing for a long time.
+
+   INTERPOLATION, NOT MORE SMOOTHING. The obvious fix — more Chaikin passes — is wrong: Chaikin
+   APPROXIMATES, cutting corners on each pass, so every pass shrinks the island and rounds off the
+   west tip at the Breakwater, which is one of the three features the shape exists to carry. A
+   closed centripetal Catmull-Rom passes THROUGH every existing point instead, so the shape is
+   preserved exactly and only its resolution changes. Measured: enclosed area moves by 0.06 to
+   0.15 per cent, and the maximum distance from any original control point to the new polyline is
+   0.03 units. It is the same coastline, drawn smoothly.
+
+   CENTRIPETAL rather than uniform parameterisation. Uniform Catmull-Rom overshoots and can loop
+   where consecutive segment lengths differ sharply — which is exactly the Al Bateen creek, a
+   tight inlet sitting next to a long straight run of Corniche.
+
+   ONE OUTLINE STILL. It would be cheaper to give the geometry a fine curve and leave the
+   inside-test on the coarse one, and that is precisely the bug this file already fixed once: two
+   different coastlines, with buildings passing a test against a shape that was not being drawn.
+   The analysis cost is a point-in-polygon per fabric cell, which is load-time and measured in
+   milliseconds; the divergence would be permanent. Same points for both.
+
+   THE COUNT IS DERIVED, per the rule that has governed shoreline modules and repeat counts since
+   the beginning: perimeter divided by the target segment. COAST_SEG_M is the one number to move. */
+const COAST_SEG_M = 6;                  // metres of coastline per segment
+
+function closedSpline(pts, n){
+  const N = pts.length;
+  const P = i => pts[((i % N) + N) % N];
+  const at = (i, t) => {
+    const p0 = P(i-1), p1 = P(i), p2 = P(i+1), p3 = P(i+2);
+    const d = (a, b) => Math.sqrt(Math.hypot(b[0]-a[0], b[1]-a[1])) || 1e-6;   // alpha 0.5
+    const t0 = 0, t1 = t0 + d(p0,p1), t2 = t1 + d(p1,p2), t3 = t2 + d(p2,p3);
+    const tt = t1 + (t2 - t1) * t;
+    const lerp = (a, b, ta, tb) => {
+      const k = (tb - tt) / (tb - ta), m = (tt - ta) / (tb - ta);
+      return [a[0]*k + b[0]*m, a[1]*k + b[1]*m];
+    };
+    const A1 = lerp(p0,p1,t0,t1), A2 = lerp(p1,p2,t1,t2), A3 = lerp(p2,p3,t2,t3);
+    return lerp(lerp(A1,A2,t0,t2), lerp(A2,A3,t1,t3), t1, t2);
+  };
+  // Arc-length table, so the output is evenly spaced round the whole loop rather than evenly
+  // spaced within each source segment — the same distinction getSpacedPoints exists for.
+  const sub = 8, table = [];
+  let acc = 0;
+  for (let i = 0; i < N; i++){
+    let prev = at(i, 0);
+    for (let k = 1; k <= sub; k++){
+      const q = at(i, k/sub);
+      acc += Math.hypot(q[0]-prev[0], q[1]-prev[1]);
+      table.push({ len:acc, i, t:k/sub });
+      prev = q;
+    }
+  }
+  const out = [];
+  let k = 0;
+  for (let j = 0; j < n; j++){
+    const want = acc * j / n;
+    while (k < table.length - 1 && table[k].len < want) k++;
+    out.push(at(table[k].i, table[k].t));
+  }
+  return out;
+}
+
+const coastCache = new Map();
+function isleCoast(id){
+  let c = coastCache.get(id);
+  if (!c){
+    const sm = isleSmooth(id);
+    let per = 0;
+    for (let i = 0; i < sm.length; i++){
+      const a = sm[i], b = sm[(i+1) % sm.length];
+      per += Math.hypot(b[0]-a[0], b[1]-a[1]);
+    }
+    /* per is in normalised island-radius units, so it has to be scaled by THIS island's radius
+       to become a real length — a normalised perimeter says nothing about how long the shore is.
+       DISTRICTS is declared further down the file; that is fine because this runs at build time,
+       not at module evaluation, and the fallback covers an id that is not a district at all. */
+    const R = (DISTRICTS.find(x => x.id === id) || {}).r || 60;
+    const n = Math.max(96, Math.ceil(per * R * 7.8 / COAST_SEG_M));
+    c = closedSpline(sm, n);
+    coastCache.set(id, c);
+  }
+  return c;
+}
+
 const outlineCache = new Map();
 function isleOutline(id){
   let o = outlineCache.get(id);
-  if (!o){ o = isleShape(id, 1).getSpacedPoints(180); outlineCache.set(id, o); }
+  if (!o){ o = isleCoast(id).map(p => ({ x:p[0], y:p[1] })); outlineCache.set(id, o); }
   return o;
 }
 
