@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v89';
+export const BUILD = 'world v90';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3202,6 +3202,32 @@ for (const d of DISTRICTS){
   };
 }
 
+/* REAL CENTRELINES, ATTACHED WHEN THEY EXIST RATHER THAN WHEN THE ISLAND IS DECLARED.
+
+   This ran once, inline, in the district loop below — which happens during buildWorld, which
+   happens a few milliseconds after sceneIslands is built, which is after Corniche's roads have
+   been awaited and while the other four are still in flight. So the test read null for four
+   islands out of five and never ran again. Corniche painted its real network; Yas, Saadiyat,
+   Reem and Al Maryah were STRUCTURALLY incapable of it, and would have gone on painting a
+   generated ring-and-spokes lattice however long you waited or however fast the fetch was.
+
+   That is why "is stage 2 working" had two different answers depending on which island you
+   looked at, and why the honest test is Corniche and only Corniche on the old build.
+
+   Idempotent, so calling it twice costs a property write. The generated skeleton is untouched:
+   ring and arterials still feed onRoad and the fabric, draw* feed the painter. */
+function attachRealRoads(d){
+  const b = BASE && BASE[d.id];
+  if (!b || !b.roads || !d.roads) return false;
+  d.roads.drawRing = [];                 // no separate ring: the real Corniche road is a major
+  d.roads.drawArterials = b.roads;
+  /* Junction pads, signals and zebras were placed at generated crossings, which the real network
+     does not have. Empty rather than left in place: a signalised junction drawn where two real
+     roads do not meet is worse than no signal at all. Real junctions come with stage 3. */
+  d.roads.crossings = [];
+  return true;
+}
+
 const pickTargets = [];
 
 DISTRICTS.forEach(d => {
@@ -3570,14 +3596,9 @@ DISTRICTS.forEach(d => {
      So: drawRing and drawArterials for the painter, ring and arterials for the generator. Two
      networks briefly coexisting is the honest cost of doing this in stages rather than in one
      unverifiable drop. */
-  if (BASE && BASE[d.id] && BASE[d.id].roads){
-    d.roads.drawRing = [];                 // no separate ring: the real Corniche road is a major
-    d.roads.drawArterials = BASE[d.id].roads;
-    /* Junction pads, signals and zebras were placed at generated crossings, which the real network
-       does not have. Empty rather than left in place: a signalised junction drawn where two real
-       roads do not meet is worse than no signal at all. Real junctions come with stage 3. */
-    d.roads.crossings = [];
-  }
+  /* Attempted here for Corniche, whose roads were awaited before the build, and attempted AGAIN
+     at the top of buildGroundFor for everything else. See attachRealRoads. */
+  attachRealRoads(d);
 
   d.placeAnchors = d.places.map(pl => ({ ...pl, district:d }));
 });
@@ -4630,6 +4651,14 @@ const signalTicks = [];
 function buildGroundFor(d){
   const f = d.fabric;
   if (!f) return;
+  /* THE LAST MOMENT THE ANSWER CAN CHANGE. The ground canvas is painted below and there is no
+     repainting it afterwards, so the real network is claimed here rather than at declaration —
+     by now the deferred islands have had a leg of the attract loop to finish their fetch.
+     If it has still not landed the island paints generated roads, which is the documented
+     degradation, not a failure. */
+  d.roadsReal = attachRealRoads(d);
+  console.info('roads ' + d.id + ': ' + (d.roadsReal
+    ? (d.roads.drawArterials.length + ' real centrelines') : 'generated skeleton'));
   const plan = groundPlan(d, f.cells, f.blocks);
   d.plan = plan;
 

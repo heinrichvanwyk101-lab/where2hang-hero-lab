@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v4';
+export const BUILD = 'basemap v5';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -216,7 +216,19 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
     const tf = transform(idx, entry.id, t, p);
     out[entry.id] = {
       shape,
-      roads: entry._roads ? roadsNormalised(entry, entry._roads) : null,
+      /* LAZY, BECAUSE THIS TABLE IS BUILT ONCE AND THE ROADS ARRIVE FIVE TIMES.
+         sceneIslands is called immediately after Corniche's roads are awaited; the other four
+         islands are still in flight. A plain property captured null for all of them and kept it
+         forever, so no island but Corniche could ever paint a real centreline no matter how
+         early its fetch landed. A getter reads entry._roads at ACCESS time, which is when the
+         island is built, which is the moment the answer is actually knowable.
+         Memoised on the entry: the normalisation is ~1,500 polylines and the painter asks more
+         than once. */
+      get roads(){
+        if (!entry._roads) return null;
+        if (!entry._roadsN) entry._roadsN = roadsNormalised(entry, entry._roads);
+        return entry._roadsN;
+      },
       /* Landmarks in island-local SCENE units, north flipped to -z. These are world positions like
          roads and buildings, not shape coordinates, so they take the flip — see the note on
          shapeOf for why those two differ. */
