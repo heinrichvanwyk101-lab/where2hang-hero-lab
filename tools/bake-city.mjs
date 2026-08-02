@@ -91,12 +91,14 @@ const UA = 'where2hang-hero-lab/1.0 (city diorama bake; github.com/heinrichvanwy
    for no reason; nothing depends on its exact value, only on it being the same for all of them. */
 const ORIGIN = { lat: 24.4900, lon: 54.4200 };
 
+/* Each island also carries a CENTRE, a point known to be on it. That is how the right coastline
+   ring gets picked out of everything the box dragged in; see pickIsland below. */
 const ISLANDS = [
-  { id:'corniche', name:'Abu Dhabi Island', bbox:[24.4300, 54.2950, 24.5250, 54.4100] },
-  { id:'maryah',   name:'Al Maryah',        bbox:[24.4930, 54.3760, 24.5150, 54.4020] },
-  { id:'reem',     name:'Al Reem',          bbox:[24.4850, 54.3850, 24.5200, 54.4300] },
-  { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800] },
-  { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450] },
+  { id:'corniche', name:'Abu Dhabi Island', bbox:[24.4300, 54.2950, 24.5250, 54.4100], centre:[24.4750, 54.3500] },
+  { id:'maryah',   name:'Al Maryah',        bbox:[24.4930, 54.3760, 24.5150, 54.4020], centre:[24.5015, 54.3905] },
+  { id:'reem',     name:'Al Reem',          bbox:[24.4850, 54.3850, 24.5200, 54.4300], centre:[24.4980, 54.4060] },
+  { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
+  { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
 ];
 
 /* ROAD CLASSES KEPT, and the mapping to the three widths the painter already understands.
@@ -277,6 +279,48 @@ function obb(ring){
   return best;
 }
 
+/* PICKING THE ISLAND OUT OF WHAT THE BOX DRAGGED IN, and the first bake did this wrong.
+
+   v2 stitched the fragments and took the longest chain. That is not the island, and the reported
+   extents said so: Al Maryah came back 3.59 x 3.28 km against a real 900 metres, Al Reem 8.53 x
+   9.30 against 2.5, and Abu Dhabi Island 15.32 x 12.49 — larger than the bounding box that
+   fetched it, which is the detail that gives the game away.
+
+   Overpass returns whole ways that INTERSECT the box, geometry and all. So the mainland shore
+   runs in at one edge and out at the other, carrying kilometres of coastline that were never
+   asked for, and the longest chain is reliably that rather than the island sitting in the middle
+   of it.
+
+   The property that separates them is topological rather than metric: an island's coastline is a
+   CLOSED ring, and a shore passing through is an open line. So take the closed rings, and of
+   those take the one that actually contains a point known to be on the island. Both halves are
+   needed — Lulu, Hudayriyat and half a dozen breakwaters are closed rings inside the Corniche box
+   too, and picking the largest would find the right answer there and the wrong one for Al Maryah,
+   whose box also catches the western edge of Reem. */
+function contains(ring, p){
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > p[1]) !== (yj > p[1]) &&
+        p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function pickIsland(chains, centre){
+  const CLOSE_M = 60;   // a ring closes when its ends meet within a way's own node spacing
+  const closed = chains.filter(c => c.length > 3 &&
+    Math.hypot(c[0][0] - c[c.length-1][0], c[0][1] - c[c.length-1][1]) < CLOSE_M);
+  const hit = closed.filter(c => contains(c, centre)).sort((a, b) => area(b) - area(a));
+  if (hit.length) return { ring:hit[0], why:'closed ring containing the island centre' };
+
+  /* No ring contains the centre. Almost always a coastline edit upstream that has left a way
+     unclosed, and the honest thing is to say so rather than silently ship the mainland: the
+     fallback is loud, and the extent it produces will be visibly wrong in the report. */
+  const best = chains.slice().sort((a, b) => b.length - a.length)[0] || [];
+  return { ring:best, why:'NO CLOSED RING FOUND — fell back to the longest chain, CHECK THIS' };
+}
+
 function heightOf(tags){
   if (!tags) return null;
   const h = parseFloat(tags['height'] || tags['building:height']);
@@ -291,9 +335,7 @@ function heightOf(tags){
 /* ---------- COASTLINE ---------------------------------------------------------------------- */
 
 /* OSM coastline arrives as a heap of unordered fragments, each a way running with land on its
-   left. Stitching them by shared endpoint is the only way to get an island out; taking the
-   longest resulting chain is the only way to get THE island rather than a breakwater, a lagoon
-   edge, or the mainland shore that happened to fall inside the box. */
+   left. Stitching them by shared endpoint is the only way to get an island out of it. */
 function stitch(ways){
   const key = p => `${p[0].toFixed(2)},${p[1].toFixed(2)}`;
   const open = ways.map(w => w.slice());
@@ -367,8 +409,10 @@ async function bakeIsland(isle, proj){
     }
   }
 
-  const chains = stitch(coastWays).sort((a, b) => b.length - a.length);
-  const outline = chains.length ? simplify(chains[0], SIMPLIFY_M * 3).map(rd1) : [];
+  const chains = stitch(coastWays);
+  const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]));
+  const outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
+  process.stderr.write(`  ${isle.id}: ${chains.length} coast chains, took the ${picked.why}\n`);
 
   /* THE ISLAND'S TRUE EXTENT, measured from the outline rather than from the bounding box that
      fetched it. The consumer needs this to set its own radius from the data instead of from a
