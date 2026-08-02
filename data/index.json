@@ -1,0 +1,127 @@
+{
+ "generated": "2026-08-02T07:43:38.187Z",
+ "source": "OpenStreetMap contributors, ODbL 1.0",
+ "origin": {
+  "lat": 24.49,
+  "lon": 54.42
+ },
+ "units": "metres from origin, +x east +y north, one shared frame for all islands",
+ "note": "Buildings are oriented bounding boxes: x,y centre; w long axis; d short axis; rot radians from east.",
+ "islands": [
+  {
+   "id": "corniche",
+   "name": "Abu Dhabi Island",
+   "file": "isle-corniche.json",
+   "extent": {
+    "x0": -12145.7,
+    "y0": -6795.6,
+    "x1": 3179.2,
+    "y1": 5698.7,
+    "w": 15324.9,
+    "d": 12494.3,
+    "cx": -4483.2,
+    "cy": -548.5
+   },
+   "bytes": 1493695,
+   "counts": {
+    "outline": 1225,
+    "roads": 6684,
+    "buildings": 11706,
+    "withHeight": 3385,
+    "parks": 279
+   }
+  },
+  {
+   "id": "maryah",
+   "name": "Al Maryah",
+   "file": "isle-maryah.json",
+   "extent": {
+    "x0": -2941.3,
+    "y0": -2004.1,
+    "x1": 650.1,
+    "y1": 1274.9,
+    "w": 3591.4,
+    "d": 3279,
+    "cx": -1145.6,
+    "cy": -364.6
+   },
+   "bytes": 87512,
+   "counts": {
+    "outline": 296,
+    "roads": 661,
+    "buildings": 256,
+    "withHeight": 185,
+    "parks": 4
+   }
+  },
+  {
+   "id": "reem",
+   "name": "Al Reem",
+   "file": "isle-reem.json",
+   "extent": {
+    "x0": -2719.3,
+    "y0": 1582.6,
+    "x1": 5813.9,
+    "y1": 10883.3,
+    "w": 8533.2,
+    "d": 9300.7,
+    "cx": 1547.3,
+    "cy": 6233
+   },
+   "bytes": 119622,
+   "counts": {
+    "outline": 408,
+    "roads": 884,
+    "buildings": 231,
+    "withHeight": 118,
+    "parks": 27
+   }
+  },
+  {
+   "id": "saadiyat",
+   "name": "Saadiyat",
+   "file": "isle-saadiyat.json",
+   "extent": {
+    "x0": 3879.4,
+    "y0": -1161.6,
+    "x1": 11479.1,
+    "y1": 9006.2,
+    "w": 7599.7,
+    "d": 10167.8,
+    "cx": 7679.3,
+    "cy": 3922.3
+   },
+   "bytes": 250616,
+   "counts": {
+    "outline": 772,
+    "roads": 1550,
+    "buildings": 761,
+    "withHeight": 470,
+    "parks": 49
+   }
+  },
+  {
+   "id": "yas",
+   "name": "Yas",
+   "file": "isle-yas.json",
+   "extent": {
+    "x0": 15381.1,
+    "y0": -4064,
+    "x1": 21695.3,
+    "y1": 3270.9,
+    "w": 6314.2,
+    "d": 7334.9,
+    "cx": 18538.2,
+    "cy": -396.5
+   },
+   "bytes": 537121,
+   "counts": {
+    "outline": 462,
+    "roads": 2528,
+    "buildings": 3225,
+    "withHeight": 258,
+    "parks": 305
+   }
+  }
+ ]
+}
