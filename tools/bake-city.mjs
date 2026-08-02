@@ -232,17 +232,26 @@ out geom;`;
 
 function landmarkQuery(bbox, spellings){
   const b = bbox.join(',');
-  /* Escaped, anchored, and joined into one alternation so the whole set costs a single request per
-     tag key. Overpass regex is POSIX: no lookarounds and no case-insensitive flag, so the
-     spellings list carries the variation instead — which is better anyway, because a miss then
-     means the feature is absent rather than merely spelled oddly. */
-  const alt = spellings.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const blocks = NAME_KEYS.map(k => `  nwr["${k}"~"^(${alt})$"](${b});`).join('\n');
-  return `[out:json][timeout:120];
-(
-${blocks}
-);
-out center;`;
+  /* EXACT MATCHES, NOT A REGEX, and the Corniche bake failed six times before this changed.
+
+     `nwr["name"~"^(a|b|c)$"]` reads tidily and cannot use Overpass's tag index, so it scans every
+     named object in the box. That was survivable on Yas and Al Maryah and fatal on Abu Dhabi
+     Island, whose box is now 21 by 18 kilometres — five times the area of any other. Four regex
+     scans over it returned 504 from both mirrors, four times, and the island came back 0 of 7
+     while every other island resolved.
+
+     `["name"="Emirates Palace"]` is an index lookup. One statement per spelling per key is about
+     sixty statements for Corniche, which looks worse and runs in a fraction of the time, because
+     sixty index probes beat one full scan by a wide margin.
+
+     The spellings list is doing double duty now: it was written to absorb naming variation and it
+     is also what makes the exact-match form possible at all. */
+  const q = [];
+  for (const sp of spellings){
+    const esc = sp.replace(/["\\]/g, '\\$&');
+    for (const k of NAME_KEYS) q.push(`  nwr["${k}"="${esc}"](${b});`);
+  }
+  return `[out:json][timeout:180];\n(\n${q.join('\n')}\n);\nout center;`;
 }
 
 async function overpass(q){
@@ -492,6 +501,16 @@ async function bakeIsland(isle, proj){
       const b = obb(ring);
       if (!b) continue;
       buildings.push({
+        /* THE OSM ID, AND IT IS HERE FOR ONE REASON: it is the key a venue joins to.
+
+           Selecting which buildings get real treatment cannot be a curated list — there are 18,776
+           on this island and nobody maintains that. The useful filter is "contains a venue", which
+           is a spatial join in Supabase between venue coordinates and these footprints, and its
+           output has to be a stable identifier or there is nothing to store against the venue.
+
+           Cheap now and expensive later: added after the join is computed, every mapping has to be
+           recomputed against a file whose array order has changed. About 250 KB on Corniche. */
+        id: el.type === 'relation' ? -el.id : el.id,
         x: rd1(b.x), y: rd1(b.y),
         w: rd1(b.w), d: rd1(b.d),
         rot: Math.round(b.rot * 1000) / 1000,
