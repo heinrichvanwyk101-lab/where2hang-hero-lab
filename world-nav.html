@@ -1510,7 +1510,24 @@ phase('resize');
 // unlit night while the sky texture and key light are configured.
 applyView('dusk');
 phase('applyView');
+
+/* OPEN ON THE CORNICHE, NOT ON THE ARCHIPELAGO.
+
+   At world zoom the five islands are five brown silhouettes; nothing in the frame says Abu Dhabi
+   until you tap. One level down, Emirates Palace, Etihad Towers and ADNOC are all in shot, and the
+   scene reads in the first second rather than after two taps.
+
+   setWorld still exists and Back still reaches it — the world view is a real state and a good one,
+   it is simply the wrong opening shot for a hero.
+
+   THE CAMERA IS SNAPPED, NOT FLOWN. setDistrict composes a goal and the frame loop eases towards
+   it, which is right for a transition the user asked for and wrong for the first frame: easing
+   from the default world position means the scene opens by flying in from somewhere nobody chose.
+   Copying goal into cur once, before the loop starts, makes the opening shot the shot. */
 setWorld();
+setDistrict(corniche);
+cur.target.copy(goal.target);
+cur.dist = goal.dist; cur.elev = goal.elev; cur.angle = goal.angle; cur.fov = goal.fov;
 phase('setWorld');
 
 /* ---------- frame ---------- */
