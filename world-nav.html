@@ -1558,6 +1558,32 @@ function frame(){
     PH.firstFrame = performance.now() - _phT;
     PH['#page'] = performance.now() - PAGE_T0;
   }
+  /* THREE PROBE RENDERS, ONCE, BEFORE THE FIRST REAL FRAME IS MEASURED.
+
+     compile came back at 13 ms, so the 10 seconds is not shader programs — it is upload, the
+     shadow pass, or post-processing, and from outside they are one number. Rendering deliberately
+     three times separates them: the first draw pays every texture and buffer upload, the second
+     adds the shadow maps, the third adds the composer's targets. Each subsequent render is cheap,
+     so the differences are the costs.
+
+     Two guesses have already been wrong today — paintGround and shader compilation — and both
+     would have been cheap to test and expensive to act on. This is the cheap test. */
+  if (PH.firstFrame === undefined){
+    try {
+      const sw = renderer.shadowMap.enabled;
+      let m = performance.now();
+      renderer.shadowMap.enabled = false;
+      renderer.render(scene, camera);
+      PH.upload = performance.now() - m; m = performance.now();
+      renderer.shadowMap.enabled = sw;
+      renderer.render(scene, camera);
+      PH.shadowPass = performance.now() - m; m = performance.now();
+      composer.render();
+      PH.postFX = performance.now() - m;
+    } catch (e){ console.warn('probe:', e.message); }
+    PH.firstFrame = performance.now() - _phT;
+    PH['#page'] = performance.now() - PAGE_T0;
+  }
   frameStats(performance.now() - t0);
 
   if (DEBUG){
