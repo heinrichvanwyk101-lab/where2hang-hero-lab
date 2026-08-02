@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-02T07:50:11.686Z",
+ "generated": "2026-08-02T07:59:49.996Z",
  "source": "OpenStreetMap contributors, ODbL 1.0",
  "origin": {
   "lat": 24.49,
@@ -14,21 +14,21 @@
    "file": "isle-corniche.json",
    "extent": {
     "x0": -12145.7,
-    "y0": -6795.6,
-    "x1": 3179.2,
+    "y0": -10416.2,
+    "x1": 6892.4,
     "y1": 5698.7,
-    "w": 15324.9,
-    "d": 12494.3,
-    "cx": -4483.2,
-    "cy": -548.5
+    "w": 19038.1,
+    "d": 16114.9,
+    "cx": -2626.7,
+    "cy": -2358.8
    },
-   "bytes": 1493695,
+   "bytes": 2520405,
    "counts": {
-    "outline": 1225,
-    "roads": 6684,
-    "buildings": 11706,
-    "withHeight": 3385,
-    "parks": 279
+    "outline": 1905,
+    "roads": 10664,
+    "buildings": 18776,
+    "withHeight": 3807,
+    "parks": 845
    }
   },
   {
