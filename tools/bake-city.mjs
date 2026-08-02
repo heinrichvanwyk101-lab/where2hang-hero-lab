@@ -94,7 +94,16 @@ const ORIGIN = { lat: 24.4900, lon: 54.4200 };
 /* Each island also carries a CENTRE, a point known to be on it. That is how the right coastline
    ring gets picked out of everything the box dragged in; see pickIsland below. */
 const ISLANDS = [
-  { id:'corniche', name:'Abu Dhabi Island', bbox:[24.4300, 54.2950, 24.5250, 54.4100], centre:[24.4750, 54.3500] },
+  /* WIDENED TO THE ISLAND, NOT THE POSTCARD. The first correct bake returned an outline of
+     15.32 x 12.49 km from a box measuring 10.5 x 11.6 — the ring is closed and contains the
+     centre, so it is the real landmass, and Abu Dhabi Island simply runs further than the
+     Corniche does: west to the Breakwater, east past Maqta, south down the Mussafah channel.
+
+     An outline larger than the fetch box is not a cosmetic mismatch. Roads and buildings were
+     clipped at the old edges while the coast was not, so the artefact described several square
+     kilometres of land with no city standing on it — which would render as desert inside a
+     shoreline and read as a hole in the data rather than as the edge of a query. */
+  { id:'corniche', name:'Abu Dhabi Island', bbox:[24.3800, 54.2800, 24.5450, 54.4900], centre:[24.4750, 54.3500] },
   { id:'maryah',   name:'Al Maryah',        bbox:[24.4930, 54.3760, 24.5150, 54.4020], centre:[24.5015, 54.3905] },
   { id:'reem',     name:'Al Reem',          bbox:[24.4850, 54.3850, 24.5200, 54.4300], centre:[24.4980, 54.4060] },
   { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
