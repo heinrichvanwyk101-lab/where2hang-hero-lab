@@ -626,7 +626,7 @@ phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals, PERF, buildIsland } =
+        propCount, tickSignals, PERF, buildIsland, buildCornicheRest } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -1545,6 +1545,28 @@ phase('applyView');
    Copying goal into cur once, before the loop starts, makes the opening shot the shot. */
 setWorld();
 setDistrict(corniche);
+
+/* THE REST OF THE CORNICHE, ONE IDLE FRAME AFTER THE FIRST.
+
+   Only the four kilometres the camera opens on are built at load; the other fifteen are 18,776
+   buildings nobody is looking at. requestIdleCallback runs it when the main thread is free, which
+   on this page is immediately after the first frame has been presented — so the scene appears at
+   its opening framing and fills in behind, rather than making anyone wait for ground they cannot
+   see.
+
+   The timeout is the important argument. Without it a busy thread can postpone an idle callback
+   indefinitely, and "the east end of the island sometimes never arrives" is a far worse bug than
+   a hitch. Two seconds, then it runs regardless.
+
+   setTimeout where requestIdleCallback does not exist, which is Safari. */
+function fillCorniche(){
+  if (!buildCornicheRest || !buildCornicheRest()) return;
+  snapshotMats(corniche.group);
+  registerLift(corniche.group);
+  applyView(view);
+}
+if (window.requestIdleCallback) requestIdleCallback(fillCorniche, { timeout:2000 });
+else setTimeout(fillCorniche, 800);
 cur.target.copy(goal.target);
 cur.dist = goal.dist; cur.elev = goal.elev; cur.angle = goal.angle; cur.fov = goal.fov;
 phase('setWorld');

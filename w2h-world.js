@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v86';
+export const BUILD = 'world v87';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4252,7 +4252,19 @@ function urbanFabric(d, layer, opts){
 
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
      No random numbers below this line. */
-  const keep = specs.filter(sp => sp.h >= minH);
+  /* THE REGION FILTER, AND WHY IT IS HERE AND NOT TWENTY LINES EARLIER.
+
+     Corniche is nineteen kilometres long and the opening shot is four of them. The rest of the
+     island is 18,776 buildings the camera cannot see, and `?drawn` proved they are the cost:
+     the same code on a scene a tenth the size draws its first frame in 794 ms instead of 5,788.
+
+     THE FILTER CANNOT MOVE INTO PASS 1. The seeded stream is consumed one fixed block per plot,
+     in order, and the two layers agree only because both consume it identically. Skipping a plot
+     earlier would skip its draws and every building after it would change — a different city, not
+     a smaller one. So every spec is still generated, exactly as before, and only the EMIT is
+     filtered. That costs the same CPU in urbanFabric and removes the geometry, which is where the
+     first frame actually goes. */
+  const keep = specs.filter(sp => sp.h >= minH && (!opts.region || opts.region(sp)));
 
   /* ONE MESH PER MATERIAL AND GEOMETRY PAIR, ALLOCATED LAZILY.
 
@@ -4514,6 +4526,16 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
 /* READ FROM coreN, not retyped. The core was written out twice — once in the district table and
    once here — and the two copies were free to drift, which is most of how the south-shore core
    survived unnoticed through four drops. One source. */
+/* THE OPENING REGION. A radius about the shot the camera actually opens on, generous enough that
+   panning does not immediately run out of city. Everything outside it is built by buildRest below,
+   under an attract-loop leg or a user's first move — either way, while the camera is elsewhere. */
+const CORNICHE_REGION = (() => {
+  const sh = corniche.shot;
+  if (!sh) return null;
+  const rr = (sh.r * 1.6) ** 2;
+  return sp => (sp.x - sh.x) ** 2 + (sp.z - sh.z) ** 2 < rr;
+})();
+
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
   /* THE CAP WAS FLATTENING THE DOWNTOWN, and that is the carpet in every dusk shot.
 
@@ -4525,7 +4547,8 @@ const cornicheFabric = urbanFabric(corniche, corniche.detail,
      which is the real relationship: a dense field of 100-200 m towers with three landmarks
      standing clear of it. The cap now bites only at fall > 0.64 of a much taller curve, so it
      trims the tallest few rather than levelling the lot. */
-  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true, cap:26 });
+  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true, cap:26,
+    region:CORNICHE_REGION });
 urbanFabric(corniche, corniche.mass,
   /* Same density and the same seed as the detail call above, so this is the SAME CITY. The two
      layers differ only by minH: the world view keeps the tall ones and tapping in adds the short
@@ -4537,7 +4560,7 @@ urbanFabric(corniche, corniche.mass,
      threshold, which is the correct behaviour: a 42-metre building is equally invisible from
      orbit whatever the tallest tower on the island happens to be. */
   { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
-    cap:26, minH:5.4 });
+    cap:26, minH:5.4, region:CORNICHE_REGION });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
@@ -4665,6 +4688,29 @@ try {
 
 /* CALLED BY world-nav.html WHEN THE CAMERA COMMITS TO AN ISLAND. Idempotent, and returns whether
    it did anything, so the caller can decide to show a spinner only when there is work. */
+/* THE REST OF THE CORNICHE. Same call, same seed, same specs; the region is inverted so this emits
+   exactly what the first pass left out and nothing twice.
+
+   Pass 1 and 2 run again, which is about 1.4 seconds of arithmetic for a result already computed
+   once. Caching the specs instead would be faster and would mean holding forty thousand objects
+   alive for the whole session to save a second that happens while the camera is flying. The
+   arithmetic is deterministic; the memory is not free. */
+let cornicheRestDone = !CORNICHE_REGION;
+function buildCornicheRest(){
+  if (cornicheRestDone) return false;
+  cornicheRestDone = true;
+  const outside = sp => !CORNICHE_REGION(sp);
+  const t = performance.now();
+  urbanFabric(corniche, corniche.mass,
+    { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
+      cap:26, minH:5.4, region:outside });
+  urbanFabric(corniche, corniche.detail,
+    { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
+      cap:26, region:outside });
+  console.info('buildCornicheRest ' + Math.round(performance.now() - t) + ' ms');
+  return true;
+}
+
 function buildIsland(id){
   const d = DISTRICTS.find(x => x.id === id);
   if (!d || !d.pending) return false;
@@ -4677,7 +4723,7 @@ function buildIsland(id){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
-         buildIsland,
+         buildIsland, buildCornicheRest,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
