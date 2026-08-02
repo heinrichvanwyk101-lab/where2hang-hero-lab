@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v85';
+export const BUILD = 'world v86';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3174,7 +3174,12 @@ for (const d of DISTRICTS){
   d.shot = {
     x: (a.x + b.x) / 2,
     z: (a.z + b.z) / 2,
-    r: Math.hypot(b.x - a.x, b.z - a.z) * 0.62,
+    /* 1.05, NOT 0.62. At 0.62 the three landmarks separated correctly and the camera ended up
+       standing among them: no horizon, no skyline against the sky, the shot reading as a street
+       rather than a city. The span between the palace and ADNOC is the SUBJECT, not the frame —
+       the frame wants that span plus the sea in front of it and some sky above, which is what
+       every reference photograph of the Corniche is. */
+    r: Math.hypot(b.x - a.x, b.z - a.z) * 1.05,
   };
 }
 

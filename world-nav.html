@@ -1253,6 +1253,18 @@ function applyView(next){
   renderer.toneMappingExposure = night ? 1.24 : dusk ? 1.02 : 1.0;
 
   world.traverse(o => {
+    /* SPRITES ARE NOT MESHES, and the grid labels have been visible in every view since the day
+       they were added.
+
+       The planOnly test twenty lines below switches them off outside Plan, and it has never once
+       run: this guard returns before reaching it, because a sprite reports isSprite and not
+       isMesh. Nobody noticed while the camera sat above an island 380 units across and the labels
+       were a few pixels of teal. Opening the hero at street level put a two-metre "8" in the
+       middle of the shot.
+
+       Handled before the mesh guard rather than by loosening it — everything after this line
+       reads o.material as a surface material, which a SpriteMaterial is not. */
+    if (o.userData.planOnly){ o.visible = plan; return; }
     if (!o.isMesh) return;
     /* HELPERS ARE NOT SCENERY. The district tap targets are horizontal discs wider than the
        coastline, held off screen by material.visible = false — and this loop was overwriting that
@@ -1273,7 +1285,6 @@ function applyView(next){
        before any of the material branches can hand them a material for a mode they never appear
        in. Checked ahead of the ground test below, which would otherwise hide them along with the
        buildings. */
-    if (o.userData.planOnly){ o.visible = plan; return; }
     if (o.userData.nightOnly){
       o.visible = night || dusk;
       if (o.visible) o.material = dusk && o.userData.duskMats ? o.userData.duskMats
