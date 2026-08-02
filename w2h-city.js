@@ -18,7 +18,13 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v14';
+export const BUILD = 'city v15';
+
+/* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
+   against it and has now got that wrong twice by reading a stale comment instead of the geometry.
+   Half-span 24.6 in x and 6.0 in z, offset 0.4 south of the anchor. One constant, consumed
+   wherever the building's extent is needed. */
+export const PALACE_FOOT = { w:49.2, d:12.0, dz:0.4 };
 
 export const C = {
   night:   0x0B1620,
@@ -444,24 +450,43 @@ function emiratesPalace(x0, z0){
   glow.userData.duskColor = 0xF4E4BC;
   glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2E6C6, roughness:0.7 });
 
+  /* THE WINGS WERE SHORTER THAN THE CITY AROUND THEM, and that is why this reads as a compact
+     block with domes on it rather than as the long horizontal building it is.
+
+     At 2.3 and 1.7 units the wings stood 18 and 13 metres tall. The generated low-rise beside
+     them runs 2.1 to 7.0. So the span — the one feature that identifies Emirates Palace in every
+     photograph, the thing that makes a 60-metre building read as the landmark of a city of
+     towers — was buried in fabric of the same height, and only the 3.0-unit centre and the domes
+     rose clear of it. The building was correct in plan and invisible in elevation.
+
+     3.4 and 2.8 put both wings above the skirt they stand in. They still step down and out, so
+     the rhythm survives; they just do it above the roofline of the city rather than inside it.
+
+     DEPTH 11 AND 9, UP FROM 6.5 AND 5.4. The complex was 49 units across and 6.5 deep — a ratio
+     of seven and a half to one, which is a wall, not a palace. The aerials show a deep building
+     with courtyards behind the front range. This is still shallower than the real thing and
+     deliberately so: past about 12 units the estate stops fitting on the island. */
   const W = 46;
-  const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 3.0, 6.5), stone);
-  main.position.set(x0, 1.5, z0); g.add(main);
+  const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 4.2, 11.0), stone);
+  main.position.set(x0, 2.1, z0); g.add(main);
 
   // Wings step DOWN and OUT. The stepping is the rhythm; a single long block reads as a shed.
-  [[-1,0.62,2.3],[1,0.62,2.3],[-1,0.86,1.7],[1,0.86,1.7]].forEach(([sgn, f, hh]) => {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(W*0.20, hh, 5.4), stone);
+  [[-1,0.62,3.4],[1,0.62,3.4],[-1,0.86,2.8],[1,0.86,2.8]].forEach(([sgn, f, hh]) => {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(W*0.20, hh, 9.0), stone);
     w.position.set(x0 + sgn * W * f * 0.5, hh/2, z0 + 0.5); g.add(w);
   });
 
   // Arcade along the front. Reads as a colonnade in silhouette, costs almost nothing.
   for (let i = 0; i < 26; i++){
-    const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.15, 0.55), arch);
+    const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.5, 0.55), arch);
     /* THE COLONNADE RAN 8.6 UNITS PAST THE BUILDING AT EACH END. W*0.46 spans 42.3 units against
        a palace that reaches 12.4 either side of centre once the wings are counted — so ten of the
        twenty-six posts stood in open sand with nothing behind them, which from above reads as a
        line of bollards rather than as an arcade. W*0.27 ends the run where the wings end. */
-    a.position.set(x0 - W*0.27 + i * (W*0.54/25), 0.58, z0 + 3.7); g.add(a);
+    /* Moved out to z0 + 6.0 and raised to 1.5. The arcade fronts the building, so when the main
+       range went from 6.5 deep to 11 it had to follow or it would have been standing inside the
+       wall it is meant to be in front of. */
+    a.position.set(x0 - W*0.27 + i * (W*0.54/25), 0.75, z0 + 6.0); g.add(a);
   }
 
   function dome(dx, r, hy){
@@ -472,14 +497,17 @@ function emiratesPalace(x0, z0){
     const fin = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), glow);
     fin.position.set(x0 + dx, hy + r + 0.35, z0); g.add(fin);
   }
-  dome(0, 3.4, 3.2);
-  dome(-9, 1.7, 2.5);  dome(9, 1.7, 2.5);
-  dome(-17, 1.15, 2.0); dome(17, 1.15, 2.0);
+  /* Every dome rides up with the mass it sits on. The centre now tops out at 7.8 units against a
+     landmark skirt of 7.0, so the palace clears its own low-rise by construction rather than by
+     the two numbers happening to be set consistently in different files. */
+  dome(0, 3.4, 4.4);
+  dome(-9, 1.7, 3.6);  dome(9, 1.7, 3.6);
+  dome(-17, 1.15, 3.0); dome(17, 1.15, 3.0);
   // Corner pavilions, raised — they bracket the whole composition.
   [-22.5, 22.5].forEach(dx => {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.6, 5.0), stone);
-    p.position.set(x0 + dx, 1.3, z0 + 0.3); g.add(p);
-    dome(dx, 1.5, 3.3);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.6, 8.0), stone);
+    p.position.set(x0 + dx, 1.8, z0 + 0.3); g.add(p);
+    dome(dx, 1.5, 4.2);
   });
   return g;
 }

@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v75';
+export const BUILD = 'world v77';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -341,6 +341,26 @@ const ETIHAD_PLAZA = (() => {
    scaled is anything sized to a BUILDING — the Etihad spec, the avoid rectangles, the ground pads,
    the beach — because those are at true scale already and that is the entire point. */
 const ISLE_SCALE = 2.5;
+
+/* THE PALACE FOOTPRINT AND ITS ESTATE, and this is the third time the estate has been wrong by
+   hand. v74 read a comment saying the palace was thirty units wide and reserved 36; v75 read the
+   same comment, reserved 40 and claimed thirteen units of clearance. The geometry in w2h-city.js
+   is 49.2 across. Both versions reserved LESS ground than the building stands on plus a verge,
+   which is why low-rise kept arriving at its wall however the heights were tuned.
+
+   PALACE_FOOT is exported from the city kit as of city v15 and arrives through opts like C and
+   rnd. The literal is a fallback so this drop does not require a world-nav.html drop with it;
+   once the kit is passed the fallback is dead and the number lives in one file, beside the
+   geometry that defines it.
+
+   THE ESTATE IS ASYMMETRIC ON PURPOSE. The real one is: gardens and beach west and north, Etihad
+   Towers standing immediately east with a thin band of city between. Etihad's own reservation
+   begins 43 units from the palace anchor, so a symmetric estate wide enough for the western
+   gardens would run into it. Shifted 7 west, this leaves twenty units of open ground on the
+   garden side, six on the Etihad side, and fabric between the two landmarks — which is what the
+   aerials show. */
+const PALACE_FOOT   = opts.PALACE_FOOT || { w:49.2, d:12.0, dz:0.4 };
+const PALACE_ESTATE = { dx:-7, w:76, d:34 };
 
 /* Positions ON the island, so they scale with it — unlike the buildings standing on them, which
    are already at true scale and must not. */
@@ -1052,7 +1072,11 @@ function lowRiseN(d){
 }
 function cellCap(d, nx, ny, cap){
   const Z = lowRiseN(d);
-  let c = cap;
+  /* Infinity, not cap, because this is now a soft target multiplied into the height rather than a
+     ceiling handed to Math.min. Returning cap here would scale every plot on every island by the
+     roll a second time and halve the skyline. */
+  if (!Z.length) return Infinity;
+  let c = Infinity;
   for (let i = 0; i < Z.length; i++){
     const l = Z[i];
     const dd = Math.hypot(nx - l.x, ny - l.y);
@@ -2386,6 +2410,22 @@ matStoneRend.userData.duskColor  = 0xE0C79A;      // warm limestone
 const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x171B21, roughness:0.26, metalness:0.62 });
 matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 
+/* PAINTED WHITE RENDER, AND THE MISSING MAJORITY FINISH.
+
+   The five families here cover limestone, precast, aluminium and two glasses, and between them
+   they cannot produce the commonest wall in Abu Dhabi: plain white or off-white painted render.
+   Al Markaziyah is overwhelmingly that — white and pale grey mid-rise, block after block of it,
+   with the warm stone reserved for the older and the more expensive. Every aerial shows it.
+
+   Its absence is why the island reads gold. Not because the gold is wrong — warm limestone is
+   genuinely there — but because it was the only thing on offer at low rise, and low rise is most
+   of an island.
+
+   Night hex keeps b/r at 1.12, well inside the 1.75 the glass classifier tests, so this stays out
+   of the glass path like every other body material. */
+const matStoneWhite = new THREE.MeshStandardMaterial({ color:0x1A1B1D, roughness:0.95, metalness:0.0 });
+matStoneWhite.userData.duskColor = 0xE9E4DA;      // painted white render, barely warmed by the dusk
+
 /* A SECOND GLAZING, AND A ROOF THAT IS NOT A WALL.
 
    Two additions, both aimed at the same thing: the render now lights well enough that every
@@ -2583,6 +2623,7 @@ const DAY_TEX = WCLASS.map(c => fabricFacadeDay(c.rows));
    entries the lift already honours, and they exist for the same reason: a skyline of one material
    is the loudest fault in any render of it. */
 const DAY_FAMILY = {
+  white:  0xEDEBE6,      // painted white render, the commonest wall on the island
   rend:   0xE2D6BB,      // warm limestone render
   stone:  0xD2CBBE,      // precast concrete, neutral
   clad:   0xC4C8CC,      // brushed aluminium, faintly cool
@@ -2707,19 +2748,22 @@ const DISTRICTS = [
       /* 40 x 26, UP FROM 36 x 24, and only that. The rectangle is sized to the palace and its
          forecourt, which is all a reservation should ever be; the clearance that makes it read as
          a landmark is the skirt below, not a wider hole. */
-      { x:LM.palace.x, z:LM.palace.z, w:40, d:26 },   // Emirates Palace and its forecourt
+      { x:LM.palace.x + PALACE_ESTATE.dx, z:LM.palace.z + PALACE_FOOT.dz,
+        w:PALACE_ESTATE.w, d:PALACE_ESTATE.d },       // Emirates Palace and its estate
       { x:LM.etihad.x, z:LM.etihad.z, w:48, d:20 },   // Etihad Towers and the plaza
       { x: LM.adnoc.x, z: LM.adnoc.z, w:20, d:20 },   // ADNOC HQ and its apron
     ],
     /* THE SKIRT. One entry, and only the palace needs one: Etihad's shortest tower is 21.8 units
        and ADNOC is 44, so both stand clear of a 26-unit neighbour on their own.
 
-       r0 20 clears the reservation's corner. r1 62 is measured, not chosen — the palace and
+       r0 40 clears the reservation's corner — it grew with the estate, since a skirt starting
+       inside the rectangle it is protecting ramps over ground nothing stands on and wastes half
+       its run. r1 62 is measured rather than chosen — the palace and
        Etihad are 67 units apart, so the ramp reaches the Etihad cluster's edge and stops, and the
        towers that are supposed to rise there are untouched. h 7.0 sits just above the palace's
        6.5 so the nearest fabric reads as a wall of the estate rather than as a rival. */
     lowRise:[
-      { x:LM.palace.x, z:LM.palace.z, r0:20, r1:62, h:7.0 },
+      { x:LM.palace.x + PALACE_ESTATE.dx, z:LM.palace.z, r0:40, r1:62, h:7.0 },
     ],
     // Re-derived against the new outline. Index 0 is the west tip and the samples run east
     // along the north shore, so this is the Corniche itself, end to end.
@@ -2765,8 +2809,12 @@ const DISTRICTS = [
          towers standing on it, and the other three on bare desert.
 
          Derived now, from the cluster's own bounds, so it cannot be left behind again. */
-      { kind:'lawn',   x:LM.palace.x, z:LM.palace.z + 1, w:34, d:20 },
-      { kind:'paving', x:LM.palace.x, z:LM.palace.z + 1, w:30, d:12 },
+      /* The lawn runs to four units inside the reservation that protects it, so what gets painted
+         is the estate rather than a verge around the building. The forecourt is sized to the
+         palace front, not to the lawn. */
+      { kind:'lawn',   x:LM.palace.x + PALACE_ESTATE.dx, z:LM.palace.z + PALACE_FOOT.dz,
+                       w:PALACE_ESTATE.w - 8, d:PALACE_ESTATE.d - 8 },
+      { kind:'paving', x:LM.palace.x, z:LM.palace.z + 5.5, w:PALACE_FOOT.w * 0.7, d:14 },
       { kind:'paving', x:LM.etihad.x + ETIHAD_PLAZA.dx, z:LM.etihad.z + ETIHAD_PLAZA.dz,
                        w:ETIHAD_PLAZA.w, d:ETIHAD_PLAZA.d },   // Etihad plaza
       { kind:'paving', x: LM.adnoc.x, z: LM.adnoc.z, w:17, d:13 },   // ADNOC apron
@@ -3498,7 +3546,8 @@ function tintFrom(col, t){
 }
 
 function buildingSpec(rnd, ctx){
-  const { jx, jy, x, z, rot, plotW, plotD, tallest, capH, coreX, coreZ } = ctx;
+  const { jx, jy, x, z, rot, plotW, plotD, tallest, capH, coreX, coreZ,
+          softH = Infinity } = ctx;
   // The block figure the podium and setback maths are written against is the plot's smaller
   // dimension: those rules are about how far a mass may step relative to its own ground.
   const block = Math.min(plotW, plotD);
@@ -3551,8 +3600,26 @@ function buildingSpec(rnd, ctx){
      bites only on the outliers: nothing at the median moves. Raise it to Infinity to see the
      unclamped skyline, or drop it towards 12 if the diorama should read as buildings rather than
      as a cluster of masts. */
+  /* THE SKIRT IS A TARGET, NOT A CEILING, and v75 got that wrong.
+
+     v75 passed the landmark skirt in as capH, so Math.min clamped every plot inside r0 to the
+     same number: median 7.1 and tallest 7.1, identical. A clamp cannot lower a skyline, only
+     flatten one, and the ring around the palace came out as a carpet of matched blocks. This file
+     has warned about that twice for the district cap; I applied the same fault at landmark scale.
+
+     softH scales the ROLL instead. Stock inside the skirt runs 0.30 to 1.00 of the target, so at
+     7.0 units it spreads 2.1 to 7.0 with the spread of rolls the rest of the island has.
+
+     Default Infinity, and Infinity times anything positive is Infinity, so a plot with no skirt
+     over it drops out of the Math.min without a branch — which keeps the promise made above the
+     draw block: no branch, no stream change, both layers the same city.
+
+     capH STAYS AT THE DISTRICT CAP. The crown rules below test h < capH to decide whether a tower
+     was cut off by the ceiling; feeding them a landmark skirt would report every low building
+     near the palace as trimmed when it was not. */
   const h    = Math.min(capH, SLENDER * Math.min(w, dp),
-                        3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95));
+                        3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95),
+                        softH * (0.30 + Math.pow(R.hRoll, 2.2) * 0.70));
 
   const frac = h / tallest;
   const tier = h < LOWRISE ? 0 : frac < 0.42 ? 1 : 2;
@@ -3581,14 +3648,43 @@ function buildingSpec(rnd, ctx){
      mesh in every material it appears in; holding the swept stock to two materials means three
      profiles cost six buckets instead of eighteen. Both arguments point the same way, which is
      the only kind of optimisation worth taking. */
-  const isGlass = sculpt || R.glass < (h > tallest * 0.50 ? 0.62 : 0.10);
+  /* HEIGHT PICKED THE FINISH OUTRIGHT, AND SEVENTY PER CENT OF THE ISLAND CAME OUT GOLD.
+
+     The rule was one material per height band, and with the falloff putting most of Corniche below
+     frac 0.36 that meant one band did most of the work: 70 per cent warm limestone, 11 per cent
+     precast, 2 per cent aluminium. The note above matPlaceStone says precast is "the default, and
+     the largest share" — that was the intent and the height rule quietly overrode it. A single
+     finish across seven buildings in ten is why the island reads as a sand-coloured diorama rather
+     than as Abu Dhabi, and no amount of lighting fixes a palette fault.
+
+     Height still sets the BAND — that part was right, and varying finish with height reads as
+     eras where varying it at random reads as noise. What changes is that a band now holds a mix
+     rather than a single material, weighted the way the aerials actually look: white render
+     commonest, precast close behind, warm limestone the minority it really is.
+
+     THE ROLL IS R.glass, RENORMALISED, and no new draw is taken. R.glass has already been spent
+     on the glass test by the time we get here, and on this branch it is known to lie above the
+     threshold — so rescaling it to [0, 1) gives a clean uniform for free. Adding a roll to the
+     block above would have shuffled every building on every island for a palette change. */
+  const gThresh = h > tallest * 0.50 ? 0.62 : 0.10;
+  const isGlass = sculpt || R.glass < gThresh;
+  const u = (R.glass - gThresh) / (1 - gThresh);
   let mat, tAmount, tWarm;
   if (isGlass){
     if (R.glassKind < (h > tallest * 0.72 ? 0.14 : 0.55)){ mat = 'bronze'; tAmount = 0.26; tWarm = 0.9; }
     else                                                 { mat = 'glass';  tAmount = 0.30; tWarm = 0.2; }
-  } else if (frac < 0.36){ mat = 'rend';  tAmount = 0.46; tWarm = 1.15; }
-  else if   (frac < 0.62){ mat = 'stone'; tAmount = 0.42; tWarm = 1.00; }
-  else                   { mat = 'clad';  tAmount = 0.30; tWarm = 0.55; }
+  } else if (frac < 0.36){
+    if      (u < 0.44){ mat = 'white'; tAmount = 0.34; tWarm = 0.70; }
+    else if (u < 0.78){ mat = 'stone'; tAmount = 0.42; tWarm = 1.00; }
+    else              { mat = 'rend';  tAmount = 0.46; tWarm = 1.15; }
+  } else if (frac < 0.62){
+    if      (u < 0.34){ mat = 'white'; tAmount = 0.32; tWarm = 0.70; }
+    else if (u < 0.72){ mat = 'stone'; tAmount = 0.42; tWarm = 1.00; }
+    else              { mat = 'clad';  tAmount = 0.30; tWarm = 0.55; }
+  } else {
+    if      (u < 0.30){ mat = 'stone'; tAmount = 0.38; tWarm = 0.95; }
+    else              { mat = 'clad';  tAmount = 0.30; tWarm = 0.55; }
+  }
   const tint = { v:R.tintV, w:R.tintW, amount:tAmount, warm:tWarm };
 
   /* ---- PODIUM ----
@@ -3740,7 +3836,7 @@ const FABRIC_MATS = new Map();
 function fabricMats(cool){
   const k = cool ? 'cool' : 'warm';
   if (FABRIC_MATS.has(k)) return FABRIC_MATS.get(k);
-  const base = { rend:matStoneRend, stone:matPlaceStone, clad:matStoneClad,
+  const base = { white:matStoneWhite, rend:matStoneRend, stone:matPlaceStone, clad:matStoneClad,
                  glass:matPlaceGlass, bronze:matGlassBronze };
   const out = {};
   Object.entries(Object.assign({ roof:matRoofDeck }, base)).forEach(([n, m]) => {
@@ -3864,7 +3960,8 @@ function urbanFabric(d, layer, opts){
      knowledge of minH or lod. This is what makes the two layers the same city. */
   const specs = cells.map(c => buildingSpec(rnd, {
     jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r, rot:c.rot,
-    plotW:c.w, plotD:c.dp, tallest, capH:cellCap(d, c.jx, c.jy, cap), coreX, coreZ }));
+    plotW:c.w, plotD:c.dp, tallest, capH:cap, softH:cellCap(d, c.jx, c.jy, cap),
+    coreX, coreZ }));
 
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
      No random numbers below this line. */
