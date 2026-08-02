@@ -602,6 +602,8 @@ const STATE = { WORLD:'world', DISTRICT:'district', PLACE:'place' };
 let state = STATE.WORLD;
 let activeDistrict = null, activePlace = null;
 
+fitClip();
+
 const goal = { target:new THREE.Vector3(0,0,-40), dist:430, elev:300, angle:0, fov:52 };
 const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
                angle:goal.angle, fov:goal.fov };
@@ -642,10 +644,45 @@ function applyLOD(){
 }
 
 /* The half-extent of the whole archipelago, measured from the districts themselves. */
+/* THE DISPLAYED RADIUS, NOT THE TRUE ONE. d.r is the island's real half-span in scene units and
+   d.dispScale is the damping the basemap applies on the group, so the radius that actually appears
+   on screen is the product. Reading d.r alone under-measures every island except the reference —
+   Al Maryah is 156 units true and 613 displayed — and the world camera is framed from this. */
 function worldBounds(){
   let m = 0;
-  DISTRICTS.forEach(d => { m = Math.max(m, Math.hypot(d.x, d.z + 40) + d.r); });
+  DISTRICTS.forEach(d => {
+    m = Math.max(m, Math.hypot(d.x, d.z + 40) + d.r * (d.dispScale || 1));
+  });
   return Math.max(120, m);
+}
+
+/* THE CLIP AND SHADOW VOLUMES FOLLOW THE WORLD, and three literals here did not.
+
+   camera.far was 6000, which was generous against an archipelago 800 units across and is not
+   against one several thousand across. setWorld puts the camera at dist = B * 2.32 and elev =
+   B * 1.55, so at B = 3,000 it stands about 8,500 units from its target — past the far plane, and
+   geometry crossed it progressively as the camera pulled back. That is the black arriving from the
+   top of the frame: not fog, not the sky, just the clip plane eating the scene.
+
+   The shadow camera had the same fault at 1600 near/far with a 340-unit orthographic box, sized
+   for an island of radius 190 and now looking at one of 1,220.
+
+   Called once after buildWorld and again whenever the display scale changes, so there is one
+   source for it and no copy to drift. */
+function fitClip(){
+  const B = worldBounds();
+  camera.far = Math.max(6000, B * 4.2);
+  camera.updateProjectionMatrix();
+
+  const big = DISTRICTS.reduce((a, d) => Math.max(a, d.r * (d.dispScale || 1)), 0);
+  const half = Math.max(340, big * 1.25);
+  [sun, moon].forEach(L => {
+    if (!L || !L.shadow) return;
+    L.shadow.camera.left = -half; L.shadow.camera.right  = half;
+    L.shadow.camera.top  =  half; L.shadow.camera.bottom = -half;
+    L.shadow.camera.far  = Math.max(1600, B * 3.0);
+    L.shadow.camera.updateProjectionMatrix();
+  });
 }
 
 function setWorld(){
