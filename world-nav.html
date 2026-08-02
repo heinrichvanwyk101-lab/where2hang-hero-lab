@@ -1410,11 +1410,26 @@ const smaa = new SMAAPass(window.innerWidth * renderer.getPixelRatio(),
                           window.innerHeight * renderer.getPixelRatio());
 composer.addPass(smaa);
 
+/* SPLIT ON THE FIRST CALL ONLY, because this function is 4,527 ms of a 12 second load — larger
+   than building the entire city — and it is four lines long.
+
+   The pixel ratio is already clamped to 2, so the obvious explanation was wrong. Three of these
+   four calls only record a size in three.js and defer the GPU allocation; one of them does not,
+   and which one it is decides whether the fix is a smaller target, a cheaper pass, or dropping a
+   pass entirely. Four marks is cheaper than another theory. */
+let _resized = false;
 function resize(){
   const w = window.innerWidth, h = window.innerHeight, pr = renderer.getPixelRatio();
-  renderer.setSize(w, h, false);
-  composer.setSize(w, h); bloom.setSize(w, h); smaa.setSize(w*pr, h*pr);
-  camera.aspect = w/h; camera.updateProjectionMatrix();
+  const first = !_resized; _resized = true;
+  let m = first ? performance.now() : 0;
+  const mark = k => { if (first){ PH[k] = performance.now() - m; m = performance.now(); } };
+
+  renderer.setSize(w, h, false);            mark('r.setSize');
+  composer.setSize(w, h);                   mark('composer');
+  bloom.setSize(w, h);                      mark('bloom');
+  smaa.setSize(w * pr, h * pr);             mark('smaa');
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (first) console.info('resize ' + w + 'x' + h + ' pr=' + pr);
 }
 phase('liftReg');
 window.addEventListener('resize', resize);
