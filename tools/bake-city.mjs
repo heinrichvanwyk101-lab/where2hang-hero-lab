@@ -618,6 +618,25 @@ async function main(){
     const path = `data/isle-${baked.id}.json`;
     await fs.writeFile(path, JSON.stringify(baked));
     const bytes = (await fs.stat(path)).size;
+
+    /* A ROADS-ONLY ARTEFACT, and it exists because of where the scene needs this data.
+
+       The island file is 2.7 MB on Corniche and the roads inside it are a fraction of that — the
+       rest is 18,776 buildings. But the ground canvas is painted while the island is built, so the
+       centrelines have to be in hand BEFORE the first frame, and putting 2.7 MB on that path would
+       undo a load that is now two seconds.
+
+       Major and minor only. Local streets are most of the count and the least of the picture at
+       7.8 metres to the unit, and they can come later with the buildings if they are ever wanted.
+       Written even when empty, so a consumer never has to distinguish "no roads" from "not baked
+       yet". */
+    const rd = { id:baked.id,
+                 roads:(baked.roads || []).filter(r => r.cls === 'major' || r.cls === 'minor') };
+    const rpath = `data/roads-${baked.id}.json`;
+    await fs.writeFile(rpath, JSON.stringify(rd));
+    const rbytes = (await fs.stat(rpath)).size;
+    process.stderr.write(`  ${baked.id}: roads-only ${rd.roads.length} ways, ` +
+                         `${(rbytes/1048576).toFixed(2)} MB\n`);
     /* THE OUTLINE GOES IN THE INDEX AS WELL AS THE ISLAND FILE, and it is the only thing that
        does. The world view draws all five coastlines at once but needs no road or building from
        four of them, so without this the opening shot has to download 3.4 MB to draw five
