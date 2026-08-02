@@ -481,8 +481,16 @@ async function main(){
     const path = `data/isle-${baked.id}.json`;
     await fs.writeFile(path, JSON.stringify(baked));
     const bytes = (await fs.stat(path)).size;
+    /* THE OUTLINE GOES IN THE INDEX AS WELL AS THE ISLAND FILE, and it is the only thing that
+       does. The world view draws all five coastlines at once but needs no road or building from
+       four of them, so without this the opening shot has to download 3.4 MB to draw five
+       silhouettes. All five outlines together are about forty kilobytes.
+
+       Duplicated rather than moved, because an island file that cannot draw its own coast is a
+       trap for whatever loads it next. Forty kilobytes is a fair price for the artefact staying
+       self-describing. */
     index.islands.push({ id:baked.id, name:baked.name, file:`isle-${baked.id}.json`,
-                         extent:baked.extent, bytes,
+                         extent:baked.extent, outline:baked.outline, bytes,
                          counts:{ outline:baked.outline.length, roads:baked.roads.length,
                                   buildings:baked.buildings.length,
                                   withHeight:baked.buildings.filter(b => b.h).length,
