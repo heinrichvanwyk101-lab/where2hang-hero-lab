@@ -44,9 +44,17 @@
    the rest, so the bake improves what it can and lies about nothing.
 
    ---------------------------------------------------------------------------------------------
-   THE PROJECTION. Local equirectangular about each island's own centroid: at this latitude and
-   over spans of a few kilometres the error against a proper transverse Mercator is centimetres,
-   and the alternative is a dependency. Metres out, island-local, +x east and +y north.
+   THE PROJECTION. Local equirectangular about ONE origin for the whole emirate, not one per
+   island. At this latitude and over the thirty kilometres from the Breakwater to Yas the error
+   against a proper transverse Mercator is under a metre, and the alternative is a dependency.
+
+   ONE ORIGIN IS THE WHOLE POINT, and v1 got it wrong. Per-island origins are fine for five
+   separate discs floating in a diorama and worthless the moment the scene has to become a map:
+   every island would sit at its own zero and Yas would share coordinates with the Corniche. With
+   a shared frame the artefact IS a basemap — true distances, true bearings, true relative
+   position — and the diorama's spreading of the islands becomes a display offset the camera can
+   interpolate to zero. Baking the separation in would mean throwing the data away to get the map
+   back.
 
    NOTE ON THE Z SIGN. The scene uses z = -y, north-negative, which is where the world file's
    `jy` and `-a.z` conversions come from. That flip is done ON ARRIVAL, not here: this file stays
@@ -79,6 +87,10 @@ const UA = 'where2hang-hero-lab/1.0 (city diorama bake; github.com/heinrichvanwy
    where the box cut it, which then reads as a quay wall in the render — a failure that looks like
    a design decision rather than a bug. Over-fetching costs seconds in an Action that runs by
    hand; under-fetching costs an afternoon of wondering why Saadiyat has a corner. */
+/* The shared frame. Chosen near the centroid of the five so no island carries a large coordinate
+   for no reason; nothing depends on its exact value, only on it being the same for all of them. */
+const ORIGIN = { lat: 24.4900, lon: 54.4200 };
+
 const ISLANDS = [
   { id:'corniche', name:'Abu Dhabi Island', bbox:[24.4300, 54.2950, 24.5250, 54.4100] },
   { id:'maryah',   name:'Al Maryah',        bbox:[24.4930, 54.3760, 24.5150, 54.4020] },
@@ -94,8 +106,13 @@ const ROAD_CLASS = {
   motorway:'major', motorway_link:'major', trunk:'major', trunk_link:'major',
   primary:'major', primary_link:'major',
   secondary:'minor', secondary_link:'minor', tertiary:'minor', tertiary_link:'minor',
-  residential:'local', unclassified:'local', living_street:'local', service:'local',
+  residential:'local', unclassified:'local', living_street:'local',
 };
+/* SERVICE IS GONE, and it was most of the file. The first bake returned 12,790 road ways for
+   Corniche alone against a real arterial-and-street network of maybe two thousand; the rest is
+   car park aisles, petrol station forecourts and driveways. At 7.8 metres per unit a driveway is
+   a third of a unit wide — narrower than the line used to draw it — so it costs bytes and paint
+   time to produce something that cannot be seen. */
 
 /* Buildings smaller than this are dropped. 120 m² is a villa outbuilding or a substation; at
    diorama scale it is a speck that costs an instance. */
@@ -301,9 +318,7 @@ function stitch(ways){
 
 /* ---------- THE BAKE ----------------------------------------------------------------------- */
 
-async function bakeIsland(isle){
-  const [s, w, n, e] = isle.bbox;
-  const proj = projector((s + n) / 2, (w + e) / 2);
+async function bakeIsland(isle, proj){
   process.stderr.write(`  ${isle.id}: querying...\n`);
   const json = await overpass(query(isle.bbox));
   const els = json.elements || [];
@@ -355,12 +370,28 @@ async function bakeIsland(isle){
   const chains = stitch(coastWays).sort((a, b) => b.length - a.length);
   const outline = chains.length ? simplify(chains[0], SIMPLIFY_M * 3).map(rd1) : [];
 
+  /* THE ISLAND'S TRUE EXTENT, measured from the outline rather than from the bounding box that
+     fetched it. The consumer needs this to set its own radius from the data instead of from a
+     literal — which is the whole reason the drawn islands were a third of true size and nobody
+     noticed for seventy versions. */
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of outline){
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const extent = outline.length
+    ? { x0:rd1(x0), y0:rd1(y0), x1:rd1(x1), y1:rd1(y1),
+        w:rd1(x1 - x0), d:rd1(y1 - y0),
+        cx:rd1((x0 + x1) / 2), cy:rd1((y0 + y1) / 2) }
+    : null;
+
   process.stderr.write(`  ${isle.id}: outline ${outline.length}pt, roads ${roads.length}, ` +
                        `buildings ${buildings.length} (${buildings.filter(b => b.h).length} with height), ` +
-                       `parks ${parks.length}\n`);
+                       `parks ${parks.length}` +
+                       (extent ? `, extent ${(extent.w/1000).toFixed(2)} x ${(extent.d/1000).toFixed(2)} km` : '') +
+                       `\n`);
 
-  return { id:isle.id, name:isle.name, origin:{ lat:proj.lat0, lon:proj.lon0 },
-           outline, roads, buildings, parks };
+  return { id:isle.id, name:isle.name, extent, outline, roads, buildings, parks };
 }
 
 const rd1 = p => Array.isArray(p) ? [Math.round(p[0]*10)/10, Math.round(p[1]*10)/10]
@@ -372,26 +403,58 @@ async function main(){
   const list = only ? ISLANDS.filter(i => i.id === only) : ISLANDS;
   if (!list.length) throw new Error(`no island called "${only}"`);
 
-  const islands = [];
+  const proj = projector(ORIGIN.lat, ORIGIN.lon);
+  const fs = await import('node:fs/promises');
+  await fs.mkdir('data', { recursive: true });
+
+  /* ONE FILE PER ISLAND, plus a small index.
+
+     v1 wrote a single 3.4 MB artefact, which means the hero cannot draw the Corniche until it has
+     also downloaded Saadiyat and Yas. Corniche is three quarters of the payload and the only
+     island the opening shot contains, so splitting turns a 3.4 MB blocking fetch into a small
+     index, one island, and four more whenever the camera actually goes there.
+
+     The index carries the shared origin and every island's extent. That is enough to lay out the
+     archipelago, size the cameras and decide what to load, without opening a single island file. */
+  const index = { generated:new Date().toISOString(),
+                  source:'OpenStreetMap contributors, ODbL 1.0',
+                  origin:ORIGIN,
+                  units:'metres from origin, +x east +y north, one shared frame for all islands',
+                  note:'Buildings are oriented bounding boxes: x,y centre; w long axis; d short axis; rot radians from east.',
+                  islands:[] };
+
   for (const isle of list){
-    islands.push(await bakeIsland(isle));
-    /* Serial, with a gap. Overpass asks for it and five parallel requests from one Action IP is
-       how you get the repo rate-limited for an hour. */
+    const baked = await bakeIsland(isle, proj);
+    const path = `data/isle-${baked.id}.json`;
+    await fs.writeFile(path, JSON.stringify(baked));
+    const bytes = (await fs.stat(path)).size;
+    index.islands.push({ id:baked.id, name:baked.name, file:`isle-${baked.id}.json`,
+                         extent:baked.extent, bytes,
+                         counts:{ outline:baked.outline.length, roads:baked.roads.length,
+                                  buildings:baked.buildings.length,
+                                  withHeight:baked.buildings.filter(b => b.h).length,
+                                  parks:baked.parks.length } });
+    process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
+    /* Serial, with a gap. Overpass asks for it, and five parallel requests from one Action IP is
+       how the repo gets rate-limited for an hour. */
     await new Promise(r => setTimeout(r, 4000));
   }
 
-  const out = {
-    generated: new Date().toISOString(),
-    source: 'OpenStreetMap contributors, ODbL 1.0',
-    units: 'metres, island-local, +x east +y north',
-    note: 'Buildings are oriented bounding boxes: x,y centre; w long axis; d short axis; rot radians from east.',
-    islands,
-  };
-  const fs = await import('node:fs/promises');
-  await fs.mkdir('data', { recursive: true });
-  await fs.writeFile('data/abudhabi.json', JSON.stringify(out));
-  const bytes = (await fs.stat('data/abudhabi.json')).size;
-  process.stderr.write(`\nwrote data/abudhabi.json  ${(bytes/1048576).toFixed(2)} MB\n`);
+  /* A PARTIAL BAKE MUST NOT TRUNCATE THE INDEX. Running one island rewrites its own file and its
+     own entry, and leaves the other four exactly as they were. */
+  if (only){
+    try {
+      const prev = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
+      const kept = (prev.islands || []).filter(i => i.id !== only);
+      index.islands = kept.concat(index.islands)
+        .sort((a, b) => ISLANDS.findIndex(i => i.id === a.id) - ISLANDS.findIndex(i => i.id === b.id));
+    } catch { /* no previous index; the single entry stands alone */ }
+  }
+
+  await fs.writeFile('data/index.json', JSON.stringify(index, null, 1));
+  const total = index.islands.reduce((a, i) => a + (i.bytes || 0), 0);
+  process.stderr.write(`\nwrote data/index.json  —  ${index.islands.length} islands, ` +
+                       `${(total/1048576).toFixed(2)} MB total\n`);
 }
 
 /* Guarded so the geometry above can be imported by a test harness without firing a hundred
