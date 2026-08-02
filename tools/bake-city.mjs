@@ -193,8 +193,21 @@ const ROAD_CLASS = {
    time to produce something that cannot be seen. */
 
 /* Buildings smaller than this are dropped. 120 m² is a villa outbuilding or a substation; at
-   diorama scale it is a speck that costs an instance. */
-const MIN_BUILDING_AREA = 120;
+   diorama scale it is a speck that costs an instance.
+
+   CHOSEN AGAINST OSM'S STOCK, WHICH IS THE REASON IT NOW NEEDS ARGUING WITH. Under OSM small
+   buildings were rare because nobody had traced them, so the threshold cost little. The first
+   Overture extract returned 77,821 footprints over the archipelago and this discarded 33,670 of
+   them — forty-three per cent — which makes it the largest single lever on how populated these
+   islands look, and far too large a lever to leave as a literal nobody has re-examined.
+
+   Overridable, so the question can be answered by running it rather than by arguing about it. */
+const MIN_BUILDING_AREA = Number(process.env.W2H_MIN_AREA) || 120;
+
+/* A FLOOR BELOW THE THRESHOLD, not a second threshold. Everything above this is read and carries
+   its area, so the probe can report what a different threshold would buy per island without a
+   second S3 scan. Below 20 m² is a bin store or a piece of ML noise and nothing will ever want it. */
+const AREA_FLOOR = 20;
 /* Simplification tolerance for coastline and road geometry, in metres. Two metres is well below
    anything visible at this scale and removes most of OSM's surveyed detail. */
 const SIMPLIFY_M = 2.0;
@@ -337,12 +350,13 @@ async function loadOverture(proj){
       if (lat < la0) la0 = lat; if (lat > la1) la1 = lat;
       xy[i] = proj.fwd(lat, lon);
     }
-    if (area(xy) < MIN_BUILDING_AREA){ tooSmall++; continue; }
+    const a = area(xy);
+    if (a < AREA_FLOOR){ tooSmall++; continue; }
     const b = obb(xy);
     if (!b){ noBox++; continue; }
 
     rows.push({
-      lat: (la0 + la1) / 2, lon: (lo0 + lo1) / 2,
+      lat: (la0 + la1) / 2, lon: (lo0 + lo1) / 2, a,
       rec: {
         id: rec.id,
         osm: osmIdOf(rec.sources),
@@ -354,8 +368,9 @@ async function loadOverture(proj){
     });
   }
 
-  process.stderr.write(`  Overture: ${lines} rows -> ${rows.length} buildings ` +
-    `(${tooSmall} under ${MIN_BUILDING_AREA} m², ${noGeom} unusable geometry, ${noBox} no box)\n`);
+  process.stderr.write(`  Overture: ${lines} rows -> ${rows.length} readable ` +
+    `(${tooSmall} under ${AREA_FLOOR} m², ${noGeom} unusable geometry, ${noBox} no box); ` +
+    `${rows.filter(r => r.a >= MIN_BUILDING_AREA).length} at or above ${MIN_BUILDING_AREA} m²\n`);
   OVERTURE = { rows };
   return OVERTURE;
 }
@@ -368,6 +383,7 @@ function overtureFor(isle){
   const [s, w, n, e] = isle.bbox;
   const out = [];
   for (const r of OVERTURE.rows){
+    if (r.a < MIN_BUILDING_AREA) continue;
     if (r.lat >= s && r.lat <= n && r.lon >= w && r.lon <= e){
       /* Cloned, because one building can legitimately fall in two islands' boxes and the JSON
          writer must not see the same object twice under two extents. */
@@ -878,6 +894,32 @@ async function probe(proj){
       `${(h + ' (' + Math.round(100 * h / Math.max(got.length, 1)) + '%)').padStart(14)}\n`);
   }
   process.stderr.write(`\nProbe only — nothing written, nothing committed.\n`);
+
+  /* ---------- WHAT THE AREA THRESHOLD IS COSTING, PER ISLAND ----------
+
+     One scan, every threshold. The extract is already in memory with each building's area on it,
+     so the question "what would 60 m² buy on Yas" is a filter rather than another twenty minutes
+     of S3. Bands rather than a single number, because the answer that matters is not how many are
+     below 120 but WHERE they are: 30,000 sheds behind Corniche's villas and 30,000 houses on
+     Saadiyat are the same count and completely different decisions. */
+  const BANDS = [20, 40, 60, 80, 120, 200, 400];
+  process.stderr.write(`\nBuildings by footprint area, per island — the column at ` +
+    `${MIN_BUILDING_AREA} m² and above is what the bake would keep.\n\n`);
+  process.stderr.write(`${'island'.padEnd(10)}` +
+    BANDS.map((b, i) => (i === BANDS.length - 1 ? `${b}+` : `${b}-${BANDS[i+1]}`).padStart(10)).join('') +
+    `${'>=' + MIN_BUILDING_AREA}`.padStart(11) + `\n`);
+  for (const isle of ISLANDS){
+    const [s, w, n, e] = isle.bbox;
+    const mine = OVERTURE.rows.filter(r => r.lat >= s && r.lat <= n && r.lon >= w && r.lon <= e);
+    const cells = BANDS.map((b, i) => {
+      const hi = i === BANDS.length - 1 ? Infinity : BANDS[i+1];
+      return String(mine.filter(r => r.a >= b && r.a < hi).length).padStart(10);
+    }).join('');
+    const keep = mine.filter(r => r.a >= MIN_BUILDING_AREA).length;
+    process.stderr.write(`${isle.id.padEnd(10)}${cells}${String(keep).padStart(11)}\n`);
+  }
+  process.stderr.write(`\nRe-run with W2H_MIN_AREA set to try another threshold — no refetch needed ` +
+    `if the extract is still on the runner.\n`);
 }
 
 async function main(){
