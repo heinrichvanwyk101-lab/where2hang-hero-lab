@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-02T08:49:56.080Z",
+ "generated": "2026-08-02T09:01:36.160Z",
  "source": "OpenStreetMap contributors, ODbL 1.0",
  "origin": {
   "lat": 24.49,
@@ -7644,25 +7644,8 @@
      -355.2
     ]
    ],
-   "landmarks": {
-    "Qasr Al Hosn": {
-     "x": -6580.5,
-     "y": -860.8
-    },
-    "Marina Mall": {
-     "x": -10012.1,
-     "y": -1554.1
-    },
-    "ADNOC Headquarters": {
-     "x": -9716.3,
-     "y": -3119
-    },
-    "Etihad Towers": {
-     "x": -9956.5,
-     "y": -3491
-    }
-   },
-   "bytes": 2520585,
+   "landmarks": {},
+   "bytes": 2520420,
    "counts": {
     "outline": 1905,
     "roads": 10664,
@@ -7883,9 +7866,13 @@
     "Cleveland Clinic Abu Dhabi": {
      "x": -3248.1,
      "y": 774.6
+    },
+    "The Galleria Al Maryah Island": {
+     "x": -3183.8,
+     "y": 1272.9
     }
    },
-   "bytes": 83844,
+   "bytes": 83901,
    "counts": {
     "outline": 47,
     "roads": 661,
@@ -10758,12 +10745,20 @@
     ]
    ],
    "landmarks": {
+    "Manarat Al Saadiyat": {
+     "x": -124.8,
+     "y": 4960.3
+    },
+    "Zayed National Museum": {
+     "x": -1350.8,
+     "y": 4845.5
+    },
     "Berklee Abu Dhabi": {
      "x": -208.8,
      "y": 4815.5
     }
    },
-   "bytes": 244994,
+   "bytes": 245089,
    "counts": {
     "outline": 408,
     "roads": 1550,
@@ -12645,6 +12640,14 @@
      "x": 18777.3,
      "y": -2113.2
     },
+    "Yas Waterworld": {
+     "x": 18183.1,
+     "y": -229.6
+    },
+    "Ferrari World Abu Dhabi": {
+     "x": 19106.8,
+     "y": -660.3
+    },
     "SeaWorld Abu Dhabi": {
      "x": 20187.5,
      "y": -489.4
@@ -12654,7 +12657,7 @@
      "y": -3306.2
     }
    },
-   "bytes": 537303,
+   "bytes": 537396,
    "counts": {
     "outline": 462,
     "roads": 2528,
