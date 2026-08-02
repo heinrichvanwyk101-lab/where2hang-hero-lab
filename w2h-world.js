@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v84';
+export const BUILD = 'world v85';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3152,6 +3152,30 @@ urbanFabric  = timed('urbanFabric',  urbanFabric);
   const k = Math.max(1, (far * 2.6) / 3200);
   water.scale.set(k, 1, k);
   farSea.scale.set(Math.max(1, k * 0.6), 1, Math.max(1, k * 0.6));
+}
+
+/* THE OPENING SHOT, WHICH IS NOT THE DISTRICT SHOT.
+
+   The district camera frames d.r, and d.r is now the whole landmass — nineteen kilometres from the
+   Breakwater to the Mussafah channel. Fitting that puts the island across the frame as a sliver
+   with sea above and below it, and stacks all three landmark labels into one clump at the west
+   end. The arithmetic behind 5.7r is right; what changed is what r means.
+
+   The Corniche the hero wants is the four kilometres from the Breakwater to ADNOC. So a shot is
+   declared per district — a centre and a framing radius in scene units — and where one exists the
+   opening camera uses it instead of the island's own radius. Absent, nothing changes.
+
+   Derived from the landmark anchors rather than typed, so it follows the bake: the centre is the
+   midpoint of the palace and ADNOC, and the radius is the distance between them with a margin.
+   Re-bake the city and the shot re-aims itself. */
+for (const d of DISTRICTS){
+  if (d.id !== 'corniche') continue;
+  const a = LM.palace, b = LM.adnoc;
+  d.shot = {
+    x: (a.x + b.x) / 2,
+    z: (a.z + b.z) / 2,
+    r: Math.hypot(b.x - a.x, b.z - a.z) * 0.62,
+  };
 }
 
 const pickTargets = [];
