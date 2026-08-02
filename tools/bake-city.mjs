@@ -57,7 +57,21 @@
 const OVERPASS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
 ];
+
+/* A USER-AGENT, AND THE FIRST RUN FAILED WITHOUT ONE.
+
+   Node's built-in fetch sends no User-Agent at all, and Overpass's front end returns 406 to
+   requests that arrive without one. Every mirror did, so it read as an outage rather than as a
+   header fault — and the script made that worse by reporting the status code and discarding the
+   body, which is where Overpass puts the explanation.
+
+   The identifying string is the OSM convention rather than politeness: these are volunteer-run
+   endpoints on a shared CI IP range, and an operator who can see what is hitting them will
+   throttle rather than block. */
+const UA = 'where2hang-hero-lab/1.0 (city diorama bake; github.com/heinrichvanwyk101-lab)';
 
 /* THE FIVE ISLANDS, as bounding boxes in [south, west, north, east].
 
@@ -124,23 +138,37 @@ out geom;`;
 async function overpass(q){
   let lastErr;
   for (const url of OVERPASS){
+    const host = new URL(url).host;
     for (let attempt = 0; attempt < 3; attempt++){
       try {
         const res = await fetch(url, {
           method:'POST',
-          headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+          headers:{
+            'Content-Type':'application/x-www-form-urlencoded',
+            'User-Agent': UA,
+            'Accept':'application/json',
+          },
           body:'data=' + encodeURIComponent(q),
         });
+        if (res.ok) return await res.json();
+
+        /* READ THE BODY BEFORE DECIDING ANYTHING. Overpass answers 400 and 406 with a plain-text
+           explanation — a syntax error with a line number, a rejected header, an area that is too
+           large. v1 threw on the status alone and the first real failure produced "HTTP 406" and
+           nothing else, which is a diagnostic that costs a round trip to learn nothing from. */
+        const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400);
+        process.stderr.write(`    ${host} -> HTTP ${res.status}${body ? ': ' + body : ''}\n`);
+
+        /* 429 and 504 are "come back later" and worth waiting on the same mirror. Anything else is
+           a different answer from a different machine, so move on rather than asking again. */
         if (res.status === 429 || res.status === 504){
-          /* Overpass rate-limits by IP and the Action's IP is shared. Backing off is not
-             optional; failing the whole bake because a mirror was busy for ten seconds would make
-             this thing untrustworthy to run. */
           await new Promise(r => setTimeout(r, 15000 * (attempt + 1)));
           continue;
         }
-        if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
-        return await res.json();
+        lastErr = new Error(`${host} -> HTTP ${res.status}${body ? ': ' + body : ''}`);
+        break;
       } catch (e){
+        process.stderr.write(`    ${host} -> ${e.message}\n`);
         lastErr = e;
         await new Promise(r => setTimeout(r, 5000 * (attempt + 1)));
       }
