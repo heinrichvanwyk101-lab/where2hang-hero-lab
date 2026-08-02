@@ -626,7 +626,7 @@ phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals, PERF } =
+        propCount, tickSignals, PERF, buildIsland } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -796,6 +796,16 @@ function setWorld(){
   ui('Abu Dhabi', 'Tap an island');
 }
 function setDistrict(d){
+  /* BUILD THE ISLAND IF IT IS NOT BUILT YET. The four outer islands ship as coastline only and
+     grow their city the first time the camera commits to one — see the note in w2h-world.js.
+
+     Synchronous on purpose. It is roughly a second, it happens under a camera flight that already
+     takes about that long, and the alternative is a frame where the island is visibly empty and
+     then visibly is not. A hitch during a move reads as the move; a pop after it reads as a bug. */
+  if (buildIsland && d && buildIsland(d.id)){
+    fitClip();
+    applyView(view);
+  }
   /* Every state change composes a shot, so a leftover angle from the last one would arrive as a
      camera that lands somewhere the transition did not intend. orbit.on stays as it is: once the
      user has taken hold of the camera, the idle drift should not come back for the rest of the

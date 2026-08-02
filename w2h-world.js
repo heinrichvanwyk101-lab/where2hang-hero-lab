@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v83';
+export const BUILD = 'world v84';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4410,7 +4410,8 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
 }
 
 /* ---------- the four placeholders ---------- */
-DISTRICTS.filter(d => !d.built).forEach(d => {
+/* PER-ISLAND, AND CALLABLE LATER. Was a forEach; the body is unchanged. */
+function buildFabricFor(d){
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   // Per-district character: where downtown sits, and how tall it gets there.
   const tallest = { maryah:40, reem:44, saadiyat:14, yas:18 }[d.id];
@@ -4431,6 +4432,29 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
   glow.position.set(0, GROUND + 20, 0);
   d.detail.add(glow);
   d.glow = glow;
+}
+
+/* THE FOUR OUTER ISLANDS ARE NOT BUILT AT LOAD, and this is the largest lever left.
+
+   Measurement, not instinct: compile 26 ms, upload 53, shadowPass 2, postFX 3 — the GPU is not the
+   problem. buildWorld is 3.2 seconds and the gap before the first frame is another 7.3, and that
+   gap contains no JavaScript of ours at all. It is the runtime and the driver digesting what was
+   just handed to them, and it scales with how much scene exists when the first frame is drawn.
+
+   Corniche is the opening shot. Saadiyat, Yas, Reem and Al Maryah are four fifths of the object
+   count and, at world zoom, four silhouettes — the fabric inside them is invisible until the
+   camera goes there, and going there is a deliberate act that can carry a build.
+
+   The coastline, the platform and the beach are NOT deferred: those are what the world view
+   actually shows, and they are built in the loop far above this one. Only the city on top waits.
+
+   deferIslands:false restores the old behaviour in one option, which matters because "it was fine
+   before the deferral" needs to be testable without a revert. */
+const DEFER = opts.deferIslands !== false;
+
+DISTRICTS.filter(d => !d.built).forEach(d => {
+  if (DEFER){ d.pending = true; return; }
+  buildFabricFor(d);
 });
 
 /* Corniche gets fabric across the whole island, minus three reserved rectangles. The towers
@@ -4505,7 +4529,8 @@ const duskBeach  = new THREE.MeshStandardMaterial({ color:0x9C8C6F, roughness:1,
 
 let propCount = { palms:0, lamps:0, cars:0, boats:0, shrubs:0, signals:0 };
 const signalTicks = [];
-DISTRICTS.forEach(d => {
+/* PER-ISLAND, AND CALLABLE LATER. Was a forEach; the body is unchanged. */
+function buildGroundFor(d){
   const f = d.fabric;
   if (!f) return;
   const plan = groundPlan(d, f.cells, f.blocks);
@@ -4576,7 +4601,9 @@ DISTRICTS.forEach(d => {
     m.userData.planMats = [planTop, planSide];
     m.userData.ground   = true;
   });
-});
+}
+
+DISTRICTS.forEach(d => { if (!d.pending) buildGroundFor(d); });
 
 /* ---------- shadow flags, one sweep ---------- */
 world.traverse(o => {
@@ -4607,7 +4634,21 @@ try {
                  String(r.pct).padStart(3) + '%  x' + r.calls));
 } catch (e){ /* timing must never break the build */ }
 
+/* CALLED BY world-nav.html WHEN THE CAMERA COMMITS TO AN ISLAND. Idempotent, and returns whether
+   it did anything, so the caller can decide to show a spinner only when there is work. */
+function buildIsland(id){
+  const d = DISTRICTS.find(x => x.id === id);
+  if (!d || !d.pending) return false;
+  d.pending = false;
+  const t = performance.now();
+  buildFabricFor(d);
+  buildGroundFor(d);
+  console.info('buildIsland ' + id + ' ' + Math.round(performance.now() - t) + ' ms');
+  return true;
+}
+
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
+         buildIsland,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
