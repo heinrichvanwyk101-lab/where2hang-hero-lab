@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v58', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v59', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1446,6 +1446,19 @@ function applyView(next){
        material with a visible one in Day and Silhouette, laying a solid lid over every island.
        Anything that exists for input rather than for looking at is skipped outright. */
     if (o.userData.helper) return;
+    /* HIDDEN BY THE FOOTPRINTS PASS, AND IT STAYS HIDDEN.
+
+       This is where the second city came from. hideFabric wrote o.visible = false and this
+       traverse wrote o.visible = true again — an InstancedMesh reports isMesh, so every one of
+       them fell through to the ground test below and came back on. Both callers of hideFabric
+       call applyView three lines later, so the hide has never once survived its own stack, in
+       either order. v58's race fix was correct and made no difference for that reason.
+
+       visible is not durable state; it is whatever the last traverse said. The mark is. Checked
+       ahead of nightOnly and ahead of the plan/ground line because both of those write visible,
+       and this flag outranks a view: a mesh the footprints replaced has no version in any
+       lighting mode. */
+    if (o.userData.fpHidden){ o.visible = false; return; }
     /* NIGHT-ONLY MESHES EXIST OR THEY DO NOT — there is no daytime version of them.
 
        The lamp pools are additive quads standing in for 628 point lights that could not be real
@@ -2005,10 +2018,37 @@ function hideFabric(d){
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
-      if (o.isInstancedMesh && o.name !== 'footprints'){ o.visible = false; n++; }
+      if (o.isInstancedMesh && o.name !== 'footprints'){
+        o.visible = false;
+        /* THE MARK IS THE FIX, NOT THE FLAG BELOW IT.
+
+           applyView traverses the whole world and sets visible on every mesh it does not
+           explicitly except. Setting visible here and nothing else meant this function was making
+           a suggestion that the next line of its own caller overruled. userData survives the
+           traverse; visible does not. */
+        o.userData.fpHidden = true;
+        n++;
+      }
     });
   });
   d.fpHid = n;
+  return n;
+}
+
+/* WHAT IS ACTUALLY DRAWING, READ WHEN THE OVERLAY IS BUILT.
+
+   d.fpHid is a count taken at the instant of hiding, and it stayed perfectly truthful for the
+   whole time the scene was drawing two cities on top of each other — 135 meshes were hidden, and
+   then unhidden, and the number never knew. A count of what is on screen now cannot lie in that
+   direction. This is the instrument that would have closed it in one load rather than three. */
+function fabricVisible(d){
+  let n = 0;
+  [d.mass, d.detail].forEach(layer => {
+    if (!layer) return;
+    layer.children.forEach(o => {
+      if (o.isInstancedMesh && o.name !== 'footprints' && o.visible) n++;
+    });
+  });
   return n;
 }
 
@@ -2295,7 +2335,8 @@ function frame(){
          falling back to the coastline. An anchor the bake missed keeps a stale authored position
          near the island centre and looks like a landmark that happens to be central. */
       (FP_ON ? 'fp     ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
-        (fpState.get(d.id) === 'on' ? (d.fpCount + '/' + d.fpReal + 'r hid' + (d.fpHid || 0))
+        (fpState.get(d.id) === 'on' ? (d.fpCount + '/' + d.fpReal + 'r hid' + (d.fpHid || 0)
+           + '/' + fabricVisible(d) + 'v')
          : (fpState.get(d.id) || '-'))).join('  ') + '\n' : '') +
       'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
         (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +
