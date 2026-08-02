@@ -383,14 +383,50 @@ function overtureFor(isle){
   const [s, w, n, e] = isle.bbox;
   const out = [];
   for (const r of OVERTURE.rows){
-    if (r.a < MIN_BUILDING_AREA) continue;
     if (r.lat >= s && r.lat <= n && r.lon >= w && r.lon <= e){
       /* Cloned, because one building can legitimately fall in two islands' boxes and the JSON
-         writer must not see the same object twice under two extents. */
-      out.push({ ...r.rec });
+         writer must not see the same object twice under two extents. The area rides along so the
+         per-island threshold can be applied once the display scales are known, which is after
+         every outline has been measured — and is stripped again before the file is written. */
+      out.push({ ...r.rec, a: Math.round(r.a) });
     }
   }
   return out;
+}
+
+/* ---------- THE DISPLAY SCALE, AND WHY THE BAKE HAS TO KNOW IT ------------------------------
+
+   MIN_BUILDING_AREA exists to drop what is too small to see. That is a statement about the
+   RENDERED size of a building, and the renderer does not draw these islands at one to one — the
+   archipelago is damped, so Al Maryah is drawn 3.94 times oversize and Al Reem 3.04. A 40 m² unit
+   on Al Maryah is drawn at the size a 620 m² unit occupies on the Corniche. Filtering both at
+   120 m² throws away perfectly visible stock on exactly the islands that look emptiest.
+
+   So the threshold divides by the square of the island's display scale. Corniche stays at 120,
+   Al Maryah falls to 8, Al Reem to 13. This is not artistic licence and it is not a density knob:
+   it is a filter being made to mean the thing it already claimed to mean.
+
+   DUPLICATED FROM w2h-basemap.js, DELIBERATELY AND WITH A GUARD. The bake cannot import a browser
+   module and the alternative is a magic table of five numbers that silently rots the first time
+   DAMP_P moves. The formula is four lines; what matters is that both copies read the same extents,
+   so the log prints the scales it used and a disagreement with the overlay's `x3.9` is visible in
+   one look. */
+const DAMP_P = 1 / 3;
+
+function displayScales(extents){
+  const span = e => Math.max(e.w, e.d);
+  const ids = Object.keys(extents).filter(k => extents[k]);
+  if (!ids.length) return {};
+  const R = Math.max(...ids.map(k => span(extents[k])));
+  const out = {};
+  for (const k of ids) out[k] = Math.pow(R / span(extents[k]), 1 - DAMP_P);
+  return out;
+}
+
+/* The threshold for one island, floored so a very large scale cannot drop below the point where a
+   footprint stops being a building and starts being an air-conditioning housing. */
+function areaThresholdFor(scale){
+  return Math.max(AREA_FLOOR, MIN_BUILDING_AREA / (scale * scale));
 }
 
 const R_EARTH = 6378137;
@@ -747,10 +783,11 @@ async function bakeIsland(isle, proj){
       if (!geom || geom.length < 4) continue;
       const ring = toXY(geom);
       const a = area(ring);
-      if (a < MIN_BUILDING_AREA) continue;
+      if (a < AREA_FLOOR) continue;
       const b = obb(ring);
       if (!b) continue;
       osmBuildings.push({
+        a: Math.round(a),
         /* THE OSM ID, AND IT IS HERE FOR ONE REASON: it is the key a venue joins to.
 
            Selecting which buildings get real treatment cannot be a curated list — there are 18,776
@@ -918,8 +955,42 @@ async function probe(proj){
     const keep = mine.filter(r => r.a >= MIN_BUILDING_AREA).length;
     process.stderr.write(`${isle.id.padEnd(10)}${cells}${String(keep).padStart(11)}\n`);
   }
-  process.stderr.write(`\nRe-run with W2H_MIN_AREA set to try another threshold — no refetch needed ` +
-    `if the extract is still on the runner.\n`);
+  process.stderr.write(`\nRe-run with W2H_MIN_AREA set to try another base threshold — no refetch ` +
+    `needed if the extract is still on the runner.\n`);
+
+  /* ---------- WHAT THE SCALE CORRECTION BUYS ----------
+
+     The bake divides the threshold by the square of each island's display scale, so this is the
+     column that actually predicts the artefact. Scales come from the committed index's extents,
+     which is where the bake will get them too when only one island is being re-baked. */
+  const extents = {};
+  try {
+    const fsp = await import('node:fs/promises');
+    const idx = JSON.parse(await fsp.readFile('data/index.json', 'utf8'));
+    for (const i of idx.islands || []) if (i.extent) extents[i.id] = i.extent;
+  } catch { /* no index to scale against */ }
+  const scales = displayScales(extents);
+  if (!Object.keys(scales).length){
+    process.stderr.write(`\nNo committed index, so the display scales are unknown — ` +
+      `the flat ${MIN_BUILDING_AREA} m² column above is what a first bake would keep.\n`);
+    return;
+  }
+
+  process.stderr.write(`\n${'island'.padEnd(10)}${'scale'.padStart(8)}${'threshold'.padStart(11)}` +
+    `${'flat ' + MIN_BUILDING_AREA}`.padStart(11) + `${'scaled'.padStart(10)}${'change'.padStart(9)}\n`);
+  for (const isle of ISLANDS){
+    const [s, w, n, e] = isle.bbox;
+    const mine = OVERTURE.rows.filter(r => r.lat >= s && r.lat <= n && r.lon >= w && r.lon <= e);
+    const sc = scales[isle.id] || 1;
+    const thr = areaThresholdFor(sc);
+    const flat = mine.filter(r => r.a >= MIN_BUILDING_AREA).length;
+    const scaled = mine.filter(r => r.a >= thr).length;
+    process.stderr.write(`${isle.id.padEnd(10)}${('x' + sc.toFixed(2)).padStart(8)}` +
+      `${(Math.round(thr) + ' m²').padStart(11)}${String(flat).padStart(11)}` +
+      `${String(scaled).padStart(10)}${((scaled / Math.max(flat, 1)).toFixed(2) + 'x').padStart(9)}\n`);
+  }
+  process.stderr.write(`\nThese are pre-coastline counts. The bake clips each island to its own ` +
+    `shore afterwards.\n`);
 }
 
 async function main(){
@@ -978,8 +1049,50 @@ async function main(){
                   note:'Buildings are oriented bounding boxes: x,y centre; w long axis; d short axis; rot radians from east.',
                   islands:[] };
 
+  /* TWO PHASES, AND THE SPLIT IS FORCED BY THE THRESHOLD.
+
+     An island's display scale is a function of the LARGEST island's span, so no island's threshold
+     can be known until every outline has been measured. Baking into memory first costs about six
+     megabytes and buys a filter that is correct rather than uniform.
+
+     A partial bake fills the gaps from the committed index. The extents are the most stable thing
+     in this file — an outline moves by metres between bakes — so re-baking Al Reem alone gets the
+     same scale it would have got in a full run. */
+  const bakedAll = [];
   for (const isle of list){
-    const baked = await bakeIsland(isle, proj);
+    bakedAll.push(await bakeIsland(isle, proj));
+    /* Serial, with a gap. Overpass asks for it, and five parallel requests from one Action IP is
+       how the repo gets rate-limited for an hour. */
+    if (isle !== list[list.length - 1]) await new Promise(r => setTimeout(r, 4000));
+  }
+
+  const extents = {};
+  try {
+    const prevIdx = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
+    for (const i of prevIdx.islands || []) if (i.extent) extents[i.id] = i.extent;
+  } catch { /* first run */ }
+  for (const b of bakedAll) if (b.extent) extents[b.id] = b.extent;
+  const scales = displayScales(extents);
+
+  process.stderr.write(`\ndisplay scales and the visibility threshold each one implies:\n`);
+  for (const id of Object.keys(scales)){
+    process.stderr.write(`  ${id.padEnd(10)}x${scales[id].toFixed(2).padStart(5)}` +
+      `   threshold ${Math.round(areaThresholdFor(scales[id]))} m²\n`);
+  }
+  process.stderr.write(`\n`);
+
+  for (const baked of bakedAll){
+    /* THE THRESHOLD, APPLIED ONCE, AND THE AREA STRIPPED ON THE WAY OUT. `a` exists to make this
+       decision and has no consumer downstream; leaving it in would put a hundred kilobytes of
+       dead field in the artefact the hero downloads. */
+    const thr = areaThresholdFor(scales[baked.id] || 1);
+    const before = baked.buildings.length;
+    baked.buildings = baked.buildings
+      .filter(b => b.a == null || b.a >= thr)
+      .map(({ a, ...rest }) => rest);
+    process.stderr.write(`  ${baked.id}: threshold ${Math.round(thr)} m² — ` +
+      `${before} -> ${baked.buildings.length}\n`);
+
     const path = `data/isle-${baked.id}.json`;
     await fs.writeFile(path, JSON.stringify(baked));
     const bytes = (await fs.stat(path)).size;
@@ -1032,9 +1145,6 @@ async function main(){
           `(${Math.round(100 * now / was.buildings)}%). Check the diff before keeping this.\n`);
       }
     }
-    /* Serial, with a gap. Overpass asks for it, and five parallel requests from one Action IP is
-       how the repo gets rate-limited for an hour. */
-    await new Promise(r => setTimeout(r, 4000));
   }
 
   /* A PARTIAL BAKE MUST NOT TRUNCATE THE INDEX. Running one island rewrites its own file and its
