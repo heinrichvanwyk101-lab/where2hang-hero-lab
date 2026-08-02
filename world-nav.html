@@ -802,7 +802,13 @@ function setDistrict(d){
      Synchronous on purpose. It is roughly a second, it happens under a camera flight that already
      takes about that long, and the alternative is a frame where the island is visibly empty and
      then visibly is not. A hitch during a move reads as the move; a pop after it reads as a bug. */
+  /* REGISTER BEFORE ANY VIEW TOUCHES IT. The order is the fix: build, snapshot, register, then
+     apply. Applying a view to meshes that have not been snapshotted sets their material to
+     undefined, which kills the render loop from inside projectObject with an error that names
+     neither the mesh nor the island. */
   if (buildIsland && d && buildIsland(d.id)){
+    snapshotMats(d.group);
+    registerLift(d.group);
     fitClip();
     applyView(view);
   }
@@ -988,16 +994,31 @@ const GLASS_ROUGH = 0.24, GLASS_METAL = 0.62, GLASS_ENV = 1.5;
    never being used.
 
    Snapshot everything now, while the scene is still exactly as buildWorld left it. */
-world.traverse(o => {
-  if (!o.isMesh || o.userData.helper) return;
-  if (!o.userData.origMat) o.userData.origMat = o.material;
-});
+/* SNAPSHOT A SUBTREE, not just the world once.
+
+   This ran once at load and stamped origMat on every mesh. applyView restores from it, so a mesh
+   without one gets `o.material = undefined` — and three.js then reads material.visible on
+   undefined and the render loop dies. That is exactly what deferring the outer islands produced:
+   the city arrived after the snapshot had already been taken, and tapping Al Reem threw
+   "Cannot read properties of undefined (reading 'visible')" from inside projectObject.
+
+   Deferred building means registration has to be repeatable. Both passes are now functions over a
+   root, idempotent through `seen` and the origMat guard, and buildIsland calls them on the new
+   island before any view touches it. */
+function snapshotMats(root){
+  root.traverse(o => {
+    if (!o.isMesh || o.userData.helper) return;
+    if (!o.userData.origMat) o.userData.origMat = o.material;
+  });
+}
+snapshotMats(world);
 water.userData.origMat = water.material;
 phase('snapshot');
 const liftReg = [];
-{
-  const seen = new Set();
-  world.traverse(o => {
+const liftSeen = new Set();
+function registerLift(root){
+  const seen = liftSeen;
+  root.traverse(o => {
     // litMat: props, already the right colour under any light. duskMats: the islands, which
     // carry a painted ground texture and get a whole material per mode instead.
     if (!o.isMesh || o.userData.litMat || o.userData.duskMats) return;
@@ -1038,6 +1059,7 @@ const liftReg = [];
     });
   });
 }
+registerLift(world);
 /* NIGHT SHOULD REVEAL THE CITY, NOT HIDE IT.
 
    The night render loses the model: sea, ground and unlit faces all sit near black and the only
