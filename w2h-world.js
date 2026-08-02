@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v74';
+export const BUILD = 'world v75';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1014,6 +1014,53 @@ function inAvoid(d, nx, ny, pad){
     if (nx > b.x0 - m && nx < b.x1 + m && ny > b.y0 - m && ny < b.y1 + m) return true;
   }
   return false;
+}
+
+/* THE LANDMARK SKIRT, and why the avoid rectangle could never have done this job.
+
+   A reservation is binary: inside it nothing is built, outside it the fabric runs at the full
+   district cap. Around a TALL landmark that is enough — ADNOC is 44 units and Etihad's shortest
+   tower is 21.8, so a 26-unit neighbour standing at the rectangle's edge still reads as fabric.
+   Around a LOW one it is not. Emirates Palace is 6.5 units, and v74 put the district cap at 26
+   with the falloff at the palace's own position measuring 0.38 — so the stock immediately outside
+   its reservation runs from 6.3 to 18.6 units. Three times the height of the building it is meant
+   to be framing, standing three units from its wall.
+
+   v74's note argued the falloff was already protecting the palace and shrank the rectangle from
+   62 to 36 on that basis. The falloff reaches zero at dc 0.9; the palace sits at 0.65. It was
+   never protected — the wide rectangle had been doing the work, and removing it removed the only
+   thing holding the towers off.
+
+   The fix is a RAMP rather than a bigger hole. Inside r0 the cap is the landmark's own scale;
+   from r0 to r1 it smoothsteps back to the district cap. The fabric stays continuous — no bald
+   third of the island, which is the fault the v74 note was right about — and the skyline profile
+   comes out as the place actually reads: low around the palace, rising eastward into Etihad and
+   on to ADNOC. Distances are world units in the table and normalised here, like every other
+   building-sized figure in this file.
+
+   IT CANNOT MOVE THE RANDOM STREAM. capH enters buildingSpec through one Math.min below the
+   unconditional draw block, so a per-cell cap changes heights and nothing else. Mass and detail
+   both go through urbanFabric, both compute it from position alone, and the two layers stay the
+   same city. */
+function lowRiseN(d){
+  if (!d._lowRiseN){
+    d._lowRiseN = (d.lowRise || []).map(l => ({
+      x: l.x / d.r, y: -l.z / d.r, r0: l.r0 / d.r, r1: l.r1 / d.r, h: l.h,
+    }));
+  }
+  return d._lowRiseN;
+}
+function cellCap(d, nx, ny, cap){
+  const Z = lowRiseN(d);
+  let c = cap;
+  for (let i = 0; i < Z.length; i++){
+    const l = Z[i];
+    const dd = Math.hypot(nx - l.x, ny - l.y);
+    if (dd >= l.r1) continue;
+    const t = dd <= l.r0 ? 0 : (dd - l.r0) / (l.r1 - l.r0);
+    c = Math.min(c, l.h + (cap - l.h) * (t * t * (3 - 2 * t)));
+  }
+  return c;
 }
 
 function roadSkeleton(d){
@@ -2657,9 +2704,22 @@ const DISTRICTS = [
          the west tip fall is 0, so anything the fabric puts down is 3.0 units against the
          palace's 6.5 and cannot compete with it. The rectangle was doing a second job that was
          already being done. */
-      { x:LM.palace.x, z:LM.palace.z, w:36, d:24 },   // Emirates Palace and its forecourt
+      /* 40 x 26, UP FROM 36 x 24, and only that. The rectangle is sized to the palace and its
+         forecourt, which is all a reservation should ever be; the clearance that makes it read as
+         a landmark is the skirt below, not a wider hole. */
+      { x:LM.palace.x, z:LM.palace.z, w:40, d:26 },   // Emirates Palace and its forecourt
       { x:LM.etihad.x, z:LM.etihad.z, w:48, d:20 },   // Etihad Towers and the plaza
       { x: LM.adnoc.x, z: LM.adnoc.z, w:20, d:20 },   // ADNOC HQ and its apron
+    ],
+    /* THE SKIRT. One entry, and only the palace needs one: Etihad's shortest tower is 21.8 units
+       and ADNOC is 44, so both stand clear of a 26-unit neighbour on their own.
+
+       r0 20 clears the reservation's corner. r1 62 is measured, not chosen — the palace and
+       Etihad are 67 units apart, so the ramp reaches the Etihad cluster's edge and stops, and the
+       towers that are supposed to rise there are untouched. h 7.0 sits just above the palace's
+       6.5 so the nearest fabric reads as a wall of the estate rather than as a rival. */
+    lowRise:[
+      { x:LM.palace.x, z:LM.palace.z, r0:20, r1:62, h:7.0 },
     ],
     // Re-derived against the new outline. Index 0 is the west tip and the samples run east
     // along the north shore, so this is the Corniche itself, end to end.
@@ -3804,7 +3864,7 @@ function urbanFabric(d, layer, opts){
      knowledge of minH or lod. This is what makes the two layers the same city. */
   const specs = cells.map(c => buildingSpec(rnd, {
     jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r, rot:c.rot,
-    plotW:c.w, plotD:c.dp, tallest, capH:cap, coreX, coreZ }));
+    plotW:c.w, plotD:c.dp, tallest, capH:cellCap(d, c.jx, c.jy, cap), coreX, coreZ }));
 
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
      No random numbers below this line. */
