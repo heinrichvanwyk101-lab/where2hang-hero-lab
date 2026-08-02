@@ -224,7 +224,7 @@ phase('import');
 
    ?debug ALSO ACCEPTS ?drawn, which forces the old path with the data present. That is the toggle
    that makes a fault attributable: same build, same camera, coastlines the only difference. */
-let basemap = null;
+let basemap = null, fpSeed = null;
 if (!location.search.includes('drawn')){
   try {
     const idx = await BMAP.loadIndex('data/');
@@ -242,6 +242,19 @@ if (!location.search.includes('drawn')){
        does not stall waiting for it. */
     try { await BMAP.loadRoads(idx, 'corniche'); }
     catch (e){ console.warn('roads corniche:', e.message); }
+
+    /* AND ITS FOOTPRINTS, ON THE SAME ARGUMENT. Corniche is built inside buildWorld, so there is
+       no later moment to hand it a payload — it either arrives before the call or that island
+       builds generated for the session. Only under ?fp, so the default path fetches nothing extra
+       and weighs what it always weighed. */
+    if (location.search.includes('fp')){
+      try {
+        const entry = (idx.islands || []).find(i => i.id === 'corniche');
+        const data  = await BMAP.loadIsland(idx, 'corniche');
+        const units = BMAP.buildingsUnits(data, BMAP.islandOrigin(entry));
+        if (units && units.length) fpSeed = { corniche: units };
+      } catch (e){ console.warn('footprints corniche:', e.message); }
+    }
     for (const isl of idx.islands || []){
       if (isl.id !== 'corniche') BMAP.loadRoads(idx, isl.id).catch(() => {});
     }
@@ -279,7 +292,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v53', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v54', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -296,6 +309,9 @@ const DEBUG = location.hash.indexOf('debug') >= 0;
    footprints" and sent me looking at the bake. */
 const FP_ON = location.search.includes('fp');
 const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
+// Corniche's payload was awaited before buildWorld, so its state is already known here.
+if (fpSeed && fpSeed.corniche) fpState.set('corniche', 'on');
+if (fpSeed && fpSeed.corniche) fpState.set('corniche', 'on');
 if (DEBUG) document.getElementById('dbg').classList.add('on');
 
 
@@ -658,12 +674,13 @@ phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, footprintsFor } =
+        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, footprintsFor, setFootprints } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
     C, rnd,
     basemap,
+    footprints: fpSeed,
     PALACE_FOOT: CITY.PALACE_FOOT,
   });
 
@@ -947,7 +964,7 @@ function setDistrict(d){
     fitClip();
     applyView(view);
   }
-  if (d) addFootprints(d);
+
   /* Every state change composes a shot, so a leftover angle from the last one would arrive as a
      camera that lands somewhere the transition did not intend. orbit.on stays as it is: once the
      user has taken hold of the camera, the idle drift should not come back for the rest of the
@@ -1959,15 +1976,20 @@ function whenRoads(id, ms = 4000){
 }
 
 
-/* ---------- STAGE 3a: REAL FOOTPRINTS, BEHIND ?fp ----------
+/* ---------- STAGE 3b: FOOTPRINTS BEFORE THE BUILD ----------
 
-   The island payload is the file roads were split out of, and it is the larger half of what is
-   left. It is fetched only when the flag is on, so nothing about the default path changes weight:
-   a diagnostic that costs every visitor a megabyte is a diagnostic that has to be justified to
-   people who are not debugging.
+   3a added footprints AFTER the island was built and hid the generated meshes on top. That worked
+   for the buildings and could never work for the ground: groundPlan runs inside buildIsland, reads
+   the fabric's cells, and paints a canvas that is never repainted. So the props stood where the
+   generated city said there was open space, and the lawns went where it said there were holes.
 
-   Per island, on demand, at the moment its city is built. Same lifecycle as the roads, same
-   reason — the ground and the buildings want to arrive together or the island assembles twice. */
+   Hiding meshes also turned out to be the wrong instrument. hideFabric matched on isInstancedMesh,
+   and the palms, lamps and cars are instanced too — it was very likely hiding the props rather
+   than fixing them, and a count could not tell the difference.
+
+   So the payload is fetched FIRST and handed to the world module before buildIsland, which then
+   builds both layers from it and derives the ground from it. Nothing is hidden, because nothing
+   generated is ever created. */
 
 async function footprintsFrom(d){
   const idx = window.__basemapIndex;
@@ -1975,54 +1997,35 @@ async function footprintsFrom(d){
   const entry = (idx.islands || []).find(i => i.id === d.id);
   if (!entry) return null;
   const data = await BMAP.loadIsland(idx, d.id);
-  const origin = BMAP.islandOrigin(entry);
-  const units = BMAP.buildingsUnits(data, origin);
+  const units = BMAP.buildingsUnits(data, BMAP.islandOrigin(entry));
   return (units && units.length) ? units : null;
 }
 
-/* Hides the generated fabric's MESHES without touching its arithmetic. The cells and blocks it
-   returned are still in d.fabric and still feeding groundPlan; only the boxes stop drawing. */
-function hideFabric(d){
-  let n = 0;
-  [d.mass, d.detail].forEach(layer => {
-    if (!layer) return;
-    layer.children.forEach(o => {
-      if (o.isInstancedMesh && o.name !== 'footprints'){ o.visible = false; n++; }
-    });
-  });
-  /* COUNTED, because the day view shows generated fabric standing alongside the footprints on at
-     least Al Reem, and "the meshes were hidden" is currently an assumption rather than a reading.
-     If this comes back 0 the fabric is not where this function is looking; if it comes back a
-     sensible number and pale buildings are still there, they are something else — the landmark
-     kit and the prop instances are not fabric and should not be hidden. */
-  d.fpHid = n;
-  return n;
-}
-
-async function addFootprints(d){
-  if (!FP_ON || !footprintsFor || fpState.has(d.id)) return;
+/* Resolves once per island and caches, so the prefetch and a user tap racing each other cannot
+   fetch twice or build twice. Same ceiling as the roads and for the same reason: a payload that
+   never settles must not leave an island permanently unbuilt. */
+const fpPending = new Map();
+function fpReady(d, ms = 8000){
+  if (!FP_ON) return Promise.resolve(false);
+  if (fpPending.has(d.id)) return fpPending.get(d.id);
   fpState.set(d.id, 'pending');
-  try {
-    const list = await footprintsFrom(d);
-    if (!list){ fpState.set(d.id, 'none'); return; }
-    const g = footprintsFor(d, list);
-    if (!g){ fpState.set(d.id, 'none'); return; }
-    hideFabric(d);
-    d.detail.add(g);
-    /* Same order the deferred islands taught us: snapshot and register BEFORE any view touches
-       the new meshes, or applyView sets a material to undefined and the render loop dies inside
-       projectObject naming neither the mesh nor the island. */
-    snapshotMats(g); registerLift(g); applyView(view);
-    fpState.set(d.id, 'on');
-    console.info('footprints ' + d.id + ': ' + d.fpCount + ' (' + d.fpReal + ' real heights)');
-  } catch (e){ noteError('footprints ' + d.id, e); fpState.set(d.id, 'none'); }
+  const p = Promise.race([
+    footprintsFrom(d).catch(e => { noteError('footprints ' + d.id, e); return null; }),
+    new Promise(res => setTimeout(() => res(null), ms)),
+  ]).then(list => {
+    const ok = !!(list && setFootprints && setFootprints(d.id, list));
+    fpState.set(d.id, ok ? 'on' : 'none');
+    return ok;
+  });
+  fpPending.set(d.id, p);
+  return p;
 }
 
 function buildAndRegister(d){
   if (!buildIsland(d.id)) return;
   snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
-  addFootprints(d);
 }
+
 
 function attractPrefetch(n){
   const leg = ATTRACT[n % ATTRACT.length];
@@ -2044,8 +2047,9 @@ function attractPrefetch(n){
      Nothing here blocks a frame: the build still happens synchronously when it happens, this only
      moves WHEN. And a user tap still builds immediately through setDistrict, because a stall
      during a committed move is worse than a generated lattice. */
-  if (roadsIn(leg.id)){ buildAndRegister(d); return; }
-  whenRoads(leg.id).then(() => { if (d.pending) buildAndRegister(d); });
+  if (roadsIn(leg.id) && (!FP_ON || fpState.get(leg.id) === 'on')){ buildAndRegister(d); return; }
+  Promise.all([whenRoads(leg.id), fpReady(d)])
+    .then(() => { if (d.pending) buildAndRegister(d); });
 }
 
 function attractGo(i){
@@ -2281,7 +2285,7 @@ function frame(){
          falling back to the coastline. An anchor the bake missed keeps a stale authored position
          near the island centre and looks like a landmark that happens to be central. */
       (FP_ON ? 'fp     ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
-        (fpState.get(d.id) === 'on' ? (d.fpCount + '/' + d.fpReal + 'r hid' + (d.fpHid || 0))
+        (d.fpCount ? (d.fpCount + '/' + d.fpReal + 'r')
          : (fpState.get(d.id) || '-'))).join('  ') + '\n' : '') +
       'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
         (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +

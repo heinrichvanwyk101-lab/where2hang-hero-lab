@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v96';
+export const BUILD = 'world v97';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -109,6 +109,10 @@ if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via
    to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
    fault came from the data or from everything else. */
 const BASE = opts.basemap || null;
+/* CORNICHE CANNOT WAIT, because it is built inside this call. Every other island acquires its
+   footprints through setFootprints before its deferred build; the opening island has no such
+   moment, so its payload comes in through opts the way its basemap does. */
+const FP_IN = opts.footprints || null;
 
 /* STAGE TIMING, AND IT IS HERE BECAUSE SIXTEEN SECONDS IS TOO SLOW TO GUESS AT.
 
@@ -3672,6 +3676,8 @@ DISTRICTS.forEach(d => {
      at the top of buildGroundFor for everything else. See attachRealRoads. */
   attachRealRoads(d);
 
+  if (FP_IN && FP_IN[d.id]) d.fpList = FP_IN[d.id];
+
   d.placeAnchors = d.places.map(pl => ({ ...pl, district:d }));
 });
 
@@ -4616,7 +4622,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
    skyline in the city to one number and look instantly wrong next to the 3,807 that are right.
    Which is which is recorded and shown, since a modelled height and a surveyed one are otherwise
    indistinguishable and only one of them is evidence. */
-function footprintsFor(d, list){
+function footprintsFor(d, list, minH = 0){
   if (!list || !list.length) return null;
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   const MATS = fabricMats(cool);
@@ -4630,6 +4636,12 @@ function footprintsFor(d, list){
   let real = 0;
   for (const b of list){
     const nx = b.x / d.r, ny = -b.z / d.r;
+    /* THE COASTLINE TEST THE FABRIC ALWAYS HAD AND THIS DID NOT.
+       urbanFabric tests every plot against insideIsle before it emits. footprintsFor placed
+       whatever the payload contained, and the bake selects buildings by BOUNDING BOX — so piers,
+       reclaimed edges and anything OSM holds inside the box but outside the coastline landed in
+       open water. That is the building standing in the channel off Al Maryah's west edge. */
+    if (!insideIsle(d.id, nx, ny)) continue;
     let h = b.h, isReal = h != null && h > 1;
     if (isReal) real++;
     else {
@@ -4641,8 +4653,15 @@ function footprintsFor(d, list){
       const cap = Math.min(tallest * (0.22 + 0.78 * fall), cellCap(d, nx, ny, tallest));
       h = Math.max(2.2, cap * (0.55 + rnd() * 0.55));
     }
-    specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h });
+    /* minH is how the mass layer exists at all. urbanFabric builds the same city twice and lets
+       the world-zoom copy omit anything under a floor; footprints had no equivalent, so the mass
+       layer was empty and the LOD contract was broken in the direction of "the cheap version does
+       not exist". Same list, same positions, one filter. */
+    if (h < minH) continue;
+    specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h,
+                 jx:nx, jy:ny });
   }
+  if (!specs.length) return null;
 
   /* Bucketed by material and window class exactly as the fabric is, so a footprint and a
      generated block standing next to each other are lit by the same shader and the Day/Dusk
@@ -4699,6 +4718,65 @@ function footprintsFor(d, list){
   return g;
 }
 
+
+/* THE GROUND, FROM THE BUILDINGS THAT ARE ACTUALLY THERE.
+
+   groundPlan takes cells and blocks and decides three things from them: where parks go (the holes
+   the city left), where pavement is painted, and — through the prop placer — where palms, lamps
+   and cars stand. All three were being answered by the GENERATED fabric while the buildings on
+   screen were real, so props stood inside real towers and lawns were laid across real blocks. Two
+   cities, one ground, and the ground belonged to the wrong one.
+
+   CELLS ARE A DIRECT TRANSLATION. A footprint is an oriented box and a cell is an oriented plot;
+   the fields line up one for one, in the same normalised frame, with the same rotation sign the
+   canvas already expects. Nothing is being invented here.
+
+   BLOCKS ARE NOT, AND THIS IS THE HONEST PART. A block is a superblock outline — the developed
+   ground between streets — and footprints know nothing about streets. So blocks are approximated
+   from OCCUPANCY: a coarse grid, marked where buildings stand, dilated by one cell so the paving
+   reaches the kerb rather than stopping at the wall, and emitted as quads. That is a blockier city
+   floor than the generator drew and it is in the right places, which is the trade. Real block
+   outlines come from the road network in a later pass, where they can be derived rather than
+   guessed. */
+function plotsFromFootprints(d, list){
+  const cells = [], seen = new Set();
+  const Q = 0.035;                       // occupancy pitch, normalised island units
+  for (const b of list){
+    const jx = b.x / d.r, jy = -b.z / d.r;
+    if (!insideIsle(d.id, jx, jy)) continue;
+    const wN = Math.max(0.002, b.w / d.r), dN = Math.max(0.002, b.dp / d.r);
+    cells.push({ jx, jy, rot:b.rot, wN, dN, w:wN * d.r, dp:dN * d.r });
+    seen.add(Math.round(jx / Q) + ',' + Math.round(jy / Q));
+  }
+  if (!cells.length) return null;
+
+  /* Dilated by one ring. Without it every block stops at the building line and the street reads as
+     desert running up to the wall; with it the paved ground reaches roughly a plot beyond the
+     footprints, which is what a pavement is. */
+  const grid = new Set();
+  for (const k of seen){
+    const [gx, gy] = k.split(',').map(Number);
+    for (let a = -1; a <= 1; a++) for (let b2 = -1; b2 <= 1; b2++) grid.add((gx+a) + ',' + (gy+b2));
+  }
+  const blocks = [];
+  for (const k of grid){
+    const [gx, gy] = k.split(',').map(Number);
+    const x0 = (gx - 0.5) * Q, x1 = (gx + 0.5) * Q;
+    const y0 = (gy - 0.5) * Q, y1 = (gy + 0.5) * Q;
+    blocks.push([[x0,y0],[x1,y0],[x1,y1],[x0,y1]]);
+  }
+  return { cells, blocks };
+}
+
+/* Handed in before the island is built, because the ground canvas is painted during the build and
+   there is no repainting it afterwards — the same constraint the roads have, for the same reason. */
+function setFootprints(id, list){
+  const d = DISTRICTS.find(x => x.id === id);
+  if (!d) return false;
+  d.fpList = list || null;
+  return !!d.fpList;
+}
+
 function buildFabricFor(d){
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   // Per-district character: where downtown sits, and how tall it gets there.
@@ -4711,10 +4789,25 @@ function buildFabricFor(d){
      Instancing means the extra count is free in draw calls. */
   /* SAME DENSITY, SAME SEED, DIFFERENT FLOOR. The layers are the same city; mass simply omits
      anything under minH, so the world view holds the massing and zooming in fills the gaps. */
-  urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool, minH:5.4 });
-  const built = urbanFabric(d, d.detail,
-                           { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
-  d.fabric = built;
+  if (d.fpList){
+    /* THE GENERATOR DOES NOT RUN AT ALL. It was the largest stage in every build — 2,000 to 4,900
+       ms, most of it onRoad testing hundreds of thousands of plot candidates against road
+       polylines — and every one of those tests existed to keep generated buildings off the
+       streets. Real footprints are already off the streets, by construction. Nothing here needs
+       the answer any more.
+       Two layers from one list: mass omits anything under the floor, detail takes everything, so
+       the world silhouette is a compressed portrait of the same city rather than a second one. */
+    const mass   = footprintsFor(d, d.fpList, 5.4);
+    const detail = footprintsFor(d, d.fpList, 0);
+    if (mass)   d.mass.add(mass);
+    if (detail) d.detail.add(detail);
+    d.fabric = plotsFromFootprints(d, d.fpList) || { cells:[], blocks:[] };
+  } else {
+    urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool, minH:5.4 });
+    const built = urbanFabric(d, d.detail,
+                             { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
+    d.fabric = built;
+  }
 
   const glow = new THREE.PointLight(d.tint, 0, 150, 2);
   glow.position.set(0, GROUND + 20, 0);
@@ -4983,7 +5076,7 @@ function buildIsland(id){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
-         buildIsland, buildCornicheRest, footprintsFor,
+         buildIsland, buildCornicheRest, footprintsFor, setFootprints,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
