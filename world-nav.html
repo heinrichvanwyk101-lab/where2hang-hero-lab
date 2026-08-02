@@ -1546,9 +1546,19 @@ function frame(){
          showed four of eight, which is how a measurement turns into another guess: the two stages
          that were visible accounted for three seconds of fourteen and I could not see where the
          other eleven went. Pairs per line, so it fits and still reads. */
-      'phase  ' + Object.keys(PH).filter(k => k[0] !== '#')
-        .map(k => k + ' ' + Math.round(PH[k])).join('  ') + '\n' +
-      '       total ' + Math.round(PH['#page'] || 0) + ' ms\n' +
+      /* WRAPPED, LIKE THE STAGES, and for the same reason — which I had just fixed one line below
+         and then reintroduced here. A single line of seven phases runs off a folded phone at the
+         fourth, and the fourth was the one that mattered. */
+      (() => {
+        const rows = Object.keys(PH).filter(k => k[0] !== '#')
+          .map(k => [k, Math.round(PH[k])]).sort((a, b) => b[1] - a[1]);
+        let out = '';
+        for (let i = 0; i < rows.length; i += 2){
+          out += (i ? '       ' : 'phase  ') +
+            rows.slice(i, i + 2).map(([k, v]) => (k + ' ' + v).padEnd(24)).join('') + '\n';
+        }
+        return out + '       total ' + Math.round(PH['#page'] || 0) + ' ms\n';
+      })() +
       (PERF ? (() => {
         const rows = Object.keys(PERF).filter(k => k[0] !== '#')
           .map(k => [k, Math.round(PERF[k])]).sort((a, b) => b[1] - a[1]);
