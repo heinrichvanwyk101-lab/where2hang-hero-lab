@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v73';
+export const BUILD = 'world v74';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -773,7 +773,7 @@ function beachReach(id, pts, i, want){
   return 0;
 }
 
-const RING_INSET = 0.085;      // normalised island units — about 6.5 on Corniche, 5.3 on Yas
+// RING_INSET is now derived per district from RING_INSET_M; see ringInset().
 const RING_MIN   = 10;         // a surviving run shorter than this is debris, not a road
 
 function insetRing(id, inset){
@@ -966,8 +966,20 @@ const COAST_CLEAR = 0.050;                   // no building closer than this to 
 /* THE BEACH WIDTH, HOISTED, because three things have to agree about it: the skirt geometry, the
    plan handed to the prop kit so boats do not moor on dry sand, and the spacing of the islands
    themselves. */
-const BEACH_W = 12;                          // world units, before per-sample clamping
-const COAST_PARK_IN = 0.038;                 // the seafront park sits between the beach and the ring
+/* THE SEAFRONT, IN METRES — the last three quantities still expressed as a share of an island.
+
+   BEACH_W is in WORLD units and RING_INSET and COAST_PARK_IN are NORMALISED, so scaling the
+   islands 2.5x in v60 grew the park and the setback while leaving the sand exactly where it was.
+   Measured on Corniche: a 94 m beach that did not move, a park that went 23 m to 56, and a ring
+   setback that went 50 m to 126. That is why the green band now reads as a golf course and why
+   there is a long empty walk between the buildings and the water.
+
+   All three in metres, at the figures the real Corniche actually has: a wide public beach, a
+   generous but walkable park, and a seafront road close enough to the sand that the two read as
+   one promenade. */
+const BEACH_M       = 90;
+const COAST_PARK_M  = 46;
+const RING_INSET_M  = 78;
 
 /* EXCLUSION IS A SET OF ROOMS, NOT A WALL.
 
@@ -1010,7 +1022,7 @@ function roadSkeleton(d){
   const core    = d.coreN || [0, 0];
   const inside  = (nx, ny) => insideIsle(d.id, nx, ny);
 
-  const ring = insetRing(d.id, RING_INSET);   // an ARRAY of open runs, not one closed loop
+  const ring = insetRing(d.id, roadW(d, RING_INSET_M));  // an ARRAY of open runs, not one closed loop
 
   /* ===========================================================================
      THE SUPERBLOCK GRID.
@@ -1060,7 +1072,7 @@ function roadSkeleton(d){
 
        The terminus is the ring's inner kerb, derived from the ring's own width rather than from a
        fraction of the inset — the two are different quantities and only one of them is a road. */
-    const stopAt = RING_INSET + roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB;
+    const stopAt = roadW(d, RING_INSET_M) + roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB;
     const line = (fixed, along, horiz, major) => {
       // Walk the line in small steps, emitting runs of consecutive points that are on land.
       const runs = [];
@@ -1315,12 +1327,12 @@ function groundPlan(d, cells, blocks){
     const a = Math.round(d.coastPark[0] * (N - 1));
     const b = Math.round(d.coastPark[1] * (N - 1));
     coastLine = [];
-    for (let i = a; i <= b; i++) coastLine.push(inwardAt(d.id, outline, i, COAST_PARK_IN));
+    for (let i = a; i <= b; i++) coastLine.push(inwardAt(d.id, outline, i, roadW(d, COAST_PARK_M)));
   }
 
   return {
     outline, core, inside, ring, arterials, crossings:d.roads.crossings, parks, coastLine, cells, blocks,
-    beachN: BEACH_W / d.r,
+    beachN: roadW(d, BEACH_M),
     coastPark: d.coastPark, ground: GROUND,
     rndPaint: localRnd(seed ^ 0x9E3779B1),
     rndProps: localRnd(seed ^ 0x85EBCA6B),
@@ -2869,7 +2881,7 @@ DISTRICTS.forEach(d => {
        it reads as one, and the last four units come in at 1:8.6. Same total width, same total
        drop, the fall redistributed: 1.55 units of it now happens in the first 1.9 units of run
        rather than being spread down to the shore. */
-    const BW = BEACH_W / d.r;
+    const BW = roadW(d, BEACH_M);
     const P = [                                            // offset in world units, height, shade
       /* THE INNER RING WAS IN MID-AIR, AND THAT IS THE WHOLE REASON NONE OF THIS HAS BEEN
          VISIBLE FOR FOUR DROPS.
@@ -4035,13 +4047,29 @@ DISTRICTS.filter(d => !d.built).forEach(d => {
    once here — and the two copies were free to drift, which is most of how the south-shore core
    survived unnoticed through four drops. One source. */
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
-  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true, cap:12 });
+  /* THE CAP WAS FLATTENING THE DOWNTOWN, and that is the carpet in every dusk shot.
+
+     tallest 16 with cap 12 means the cap bites wherever the falloff exceeds 0.63 — which is most
+     of the island — so the entire core clipped to one height and the skyline lost its shape. A cap
+     exists to stop the fabric competing with ADNOC at 44 units, not to iron the city flat.
+
+     tallest 34 and cap 26 puts the generated stock at 203 m against ADNOC's 343 and Etihad's 305,
+     which is the real relationship: a dense field of 100-200 m towers with three landmarks
+     standing clear of it. The cap now bites only at fall > 0.64 of a much taller curve, so it
+     trims the tallest few rather than levelling the lot. */
+  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true, cap:26 });
 urbanFabric(corniche, corniche.mass,
   /* Same density and the same seed as the detail call above, so this is the SAME CITY. The two
-     layers differ only by minH: the world view keeps about 72 per cent of the buildings, the
-     tall ones, and tapping in adds the short ones between them without moving anything. */
-  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:16, avoid:true,
-    cap:12, minH:5.4 });
+     layers differ only by minH: the world view keeps the tall ones and tapping in adds the short
+     ones between them without moving anything.
+
+     minH IS A FIXED 5.4 UNITS and that is deliberate — it is a real height, about 42 metres,
+     below which a building is not worth drawing at world zoom. It is NOT a fraction of `tallest`,
+     so raising the height model changes which share of the stock survives rather than changing the
+     threshold, which is the correct behaviour: a 42-metre building is equally invisible from
+     orbit whatever the tallest tower on the island happens to be. */
+  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
+    cap:26, minH:5.4 });
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
