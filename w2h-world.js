@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v95';
+export const BUILD = 'world v96';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4662,7 +4662,7 @@ function footprintsFor(d, list){
     meshes.set(k, m);
   });
 
-  const M = new THREE.Object3D(), col = new THREE.Color(), idx = new Map();
+  const M = new THREE.Object3D(), idx = new Map();
   for (const sp of specs){
     M.position.set(sp.x, GROUND + sp.h / 2, sp.z);
     M.rotation.set(0, -sp.rot, 0);
@@ -4671,7 +4671,20 @@ function footprintsFor(d, list){
     const k = typeOf(sp.h) + '#' + wClass(sp.h), m = meshes.get(k), i = idx.get(k) || 0;
     idx.set(k, i + 1);
     m.setMatrixAt(i, M.matrix);
-    m.setColorAt(i, tintFrom(col, 1));
+    /* NO PER-INSTANCE COLOUR, DELIBERATELY, AFTER GETTING IT WRONG.
+
+       tintFrom takes a tint OBJECT — v, amount, warm, w — and it was handed the number 1. Every
+       field came back undefined, v computed to NaN, and setRGB(NaN,NaN,NaN) gave all 18,776
+       footprints a NaN instance colour, which the GPU renders black. Dusk hid it completely: black
+       buildings in a dark scene read as an empty island, which is exactly how it was reported and
+       exactly how I first read it. Day showed it in one look.
+
+       Not replaced with a guessed tint object. The fabric's variation is a function of the
+       generator's seeded stream and its fields have meanings I would be inferring rather than
+       reading. Omitting the call is unambiguously correct — the instances take their material's
+       own colour, and they are already bucketed by material and window class, so the variation
+       that matters is still there. Per-instance variation is a thing to add on purpose later,
+       from the same stream the fabric uses, not a thing to approximate now. */
   }
 
   const g = new THREE.Group();

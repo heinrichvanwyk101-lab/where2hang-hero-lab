@@ -279,7 +279,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v51', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v53', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1983,12 +1983,20 @@ async function footprintsFrom(d){
 /* Hides the generated fabric's MESHES without touching its arithmetic. The cells and blocks it
    returned are still in d.fabric and still feeding groundPlan; only the boxes stop drawing. */
 function hideFabric(d){
+  let n = 0;
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
-      if (o.isInstancedMesh && o.name !== 'footprints') o.visible = false;
+      if (o.isInstancedMesh && o.name !== 'footprints'){ o.visible = false; n++; }
     });
   });
+  /* COUNTED, because the day view shows generated fabric standing alongside the footprints on at
+     least Al Reem, and "the meshes were hidden" is currently an assumption rather than a reading.
+     If this comes back 0 the fabric is not where this function is looking; if it comes back a
+     sensible number and pale buildings are still there, they are something else — the landmark
+     kit and the prop instances are not fabric and should not be hidden. */
+  d.fpHid = n;
+  return n;
 }
 
 async function addFootprints(d){
@@ -2273,7 +2281,7 @@ function frame(){
          falling back to the coastline. An anchor the bake missed keeps a stale authored position
          near the island centre and looks like a landmark that happens to be central. */
       (FP_ON ? 'fp     ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
-        (fpState.get(d.id) === 'on' ? (d.fpCount + '/' + d.fpReal + 'r')
+        (fpState.get(d.id) === 'on' ? (d.fpCount + '/' + d.fpReal + 'r hid' + (d.fpHid || 0))
          : (fpState.get(d.id) || '-'))).join('  ') + '\n' : '') +
       'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
         (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +
@@ -2319,7 +2327,26 @@ function frame(){
          outside — the flag is set, the user touched something, or it threw — and the overlay
          could distinguish none of them. */
       'cam    aspect ' + (camera.aspect || 0).toFixed(2) + '  dist ' + Math.round(cur.dist) +
-        '  elev ' + Math.round(cur.elev) + '  fov ' + Math.round(camera.fov) + '\n' +
+        '  elev ' + Math.round(cur.elev) + '  fov ' + Math.round(camera.fov) +
+        '  clip ' + Math.round(camera.near) + '/' + Math.round(camera.far) + '\n' +
+      /* WHERE THE CAMERA IS AND WHERE THE SUBJECT IS, which is the pair that decides whether a
+         black frame means "aimed at nothing" or "aimed at something that is not being drawn".
+         Every other number on this overlay is consistent with a working scene, so the fault is
+         in a relationship between two of them and none of the two were visible.
+         The island's own centre and displayed radius sit alongside, because the question is
+         whether the target is anywhere near the land. */
+      'aim    cam ' + [camera.position.x, camera.position.y, camera.position.z]
+          .map(v => Math.round(v)).join(',') +
+        '  tgt ' + [cur.target.x, cur.target.y, cur.target.z].map(v => Math.round(v)).join(',') +
+        (activeDistrict ? '\n       isle ' + Math.round(activeDistrict.x) + ',' +
+            Math.round(activeDistrict.z) + '  r ' +
+            Math.round(activeDistrict.r * (activeDistrict.dispScale || 1)) +
+            '  shot ' + (activeDistrict.shot
+              ? Math.round(activeDistrict.shot.x) + ',' + Math.round(activeDistrict.shot.z) +
+                ' r' + Math.round(activeDistrict.shot.r) : '-') +
+            '  vis ' + (activeDistrict.detail && activeDistrict.detail.visible ? 'detail' : 'mass') +
+            ' ' + ((activeDistrict.detail && activeDistrict.detail.children.length) || 0) : '') +
+        '\n' +
       'loop   ' + (ATTRACT_OFF ? 'off (?still)'
         : attract.dead ? 'DEAD'
         : attract.on ? ('leg ' + attract.i + ' ' + (ATTRACT[attract.i].id || 'world') + '  next in ' +
