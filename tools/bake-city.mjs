@@ -199,6 +199,184 @@ const MIN_BUILDING_AREA = 120;
    anything visible at this scale and removes most of OSM's surveyed detail. */
 const SIMPLIFY_M = 2.0;
 
+/* ---------- OVERTURE BUILDINGS ---------------------------------------------------------------
+
+   WHY THE BUILDINGS MOVED SOURCE AND THE REST DID NOT.
+
+   The measurement that forced this: against their own baked outlines, Al Maryah holds 34 buildings
+   and Al Reem 96, at 29 and 16 per square kilometre against Abu Dhabi Island's 194. The clip is
+   not the cause — of 1,976 buildings rejected across the five islands, two are within 100 m of a
+   coastline and the rest are 300 m to 8.5 km out to sea, so they are correctly rejected. Nor is it
+   the bounding boxes. The median building OSM holds on Al Maryah is 3,493 m² and on Al Reem
+   2,476 m², against 439 m² on the main island. That is not a thinly mapped city. It is a map
+   containing the towers and the malls and none of the ordinary stock — somebody added the
+   landmarks by hand and nobody ever traced the rest.
+
+   Overture conflates OSM first and then fills the gaps with machine-derived footprints, which is
+   exactly the missing layer. OSM buildings still arrive: they arrive INSIDE Overture, at higher
+   priority than the ML data, so nothing hand-surveyed is lost by this change.
+
+   COASTLINE, ROADS, PARKS AND LANDMARKS STAY ON OVERPASS. The centrelines work, roadsNormalised
+   is built around OSM's highway classes, and the coastline stitcher is built around OSM's
+   left-hand-land convention. Moving two sources in one bake is how a single symptom becomes
+   unattributable, and this file has paid that price before.
+
+   THE DATA IS NOT FETCHED HERE. Overture is GeoParquet on S3 with no REST endpoint, so the
+   workflow runs one DuckDB query into a newline-delimited JSON file and this reads it. Deliberate:
+   the fetch is a build step with a binary dependency, the bake stays plain Node, and the file can
+   be produced by hand for a local run.
+
+   AND IF THE FILE IS NOT THERE, THE OSM PATH STILL RUNS. A missing extract degrades to exactly
+   the bake that produced the current data rather than to an empty archipelago, which is the
+   difference between a workflow step that failed and a repository full of islands with no
+   buildings on them. */
+const OVERTURE_NDJSON = process.env.W2H_OVERTURE || '.cache/overture-buildings.ndjson';
+
+/* Loaded once for all five islands, because the query is one scan of the union bounding box and
+   splitting it per island would be five scans of S3 for the same rows. Kept in geographic degrees
+   alongside the projected box so island assignment costs a comparison rather than an inversion. */
+let OVERTURE = null;
+
+/* Overture carries height in metres directly, and num_floors where it does not. Same 3.2 m storey
+   and the same sanity window as heightOf uses on OSM tags, so a building that appears in both
+   sources gets the same height whichever path it came down.
+
+   Most ML-derived footprints carry neither, and that is expected rather than a fault: the
+   consumer already models a height for untagged stock from the district falloff, and a thousand
+   modelled buildings read incomparably better than a thousand absent ones. Expect withHeight to
+   fall as a PROPORTION in the index while rising in absolute terms. */
+function overtureHeight(h, floors){
+  const hv = typeof h === 'number' ? h : parseFloat(h);
+  if (isFinite(hv) && hv > 2 && hv < 400) return Math.round(hv * 10) / 10;
+  const lv = typeof floors === 'number' ? floors : parseFloat(floors);
+  if (isFinite(lv) && lv >= 1 && lv < 130) return Math.round(lv * 3.2 * 10) / 10;
+  return null;
+}
+
+/* The outer ring, and for a multipolygon the LARGEST outer ring. A building represented as several
+   polygons is a terminal or a mall with detached wings, and the oriented box wants the piece that
+   carries the mass rather than a bounding box drawn round the lot — which on Zayed International
+   would be a kilometre wide. */
+function outerRing(geom){
+  if (!geom) return null;
+  if (geom.type === 'Polygon') return geom.coordinates && geom.coordinates[0];
+  if (geom.type === 'MultiPolygon'){
+    let best = null, bestA = 0;
+    for (const poly of geom.coordinates || []){
+      const r = poly && poly[0];
+      if (!r || r.length < 4) continue;
+      const a = area(r);
+      if (a > bestA){ bestA = a; best = r; }
+    }
+    return best;
+  }
+  return null;
+}
+
+/* The OSM way or relation id, WHERE OVERTURE'S CONFLATION FOUND ONE, kept alongside the GERS id.
+
+   GERS is the better join key — it is designed to survive a release where an OSM way is split or
+   replaced, which is precisely when an osm id stops meaning what it meant — so it goes in `id`.
+   But every building already matched to a venue in Supabase was matched on the osm id, so
+   discarding it would make this bake a one-way door and the existing join unrepeatable. It costs
+   a dozen bytes on the buildings that have one. */
+function osmIdOf(sources){
+  for (const s of sources || []){
+    const ds = s && s.dataset, rid = s && s.record_id;
+    if (!rid || !/openstreetmap/i.test(String(ds))) continue;
+    const m = String(rid).match(/^([wrn])(\d+)$/);
+    if (m) return m[1] === 'r' ? -Number(m[2]) : Number(m[2]);
+  }
+  return null;
+}
+
+/* Reads the extract into oriented boxes in the shared metre frame, once. Streamed rather than read
+   whole: the union box over Abu Dhabi is a hundred thousand-odd footprints with their geometry,
+   and holding that as one string before parsing it is a needless spike in a runner that also has
+   DuckDB's residue in memory. */
+async function loadOverture(proj){
+  if (OVERTURE) return OVERTURE;
+  const fs = await import('node:fs');
+  const readline = await import('node:readline');
+  try { await (await import('node:fs/promises')).access(OVERTURE_NDJSON); }
+  catch {
+    process.stderr.write(`  no Overture extract at ${OVERTURE_NDJSON} — falling back to OSM buildings\n`);
+    OVERTURE = { rows: null };
+    return OVERTURE;
+  }
+
+  const rows = [];
+  let lines = 0, noGeom = 0, tooSmall = 0, noBox = 0;
+  const rl = readline.createInterface({
+    input: fs.createReadStream(OVERTURE_NDJSON, { encoding: 'utf8' }),
+    crlfDelay: Infinity,
+  });
+  for await (const line of rl){
+    const s = line.trim();
+    if (!s) continue;
+    lines++;
+    let rec;
+    /* One malformed line must not take the archipelago down. DuckDB writes clean JSON, but a
+       truncated file from a cancelled step is a real thing and it should cost the rows after the
+       truncation and nothing else. */
+    try { rec = JSON.parse(s); } catch { noGeom++; continue; }
+
+    let geom = rec.geojson;
+    if (typeof geom === 'string'){ try { geom = JSON.parse(geom); } catch { geom = null; } }
+    const ring = outerRing(geom);
+    if (!ring || ring.length < 4){ noGeom++; continue; }
+
+    /* GeoJSON is [lon, lat]; the projector takes (lat, lon). Getting this the wrong way round
+       puts Abu Dhabi in the Indian Ocean, which is at least an obvious failure — but it is also
+       the single most likely mistake in this function, so it is written once and named. */
+    let lo0 = Infinity, lo1 = -Infinity, la0 = Infinity, la1 = -Infinity;
+    const xy = new Array(ring.length);
+    for (let i = 0; i < ring.length; i++){
+      const lon = ring[i][0], lat = ring[i][1];
+      if (lon < lo0) lo0 = lon; if (lon > lo1) lo1 = lon;
+      if (lat < la0) la0 = lat; if (lat > la1) la1 = lat;
+      xy[i] = proj.fwd(lat, lon);
+    }
+    if (area(xy) < MIN_BUILDING_AREA){ tooSmall++; continue; }
+    const b = obb(xy);
+    if (!b){ noBox++; continue; }
+
+    rows.push({
+      lat: (la0 + la1) / 2, lon: (lo0 + lo1) / 2,
+      rec: {
+        id: rec.id,
+        osm: osmIdOf(rec.sources),
+        x: rd1(b.x), y: rd1(b.y),
+        w: rd1(b.w), d: rd1(b.d),
+        rot: Math.round(b.rot * 1000) / 1000,
+        h: overtureHeight(rec.height, rec.num_floors),
+      },
+    });
+  }
+
+  process.stderr.write(`  Overture: ${lines} rows -> ${rows.length} buildings ` +
+    `(${tooSmall} under ${MIN_BUILDING_AREA} m², ${noGeom} unusable geometry, ${noBox} no box)\n`);
+  OVERTURE = { rows };
+  return OVERTURE;
+}
+
+/* Everything whose centre falls in this island's fetch box. The same box Overpass was given, so
+   the two sources see the same ground and the coastline clip downstream behaves identically —
+   which is the point: this change must move which buildings exist, not which ones survive. */
+function overtureFor(isle){
+  if (!OVERTURE || !OVERTURE.rows) return null;
+  const [s, w, n, e] = isle.bbox;
+  const out = [];
+  for (const r of OVERTURE.rows){
+    if (r.lat >= s && r.lat <= n && r.lon >= w && r.lon <= e){
+      /* Cloned, because one building can legitimately fall in two islands' boxes and the JSON
+         writer must not see the same object twice under two extents. */
+      out.push({ ...r.rec });
+    }
+  }
+  return out;
+}
+
 const R_EARTH = 6378137;
 
 function projector(lat0, lon0){
@@ -407,6 +585,60 @@ function contains(ring, p){
   return inside;
 }
 
+/* ---------- THE BAKE-TIME PRE-CLIP ------------------------------------------------------------
+
+   THE PROBLEM THIS SOLVES IS A FILE SIZE, AND IT IS CAUSED BY THE BOXES OVERLAPPING.
+
+   Corniche's fetch box is 18 x 21 km and it wholly contains Al Maryah's and most of Al Reem's, so
+   every building on those islands is written into isle-corniche.json as well as its own. Under OSM
+   that cost a thousand rows nobody noticed. Under Overture's machine-derived fill it is the
+   difference between a 2.8 MB artefact and one several times that, on the one island the hero
+   opens on — and every one of those rows is discarded by insideIsle the moment it arrives.
+
+   So the discard moves to the bake, where it is paid once rather than on every load.
+
+   WITH A MARGIN, AND THE MARGIN IS THE WHOLE SAFETY ARGUMENT. The consumer clips against a
+   RESAMPLED outline, this clips against the simplified one, and the two do not agree to the metre.
+   Pre-removing anything the consumer would have kept would be an invisible, permanent loss, so the
+   test here is deliberately looser: inside the coast, or within 150 m of it. The consumer's clip
+   stays the authority and ?noclip still means what it meant — it disables the runtime test, and
+   what it now shows is everything within 150 m of the shore rather than everything in the box.
+
+   150 m is comfortably wider than any disagreement two samplings of the same coastline can produce
+   and comfortably narrower than the 300 m at which the nearest genuinely-offshore building sits. */
+const CLIP_MARGIN_M = 150;
+
+function nearRing(ring, px, py, margin){
+  const m2 = margin * margin;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const ax = ring[j][0], ay = ring[j][1];
+    const dx = ring[i][0] - ax, dy = ring[i][1] - ay;
+    const L2 = dx*dx + dy*dy;
+    let t = L2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const qx = ax + t*dx - px, qy = ay + t*dy - py;
+    if (qx*qx + qy*qy <= m2) return true;
+  }
+  return false;
+}
+
+function clipToOutline(buildings, outline, margin){
+  if (!outline || outline.length < 4) return buildings;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of outline){
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const out = [];
+  for (const b of buildings){
+    /* The cheap rejection first. Most of what Corniche's box drags in is nowhere near Corniche's
+       coast, and a bounding-box test settles those without touching two thousand segments. */
+    if (b.x < x0 - margin || b.x > x1 + margin || b.y < y0 - margin || b.y > y1 + margin) continue;
+    if (contains(outline, [b.x, b.y]) || nearRing(outline, b.x, b.y, margin)) out.push(b);
+  }
+  return out;
+}
+
 function pickIsland(chains, centre){
   const CLOSE_M = 60;   // a ring closes when its ends meet within a way's own node spacing
   const closed = chains.filter(c => c.length > 3 &&
@@ -467,7 +699,9 @@ async function bakeIsland(isle, proj){
 
   const toXY = g => g.map(p => proj.fwd(p.lat, p.lon));
 
-  const coastWays = [], roads = [], buildings = [], parks = [];
+  /* osmBuildings, not buildings. It is now the FALLBACK — used only when the Overture extract is
+     absent — and naming it for what it is stops the two paths reading as one. */
+  const coastWays = [], roads = [], osmBuildings = [], parks = [];
   for (const el of els){
     const t = el.tags || {};
     if (!el.geometry && !el.members) continue;
@@ -500,7 +734,7 @@ async function bakeIsland(isle, proj){
       if (a < MIN_BUILDING_AREA) continue;
       const b = obb(ring);
       if (!b) continue;
-      buildings.push({
+      osmBuildings.push({
         /* THE OSM ID, AND IT IS HERE FOR ONE REASON: it is the key a venue joins to.
 
            Selecting which buildings get real treatment cannot be a curated list — there are 18,776
@@ -518,6 +752,17 @@ async function bakeIsland(isle, proj){
       });
     }
   }
+
+  /* WHICH SET OF BUILDINGS THIS ISLAND GETS, decided once and reported once.
+
+     Overture where the extract exists, OSM where it does not. Not a merge: Overture has already
+     conflated OSM in at higher priority than its machine-derived sources, so merging the two here
+     would put every hand-surveyed building in twice, and two boxes on one plot is the fault this
+     whole arc has been about. */
+  const overture = overtureFor(isle);
+  let buildings = overture || osmBuildings;
+  process.stderr.write(`  ${isle.id}: buildings from ${overture ? 'Overture' : 'OSM'} ` +
+    `(${buildings.length}` + (overture ? `, OSM alone returned ${osmBuildings.length}` : '') + `)\n`);
 
   /* A SECOND, SMALL QUERY. Folding these into the main one would work, but a landmark that fails
      to parse would take the whole island's coastline down with it, and the failure modes of a
@@ -560,6 +805,16 @@ async function bakeIsland(isle, proj){
   const outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
   process.stderr.write(`  ${isle.id}: ${chains.length} coast chains, took the ${picked.why}\n`);
 
+  /* The first moment the coastline exists, which is the first moment a building can be told it is
+     not on this island. Reported rather than silent: the number dropped here is the overlap
+     between the fetch boxes, and if it ever comes out near zero on Corniche the boxes have moved. */
+  if (outline.length){
+    const before = buildings.length;
+    buildings = clipToOutline(buildings, outline, CLIP_MARGIN_M);
+    process.stderr.write(`  ${isle.id}: coast pre-clip ${before} -> ${buildings.length} ` +
+      `(dropped ${before - buildings.length} beyond ${CLIP_MARGIN_M} m of the shore)\n`);
+  }
+
   /* THE ISLAND'S TRUE EXTENT, measured from the outline rather than from the bounding box that
      fetched it. The consumer needs this to set its own radius from the data instead of from a
      literal — which is the whole reason the drawn islands were a third of true size and nobody
@@ -588,14 +843,72 @@ const rd1 = p => Array.isArray(p) ? [Math.round(p[0]*10)/10, Math.round(p[1]*10)
                                   : Math.round(p*10)/10;
 const rd2 = p => [Math.round(p[0]*10)/10, Math.round(p[1]*10)/10];
 
+/* ---------- PROBE ----------------------------------------------------------------------------
+
+   COUNT BEFORE COMMITTING, because the whole case for this change rests on a claim about somebody
+   else's dataset that this repository has never verified. Overture SHOULD fill Al Reem. If it does
+   not — if the extract returns 96 buildings there as well — then the conflation does not reach the
+   Gulf, the change is worthless, and the right thing is to find that out in one minute rather than
+   after a bake, a deploy and an evening of looking at an empty island.
+
+   Reads the extract, counts per island fetch box, and prints it beside what the committed index
+   currently holds. Writes nothing and commits nothing. */
+async function probe(proj){
+  await loadOverture(proj);
+  if (!OVERTURE.rows){
+    process.stderr.write(`\nNo extract to probe. The fetch step did not run or wrote nowhere.\n`);
+    process.exit(1);
+  }
+  let prev = {};
+  try {
+    const fs = await import('node:fs/promises');
+    const idx = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
+    for (const i of idx.islands || []) prev[i.id] = i.counts || {};
+  } catch { /* first run, or a fresh checkout — the comparison column simply stays blank */ }
+
+  process.stderr.write(`\n${'island'.padEnd(10)}${'OSM now'.padStart(10)}${'Overture'.padStart(10)}` +
+                       `${'change'.padStart(10)}${'with height'.padStart(14)}\n`);
+  for (const isle of ISLANDS){
+    const got = overtureFor(isle);
+    const was = prev[isle.id] ? prev[isle.id].buildings : null;
+    const h = got.filter(b => b.h != null).length;
+    const chg = was ? (got.length / was).toFixed(2) + 'x' : '—';
+    process.stderr.write(`${isle.id.padEnd(10)}${String(was == null ? '—' : was).padStart(10)}` +
+      `${String(got.length).padStart(10)}${chg.padStart(10)}` +
+      `${(h + ' (' + Math.round(100 * h / Math.max(got.length, 1)) + '%)').padStart(14)}\n`);
+  }
+  process.stderr.write(`\nProbe only — nothing written, nothing committed.\n`);
+}
+
 async function main(){
-  const only = process.argv[2];
+  /* Flags are filtered out so `--probe` cannot be mistaken for an island name, which it would have
+     been as argv[2]. */
+  const args = process.argv.slice(2).filter(a => a && a[0] !== '-');
+  const only = args[0];
   const list = only ? ISLANDS.filter(i => i.id === only) : ISLANDS;
   if (!list.length) throw new Error(`no island called "${only}"`);
 
   const proj = projector(ORIGIN.lat, ORIGIN.lon);
+
+  if (process.argv.includes('--probe')) return probe(proj);
+
   const fs = await import('node:fs/promises');
   await fs.mkdir('data', { recursive: true });
+
+  /* Before any island is baked, so the source is known for the whole run and the log says which
+     one it used before it says how many it found. */
+  await loadOverture(proj);
+  const usingOverture = !!OVERTURE.rows;
+
+  /* WHAT THE COMMITTED DATA HOLDS NOW, read before anything overwrites it. A bake that quietly
+     halves an island is the failure mode this change can produce and cannot detect from inside a
+     single run — the numbers all look self-consistent. Comparing against the previous index is the
+     only place the regression is visible. */
+  let prevCounts = {};
+  try {
+    const idx = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
+    for (const i of idx.islands || []) prevCounts[i.id] = i.counts || {};
+  } catch { /* nothing committed yet */ }
 
   /* ONE FILE PER ISLAND, plus a small index.
 
@@ -606,8 +919,18 @@ async function main(){
 
      The index carries the shared origin and every island's extent. That is enough to lay out the
      archipelago, size the cameras and decide what to load, without opening a single island file. */
+  /* THE ATTRIBUTION IS PART OF THE ARTEFACT, not a formality. Overture's buildings theme is ODbL
+     because OSM is in it, so the licence does not change — but the credit line does, and a data
+     file that says where it came from is the only thing standing between a future reader and a
+     wrong assumption about coverage. Which is exactly the assumption that cost this session an
+     evening: `source` said OpenStreetMap and nobody read it. */
   const index = { generated:new Date().toISOString(),
-                  source:'OpenStreetMap contributors, ODbL 1.0',
+                  source: usingOverture
+                    ? 'Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, ' +
+                      'Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). ' +
+                      'Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.'
+                    : 'OpenStreetMap contributors, ODbL 1.0',
+                  buildingSource: usingOverture ? 'overture' : 'osm',
                   origin:ORIGIN,
                   units:'metres from origin, +x east +y north, one shared frame for all islands',
                   note:'Buildings are oriented bounding boxes: x,y centre; w long axis; d short axis; rot radians from east.',
@@ -653,6 +976,20 @@ async function main(){
                                   withHeight:baked.buildings.filter(b => b.h).length,
                                   parks:baked.parks.length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
+
+    /* A WARNING AND NOT A FAILURE, deliberately. A count that drops can be legitimate — a source
+       correcting duplicates, a bounding box tightened on purpose — and a bake that refuses to
+       finish would mean the only way to accept a real improvement is to disable the guard. The
+       workflow's contract has always been "run it, look at the diff, keep it or revert it", so
+       this makes the thing worth looking at impossible to scroll past. */
+    const was = prevCounts[baked.id];
+    if (was && was.buildings > 0){
+      const now = baked.buildings.length;
+      if (now < was.buildings * 0.8){
+        process.stderr.write(`  !! ${baked.id}: BUILDINGS FELL ${was.buildings} -> ${now} ` +
+          `(${Math.round(100 * now / was.buildings)}%). Check the diff before keeping this.\n`);
+      }
+    }
     /* Serial, with a gap. Overpass asks for it, and five parallel requests from one Action IP is
        how the repo gets rate-limited for an hour. */
     await new Promise(r => setTimeout(r, 4000));
