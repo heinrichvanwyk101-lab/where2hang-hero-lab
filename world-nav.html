@@ -228,6 +228,24 @@ let basemap = null;
 if (!location.search.includes('drawn')){
   try {
     const idx = await BMAP.loadIndex('data/');
+
+    /* CORNICHE'S ROADS BEFORE THE BUILD, the other four after.
+
+       The ground canvas is painted while an island is built, so its centrelines have to be in hand
+       first — there is no repainting it later without throwing the texture away. Corniche is the
+       island the hero opens on, so its roads are the one thing worth blocking the first frame for:
+       a few hundred kilobytes against the 2.7 MB island file they were split out of.
+
+       The rest are fetched without awaiting. Each outer island is built the first time the camera
+       commits to it, which is at least a leg of the attract loop away — long enough for a fetch
+       this size, and if one has not landed the island simply paints generated roads and the flight
+       does not stall waiting for it. */
+    try { await BMAP.loadRoads(idx, 'corniche'); }
+    catch (e){ console.warn('roads corniche:', e.message); }
+    for (const isl of idx.islands || []){
+      if (isl.id !== 'corniche') BMAP.loadRoads(idx, isl.id).catch(() => {});
+    }
+
     const isles = BMAP.sceneIslands(idx, 0);
     window.__basemapIndex = idx;
 

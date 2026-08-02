@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v88';
+export const BUILD = 'world v89';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1532,7 +1532,11 @@ function groundPlan(d, cells, blocks){
   const outline  = isleOutline(d.id);
   const inside   = (nx, ny) => insideIsle(d.id, nx, ny);
   const N        = outline.length;
-  const { ring, arterials, core } = d.roads;
+  /* The painter takes the real network when there is one; d.roads.ring and .arterials stay as the
+     generated skeleton the fabric was built against. See the note where drawArterials is set. */
+  const ring      = d.roads.drawRing      || d.roads.ring;
+  const arterials = d.roads.drawArterials || d.roads.arterials;
+  const { core } = d.roads;
 
   /* Parks, in the holes the fabric left. Building an occupancy set from the actual cells and
      filling what is left over is the only way parkland lands where there is genuinely no city —
@@ -3548,6 +3552,32 @@ DISTRICTS.forEach(d => {
 
   // Before any fabric exists, so the generator can be told where the roads are.
   d.roads = roadSkeleton(d);
+
+  /* REAL CENTRELINES, FOR DRAWING ONLY, and the "only" is the whole design.
+
+     The baked network is what the island actually looks like: the Corniche itself, the Markaziyah
+     grid, the slip roads onto the bridges, every junction where it really is. Painting that
+     instead of a generated ring-and-arterial lattice is the single largest visible gap left.
+
+     BUT THE GENERATED SKELETON STAYS FOR THE FABRIC. onRoad tests every plot candidate against
+     every road polyline, and there are hundreds of thousands of candidates: swapping twenty
+     generated arterials for fifteen hundred real ways would put the quadratic cost straight back
+     into the build that a spatial grid was written to remove. The buildings will not sit against
+     the real streets until stage 3 replaces the fabric with real footprints — at which point the
+     footprints ARE aligned to the streets, by construction, and the exclusion test is not needed
+     at all.
+
+     So: drawRing and drawArterials for the painter, ring and arterials for the generator. Two
+     networks briefly coexisting is the honest cost of doing this in stages rather than in one
+     unverifiable drop. */
+  if (BASE && BASE[d.id] && BASE[d.id].roads){
+    d.roads.drawRing = [];                 // no separate ring: the real Corniche road is a major
+    d.roads.drawArterials = BASE[d.id].roads;
+    /* Junction pads, signals and zebras were placed at generated crossings, which the real network
+       does not have. Empty rather than left in place: a signalised junction drawn where two real
+       roads do not meet is worse than no signal at all. Real junctions come with stage 3. */
+    d.roads.crossings = [];
+  }
 
   d.placeAnchors = d.places.map(pl => ({ ...pl, district:d }));
 });

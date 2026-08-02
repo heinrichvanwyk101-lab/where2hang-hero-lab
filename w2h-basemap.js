@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v3';
+export const BUILD = 'basemap v4';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -148,6 +148,39 @@ export function transform(idx, id, t = 0, p = DAMP_P){
   };
 }
 
+/* ROADS, IN THE SAME NORMALISED SPACE AS THE ISLAND SHAPE.
+
+   w2h-world.js works in island-normalised coordinates for everything to do with the ground: the
+   outline, the inside test, the distance-to-coast test and the road skeleton all live in a frame
+   where 1.0 is the island's own radius. So roads convert the same way the shape does — divided by
+   the island half-span, and with north kept POSITIVE, because these are consumed by the ground
+   painter which works in shape space rather than by anything placed directly in the world.
+
+   That is the opposite convention to roadsUnits above, which is for world-space placement. Two
+   functions rather than a flag, because the one thing this pair must never do is quietly hand a
+   consumer the other one's answer. */
+export async function loadRoads(idx, id){
+  const entry = (idx.islands || []).find(i => i.id === id);
+  if (!entry) return null;
+  if (entry._roads) return entry._roads;
+  const res = await fetch((idx._base || 'data/') + 'roads-' + id + '.json');
+  if (!res.ok) throw new Error(`basemap: roads-${id}.json -> HTTP ${res.status}`);
+  const d = await res.json();
+  entry._roads = d.roads || [];
+  return entry._roads;
+}
+
+export function roadsNormalised(entry, roads){
+  if (!entry.extent || !roads) return null;
+  const { cx, cy } = entry.extent;
+  const half = Math.max(entry.extent.w, entry.extent.d) / 2;
+  return roads.map(r => {
+    const pts = r.pts.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+    pts.major = r.cls === 'major';
+    return pts;
+  });
+}
+
 /* ---------- WHAT w2h-world.js CONSUMES ----------------------------------------------------- */
 
 /* THE ISLAND SHAPE, NORMALISED, and it does NOT get the north flip the rest of this file applies.
@@ -183,6 +216,7 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
     const tf = transform(idx, entry.id, t, p);
     out[entry.id] = {
       shape,
+      roads: entry._roads ? roadsNormalised(entry, entry._roads) : null,
       /* Landmarks in island-local SCENE units, north flipped to -z. These are world positions like
          roads and buildings, not shape coordinates, so they take the flip — see the note on
          shapeOf for why those two differ. */
