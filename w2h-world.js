@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v82';
+export const BUILD = 'world v83';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -623,6 +623,7 @@ function isleShape(id, r){
    THE COUNT IS DERIVED, per the rule that has governed shoreline modules and repeat counts since
    the beginning: perimeter divided by the target segment. COAST_SEG_M is the one number to move. */
 const COAST_SEG_M = 6;                  // metres of coastline per segment
+const GROUND_W    = 896;                // ground canvas width in pixels; see paintGround
 
 function closedSpline(pts, n){
   const N = pts.length;
@@ -1606,8 +1607,16 @@ function paintGround(d, plan){
      identical on both axes and nothing is stretched. At W 1536 Corniche comes out 1536 x 860 and
      the short axis — the one the roads run across, and the one four rounds of legibility work
      were fought on — goes from 401 usable pixels to 860. */
+  /* GROUND_W IS THE EXPERIMENT. compileAsync came back at 26 ms, so the ten seconds before the
+     first frame is not shader compilation — it is upload, and the five ground canvases are about
+     ten of the scene's seventeen megapixels. Each is a canvas-backed texture, which on Android
+     Chrome is the slowest kind there is: rasterise, transfer, then generate a full mip chain.
+
+     896 halves the pixels. If the first frame drops by several seconds this is confirmed and the
+     number becomes a real setting to tune against legibility; if it does not, the cost is the
+     other 320 textures and this goes back to 1536, where four rounds of legibility work put it. */
   const h  = isleHalf(d.id);
-  const W  = d.r >= 50 ? 1536 : 768;
+  const W  = d.r >= 50 ? GROUND_W : 768;
   const H  = Math.max(64, Math.round(W * h.y / h.x));
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -3125,6 +3134,25 @@ roadSkeleton = timed('roadSkeleton', roadSkeleton);
 groundPlan   = timed('groundPlan',   groundPlan);
 paintGround  = timed('paintGround',  paintGround);
 urbanFabric  = timed('urbanFabric',  urbanFabric);
+
+/* THE SEA HAS TO REACH THE ISLANDS, and at true scale it stopped doing so.
+
+   The water plane is 3,200 units across, which comfortably held an archipelago 800 wide. Yas now
+   sits 2,300 units east with a displayed radius near 900, so the far corner of the world is over
+   3,200 from the centre and the ocean simply ends before it — a hard edge in open water, which
+   reads as a bug in a way that almost nothing else does.
+
+   Scaled rather than rebuilt, because the wave animation in world-nav.html holds a reference to
+   this geometry's position attribute and its untouched copy. Rebuilding the geometry would leave
+   both pointing at an array that is no longer attached to anything, and the sea would go flat with
+   no error to explain it. */
+{
+  let far = 0;
+  for (const d of DISTRICTS) far = Math.max(far, Math.hypot(d.x, d.z) + d.r * (d.dispScale || 1));
+  const k = Math.max(1, (far * 2.6) / 3200);
+  water.scale.set(k, 1, k);
+  farSea.scale.set(Math.max(1, k * 0.6), 1, Math.max(1, k * 0.6));
+}
 
 const pickTargets = [];
 
