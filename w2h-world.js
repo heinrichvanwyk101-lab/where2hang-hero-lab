@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v93';
+export const BUILD = 'world v94';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -436,6 +436,11 @@ if (BASE && BASE.corniche && BASE.corniche.landmarks){
 /* The place table's labels are shorthand and OSM's are formal, so the ones that differ are mapped
    here rather than renamed in either place: the labels are what the UI prints and the names are
    what the data calls them, and neither should bend to the other. */
+/* SUPERSEDED BY AN osm FIELD ON THE PLACE ITSELF, and kept only for anything that still has
+   neither. A side table matching on display label meant the two could drift silently: the bake
+   was returning Zayed National Museum and Berklee Abu Dhabi for Saadiyat while the scene asked
+   for Saadiyat Beach, which OSM has never been asked for, and the miss looked identical to a
+   failed Overpass lookup. The canonical key now sits next to the label it belongs to. */
 const PLACE_OSM = {
   'ADNOC HQ':'ADNOC Headquarters', 'Ferrari World':'Ferrari World Abu Dhabi',
   'Yas Marina':'Yas Marina Circuit', 'Manarat':'Manarat Al Saadiyat',
@@ -2887,9 +2892,16 @@ const DISTRICTS = [
       /* DERIVED, like the ADNOC entry. These were literals, so moving a landmark would have left
          its place camera aimed at the ground it used to stand on — the same five-copies fault
          that put ADNOC in the road, one edit from happening again. */
-      { label:'Emirates Palace', x:LM.palace.x, z:LM.palace.z, h: 7,  r: 32 },
-      { label:'Etihad Towers',   x:LM.etihad.x, z:LM.etihad.z, h:18,  r: 28 },
-      { label:'ADNOC HQ',        x: LM.adnoc.x, z: LM.adnoc.z, h:26,  r: 22 },
+      { label:'Emirates Palace', osm:'Emirates Palace',    x:LM.palace.x, z:LM.palace.z, h: 7, r:32 },
+      { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
+      { label:'ADNOC HQ',        osm:'ADNOC Headquarters', x: LM.adnoc.x, z: LM.adnoc.z, h:26, r:22 },
+      /* Both returned by the bake and neither was being asked for. Qasr Al Hosn is the oldest
+         building in the city and the east end of the shot; Marina Mall is the Breakwater, which
+         is the west end. Together they widen the Corniche framing from the palace-to-ADNOC span
+         to the whole waterfront the reference photograph shows. x and z are placeholders — the
+         bake overwrites both, and if it ever stops, marks says 3/5 rather than lying. */
+      { label:'Qasr Al Hosn',    osm:'Qasr Al Hosn',       x:  60, z: -18, h: 6, r:30 },
+      { label:'Marina Mall',     osm:'Marina Mall',        x:-120, z: -30, h: 9, r:34 },
     ],
     /* THE HEIGHT CORE, AND IT WAS ON THE WRONG SHORE.
 
@@ -3021,9 +3033,14 @@ const DISTRICTS = [
   { id:'maryah',   name:'Al Maryah',  x:2*ISLE_SCALE, z:-22*ISLE_SCALE, r:34*ISLE_SCALE, rot: 0.30, tint:0x8FD3E8,
     shore:[{ kind:'quay', t:0.60, t1:0.76, reps:5, off:2.0, y:2.40, len:6.2, wide:1.0 }],
     built:false, coreN:[0.0, 0.0], places:[
-      { label:'The Galleria', x:-10, z:  6, h:10, r:30 },
-      { label:'Rosewood',     x: 12, z:-10, h:12, r:30 },
-      { label:'Waterfront',   x:  2, z: 18, h: 5, r:30 },
+      /* Rosewood and Waterfront were never in the bake's landmark table, so they could not have
+         resolved however the lookup was written — they sat at these authored coordinates, which
+         were set for an island a fraction of this one's size, which is why all three labels
+         printed on top of each other. Replaced with the two Al Maryah landmarks the bake does
+         return. */
+      { label:'The Galleria', osm:'The Galleria Al Maryah Island', x:-10, z:  6, h:10, r:30 },
+      { label:'ADGM',         osm:'Abu Dhabi Global Market',       x: 12, z:-10, h:12, r:30 },
+      { label:'Cleveland Clinic', osm:'Cleveland Clinic Abu Dhabi', x: 2, z: 18, h: 8, r:32 },
     ] },
   /* MOVED EAST BY EIGHT. The beach width was never a design choice — it was set by the tightest
      channel in the world, Corniche to Al Reem at 22.8 units. Two beaches have to fit in that with
@@ -3033,9 +3050,16 @@ const DISTRICTS = [
      centre. */
   { id:'reem',     name:'Al Reem',    x:88*ISLE_SCALE, z:34*ISLE_SCALE, r:44*ISLE_SCALE, rot:-0.20, tint:0xBFD3E0,
     built:false, coreN:[-0.25, 0.05], places:[
-      { label:'Reem Central', x:  0, z:  0, h:12, r:36 },
-      { label:'Shams Boutik', x: 22, z: 10, h:10, r:34 },
-      { label:'Gate Towers',  x:-22, z: -8, h:16, r:36 },
+      /* THE ONE ISLAND THE BAKE CANNOT CARRY YET. Of the three names asked for, Overpass returns
+         only Sky Tower — Gate Towers and Reem Mall are in the bake's LANDMARKS table and come
+         back empty, which the Action log records as a MISSING line. Reem Central and Shams Boutik
+         were never asked for at all.
+
+         So this island declares what actually resolves and nothing else. One anchor is below the
+         two the shot needs, so Al Reem falls back to framing its coastline, which is honest:
+         better a wide island than three labels stacked on its centre pretending to be venues. */
+      { label:'Sky Tower',   osm:'Sky Tower',   x:  0, z:  0, h:16, r:36 },
+      { label:'Gate Towers', osm:'Gate Towers', x:-22, z: -8, h:16, r:36 },
     ] },
   /* AND SAADIYAT OUT BY EIGHT, for the same reason. Widening the skirt shifts which pair is
      tightest: Reem moving east fixed Corniche to Reem, and Al Maryah to Saadiyat then became the
@@ -3052,9 +3076,14 @@ const DISTRICTS = [
       { kind:'mound', t:0.05, t1:0.26, reps:7, off: 6.0, y:-0.5, len:9.0, h:0.8, wide:2.2, turn:true },
     ],
     built:false, coreN:[0.15, 0.10], coastPark:[0.02, 0.28, 0.070], places:[
-      { label:'Louvre Abu Dhabi', x: 18, z: 14, h: 6, r:40 },
-      { label:'Saadiyat Beach',   x:-24, z: 22, h: 3, r:44 },
-      { label:'Manarat',          x:  4, z:-18, h: 6, r:38 },
+      /* Louvre Abu Dhabi IS in the bake's table and does not come back — that is an Overpass
+         lookup to fix, not a name to change here, so it stays declared and reads as a miss until
+         it resolves. Saadiyat Beach was never asked for; Zayed National Museum and Berklee both
+         return and were going unused. */
+      { label:'Louvre Abu Dhabi', osm:'Louvre Abu Dhabi',      x: 18, z: 14, h: 6, r:40 },
+      { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
+      { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
+      { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
     ] },
   /* CONDITION TWO: THE MARINA. A quay wall down one wall of the inlet with pontoon fingers off
      it, and a mound across the mouth. The inlet is the only place on any island where the coast
@@ -3081,9 +3110,16 @@ const DISTRICTS = [
          which the new outline puts in the middle of the channel, and Ferrari World at x 34 sat
          exactly on the north waterline. Anchors are checked against the sampled coastline, the
          same rule every other position in this table follows. */
-      { label:'Yas Marina',    x:-10, z: 18, h: 5, r:42 },
-      { label:'Yas Mall',      x: 10, z: -6, h: 8, r:40 },
-      { label:'Ferrari World', x: 30, z:-12, h: 9, r:40 },
+      /* Five of six, and the two additions were sitting in the bake unasked-for. Yas Waterworld
+         and SeaWorld are the reason anyone goes to this island who is not going to the circuit,
+         so leaving them out of the shot was leaving out half the subject. Etihad Arena is in the
+         bake's table too; it is held back only to keep the label count at five, which is already
+         where collisions start. */
+      { label:'Yas Marina',    osm:'Yas Marina Circuit',      x:-10, z: 18, h: 5, r:42 },
+      { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
+      { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
+      { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
+      { label:'SeaWorld',      osm:'SeaWorld Abu Dhabi',      x: 22, z: 14, h: 8, r:38 },
     ] },
 ];
 
@@ -3119,7 +3155,7 @@ if (BASE){
        frame, and no dataset has an opinion about it. */
     const marks = b.landmarks || {};
     for (const pl of d.places || []){
-      const m = marks[PLACE_OSM[pl.label] || pl.label];
+      const m = marks[pl.osm || PLACE_OSM[pl.label] || pl.label];
       if (m){ pl.x = m.x; pl.z = m.z; pl.baked = true; }
       else pl.baked = false;
     }
