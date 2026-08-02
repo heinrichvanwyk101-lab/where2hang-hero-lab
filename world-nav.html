@@ -279,7 +279,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v46', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v47', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -863,6 +863,34 @@ function sunSafe(a){
   return SUN_BEARING + (d < 0 ? -SUN_KEEP : SUN_KEEP);
 }
 
+/* THE FRAMING DISTANCE, FROM THE ACTUAL ASPECT RATHER THAN A PORTRAIT PHONE'S.
+
+   Three constants in this file were the same arithmetic solved once, by hand, for one screen:
+   5.7 for a district, 1/0.159 for a place, 2.32 for the world. All three come from
+   dist = r / tan(hFov/2), and tan(hFov/2) is tan(fov/2) * aspect — so they are only correct at
+   the aspect they were derived at, 0.46, which is this phone folded.
+
+   Unfolded, the aspect is about 1.0 and the true figure is 2.61r, not 5.66r. The camera was
+   standing more than twice as far back as the shot wanted, which is the island as a sliver with
+   the sea doing most of the work. It read as a composition problem on the folded screen and as a
+   much worse one on the unfolded, because it was never a composition problem.
+
+   min() rather than the horizontal alone: past square the HEIGHT becomes the tighter dimension,
+   and fitting the width there would push the subject off the top and bottom instead. Fit the
+   narrower axis and the radius is inside the frame whichever way the screen is turned.
+
+   At aspect 0.46 this returns the old numbers to two decimal places, so nothing about the folded
+   framing moves. */
+function fitDist(r, fovDeg){
+  const v = Math.tan(fovDeg * Math.PI / 360);
+  return r / Math.min(v * (camera.aspect || 0.46), v);
+}
+
+/* Elevation as a fraction of DISTANCE, not of the subject radius, which is what keeps the pitch
+   constant when the distance moves with the aspect. The three ratios are the ones the old pairs
+   implied: 1.55/2.32, 1.5/5.7, and 0.62 x 0.159. */
+const PITCH_WORLD = 0.668, PITCH_DISTRICT = 0.263, PITCH_PLACE = 0.0986;
+
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   resetOrbit();
@@ -876,7 +904,9 @@ function setWorld(){
      rather than a corner-to-corner radius, so the same ratios now frame the group instead of
      standing twice as far back as they were ever meant to. */
   const B = W.r;
-  goal.dist = B * 2.32; goal.elev = B * 1.55;
+  /* 0.52B is what 2.32B framed at the old aspect: the world shot deliberately crops the
+     bounding box rather than fitting it, and that intent is preserved as a radius. */
+  goal.dist = fitDist(B * 0.52, 52); goal.elev = goal.dist * PITCH_WORLD;
   goal.angle = sunSafe(0); goal.fov = 52;
   applyLOD();
   ui('Abu Dhabi', 'Tap an island');
@@ -937,7 +967,7 @@ function setDistrict(d){
      lands about six degrees into frame, which is the reference's framing.
      Distance is unchanged: dist = r / tan(hFov/2) still governs how much island is visible, and
      that arithmetic was already right. */
-  goal.dist = fr * 5.7; goal.elev = fr * 1.5; goal.fov = 42;
+  goal.dist = fitDist(fr, 42); goal.elev = goal.dist * PITCH_DISTRICT; goal.fov = 42;
   // Approach from the seaward side, so the move always reads as the world turning to present
   // the island rather than the camera swinging round behind it.
   goal.angle = sunSafe(Math.atan2(d.x, d.z + 300));
@@ -987,8 +1017,8 @@ function setPlace(d, anchor){
      and the group magnifies both. Unscaled, Al Maryah's Galleria would be framed at a seventh of
      the distance it needs and the camera would end up inside the building. */
   const R = (anchor.r || 46) * s;
-  goal.dist = R / 0.159;
-  goal.elev = R * 0.62 + anchor.h * s * 1.2;
+  goal.dist = fitDist(R, 38);
+  goal.elev = goal.dist * PITCH_PLACE + anchor.h * s * 1.2;
   goal.fov  = 38;
   goal.angle = sunSafe(Math.atan2(wx - d.x, wz - d.z + 60));
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
@@ -1648,8 +1678,23 @@ function resize(){
   composer.setSize(w, h);                   mark('composer');
   bloom.setSize(w, h);                      mark('bloom');
   smaa.setSize(w * pr, h * pr);             mark('smaa');
+  const was = camera.aspect;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   if (first) console.info('resize ' + w + 'x' + h + ' pr=' + pr);
+  /* RE-FRAME, because the shot distance is now a function of the aspect and the aspect changes
+     under it. This device folds. A shot composed at 0.46 and then unfolded to 1.0 would keep the
+     distance it was given and hold the subject at less than half the size the new frame wants,
+     which is the same fault the hard-coded constants had — just arriving later. Damped, so the
+     re-frame reads as the camera easing rather than as a jump. */
+  if (!first && was && Math.abs(w / h - was) > 0.01) reframe();
+}
+
+/* Re-issues whichever shot is current. Nothing else changes: same target, same subject, same
+   state — only the distance and elevation, which are the two things that depend on the frame. */
+function reframe(){
+  if (state === STATE.PLACE && activeDistrict && activePlace) setPlace(activeDistrict, activePlace);
+  else if (state === STATE.DISTRICT && activeDistrict)         setDistrict(activeDistrict);
+  else                                                          setWorld();
 }
 phase('liftReg');
 window.addEventListener('resize', resize);
