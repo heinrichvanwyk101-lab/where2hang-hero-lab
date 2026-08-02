@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v100';
+export const BUILD = 'world v101';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -112,6 +112,21 @@ const BASE = opts.basemap || null;
 /* Read here rather than passed through opts: it governs one line in one function and threading it
    through the module boundary would be more surface than the flag is worth. */
 const NO_CLIP = typeof location !== 'undefined' && location.search.includes('noclip');
+/* ?nokit — ONE LOAD TO NAME THE FLOATERS.
+
+   The clip cleared the sea buildings, so whatever is still hanging is not a footprint that failed
+   the coastline test. The remaining candidate is the hand-built kit: Emirates Palace, Etihad
+   Towers, ADNOC HQ, the lowRise block and the cityRow are placed at AUTHORED coordinates —
+   LM.palace.x and literals like (16, -40, 26, -18) — with position.y forced to GROUND. Those
+   literals were written for a diorama island a few hundred units across. Corniche is now 2,440
+   units of real coastline, and the bake rebased the LABELS onto real landmark positions without
+   touching the geometry that was authored to sit under them.
+
+   That is a hypothesis, and it has been wrong twice today when I have stated it as fact. So it is
+   a switch instead: turn the kit off and look. If the floaters go with it, they are authored
+   geometry on stale coordinates and the fix is to rebase the kit onto the baked landmarks the way
+   the anchors already were. If they survive, they are footprints and the cause is elsewhere. */
+const NO_KIT = typeof location !== 'undefined' && location.search.includes('nokit');
 
 /* STAGE TIMING, AND IT IS HERE BECAUSE SIXTEEN SECONDS IS TOO SLOW TO GUESS AT.
 
@@ -4502,7 +4517,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const adnoc  = kit.adnocHQ(LM.adnoc.x, LM.adnoc.z);
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  [palace, etihad, adnoc].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   // Low-rise seaward of the towers: the scale contrast that makes the cluster read as enormous.
   const low = kit.lowRise(16, -40, 26, -18, 3, 0.55);
@@ -4517,7 +4532,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      ground. The western third of the island is now palace grounds and nothing else, which is
      also what is actually there. */
   const row = kit.cityRow(18, -6, 66, 4, 5, 4, 13, 0.62, 0.08, 0.22);
-  [low, row].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [low, row].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* CORNICHE MASS — the silhouette shown when this island is NOT active. Same two-part
      treatment as the detail layer and the same footprints, so the world-scale silhouette is a
@@ -4651,7 +4666,17 @@ function footprintsFor(d, list){
        ?noclip disables it, because a filter that removes a thousand objects should stay
        switchable and because the comparison is what proved it in the first place. */
     if (!NO_CLIP && !insideIsle(d.id, nx, ny)) continue;
-    let h = b.h, isReal = h != null && h > 1;
+    /* THE GATE WAS IN THE WRONG UNIT, BY A FACTOR OF 7.8.
+
+       h arrives from buildingsUnits already divided by M_PER_UNIT, so `h > 1` was asking for
+       7.8 METRES. Every OSM building shorter than that had its surveyed height discarded and
+       replaced by the model — every villa, every single-storey retail unit, every podium, every
+       building=roof. Not the whole city: wherever the stock is mid-rise the gate never fires,
+       which is why Yas improved so clearly when real heights arrived and this went unnoticed.
+       It bites exactly on the low fabric, which is exactly where a plateau appears.
+
+       2 metres, because below that it is a wall or a bad tag rather than a building. */
+    let h = b.h, isReal = h != null && h * M_PER_UNIT > 2;
     if (isReal) real++;
     else {
       /* The fabric's own falloff, in the fabric's own normalised frame: distance from the core,
@@ -4660,7 +4685,12 @@ function footprintsFor(d, list){
       const dd = Math.min(1, Math.hypot(nx - core[0], ny - core[1]) / 1.45);
       const fall = 1 - dd * dd;
       const cap = Math.min(tallest * (0.22 + 0.78 * fall), cellCap(d, nx, ny, tallest));
-      h = Math.max(2.2, cap * (0.55 + rnd() * 0.55));
+      /* 0.4 units, about 3 metres — one storey. It was 2.2, which is SEVENTEEN metres, so
+         nothing this model produced could be shorter than a five-storey block. Dense low stock
+         all pushed to the same minimum stops reading as buildings and starts reading as raised
+         ground, and the falloff varies slowly enough across an island that they land at similar
+         heights rather than varied ones. */
+      h = Math.max(0.4, cap * (0.55 + rnd() * 0.55));
     }
     specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h });
   }
