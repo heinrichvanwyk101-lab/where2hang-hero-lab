@@ -292,7 +292,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v55', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v56', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -681,7 +681,7 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     C, rnd,
     basemap,
     footprints: fpSeed,
-    fpClip: location.search.includes('fpclip'),
+    fpClip: !location.search.includes('noclip'),
     PALACE_FOOT: CITY.PALACE_FOOT,
   });
 
@@ -2010,12 +2010,19 @@ function fpReady(d, ms = 8000){
   if (!FP_ON) return Promise.resolve(false);
   if (fpPending.has(d.id)) return fpPending.get(d.id);
   fpState.set(d.id, 'pending');
+  /* 'none' MEANT THREE DIFFERENT THINGS AND THAT COST A WHOLE DIAGNOSIS. Al Maryah printed it,
+     I read it as "the coastline filter rejected every building", and reasoned from there about
+     coordinate frames for two deploys. It meant the payload never arrived. A state word that
+     covers a timeout, an empty result and a throw is not a state word, it is a shrug. */
+  let why = 'none';
   const p = Promise.race([
-    footprintsFrom(d).catch(e => { noteError('footprints ' + d.id, e); return null; }),
-    new Promise(res => setTimeout(() => res(null), ms)),
+    footprintsFrom(d)
+      .then(l => { if (!l) why = 'empty'; return l; })
+      .catch(e => { why = 'err'; noteError('footprints ' + d.id, e); return null; }),
+    new Promise(res => setTimeout(() => { why = 'slow'; res(null); }, ms)),
   ]).then(list => {
     const ok = !!(list && setFootprints && setFootprints(d.id, list));
-    fpState.set(d.id, ok ? 'on' : 'none');
+    fpState.set(d.id, ok ? 'on' : why);
     return ok;
   });
   fpPending.set(d.id, p);

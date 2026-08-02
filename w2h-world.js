@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v98';
+export const BUILD = 'world v99';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -109,8 +109,12 @@ if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via
    to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
    fault came from the data or from everything else. */
 const BASE = opts.basemap || null;
-/* The coastline clip is off until its frame is proven. See footprintsFor. */
-const FP_CLIP = opts.fpClip === true;
+/* ON, NOW THAT THE FRAME IS PROVEN. Corniche counted 17,772 of 18,776 inside against the straight
+   convention and 8,964 against the flipped one, so the normalisation was right and the thousand
+   that fail are genuinely outside the coastline — piers, reclaimed edges and whatever else the
+   bake's bounding box swept up. Those are the buildings standing in the sea.
+   ?noclip turns it off, because a filter that removes a thousand objects should stay switchable. */
+const FP_CLIP = opts.fpClip !== false;
 /* CORNICHE CANNOT WAIT, because it is built inside this call. Every other island acquires its
    footprints through setFootprints before its deferred build; the opening island has no such
    moment, so its payload comes in through opts the way its basemap does. */
