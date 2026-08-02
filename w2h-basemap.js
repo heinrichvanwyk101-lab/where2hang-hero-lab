@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v1';
+export const BUILD = 'basemap v2';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -146,6 +146,52 @@ export function transform(idx, id, t = 0, p = DAMP_P){
     z: dio[1] + (trueP[1] - dio[1]) * t,
     origin: [ox, oy],
   };
+}
+
+/* ---------- WHAT w2h-world.js CONSUMES ----------------------------------------------------- */
+
+/* THE ISLAND SHAPE, NORMALISED, and it does NOT get the north flip the rest of this file applies.
+
+   That looks like an inconsistency and is not. w2h-world.js builds each island as an
+   ExtrudeGeometry in XY and then rotates it -90 about X, so shape-y becomes world -z on the way
+   through: the drawn ISLE_SHAPES put the north shore at positive y and it renders at negative z.
+   The flip is in the rotation, so applying one here would apply it twice and mirror the island
+   north to south — which is the failure that still looks plausible in silhouette and is therefore
+   worth naming.
+
+   Roads and buildings take the flip because they are placed directly in world space and never go
+   through that rotation.
+
+   Normalised against the island's own half-span so the values land in -1..1 like the hand-drawn
+   shapes they replace, and so d.r stays the meaningful radius it has always been. */
+export function shapeOf(entry){
+  if (!entry.outline || !entry.outline.length || !entry.extent) return null;
+  const { cx, cy } = entry.extent;
+  const half = Math.max(entry.extent.w, entry.extent.d) / 2;
+  return entry.outline.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+}
+
+/* ONE CALL, EVERYTHING THE WORLD FILE NEEDS. It is handed a finished table rather than the index,
+   so the damping exponent, the projection and the axis conventions all stay in this file and
+   w2h-world.js keeps importing nothing. */
+export function sceneIslands(idx, t = 0, p = DAMP_P){
+  const damp = damping(idx, p);
+  const out = {};
+  for (const entry of idx.islands || []){
+    const shape = shapeOf(entry);
+    if (!shape) continue;
+    const tf = transform(idx, entry.id, t, p);
+    out[entry.id] = {
+      shape,
+      /* The true radius in scene units. Damping is NOT folded in here: it goes on the group as a
+         uniform scale, which keeps r meaning what every metre conversion in w2h-world.js already
+         assumes it means. */
+      r: (Math.max(entry.extent.w, entry.extent.d) / 2) / M_PER_UNIT,
+      scale: tf.scale, x: tf.x, z: tf.z,
+      extent: entry.extent,
+    };
+  }
+  return out;
 }
 
 /* ---------- GEOMETRY INTO SCENE UNITS ------------------------------------------------------ */

@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v77';
+export const BUILD = 'world v78';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -99,6 +99,16 @@ const props = opts.props || null;
 const C   = opts.C;
 const rnd = opts.rnd;
 if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via opts');
+
+/* THE BASEMAP, IF THERE IS ONE. A table keyed by island id, each entry carrying a normalised real
+   coastline, a true radius in scene units, a damped display scale and a diorama position — built
+   by w2h-basemap.js from the artefact tools/bake-city.mjs commits.
+
+   OPTIONAL BY DESIGN. Absent, every line below behaves exactly as v77 did and the hand-drawn
+   ISLE_SHAPES still run the scene. That is not politeness about deploy order: it is the only way
+   to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
+   fault came from the data or from everything else. */
+const BASE = opts.basemap || null;
 
 const world = new THREE.Group();
 scene.add(world);
@@ -486,9 +496,21 @@ function isleHalf(id){
 }
 
 const smoothCache = new Map();
+/* THE REAL COASTLINE IS NOT SMOOTHED, and that is the whole difference between the two paths.
+
+   Chaikin exists because ISLE_SHAPES is seventeen to thirty-two points drawn by hand, and corners
+   at that spacing read as a polygon rather than a shore. A surveyed outline arrives with over a
+   thousand points already simplified to a two-metre tolerance in the bake; it has no corners to
+   round, and running Chaikin over it would cut every genuine feature — the Breakwater tip, the
+   mouth of the Bateen creek, the marina entrances — by a quarter of its depth, twice.
+
+   Smoothing invented geometry is defensible. Smoothing surveyed geometry is discarding it. */
 function isleSmooth(id){
   let sm = smoothCache.get(id);
-  if (!sm){ sm = chaikin(ISLE_SHAPES[id], 2); smoothCache.set(id, sm); }
+  if (!sm){
+    sm = (BASE && BASE[id] && BASE[id].shape) ? BASE[id].shape : chaikin(ISLE_SHAPES[id], 2);
+    smoothCache.set(id, sm);
+  }
   return sm;
 }
 
@@ -2897,6 +2919,39 @@ const DISTRICTS = [
     ] },
 ];
 
+/* SIZE AND PLACE THE ISLANDS FROM THE DATA, before anything reads either.
+
+   r IS THE ONE THAT MATTERS. Every dimension in this file that means something in the real world —
+   the superblock, the plot, the road widths, the beach, the ring inset — is stated in metres and
+   converted through roadW, which divides by d.r. So the radius is not a size, it is the exchange
+   rate between metres and normalised island space, and it has been wrong by a factor of three
+   since the outlines were drawn by eye. Correcting it does not stretch the city: it leaves every
+   street the width it always claimed to be and gives the island the number of them it actually
+   holds. Corniche goes from 190 units to about 1,220, and the fabric from roughly 275 plots to
+   ten thousand — against 18,776 real buildings, which is the first time those two numbers have
+   been in the same neighbourhood.
+
+   ROTATION GOES TO ZERO, AND THE GRID ANGLE MUST NOT GO WITH IT. d.rot existed to orient a shape
+   that was authored square; a surveyed outline is already on its true bearing and rotating it
+   again would turn the island off north. But d.rot is ALSO the fallback the fabric uses for its
+   street angle when no gridRot is set, so zeroing it alone would silently swing every street on
+   three islands round to due east. The grid angle is pinned first, then the island rotation is
+   cleared. */
+if (BASE){
+  for (const d of DISTRICTS){
+    const b = BASE[d.id];
+    if (!b) continue;
+    d.r = b.r;
+    d.x = b.x; d.z = b.z;
+    if (d.gridRot === undefined) d.gridRot = d.rot || 0;
+    d.rot = 0;
+    /* The damped display scale. A uniform scale over the whole island is indistinguishable from
+       viewing it from further away — nothing inside it distorts — so this is the only place the
+       diorama's compression of the archipelago exists, and it is one number to animate away. */
+    d.dispScale = b.scale;
+  }
+}
+
 const pickTargets = [];
 
 DISTRICTS.forEach(d => {
@@ -2905,6 +2960,7 @@ DISTRICTS.forEach(d => {
   // AUTHORED AT LOCAL ORIGIN, positioned by the container.
   g.position.set(d.x, 0, d.z);
   g.rotation.y = d.rot;
+  if (d.dispScale) g.scale.setScalar(d.dispScale);
   world.add(g);
 
   const mass   = new THREE.Group(); mass.name = 'mass';

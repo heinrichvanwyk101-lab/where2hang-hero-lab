@@ -193,6 +193,35 @@ const V = '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
 const PROPS = await import('./w2h-props.js' + V);
+const BMAP  = await import('./w2h-basemap.js' + V);
+
+/* THE BASEMAP, FETCHED BEFORE THE WORLD IS BUILT.
+
+   data/index.json is the artefact tools/bake-city.mjs commits: one shared metric frame for the
+   emirate, every island's true coastline and extent. About forty kilobytes, because the outlines
+   live in the index and the roads and buildings do not — the world view draws five silhouettes
+   and needs nothing else until the camera goes somewhere.
+
+   FAILING SOFT IS DELIBERATE. If the fetch fails, basemap stays null, buildWorld falls back to
+   the hand-drawn ISLE_SHAPES and the scene renders as it did in v77. A hero section that shows
+   nothing because a JSON 404'd is a worse outcome than one showing a slightly wrong coastline,
+   and the console line says which happened.
+
+   ?debug ALSO ACCEPTS ?drawn, which forces the old path with the data present. That is the toggle
+   that makes a fault attributable: same build, same camera, coastlines the only difference. */
+let basemap = null;
+if (!location.search.includes('drawn')){
+  try {
+    const idx = await BMAP.loadIndex('data/');
+    basemap = BMAP.sceneIslands(idx, 0);
+    window.__basemapIndex = idx;
+    console.info('basemap: ' + Object.keys(basemap).length + ' islands, ' +
+      Object.entries(basemap).map(([k, v]) =>
+        k + ' r=' + Math.round(v.r) + ' x' + v.scale.toFixed(2)).join('  '));
+  } catch (e){
+    console.warn('basemap unavailable, falling back to drawn outlines:', e.message);
+  }
+}
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
@@ -542,6 +571,8 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
     C, rnd,
+    basemap,
+    PALACE_FOOT: CITY.PALACE_FOOT,
   });
 
 /* ===========================================================================
