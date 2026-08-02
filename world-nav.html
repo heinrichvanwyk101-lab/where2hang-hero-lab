@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v57', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v58', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1828,7 +1828,15 @@ function fillCorniche(){
      it always has. Whether this is also what makes them float is not something I know; if they
      survive this, the remaining suspects are the district patches and the hand-built kit, and the
      way to separate those is to load without ?fp and see whether it predates stage 3 entirely. */
-  if (fpState.get('corniche') === 'on') hideFabric(corniche);
+  /* FP_ON, NOT fpState. The state check was a race I wrote into the guard: this runs on an idle
+     callback moments after the opening shot, addFootprints is still awaiting the payload at that
+     point, and fpState reads 'pending'. So the guard never fired and the rest pass's generated
+     fabric stayed visible alongside the real footprints — two cities on the one island that has
+     a rest pass, one following the streets and one not.
+
+     Either order is now safe. If this runs first, addFootprints hides everything including what
+     was just added. If footprints land first, this hides what the rest pass adds afterwards. */
+  if (FP_ON) hideFabric(corniche);
   snapshotMats(corniche.group);
   registerLift(corniche.group);
   applyView(view);
