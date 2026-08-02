@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v94';
+export const BUILD = 'world v95';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4590,6 +4590,102 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
 
 /* ---------- the four placeholders ---------- */
 /* PER-ISLAND, AND CALLABLE LATER. Was a forEach; the body is unchanged. */
+
+/* ===========================================================================
+   STAGE 3a. REAL BUILDING FOOTPRINTS.
+
+   The bake has been writing oriented boxes into every island payload for some time and nothing
+   has ever fetched them: loadIsland and buildingsUnits are both exported by w2h-basemap.js and
+   neither is called anywhere. So this is the first time the scene has seen a real building.
+
+   WHAT THIS IS NOT. It does not replace the generated fabric. urbanFabric still runs and still
+   returns its cells and blocks, because groundPlan reads those to decide where parks go and where
+   pavement is painted, and footprints give you buildings rather than empty space. Solving the
+   ground from real footprints is the larger half of stage 3 and it is deliberately not in this
+   deploy: two changes with very different failure shapes, landing together, is how three separate
+   faults today became one unattributable symptom. Footprints either land on the coastline or they
+   do not, and that is checkable in one look.
+
+   So ?fp hides the fabric's MESHES and shows these instead, while the fabric's arithmetic carries
+   on feeding the painter. The cost is that urbanFabric's time stays on the clock. That is the
+   honest price of not breaking the ground, and it comes off once the ground no longer needs it.
+
+   HEIGHTS. About a fifth of the stock carries a real height from OSM. The rest gets the same
+   shape of model the fabric uses — a cap that falls away from the district core, softened by the
+   low-rise zones through cellCap — rather than a constant, because a constant would flatten every
+   skyline in the city to one number and look instantly wrong next to the 3,807 that are right.
+   Which is which is recorded and shown, since a modelled height and a surveyed one are otherwise
+   indistinguishable and only one of them is evidence. */
+function footprintsFor(d, list){
+  if (!list || !list.length) return null;
+  const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
+  const MATS = fabricMats(cool);
+  const tallest = { corniche:52, maryah:40, reem:44, saadiyat:14, yas:18 }[d.id] || 24;
+  const core = d.coreN || [0, 0];
+  const rnd = localRnd(hashId(d.id) ^ 0x5BD1E995);
+
+  /* Two passes for the same reason urbanFabric uses two: an InstancedMesh needs its count at
+     construction, so everything is sized before anything is written. */
+  const specs = [];
+  let real = 0;
+  for (const b of list){
+    const nx = b.x / d.r, ny = -b.z / d.r;
+    let h = b.h, isReal = h != null && h > 1;
+    if (isReal) real++;
+    else {
+      /* The fabric's own falloff, in the fabric's own normalised frame: distance from the core,
+         squared off, against the district ceiling, then softened where a low-rise zone reaches.
+         The jitter is seeded per island so a re-load produces the same city. */
+      const dd = Math.min(1, Math.hypot(nx - core[0], ny - core[1]) / 1.45);
+      const fall = 1 - dd * dd;
+      const cap = Math.min(tallest * (0.22 + 0.78 * fall), cellCap(d, nx, ny, tallest));
+      h = Math.max(2.2, cap * (0.55 + rnd() * 0.55));
+    }
+    specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h });
+  }
+
+  /* Bucketed by material and window class exactly as the fabric is, so a footprint and a
+     generated block standing next to each other are lit by the same shader and the Day/Dusk
+     switcher finds dayMats where it expects to. Type is picked from height: tall is glass, mid
+     is clad, low is render, which is the same reading the fabric applies. */
+  const typeOf = h => h > tallest * 0.62 ? 'glass' : h > tallest * 0.3 ? 'clad' : 'rend';
+  const need = new Map();
+  for (const sp of specs){ const k = typeOf(sp.h) + '#' + wClass(sp.h);
+    need.set(k, (need.get(k) || 0) + 1); }
+
+  const meshes = new Map();
+  need.forEach((n, k) => {
+    const [t, c] = k.split('#');
+    const m = new THREE.InstancedMesh(PROFILES.box, MATS[t][+c], n);
+    m.userData.dayMats = MATS[t].day[+c];
+    m.castShadow = true; m.receiveShadow = true;
+    meshes.set(k, m);
+  });
+
+  const M = new THREE.Object3D(), col = new THREE.Color(), idx = new Map();
+  for (const sp of specs){
+    M.position.set(sp.x, GROUND + sp.h / 2, sp.z);
+    M.rotation.set(0, -sp.rot, 0);
+    M.scale.set(sp.w, sp.h, sp.dp);
+    M.updateMatrix();
+    const k = typeOf(sp.h) + '#' + wClass(sp.h), m = meshes.get(k), i = idx.get(k) || 0;
+    idx.set(k, i + 1);
+    m.setMatrixAt(i, M.matrix);
+    m.setColorAt(i, tintFrom(col, 1));
+  }
+
+  const g = new THREE.Group();
+  g.name = 'footprints';
+  meshes.forEach((m, k) => {
+    m.count = idx.get(k) || 0;
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    g.add(m);
+  });
+  d.fpCount = specs.length; d.fpReal = real;
+  return g;
+}
+
 function buildFabricFor(d){
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   // Per-district character: where downtown sits, and how tall it gets there.
@@ -4874,7 +4970,7 @@ function buildIsland(id){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
-         buildIsland, buildCornicheRest,
+         buildIsland, buildCornicheRest, footprintsFor,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
