@@ -292,7 +292,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v54', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v55', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -681,6 +681,7 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     C, rnd,
     basemap,
     footprints: fpSeed,
+    fpClip: location.search.includes('fpclip'),
     PALACE_FOOT: CITY.PALACE_FOOT,
   });
 
@@ -2285,7 +2286,7 @@ function frame(){
          falling back to the coastline. An anchor the bake missed keeps a stale authored position
          near the island centre and looks like a landmark that happens to be central. */
       (FP_ON ? 'fp     ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
-        (d.fpCount ? (d.fpCount + '/' + d.fpReal + 'r')
+        (d.fpCount ? (d.fpCount + '/' + d.fpReal + 'r  in' + (d.fpInA || 0) + '/' + (d.fpInB || 0))
          : (fpState.get(d.id) || '-'))).join('  ') + '\n' : '') +
       'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
         (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +

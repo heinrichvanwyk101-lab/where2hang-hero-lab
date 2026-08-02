@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v97';
+export const BUILD = 'world v98';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -109,6 +109,8 @@ if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via
    to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
    fault came from the data or from everything else. */
 const BASE = opts.basemap || null;
+/* The coastline clip is off until its frame is proven. See footprintsFor. */
+const FP_CLIP = opts.fpClip === true;
 /* CORNICHE CANNOT WAIT, because it is built inside this call. Every other island acquires its
    footprints through setFootprints before its deferred build; the opening island has no such
    moment, so its payload comes in through opts the way its basemap does. */
@@ -4633,15 +4635,29 @@ function footprintsFor(d, list, minH = 0){
   /* Two passes for the same reason urbanFabric uses two: an InstancedMesh needs its count at
      construction, so everything is sized before anything is written. */
   const specs = [];
-  let real = 0;
+  let real = 0, inA = 0, inB = 0;
   for (const b of list){
     const nx = b.x / d.r, ny = -b.z / d.r;
-    /* THE COASTLINE TEST THE FABRIC ALWAYS HAD AND THIS DID NOT.
-       urbanFabric tests every plot against insideIsle before it emits. footprintsFor placed
-       whatever the payload contained, and the bake selects buildings by BOUNDING BOX — so piers,
-       reclaimed edges and anything OSM holds inside the box but outside the coastline landed in
-       open water. That is the building standing in the channel off Al Maryah's west edge. */
-    if (!insideIsle(d.id, nx, ny)) continue;
+    /* THE COASTLINE TEST, MEASURED BEFORE IT IS TRUSTED.
+
+       The argument for it is sound: urbanFabric tests every plot against insideIsle, footprints
+       tested nothing, and the bake selects buildings by BOUNDING BOX — so piers and reclaimed
+       edges land in open water. That is the building in the channel off Al Maryah.
+
+       The argument for the FRAME was also sound and was wrong. b.x / d.r is (x - cx) / half in
+       metres, which is what shapeOf produces, and -b.z / d.r undoes buildingsUnits' north flip.
+       By that reasoning nx, ny is already in shape space. Al Maryah then rejected 256 of 256,
+       which is not a strict test — it is a test in the wrong space, and one island losing its
+       entire stock says the reasoning is wrong somewhere I cannot see by reading.
+
+       So both conventions are counted and NEITHER filters unless ?fpclip is set. If flip comes
+       back healthy where straight comes back zero, the north flip is doubled and the fix is one
+       sign. If both come back zero, insideIsle is testing against a shape this island does not
+       have — the hand-drawn fallback rather than the baked outline — and the fix is in isleSmooth,
+       not here. Two numbers, one load, no third guess. */
+    if (insideIsle(d.id, nx,  ny)) inA++;
+    if (insideIsle(d.id, nx, -ny)) inB++;
+    if (FP_CLIP && !insideIsle(d.id, nx, ny)) continue;
     let h = b.h, isReal = h != null && h > 1;
     if (isReal) real++;
     else {
@@ -4714,7 +4730,7 @@ function footprintsFor(d, list, minH = 0){
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
     g.add(m);
   });
-  d.fpCount = specs.length; d.fpReal = real;
+  d.fpCount = specs.length; d.fpReal = real; d.fpInA = inA; d.fpInB = inB;
   return g;
 }
 
@@ -4743,7 +4759,7 @@ function plotsFromFootprints(d, list){
   const Q = 0.035;                       // occupancy pitch, normalised island units
   for (const b of list){
     const jx = b.x / d.r, jy = -b.z / d.r;
-    if (!insideIsle(d.id, jx, jy)) continue;
+    if (FP_CLIP && !insideIsle(d.id, jx, jy)) continue;
     const wN = Math.max(0.002, b.w / d.r), dN = Math.max(0.002, b.dp / d.r);
     cells.push({ jx, jy, rot:b.rot, wN, dN, w:wN * d.r, dp:dN * d.r });
     seen.add(Math.round(jx / Q) + ',' + Math.round(jy / Q));
@@ -4876,6 +4892,22 @@ const CORNICHE_REGION = (() => {
   return sp => (sp.x - sh.x) ** 2 + (sp.z - sh.z) ** 2 < rr;
 })();
 
+/* CORNICHE NEVER WENT THROUGH buildFabricFor, WHICH IS WHY IT WAS THE ONE ISLAND THE FOOTPRINT
+   PATH COULD NOT REACH. It carries built:true, so the deferred loop skips it, and its city is
+   assembled here at module level and again in buildCornicheRest. Seeding its payload through opts
+   was correct and useless: nothing on this path ever read fpList. urbanFabric stayed at ~3,000 ms
+   and the fp line read `corn on` with no count, which is exactly what "state set, nothing built"
+   looks like.
+   Same two-layer split as everywhere else, and the region test is dropped with it — that existed
+   to keep generated stock away from the hand-built landmarks, and real footprints already are
+   where they are. */
+if (corniche.fpList){
+  const cMass   = footprintsFor(corniche, corniche.fpList, 5.4);
+  const cDetail = footprintsFor(corniche, corniche.fpList, 0);
+  if (cMass)   corniche.mass.add(cMass);
+  if (cDetail) corniche.detail.add(cDetail);
+  corniche.fabric = plotsFromFootprints(corniche, corniche.fpList) || { cells:[], blocks:[] };
+} else {
 const cornicheFabric = urbanFabric(corniche, corniche.detail,
   /* THE CAP WAS FLATTENING THE DOWNTOWN, and that is the carpet in every dusk shot.
 
@@ -4902,6 +4934,7 @@ urbanFabric(corniche, corniche.mass,
   { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
     cap:26, minH:5.4, region:CORNICHE_REGION });
 corniche.fabric = cornicheFabric;
+}
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
 const cglow = new THREE.PointLight(C.gold, 0, 170, 2);
@@ -5047,6 +5080,9 @@ let cornicheRestDone = !CORNICHE_REGION;
 function buildCornicheRest(){
   if (cornicheRestDone) return false;
   cornicheRestDone = true;
+  /* Nothing left to fill in. This exists to grow generated stock across the rest of the island
+     once the camera commits; with real footprints the whole island already has its buildings. */
+  if (corniche.fpList) return true;
   const outside = sp => !CORNICHE_REGION(sp);
   const t = performance.now();
   urbanFabric(corniche, corniche.mass,
