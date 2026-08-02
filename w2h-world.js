@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v79';
+export const BUILD = 'world v80';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -389,6 +389,35 @@ const LM = {
      palace: 3.0 units between the nearest tower and the palace block. */
   etihad: { x: -17.5 * ISLE_SCALE, z:-11 * ISLE_SCALE },
   adnoc:  { x: 42.25 * ISLE_SCALE, z: 7.25 * ISLE_SCALE },
+};
+
+/* THE ANCHORS COME FROM THE MAP WHEN THERE IS ONE, and v79 showed why they must.
+
+   These three were authored as absolute units against a drawn coastline: -105, -44 and +105 on an
+   island 380 units across. The real island is 2,440 across, so all three sat inside two per cent of
+   its centre, on top of one another — one tap target where there should be three, and the palace
+   unreachable. Scaling them by the radius ratio would have separated them and left all three
+   standing in the wrong place, because they were positioned against a shape that no longer exists.
+
+   The names are OSM's, matched exactly by the bake. A landmark the bake could not find keeps its
+   authored position and says so below, which is the only honest failure mode: a missing anchor
+   that silently defaults to the island centre is how a landmark ends up in the sea. */
+const LM_OSM = { palace:'Emirates Palace', etihad:'Etihad Towers', adnoc:'ADNOC Headquarters' };
+if (BASE && BASE.corniche && BASE.corniche.landmarks){
+  const found = BASE.corniche.landmarks;
+  for (const [key, name] of Object.entries(LM_OSM)){
+    if (found[name]) LM[key] = { x:found[name].x, z:found[name].z };
+    else console.warn('w2h-world: no baked anchor for ' + name + ' — keeping the authored one');
+  }
+}
+
+/* The place table's labels are shorthand and OSM's are formal, so the ones that differ are mapped
+   here rather than renamed in either place: the labels are what the UI prints and the names are
+   what the data calls them, and neither should bend to the other. */
+const PLACE_OSM = {
+  'ADNOC HQ':'ADNOC Headquarters', 'Ferrari World':'Ferrari World Abu Dhabi',
+  'Yas Marina':'Yas Marina Circuit', 'Manarat':'Manarat Al Saadiyat',
+  'The Galleria':'The Galleria Al Maryah Island',
 };
 
 const ISLE_SHAPES = {
@@ -3049,6 +3078,15 @@ if (BASE){
     d.x = b.x; d.z = b.z;
     if (d.gridRot === undefined) d.gridRot = d.rot || 0;
     d.rot = 0;
+
+    /* Every place the bake could name moves with its landmark. r is the camera's framing radius
+       and stays authored — that is a composition decision about how tightly to hold a building in
+       frame, and no dataset has an opinion about it. */
+    const marks = b.landmarks || {};
+    for (const pl of d.places || []){
+      const m = marks[PLACE_OSM[pl.label] || pl.label];
+      if (m){ pl.x = m.x; pl.z = m.z; }
+    }
     /* The damped display scale. A uniform scale over the whole island is indistinguishable from
        viewing it from further away — nothing inside it distorts — so this is the only place the
        diorama's compression of the archipelago exists, and it is one number to animate away. */

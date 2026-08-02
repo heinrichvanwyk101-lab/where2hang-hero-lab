@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v2';
+export const BUILD = 'basemap v3';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -183,6 +183,11 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
     const tf = transform(idx, entry.id, t, p);
     out[entry.id] = {
       shape,
+      /* Landmarks in island-local SCENE units, north flipped to -z. These are world positions like
+         roads and buildings, not shape coordinates, so they take the flip — see the note on
+         shapeOf for why those two differ. */
+      landmarks: Object.fromEntries(Object.entries(entry.landmarks || {}).map(([k, p]) =>
+        [k, { x: m2u(p.x - entry.extent.cx), z: -m2u(p.y - entry.extent.cy) }])),
       /* The true radius in scene units. Damping is NOT folded in here: it goes on the group as a
          uniform scale, which keeps r meaning what every metre conversion in w2h-world.js already
          assumes it means. */
