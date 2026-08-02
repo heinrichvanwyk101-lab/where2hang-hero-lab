@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v59', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v60', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2334,10 +2334,21 @@ function frame(){
       /* HOW MANY ANCHORS THE BAKE NAMED, per island, and whether the shot is framing them or
          falling back to the coastline. An anchor the bake missed keeps a stale authored position
          near the island centre and looks like a landmark that happens to be central. */
-      (FP_ON ? 'fp     ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
+      /* ONE LINE PER ISLAND, BECAUSE FIVE ON ONE ROW RAN OFF THE SCREEN.
+
+         This row carries four numbers per island and the pane is 55 characters wide on a folded
+         Z Fold, so it truncated at Al Maryah and reem, saad and yas were never legible on the
+         device the build is judged on. A diagnostic nobody can read is worse than one that does
+         not exist: it looks like coverage. Every other row here fits because it carries one
+         short token per island; this one does not, so it wraps instead of pretending.
+
+         The gutter is blank after the first line, so the label column still reads as one field
+         rather than five. */
+      (FP_ON ? DISTRICTS.map((d, i) =>
+        (i ? '       ' : 'fp     ') + d.id.slice(0,4).padEnd(5) +
         (fpState.get(d.id) === 'on' ? (d.fpCount + '/' + d.fpReal + 'r hid' + (d.fpHid || 0)
            + '/' + fabricVisible(d) + 'v')
-         : (fpState.get(d.id) || '-'))).join('  ') + '\n' : '') +
+         : (fpState.get(d.id) || '-'))).join('\n') + '\n' : '') +
       'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
         (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +
         (d.shot && d.shot.r < d.r ? '*' : '')).join('  ') + '\n' +
