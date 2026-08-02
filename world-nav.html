@@ -624,6 +624,41 @@ let activeDistrict = null, activePlace = null;
 phase('buildWorld');
 fitClip();
 
+/* SPLIT THE FIRST FRAME, because 9,913 ms of it is two thirds of the load and I do not know which
+   half it is.
+
+   three.js compiles a material's program the first time it draws with it, and uploads a texture or
+   a buffer the first time it binds it. Both land in the first render and neither is separable from
+   the outside. renderer.compile walks the scene and builds every program WITHOUT drawing, so
+   timing it splits the two: whatever the first frame still costs afterwards is upload, and
+   whatever compile costs is programs.
+
+   The measurement is also half of any fix. Compilation has to happen; doing it here, where a
+   loading state can cover it, is better than doing it in the frame the user is waiting on. If it
+   turns out to be small, this line costs nothing and the answer is texture and buffer size
+   instead — which is a completely different piece of work. */
+try { renderer.compile(scene, camera); } catch (e){ console.warn('compile:', e.message); }
+phase('compile');
+
+/* Total texture pixels, since 330 textures says nothing about their size and a single 4096 ground
+   canvas outweighs a hundred window maps. Counted from the scene rather than assumed. */
+try {
+  let px = 0, n = 0, big = [];
+  scene.traverse(o => {
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of mats) for (const k of ['map','emissiveMap','normalMap']){
+      const t = m && m[k], im = t && t.image;
+      if (!im || !im.width || t.__counted) continue;
+      t.__counted = true; n++; px += im.width * im.height;
+      big.push([im.width + 'x' + im.height, im.width * im.height]);
+    }
+  });
+  big.sort((a, b) => b[1] - a[1]);
+  console.info('textures ' + n + '  ' + (px / 1e6).toFixed(1) + ' Mpx  largest ' +
+               big.slice(0, 4).map(b => b[0]).join(' '));
+  PH['#mpx'] = px / 1e6;
+} catch (e){ /* diagnostics must never break the scene */ }
+
 const goal = { target:new THREE.Vector3(0,0,-40), dist:430, elev:300, angle:0, fov:52 };
 const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
                angle:goal.angle, fov:goal.fov };
@@ -1557,7 +1592,8 @@ function frame(){
           out += (i ? '       ' : 'phase  ') +
             rows.slice(i, i + 2).map(([k, v]) => (k + ' ' + v).padEnd(24)).join('') + '\n';
         }
-        return out + '       total ' + Math.round(PH['#page'] || 0) + ' ms\n';
+        return out + '       total ' + Math.round(PH['#page'] || 0) + ' ms   ' +
+               (PH['#mpx'] ? PH['#mpx'].toFixed(0) + ' Mpx tex' : '') + '\n';
       })() +
       (PERF ? (() => {
         const rows = Object.keys(PERF).filter(k => k[0] !== '#')
