@@ -944,6 +944,7 @@ world.traverse(o => {
   if (!o.userData.origMat) o.userData.origMat = o.material;
 });
 water.userData.origMat = water.material;
+phase('snapshot');
 const liftReg = [];
 {
   const seen = new Set();
@@ -1415,12 +1416,16 @@ function resize(){
   composer.setSize(w, h); bloom.setSize(w, h); smaa.setSize(w*pr, h*pr);
   camera.aspect = w/h; camera.updateProjectionMatrix();
 }
+phase('liftReg');
 window.addEventListener('resize', resize);
 resize();
+phase('resize');
 // Dusk before setWorld, so the first frame is already the product state rather than a flash of
 // unlit night while the sky texture and key light are configured.
 applyView('dusk');
+phase('applyView');
 setWorld();
+phase('setWorld');
 
 /* ---------- frame ---------- */
 const clock = new THREE.Clock();
