@@ -124,17 +124,58 @@ const ISLANDS = [
 
    `out center` gives a node its position and a way or relation its bounding-box centre, which for
    a building footprint is the right anchor for a camera to aim at. */
+/* CANONICAL NAME -> THE SPELLINGS OSM ACTUALLY USES, and the first bake needed this badly.
+
+   Twelve of twenty-three resolved, and the misses were not random: Emirates Palace, Louvre Abu
+   Dhabi, Manarat Al Saadiyat, Ferrari World and Gate Towers. Every one of those carries an Arabic
+   `name` with the English in `name:en`, which is the normal convention for UAE features and which
+   a query against `name` alone cannot see. The remainder were variants — "The Gate Towers",
+   "ADNEC", "The Galleria" without its island.
+
+   So each landmark is a canonical key and a list of acceptable spellings, and the query looks at
+   name, name:en, alt_name and official_name. The key is what the artefact stores, so the scene
+   keeps asking for one name however many the map has. */
 const LANDMARKS = {
-  corniche: ['Emirates Palace', 'Etihad Towers', 'ADNOC Headquarters', 'Qasr Al Hosn',
-             'Marina Mall', 'Capital Gate', 'Abu Dhabi National Exhibition Centre'],
-  maryah:   ['The Galleria Al Maryah Island', 'Cleveland Clinic Abu Dhabi',
-             'Abu Dhabi Global Market'],
-  reem:     ['Gate Towers', 'Sky Tower', 'Reem Mall'],
-  saadiyat: ['Louvre Abu Dhabi', 'Zayed National Museum', 'Manarat Al Saadiyat',
-             'Berklee Abu Dhabi'],
-  yas:      ['Ferrari World Abu Dhabi', 'Yas Marina Circuit', 'Yas Mall', 'Etihad Arena',
-             'Yas Waterworld', 'SeaWorld Abu Dhabi'],
+  corniche: {
+    'Emirates Palace':     ['Emirates Palace', 'Emirates Palace Mandarin Oriental'],
+    'Etihad Towers':       ['Etihad Towers', 'The Etihad Towers'],
+    'ADNOC Headquarters':  ['ADNOC Headquarters', 'ADNOC HQ', 'ADNOC Group Headquarters'],
+    'Qasr Al Hosn':        ['Qasr Al Hosn'],
+    'Marina Mall':         ['Marina Mall', 'Marina Mall Abu Dhabi'],
+    'Capital Gate':        ['Capital Gate', 'Capital Gate Tower'],
+    'ADNEC':               ['Abu Dhabi National Exhibition Centre',
+                            'Abu Dhabi National Exhibition Center', 'ADNEC'],
+  },
+  maryah: {
+    'The Galleria Al Maryah Island': ['The Galleria Al Maryah Island', 'The Galleria',
+                                      'Galleria Al Maryah Island'],
+    'Cleveland Clinic Abu Dhabi':    ['Cleveland Clinic Abu Dhabi'],
+    'Abu Dhabi Global Market':       ['Abu Dhabi Global Market', 'ADGM'],
+  },
+  reem: {
+    'Gate Towers': ['Gate Towers', 'The Gate Towers'],
+    'Sky Tower':   ['Sky Tower', 'Sky Tower Abu Dhabi'],
+    'Reem Mall':   ['Reem Mall'],
+  },
+  saadiyat: {
+    'Louvre Abu Dhabi':      ['Louvre Abu Dhabi', 'Louvre'],
+    'Zayed National Museum': ['Zayed National Museum'],
+    'Manarat Al Saadiyat':   ['Manarat Al Saadiyat', 'Manarat al Saadiyat'],
+    'Berklee Abu Dhabi':     ['Berklee Abu Dhabi'],
+  },
+  yas: {
+    'Ferrari World Abu Dhabi': ['Ferrari World Abu Dhabi', 'Ferrari World'],
+    'Yas Marina Circuit':      ['Yas Marina Circuit'],
+    'Yas Mall':                ['Yas Mall'],
+    'Etihad Arena':            ['Etihad Arena'],
+    'Yas Waterworld':          ['Yas Waterworld', 'Yas Waterworld Abu Dhabi',
+                                'Yas Water World'],
+    'SeaWorld Abu Dhabi':      ['SeaWorld Abu Dhabi', 'SeaWorld Yas Island, Abu Dhabi'],
+  },
 };
+/* The tags a name might live under, in no particular order — a feature can carry several and they
+   need not agree. */
+const NAME_KEYS = ['name', 'name:en', 'alt_name', 'official_name'];
 
 /* ROAD CLASSES KEPT, and the mapping to the three widths the painter already understands.
    Everything below `service` is dropped: driveways and car park aisles are noise at 7.7 metres
@@ -189,15 +230,17 @@ function query(bbox){
 out geom;`;
 }
 
-function landmarkQuery(bbox, names){
+function landmarkQuery(bbox, spellings){
   const b = bbox.join(',');
-  /* Escaped for the regex, anchored, and joined into one alternation so the whole set costs a
-     single request. Overpass regex is POSIX, so no lookarounds and no case-insensitive flag —
-     exact names it is, which is also what makes a miss meaningful. */
-  const alt = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  /* Escaped, anchored, and joined into one alternation so the whole set costs a single request per
+     tag key. Overpass regex is POSIX: no lookarounds and no case-insensitive flag, so the
+     spellings list carries the variation instead — which is better anyway, because a miss then
+     means the feature is absent rather than merely spelled oddly. */
+  const alt = spellings.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const blocks = NAME_KEYS.map(k => `  nwr["${k}"~"^(${alt})$"](${b});`).join('\n');
   return `[out:json][timeout:120];
 (
-  nwr["name"~"^(${alt})$"](${b});
+${blocks}
 );
 out center;`;
 }
@@ -461,20 +504,27 @@ async function bakeIsland(isle, proj){
      to parse would take the whole island's coastline down with it, and the failure modes of a
      name list and a bounding-box sweep are nothing alike. */
   const marks = {};
-  const wanted = LANDMARKS[isle.id] || [];
+  const table = LANDMARKS[isle.id] || {};
+  const wanted = Object.keys(table);
+  /* Spelling -> canonical, built once. A spelling shared by two landmarks would be a table bug and
+     the last one would silently win, so the map is the right shape to notice that in. */
+  const canon = {};
+  for (const [key, list] of Object.entries(table)) for (const sp of list) canon[sp] = key;
   if (wanted.length){
     try {
-      const lm = await overpass(landmarkQuery(isle.bbox, wanted));
+      const lm = await overpass(landmarkQuery(isle.bbox, Object.keys(canon)));
       for (const el of lm.elements || []){
-        const nm = el.tags && el.tags.name;
-        if (!nm || !wanted.includes(nm)) continue;
+        const t = el.tags || {};
+        let nm = null;
+        for (const k of NAME_KEYS){ if (t[k] && canon[t[k]]){ nm = canon[t[k]]; break; } }
+        if (!nm) continue;
         const lat = el.lat != null ? el.lat : (el.center && el.center.lat);
         const lon = el.lon != null ? el.lon : (el.center && el.center.lon);
         if (lat == null) continue;
         const [x, y] = proj.fwd(lat, lon);
-        /* First match wins. Several of these names exist more than once in OSM — a mall and its
-           bus stop, a circuit and its grandstand — and taking the first keeps the bake
-           deterministic rather than dependent on element order between runs. */
+        /* First match wins. Several of these exist more than once in OSM — a mall and its bus
+           stop, a circuit and its grandstand — and taking the first keeps the bake deterministic
+           rather than dependent on element order between runs. */
         if (!marks[nm]) marks[nm] = { x:rd1(x), y:rd1(y) };
       }
     } catch (e){
