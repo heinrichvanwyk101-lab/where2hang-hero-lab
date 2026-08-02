@@ -279,7 +279,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v42', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v45', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -656,6 +656,8 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
 /* ===========================================================================
    CAMERA STATE MACHINE
    =========================================================================== */
+/* In DISPLAYED units — the size the island actually is on screen. See setDistrict. */
+const SHOT_MIN_DISP = 320;
 const STATE = { WORLD:'world', DISTRICT:'district', PLACE:'place' };
 let state = STATE.WORLD;
 let activeDistrict = null, activePlace = null;
@@ -760,12 +762,33 @@ function applyLOD(){
    d.dispScale is the damping the basemap applies on the group, so the radius that actually appears
    on screen is the product. Reading d.r alone under-measures every island except the reference —
    Al Maryah is 156 units true and 613 displayed — and the world camera is framed from this. */
-function worldBounds(){
-  let m = 0;
+/* THE ARCHIPELAGO'S BOX, NOT ITS RADIUS ABOUT CORNICHE.
+
+   worldBounds measured the furthest island from (0, -40) — Corniche's own position — and returned
+   that as the world's size. Corniche sits at the south-west corner of the spread and Yas is 2,300
+   units north-east of it, so the "radius" came out roughly twice the true half-extent AND was
+   centred on a corner. Both errors land in the opening shot: the camera stands about twice as far
+   back as it needs to, and it aims at Corniche while the other four islands sit off to one side.
+   That is the overview not being central, and it is not a matter of taste.
+
+   A box has a centre. Everything downstream wants that centre and that half-extent. */
+function worldExtent(){
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   DISTRICTS.forEach(d => {
-    m = Math.max(m, Math.hypot(d.x, d.z + 40) + d.r * (d.dispScale || 1));
+    const R = d.r * (d.dispScale || 1);
+    x0 = Math.min(x0, d.x - R); x1 = Math.max(x1, d.x + R);
+    z0 = Math.min(z0, d.z - R); z1 = Math.max(z1, d.z + R);
   });
-  return Math.max(120, m);
+  if (!isFinite(x0)) return { cx:0, cz:-40, r:120 };
+  return {
+    cx: (x0 + x1) / 2,
+    cz: (z0 + z1) / 2,
+    r:  Math.max(120, Math.max(x1 - x0, z1 - z0) / 2),
+  };
+}
+
+function worldBounds(){
+  return worldExtent().r;
 }
 
 /* THE CLIP AND SHADOW VOLUMES FOLLOW THE WORLD, and three literals here did not.
@@ -797,19 +820,64 @@ function fitClip(){
   });
 }
 
+/* THE BEARING THAT LOOKS INTO THE SUN, DERIVED RATHER THAN AVOIDED BY EYE.
+
+   The camera stands at target + (sin a, ., cos a) * dist and looks back at the target, so its view
+   direction is -(sin a, cos a). It is staring at the sun when that lines up with the sun's own sky
+   direction — sun.position, which is fixed at (-380, 210, 260). Solving gives a bearing of about
+   2.17 rad, and the seaward approach in setDistrict is atan2(d.x, d.z + 300):
+
+     Yas       (2300, -1180)  ->  1.94 rad   0.23 from the sun   blown out
+     Al Reem   (1560,  -640)  ->  1.79        0.39               hazed
+     Saadiyat  ( 520, -1560)  ->  2.75        0.58               glare off to one side
+     Al Maryah ( 940,  -150)  ->  1.41        0.76               clean
+
+   which is the order they look bad in. The approach angle was derived purely from where an island
+   sits relative to the origin, and three of the five sit north-east, which at dusk is exactly where
+   the sun is. Nothing about the shot was wrong; it just had no idea the sun existed.
+
+   So: keep the seaward intent, but if the resulting bearing lands within SUN_KEEP of the sun,
+   push it to the nearer edge of that exclusion. Turning the camera 20 degrees around an island
+   costs nothing compositionally — every side of these islands is waterfront — and it is the
+   difference between a skyline and a white frame. */
+const SUN_BEARING = Math.atan2(-sun.position.x, -sun.position.z);
+/* 0.9 RADIANS, ABOUT 52 DEGREES, AND IT IS NOT THE SUN DISC THIS IS CLEARING.
+
+   The sun sits at 24.5 degrees elevation. The camera looks 14.7 degrees DOWN with a 21-degree
+   vertical half-angle, so its frame runs from about -36 to +6 and the disc itself is already
+   above the top edge — it was never in shot. What blows Yas out is the specular path on the
+   water, which lies along the sun's azimuth and runs from the horizon back toward the camera,
+   right through the middle of the frame. That path is broad, so clearing it wants more than the
+   10-degree horizontal half-angle would suggest.
+
+   52 degrees puts the glitter to the edge and leaves the light itself doing what it should:
+   raking across the towers from three-quarters behind, which is where the warmth comes from and
+   the reason not to move the sun instead. Backlit is the only bad case, and it is the only one
+   excluded. */
+const SUN_KEEP = 0.90;
+function sunSafe(a){
+  let d = a - SUN_BEARING;
+  while (d >  Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  if (Math.abs(d) >= SUN_KEEP) return a;
+  return SUN_BEARING + (d < 0 ? -SUN_KEEP : SUN_KEEP);
+}
+
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   resetOrbit();
-  goal.target.set(0, 0, -40);
-  /* SCALED WITH THE ISLANDS. world v60 put the archipelago on an ISLE_SCALE constant so the street
-     grid could hold real superblocks; these two numbers are the only camera figures in the file
-     that were absolute rather than derived from d.r, so they are the only ones that had to follow.
-     Derived from the world bounds rather than multiplied by a copy of the constant, since a second
-     copy is exactly what has gone wrong five times in this build already. The two ratios are the
-     ones the old literals implied at the old scale — 600 and 400 against a half-extent of 258 —
-     so the framing that was tuned by eye is preserved exactly and only the scale changes. */
-  const B = worldBounds();
-  goal.dist = B * 2.32; goal.elev = B * 1.55; goal.angle = 0; goal.fov = 52;
+  /* AIMED AT THE ARCHIPELAGO, NOT AT CORNICHE. lookAt puts goal.target dead centre of frame, so
+     whatever this is set to IS the middle of the shot. It was Corniche, which is one island at one
+     corner of five. */
+  const W = worldExtent();
+  goal.target.set(W.cx, 0, W.cz);
+  /* The two ratios are the ones the old literals implied — 600 and 400 against a half-extent of
+     258. They are unchanged; what changed underneath them is that B is now the real half-extent
+     rather than a corner-to-corner radius, so the same ratios now frame the group instead of
+     standing twice as far back as they were ever meant to. */
+  const B = W.r;
+  goal.dist = B * 2.32; goal.elev = B * 1.55;
+  goal.angle = sunSafe(0); goal.fov = 52;
   applyLOD();
   ui('Abu Dhabi', 'Tap an island');
 }
@@ -842,9 +910,19 @@ function setDistrict(d){
      gets framed on it; every other island is unchanged, because for them the island IS the
      subject. */
   const shot = d.shot || { x:d.x, z:d.z, r:d.r };
-  const fr = shot.r * (d.dispScale || 1);
-  goal.target.set(d.x + shot.x * (d.dispScale || 1), GROUND + 8,
-                  d.z + shot.z * (d.dispScale || 1));
+  const s = d.dispScale || 1;
+  /* THE FLOOR BELONGS IN DISPLAYED UNITS, AND WAS IN ISLAND UNITS.
+
+     SHOT_MIN_R exists to stop a small island pulling the camera inside its own towers, and it was
+     applied to d.r before the group scale multiplied it. But the group scale is what already makes
+     a small island big: Al Maryah's true radius is about 150, the floor lifted that to 320, and
+     dispScale 3.9 then took the framing radius to 1,248 against a displayed island of 585. The
+     camera was framing something twice the size of the thing on screen, which is why the island
+     sits as a band in the middle with sea above and below it.
+
+     Floored after scaling, once, so the number means the same thing as what the eye is measuring. */
+  const fr = Math.max(SHOT_MIN_DISP, shot.r * s);
+  goal.target.set(d.x + shot.x * s, GROUND + 8, d.z + shot.z * s);
   /* THE PORTRAIT FIELD CAUGHT ME TWICE. I corrected the world view for it and then set the
      district view by eye, and 2.6r put the camera INSIDE the island: at fov 42 with a 0.46
      aspect the horizontal half-angle is about 10 degrees, so the visible half-width at 2.6r is
@@ -862,7 +940,7 @@ function setDistrict(d){
   goal.dist = fr * 5.7; goal.elev = fr * 1.5; goal.fov = 42;
   // Approach from the seaward side, so the move always reads as the world turning to present
   // the island rather than the camera swinging round behind it.
-  goal.angle = Math.atan2(d.x, d.z + 300);
+  goal.angle = sunSafe(Math.atan2(d.x, d.z + 300));
   applyLOD();
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + '</span>',
      d.built ? 'Tap a place, or Back' : 'Placeholder island — Back');
@@ -912,7 +990,7 @@ function setPlace(d, anchor){
   goal.dist = R / 0.159;
   goal.elev = R * 0.62 + anchor.h * s * 1.2;
   goal.fov  = 38;
-  goal.angle = Math.atan2(wx - d.x, wz - d.z + 60);
+  goal.angle = sunSafe(Math.atan2(wx - d.x, wz - d.z + 60));
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
      'Back to ' + d.name);
 }
@@ -1719,12 +1797,56 @@ const attract = { on:false, i:0, until:0, lastInput:performance.now() };
    second of frozen thread. Wrapped exactly like setDistrict's own call, because a freshly built
    island needs its materials snapshotted and registered before any view touches them — the fault
    that killed the render loop the first time this was deferred. */
+/* HAS THIS ISLAND'S NETWORK LANDED YET. Synchronous, because the answer decides whether to build
+   now or to wait, and a promise cannot be asked that question without already having waited. */
+function roadsIn(id){
+  const idx = window.__basemapIndex;
+  const e = idx && (idx.islands || []).find(i => i.id === id);
+  return !!(e && e._roads);
+}
+
+/* Resolves when the roads are in hand, when the fetch has failed, or after a ceiling — whichever
+   comes first. The ceiling is the important one: a fetch that never settles would otherwise leave
+   the island unbuilt for the rest of the session and the flight would arrive at bare sand. Four
+   seconds is comfortably longer than any of these files has taken and comfortably shorter than a
+   leg, so in the normal case it is never reached and in the pathological case it degrades to
+   exactly the old behaviour. */
+function whenRoads(id, ms = 4000){
+  const idx = window.__basemapIndex;
+  if (!idx || !BMAP.loadRoads) return Promise.resolve(false);
+  return Promise.race([
+    BMAP.loadRoads(idx, id).then(() => true).catch(() => false),
+    new Promise(res => setTimeout(() => res(false), ms)),
+  ]);
+}
+
+function buildAndRegister(d){
+  if (!buildIsland(d.id)) return;
+  snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
+}
+
 function attractPrefetch(n){
   const leg = ATTRACT[n % ATTRACT.length];
   if (!leg || !leg.id || !buildIsland) return;
   const d = DISTRICTS.find(x => x.id === leg.id);
-  if (!d || !buildIsland(d.id)) return;
-  snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
+  if (!d) return;
+  /* THE RACE, AND WHY IT WAS WORTH FIXING RATHER THAN LIVING WITH.
+
+     The ground canvas is painted once, during the build, and never repainted. So whether an island
+     shows its real street network or a generated lattice is decided by whether roads-<id>.json
+     happened to have arrived at the instant the prefetch fired — and for Al Maryah, built from the
+     startup prefetch milliseconds after the page opens, that came down to network weather. Two
+     consecutive loads of the identical build read `mary gen` and `mary 459`.
+
+     A hero that renders differently on refresh for reasons the visitor cannot see, cause or avoid
+     is not a hero with a bug in it; it is a hero you cannot reason about at all. The prefetch runs
+     a whole leg ahead of the camera, so it has seconds to spare — it simply was not spending them.
+
+     Nothing here blocks a frame: the build still happens synchronously when it happens, this only
+     moves WHEN. And a user tap still builds immediately through setDistrict, because a stall
+     during a committed move is worse than a generated lattice. */
+  if (roadsIn(leg.id)){ buildAndRegister(d); return; }
+  whenRoads(leg.id).then(() => { if (d.pending) buildAndRegister(d); });
 }
 
 function attractGo(i){
@@ -1945,6 +2067,12 @@ function frame(){
         (!d.built ? '-' : d.roadsReal ? String(d.roads.drawArterials.length) : 'gen') +
         (d.dispScale && Math.abs(d.dispScale - 1) > 0.01
           ? ' x' + d.dispScale.toFixed(1) : '')).join('  ') + '\n' +
+      /* HOW MANY ANCHORS THE BAKE NAMED, per island, and whether the shot is framing them or
+         falling back to the coastline. An anchor the bake missed keeps a stale authored position
+         near the island centre and looks like a landmark that happens to be central. */
+      'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
+        (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +
+        (d.shot && d.shot.r < d.r ? '*' : '')).join('  ') + '\n' +
       /* V, WHICH THE OVERLAY NEVER SHOWED. The four stamps tell you which module CONTENT is
          live, which does catch a stale module — but not which query string fetched it, so a
          forgotten bump and a Pages cache miss looked identical from here. */

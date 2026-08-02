@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v90';
+export const BUILD = 'world v92';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3120,8 +3120,19 @@ if (BASE){
     const marks = b.landmarks || {};
     for (const pl of d.places || []){
       const m = marks[PLACE_OSM[pl.label] || pl.label];
-      if (m){ pl.x = m.x; pl.z = m.z; }
+      if (m){ pl.x = m.x; pl.z = m.z; pl.baked = true; }
+      else pl.baked = false;
     }
+    /* HOW MANY OF THEM THE BAKE ACTUALLY NAMED, because an anchor that fell through is not
+       obviously wrong — it just sits where it was authored, and the authored coordinates are
+       stale. They were written when an island was about 190 units across; Saadiyat's real radius
+       is nearer 700. So an unmatched anchor lands within about 3 per cent of the island centre,
+       and three of them land on top of each other there. That is the label clumping, and it is a
+       separate fault from the display scale — fixing the scale moves a clump, it does not spread
+       one. Nothing downstream could tell a surveyed position from a stale literal, so it is
+       recorded here and shown on the overlay. */
+    d.marksHit = (d.places || []).filter(p => p.baked).length;
+    d.marksOf  = (d.places || []).length;
     /* The damped display scale. A uniform scale over the whole island is indistinguishable from
        viewing it from further away — nothing inside it distorts — so this is the only place the
        diorama's compression of the archipelago exists, and it is one number to animate away. */
@@ -3183,23 +3194,40 @@ urbanFabric  = timed('urbanFabric',  urbanFabric);
    So the framing radius is clamped to a floor. Below about 320 units the shot stops shrinking with
    the island and holds a distance that keeps the camera outside the city looking at it, which is
    the only thing the loop is for. */
-const SHOT_MIN_R = 320;
+/* THE FLOOR MOVED, AND THIS IS WHY IT IS NOT HERE ANY MORE.
+   A minimum framing radius stops a small island pulling the camera inside its own towers.
+   But it was applied to d.r, and d.r is in ISLAND units while the thing the camera is
+   looking at has been magnified by the group's dispScale — so on Al Maryah the floor and
+   the damping multiplied together and framed a radius twice the size of the island on
+   screen. The floor is a camera concern in displayed units and now lives in world-nav.html
+   as SHOT_MIN_DISP. What is declared here is the SUBJECT, in the island's own frame. */
+/* THE SHOT IS THE VENUES, ON EVERY ISLAND — which is what Corniche already did and nowhere else
+   did. Corniche framed the span from Emirates Palace to ADNOC and every other island framed its
+   own coastline, so the flight arrived at Saadiyat looking at a landmass with the Louvre somewhere
+   in it and at Yas looking at a landmass with Ferrari World somewhere in it. The island is the
+   setting; the venues are the subject, and they are the only reason anyone is being flown there.
+
+   Generalised rather than special-cased five ways: the centre is the mean of the island's baked
+   anchors and the radius is the distance from that centre to the furthest of them, with the same
+   1.05 margin Corniche was tuned to. Re-bake and every shot re-aims itself.
+
+   TWO GUARDS, BOTH EARNED. Anchors that the bake did not name keep their authored coordinates,
+   which are stale — written for islands about 190 units across and now sitting inside islands
+   three to seven times that. Framing on those would put the camera in a tight huddle at the
+   island's centre looking at nothing. So unbaked anchors do not vote, and if what is left spans
+   less than a fifth of the island the whole thing falls back to the coastline: a small spread is
+   far more likely to mean bad data than a genuinely compact subject. */
+const SHOT_MIN_SPREAD = 0.20;               // as a fraction of the island's own radius
 for (const d of DISTRICTS){
-  if (d.id !== 'corniche'){
-    d.shot = { x:0, z:0, r:Math.max(SHOT_MIN_R, d.r) };
-    continue;
-  }
-  const a = LM.palace, b = LM.adnoc;
-  d.shot = {
-    x: (a.x + b.x) / 2,
-    z: (a.z + b.z) / 2,
-    /* 1.05, NOT 0.62. At 0.62 the three landmarks separated correctly and the camera ended up
-       standing among them: no horizon, no skyline against the sky, the shot reading as a street
-       rather than a city. The span between the palace and ADNOC is the SUBJECT, not the frame —
-       the frame wants that span plus the sea in front of it and some sky above, which is what
-       every reference photograph of the Corniche is. */
-    r: Math.max(SHOT_MIN_R, Math.hypot(b.x - a.x, b.z - a.z) * 1.05),
-  };
+  const pts = (d.places || []).filter(p => p.baked !== false && (p.x || p.z));
+  d.shot = { x:0, z:0, r:d.r };
+  if (pts.length < 2) continue;
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+  let far = 0;
+  for (const p of pts) far = Math.max(far, Math.hypot(p.x - cx, p.z - cz));
+  if (far < d.r * SHOT_MIN_SPREAD) continue;
+  d.shot = { x:cx, z:cz, r:far * 1.05 };
 }
 
 /* REAL CENTRELINES, ATTACHED WHEN THEY EXIST RATHER THAN WHEN THE ISLAND IS DECLARED.
