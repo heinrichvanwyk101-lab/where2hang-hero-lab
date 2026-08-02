@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v78';
+export const BUILD = 'world v79';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -626,7 +626,15 @@ function isleCoast(id){
        DISTRICTS is declared further down the file; that is fine because this runs at build time,
        not at module evaluation, and the fallback covers an id that is not a district at all. */
     const R = (DISTRICTS.find(x => x.id === id) || {}).r || 60;
-    const n = Math.max(96, Math.ceil(per * R * 7.8 / COAST_SEG_M));
+    /* CAPPED, AND v78 HUNG FOR WANT OF THIS. The formula asks for one sample every six metres,
+       which was 96 points on a drawn island of 1.2 km and becomes about twelve thousand on a real
+       coastline of nineteen. Every one of those is a segment that insideIsle and distToOutline
+       scan per plot candidate, and the fabric now offers hundreds of thousands of candidates.
+
+       2,400 points on Corniche is one sample every eight metres — finer than the two-metre
+       simplification the bake already applied is worth at 7.8 metres to the unit, and the cap
+       only ever bites on the largest island. */
+    const n = Math.min(2400, Math.max(96, Math.ceil(per * R * 7.8 / COAST_SEG_M)));
     c = closedSpline(sm, n);
     /* THE CLOSING DUPLICATE, AND v54 DROPPED IT.
 
@@ -703,14 +711,110 @@ function islandGeometry(id, r){
 }
 
 // Rejection sampling, so buildings land ON the island rather than in the sea.
+/* A UNIFORM GRID OVER THE COASTLINE, because both tests below are called per plot candidate and
+   both were linear in the number of coastline segments.
+
+   v78 made that arithmetic fatal. The block loop is sized by reach / superblock in normalised
+   units, so growing the island radius from 190 to 1,220 took KU from about 11 to 69 — roughly
+   five hundred times the plot candidates — while the outline went from 96 segments to thousands.
+   Half a billion segment tests, and the tab stopped responding. The old numbers hid a cost that
+   was always quadratic; the real ones do not.
+
+   The grid is built once per island, keyed on the same closed outline both tests already used, so
+   it cannot describe a different shape from the one being drawn — which is the fault this file
+   has paid for before. Cell size targets a handful of segments per cell; queries touch a ring of
+   cells rather than the whole coast.
+
+   insideIsle stays an exact crossing count. Only segments whose y range spans the test row can
+   contribute a crossing, so the grid is indexed by ROW for it and by cell for distance. Same
+   segments, two indexes, one build. */
+const gridCache = new Map();
+function isleGridOf(id){
+  let g = gridCache.get(id);
+  if (g) return g;
+  const pts = outlineClosed(id);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of pts){
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const n = pts.length - 1;
+  /* Aim for about four segments a cell. Fewer and the grid itself dominates; more and the query
+     degenerates towards the linear scan it replaced. */
+  const nc   = Math.max(8, Math.min(160, Math.round(Math.sqrt(n / 4))));
+  const cw   = (x1 - x0) / nc || 1, ch = (y1 - y0) / nc || 1;
+  const cells = new Array(nc * nc);
+  const rows  = new Array(nc);
+  const put = (arr, k, v) => { (arr[k] || (arr[k] = [])).push(v); };
+  const ci = v => v < 0 ? 0 : v >= nc ? nc - 1 : v;
+
+  for (let i = 0; i < n; i++){
+    const ax = pts[i][0], ay = pts[i][1], bx = pts[i+1][0], by = pts[i+1][1];
+    const gx0 = ci(Math.floor((Math.min(ax, bx) - x0) / cw));
+    const gx1 = ci(Math.floor((Math.max(ax, bx) - x0) / cw));
+    const gy0 = ci(Math.floor((Math.min(ay, by) - y0) / ch));
+    const gy1 = ci(Math.floor((Math.max(ay, by) - y0) / ch));
+    for (let gy = gy0; gy <= gy1; gy++){
+      put(rows, gy, i);
+      for (let gx = gx0; gx <= gx1; gx++) put(cells, gy * nc + gx, i);
+    }
+  }
+  g = { pts, n, x0, y0, cw, ch, nc, cells, rows };
+  gridCache.set(id, g);
+  return g;
+}
+
 function insideIsle(id, nx, ny){
-  const pts = isleOutline(id);
+  const g = isleGridOf(id);
+  const gy = Math.floor((ny - g.y0) / g.ch);
+  if (gy < 0 || gy >= g.nc) return false;          // outside the bounding box entirely
+  const list = g.rows[gy];
+  if (!list) return false;
+  const P = g.pts;
   let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){
-    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+  for (let k = 0; k < list.length; k++){
+    const i = list[k];
+    const xi = P[i][0], yi = P[i][1], xj = P[i+1][0], yj = P[i+1][1];
     if (((yi > ny) !== (yj > ny)) && (nx < (xj - xi) * (ny - yi) / (yj - yi) + xi)) inside = !inside;
   }
   return inside;
+}
+
+/* Distance to the coast, searched outward one ring of cells at a time. The loop stops as soon as
+   the best distance found is closer than the nearest unexamined ring can possibly be, so a point
+   well inland examines a handful of cells and a point near the shore examines nine. */
+function distToOutlineFast(id, x, y){
+  const g = isleGridOf(id), P = g.pts;
+  const cx = Math.floor((x - g.x0) / g.cw), cy = Math.floor((y - g.y0) / g.ch);
+  const step = Math.min(g.cw, g.ch);
+  let best = Infinity;
+  for (let ring = 0; ring < g.nc; ring++){
+    /* Everything in this ring is at least (ring-1) cells away, so once best beats that no further
+       ring can improve it. */
+    if (best < (ring - 1) * step) break;
+    for (let gy = cy - ring; gy <= cy + ring; gy++){
+      if (gy < 0 || gy >= g.nc) continue;
+      for (let gx = cx - ring; gx <= cx + ring; gx++){
+        if (gx < 0 || gx >= g.nc) continue;
+        // Only the perimeter of the ring is new.
+        if (ring > 0 && Math.abs(gy - cy) !== ring && Math.abs(gx - cx) !== ring) continue;
+        const list = g.cells[gy * g.nc + gx];
+        if (!list) continue;
+        for (let k = 0; k < list.length; k++){
+          const i = list[k];
+          const ax = P[i][0], ay = P[i][1];
+          const dx = P[i+1][0] - ax, dy = P[i+1][1] - ay;
+          const L2 = dx*dx + dy*dy;
+          let t = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const px = ax + t*dx - x, py = ay + t*dy - y;
+          const d = Math.sqrt(px*px + py*py);
+          if (d < best) best = d;
+        }
+      }
+    }
+  }
+  return best;
 }
 
 /* DISTANCE TO THE COAST, replacing every "scale the point out by 1.09 and re-test" in this file.
@@ -733,7 +837,7 @@ function outlineClosed(id){
   }
   return c;
 }
-function distToOutline(id, x, y){ return distToPolyline(x, y, outlineClosed(id)); }
+function distToOutline(id, x, y){ return distToOutlineFast(id, x, y); }
 
 /* ===========================================================================
    THE INWARD OFFSET, and why the ring road needed one.
