@@ -110,6 +110,32 @@ const ISLANDS = [
   { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
 ];
 
+/* THE LANDMARKS, LOOKED UP BY NAME RATHER THAN TYPED AS COORDINATES.
+
+   The scene's anchors are absolute unit positions authored against a hand-drawn coastline — palace
+   at x -105, ADNOC at +105 — which spanned an island 380 units wide and sit inside two per cent of
+   one 2,440 wide. All three landed on top of each other in the middle, which is why only one of
+   them can be tapped.
+
+   Typing latitudes instead would be the same mistake with better numbers: I would be guessing them
+   and nobody would know which were wrong. OSM already holds these as named features, so the bake
+   asks for them by name and reports what it found. A name that returns nothing is visible in the
+   Action log rather than silently landing at the island's centre.
+
+   `out center` gives a node its position and a way or relation its bounding-box centre, which for
+   a building footprint is the right anchor for a camera to aim at. */
+const LANDMARKS = {
+  corniche: ['Emirates Palace', 'Etihad Towers', 'ADNOC Headquarters', 'Qasr Al Hosn',
+             'Marina Mall', 'Capital Gate', 'Abu Dhabi National Exhibition Centre'],
+  maryah:   ['The Galleria Al Maryah Island', 'Cleveland Clinic Abu Dhabi',
+             'Abu Dhabi Global Market'],
+  reem:     ['Gate Towers', 'Sky Tower', 'Reem Mall'],
+  saadiyat: ['Louvre Abu Dhabi', 'Zayed National Museum', 'Manarat Al Saadiyat',
+             'Berklee Abu Dhabi'],
+  yas:      ['Ferrari World Abu Dhabi', 'Yas Marina Circuit', 'Yas Mall', 'Etihad Arena',
+             'Yas Waterworld', 'SeaWorld Abu Dhabi'],
+};
+
 /* ROAD CLASSES KEPT, and the mapping to the three widths the painter already understands.
    Everything below `service` is dropped: driveways and car park aisles are noise at 7.7 metres
    per unit and they outnumber the real network several times over. */
@@ -161,6 +187,19 @@ function query(bbox){
   way["landuse"~"grass|recreation_ground|village_green"](${b});
 );
 out geom;`;
+}
+
+function landmarkQuery(bbox, names){
+  const b = bbox.join(',');
+  /* Escaped for the regex, anchored, and joined into one alternation so the whole set costs a
+     single request. Overpass regex is POSIX, so no lookarounds and no case-insensitive flag —
+     exact names it is, which is also what makes a miss meaningful. */
+  const alt = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return `[out:json][timeout:120];
+(
+  nwr["name"~"^(${alt})$"](${b});
+);
+out center;`;
 }
 
 async function overpass(q){
@@ -418,6 +457,35 @@ async function bakeIsland(isle, proj){
     }
   }
 
+  /* A SECOND, SMALL QUERY. Folding these into the main one would work, but a landmark that fails
+     to parse would take the whole island's coastline down with it, and the failure modes of a
+     name list and a bounding-box sweep are nothing alike. */
+  const marks = {};
+  const wanted = LANDMARKS[isle.id] || [];
+  if (wanted.length){
+    try {
+      const lm = await overpass(landmarkQuery(isle.bbox, wanted));
+      for (const el of lm.elements || []){
+        const nm = el.tags && el.tags.name;
+        if (!nm || !wanted.includes(nm)) continue;
+        const lat = el.lat != null ? el.lat : (el.center && el.center.lat);
+        const lon = el.lon != null ? el.lon : (el.center && el.center.lon);
+        if (lat == null) continue;
+        const [x, y] = proj.fwd(lat, lon);
+        /* First match wins. Several of these names exist more than once in OSM — a mall and its
+           bus stop, a circuit and its grandstand — and taking the first keeps the bake
+           deterministic rather than dependent on element order between runs. */
+        if (!marks[nm]) marks[nm] = { x:rd1(x), y:rd1(y) };
+      }
+    } catch (e){
+      process.stderr.write(`    ${isle.id}: landmark query failed (${e.message}) — continuing\n`);
+    }
+    const missing = wanted.filter(n => !marks[n]);
+    process.stderr.write(`  ${isle.id}: landmarks ${Object.keys(marks).length}/${wanted.length}` +
+      (missing.length ? `  MISSING: ${missing.join(', ')}` : '') + `\n`);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
   const chains = stitch(coastWays);
   const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]));
   const outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
@@ -444,7 +512,7 @@ async function bakeIsland(isle, proj){
                        (extent ? `, extent ${(extent.w/1000).toFixed(2)} x ${(extent.d/1000).toFixed(2)} km` : '') +
                        `\n`);
 
-  return { id:isle.id, name:isle.name, extent, outline, roads, buildings, parks };
+  return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks };
 }
 
 const rd1 = p => Array.isArray(p) ? [Math.round(p[0]*10)/10, Math.round(p[1]*10)/10]
@@ -490,7 +558,8 @@ async function main(){
        trap for whatever loads it next. Forty kilobytes is a fair price for the artefact staying
        self-describing. */
     index.islands.push({ id:baked.id, name:baked.name, file:`isle-${baked.id}.json`,
-                         extent:baked.extent, outline:baked.outline, bytes,
+                         extent:baked.extent, outline:baked.outline,
+                         landmarks:baked.landmarks, bytes,
                          counts:{ outline:baked.outline.length, roads:baked.roads.length,
                                   buildings:baked.buildings.length,
                                   withHeight:baked.buildings.filter(b => b.h).length,
