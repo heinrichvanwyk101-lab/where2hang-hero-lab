@@ -1,6 +1,6 @@
 # PASTE TARGET: where2hang-hero-lab/.github/workflows/bake-city.yml
 # ==============================================================================================
-# Fetches Abu Dhabi from OpenStreetMap and commits data/abudhabi.json back to the repo.
+# Fetches Abu Dhabi from OpenStreetMap and commits data/index.json plus one file per island.
 #
 # MANUAL ONLY. No schedule and no push trigger, deliberately: OSM changes under you, and a
 # nightly bake would mean the scene quietly moved between two deploys with no commit explaining
@@ -45,19 +45,21 @@ jobs:
 
       - name: Report
         run: |
-          ls -lh data/abudhabi.json
-          node -e "const d=require('./data/abudhabi.json');
-            for(const i of d.islands)
-              console.log(i.id.padEnd(10), 'outline', String(i.outline.length).padStart(4),
-                          'roads', String(i.roads.length).padStart(5),
-                          'buildings', String(i.buildings.length).padStart(6),
-                          'with height', i.buildings.filter(b=>b.h).length);"
+          ls -lh data/
+          node -e "const d=require('./data/index.json'); const c=d.islands;
+            console.log('origin', d.origin.lat, d.origin.lon);
+            for(const i of c) console.log(i.id.padEnd(10),
+              (i.extent? (i.extent.w/1000).toFixed(2)+' x '+(i.extent.d/1000).toFixed(2)+' km' : 'no outline').padEnd(18),
+              'roads', String(i.counts.roads).padStart(5),
+              'buildings', String(i.counts.buildings).padStart(6),
+              'height', String(i.counts.withHeight).padStart(5),
+              (i.bytes/1048576).toFixed(2)+' MB');"
 
       - name: Commit
         run: |
           git config user.name  'bake-city'
           git config user.email 'actions@github.com'
-          git add data/abudhabi.json
+          git add data/
           if git diff --staged --quiet; then
             echo 'No change in the source data.'
           else
