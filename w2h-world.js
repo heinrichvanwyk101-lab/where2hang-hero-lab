@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v80';
+export const BUILD = 'world v81';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -109,6 +109,28 @@ if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via
    to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
    fault came from the data or from everything else. */
 const BASE = opts.basemap || null;
+
+/* STAGE TIMING, AND IT IS HERE BECAUSE SIXTEEN SECONDS IS TOO SLOW TO GUESS AT.
+
+   The real data made the scene forty times heavier and the build went from imperceptible to
+   sixteen seconds. There are five plausible culprits — the fabric loop, the ground canvas, the
+   coastline resample, the road skeleton, the geometry upload — and I have opinions about which,
+   which is exactly the reason to measure instead. Every wrong guess here costs another sixteen
+   second round trip on a phone.
+
+   Wrapping the named stages rather than threading marks through them: the timing is additive,
+   removable in one block, and cannot drift out of step with the code it measures. performance.now
+   is monotonic and sub-millisecond, and the wrapper costs a few microseconds against stages that
+   run for hundreds of milliseconds. */
+const PERF = {};
+const timed = (name, fn) => function(...a){
+  const t0 = performance.now();
+  const r = fn.apply(this, a);
+  PERF[name] = (PERF[name] || 0) + (performance.now() - t0);
+  PERF['#' + name] = (PERF['#' + name] || 0) + 1;
+  return r;
+};
+const T0 = performance.now();
 
 const world = new THREE.Group();
 scene.add(world);
@@ -3094,6 +3116,16 @@ if (BASE){
   }
 }
 
+/* Wrapped after every declaration and before the first call. These are function declarations, so
+   the binding is assignable and every existing call site picks the wrapper up unchanged. */
+isleCoast    = timed('isleCoast',    isleCoast);
+isleGridOf   = timed('isleGridOf',   isleGridOf);
+isleShape    = timed('isleShape',    isleShape);
+roadSkeleton = timed('roadSkeleton', roadSkeleton);
+groundPlan   = timed('groundPlan',   groundPlan);
+paintGround  = timed('paintGround',  paintGround);
+urbanFabric  = timed('urbanFabric',  urbanFabric);
+
 const pickTargets = [];
 
 DISTRICTS.forEach(d => {
@@ -4527,7 +4559,26 @@ world.traverse(o => {
 });
 water.castShadow = false;
 
-return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets,
+/* THE BREAKDOWN. Sorted by cost, with call counts, and the remainder named honestly: whatever the
+   wrapped stages do not account for is geometry construction, instancing and upload, and calling
+   that "other" rather than leaving it out is the difference between a measurement and a flattering
+   one. */
+try {
+  const total = performance.now() - T0;
+  const rows = Object.keys(PERF).filter(k => k[0] !== '#')
+    .map(k => ({ stage:k, ms:Math.round(PERF[k]), calls:PERF['#' + k],
+                 pct:Math.round(PERF[k] / total * 100) }))
+    .sort((a, b) => b.ms - a.ms);
+  const named = rows.reduce((a, r) => a + r.ms, 0);
+  rows.push({ stage:'(everything else)', ms:Math.round(total - named), calls:1,
+              pct:Math.round((total - named) / total * 100) });
+  console.info('buildWorld ' + Math.round(total) + ' ms');
+  console.table ? console.table(rows) : rows.forEach(r =>
+    console.info('  ' + r.stage.padEnd(14) + String(r.ms).padStart(6) + ' ms  ' +
+                 String(r.pct).padStart(3) + '%  x' + r.calls));
+} catch (e){ /* timing must never break the build */ }
+
+return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which

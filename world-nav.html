@@ -586,7 +586,7 @@ const propKit = createPropKit();
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals } =
+        propCount, tickSignals, PERF } =
   buildWorld(scene, kit, {
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -1511,6 +1511,12 @@ function frame(){
       /* V, WHICH THE OVERLAY NEVER SHOWED. The four stamps tell you which module CONTENT is
          live, which does catch a stale module — but not which query string fetched it, so a
          forgotten bump and a Pages cache miss looked identical from here. */
+      /* THE BUILD BREAKDOWN, ON SCREEN RATHER THAN IN THE CONSOLE. This is authored on a phone,
+         where console.table might as well not exist — a timing that can only be read by attaching
+         a desktop debugger is a timing nobody will look at. Top four stages, one line. */
+      (PERF ? 'stages ' + Object.keys(PERF).filter(k => k[0] !== '#')
+          .map(k => [k, PERF[k]]).sort((a, b) => b[1] - a[1]).slice(0, 4)
+          .map(([k, v]) => k + ' ' + Math.round(v)).join('  ') + '\n' : '') +
       'cache  ' + V + '   shadow ' + shadowNote + '\n' +
       // The number to tune against, on the device rather than in an estimate.
       'frame  ' + ftStat;
