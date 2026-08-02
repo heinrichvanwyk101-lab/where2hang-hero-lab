@@ -279,9 +279,23 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v49', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v50', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
+
+/* WITH THE OTHER URL FLAGS, AND THAT POSITION IS THE FIX.
+
+   These were declared next to the functions that read them, about 250 lines below the opening
+   shot. addFootprints is a function declaration and hoists; a const does not. So setDistrict on
+   Corniche — the one island built eagerly, before the attract loop exists — reached FP_ON while
+   it was still in its temporal dead zone and threw. The other four islands worked, because they
+   are built later, by which time the line had run.
+
+   A fault that hits exactly one of five cases and looks like a data problem on the other four.
+   The error trap named it in one load; without it this would have read as "Corniche has no
+   footprints" and sent me looking at the bake. */
+const FP_ON = location.search.includes('fp');
+const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
 if (DEBUG) document.getElementById('dbg').classList.add('on');
 
 
@@ -1932,8 +1946,6 @@ function whenRoads(id, ms = 4000){
 
    Per island, on demand, at the moment its city is built. Same lifecycle as the roads, same
    reason — the ground and the buildings want to arrive together or the island assembles twice. */
-const FP_ON = location.search.includes('fp');
-const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
 
 async function footprintsFrom(d){
   const idx = window.__basemapIndex;
