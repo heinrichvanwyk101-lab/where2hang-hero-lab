@@ -1,0 +1,68 @@
+# PASTE TARGET: where2hang-hero-lab/.github/workflows/bake-city.yml
+# ==============================================================================================
+# Fetches Abu Dhabi from OpenStreetMap and commits data/index.json plus one file per island.
+#
+# MANUAL ONLY. No schedule and no push trigger, deliberately: OSM changes under you, and a
+# nightly bake would mean the scene quietly moved between two deploys with no commit explaining
+# why. Run it when you want new data, look at the diff, keep it or revert it.
+#
+# TO RUN: Actions tab -> "Bake city data" -> Run workflow. On the phone this is four taps.
+# The island input is optional; leave it blank for all five, or name one to re-bake just that.
+# ==============================================================================================
+name: Bake city data
+
+on:
+  workflow_dispatch:
+    inputs:
+      island:
+        description: 'One island only (corniche, maryah, reem, saadiyat, yas) — blank for all'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  # Two bakes at once would race on the commit and get the repo rate-limited by Overpass.
+  group: bake-city
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step and no package.json. The script uses built-in fetch and node:fs only,
+      # which means there is no lockfile to drift, no supply chain, and nothing to maintain.
+      - name: Bake
+        run: node tools/bake-city.mjs ${{ inputs.island }}
+
+      - name: Report
+        run: |
+          ls -lh data/
+          node -e "const d=require('./data/index.json'); const c=d.islands;
+            console.log('origin', d.origin.lat, d.origin.lon);
+            for(const i of c) console.log(i.id.padEnd(10),
+              (i.extent? (i.extent.w/1000).toFixed(2)+' x '+(i.extent.d/1000).toFixed(2)+' km' : 'no outline').padEnd(18),
+              'roads', String(i.counts.roads).padStart(5),
+              'buildings', String(i.counts.buildings).padStart(6),
+              'height', String(i.counts.withHeight).padStart(5),
+              (i.bytes/1048576).toFixed(2)+' MB');"
+
+      - name: Commit
+        run: |
+          git config user.name  'bake-city'
+          git config user.email 'actions@github.com'
+          git add data/
+          if git diff --staged --quiet; then
+            echo 'No change in the source data.'
+          else
+            git commit -m "Bake city data from OSM${{ inputs.island && format(' ({0})', inputs.island) || '' }}"
+            git push
+          fi
