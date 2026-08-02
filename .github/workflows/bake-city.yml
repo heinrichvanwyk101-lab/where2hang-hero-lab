@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # No install step and no package.json. The script uses built-in fetch and node:fs only,
       # which means there is no lockfile to drift, no supply chain, and nothing to maintain.
