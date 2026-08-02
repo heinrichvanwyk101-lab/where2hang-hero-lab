@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v101';
+export const BUILD = 'world v102';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4715,7 +4715,19 @@ function footprintsFor(d, list){
 
   const M = new THREE.Object3D(), idx = new Map();
   for (const sp of specs){
-    M.position.set(sp.x, GROUND + sp.h / 2, sp.z);
+    /* GROUND, NOT GROUND + h/2. The profile geometry is built with its rings at y = t for t in
+       0..1 — its origin is at the BASE, not the centre. urbanFabric has always written
+       `GROUND + o.y` with no half-height term because there is no half-height to add, and this
+       line assumed a centred box.
+
+       Every footprint was therefore lifted by half its own height. A 200 m tower floated 100 m;
+       a 20 m block floated 10 m; wide low buildings floated a little and read as raised ground.
+       Both symptoms, one term, and the error scaled with height exactly as the screenshots did.
+
+       It survived this long because it is invisible from any distance where the gap is smaller
+       than a pixel, and the district and world shots are all at that distance. It only shows at
+       place range, which is where it was eventually seen. */
+    M.position.set(sp.x, GROUND, sp.z);
     M.rotation.set(0, -sp.rot, 0);
     M.scale.set(sp.w, sp.h, sp.dp);
     M.updateMatrix();
