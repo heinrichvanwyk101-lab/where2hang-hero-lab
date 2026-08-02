@@ -658,7 +658,25 @@ fitClip();
    loading state can cover it, is better than doing it in the frame the user is waiting on. If it
    turns out to be small, this line costs nothing and the answer is texture and buffer size
    instead — which is a completely different piece of work. */
-try { renderer.compile(scene, camera); } catch (e){ console.warn('compile:', e.message); }
+/* AWAIT THE COMPILE, because the synchronous one lies about when it finished.
+
+   renderer.compile returned in 13 ms and the first frame then cost 9.7 seconds. Moving the drawing
+   buffer allocation earlier removed 5.4 seconds from resize and the total did not change by a
+   millisecond — firstFrame simply grew by the same amount. Work that moves around but never
+   shrinks is work being deferred, and the only thing deferring it is the GL driver: compile queues
+   program builds and returns, and the first frame blocks until the queue drains.
+
+   compileAsync resolves when compilation has actually happened, so the number it produces is the
+   real one. If the phase comes back at nine seconds then this is shader compilation after all and
+   the fix is fewer material permutations. If it comes back at nothing, the cost is texture and
+   buffer upload and the fix is smaller textures.
+
+   Guarded on existence — compileAsync arrived in three r162 and the importmap pin is not something
+   to discover the hard way at run time. */
+try {
+  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+  else renderer.compile(scene, camera);
+} catch (e){ console.warn('compile:', e.message); }
 phase('compile');
 
 /* Total texture pixels, since 330 textures says nothing about their size and a single 4096 ground
