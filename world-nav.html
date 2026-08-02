@@ -189,11 +189,26 @@ try {
    TO PIN A BUILD, replace it with a literal: const V = '?v=31'. Worth doing when profiling, so
    the numbers are not measured against a cold fetch every time.
    =========================================================================== */
+/* PHASE TIMING FOR THE PAGE, because the stage timing inside buildWorld answered a different
+   question than the one being asked.
+
+   buildWorld measured 3,287 ms of a fourteen second load. Everything else — fetching four modules,
+   generating the city kit's window textures, the PMREM environment map, shader compilation and the
+   first render — was outside it and therefore invisible. Textures went from 97 to 338 over the same
+   change, which is a hint but not a measurement, and I have already spent one round trip on a
+   confident guess about paintGround that was wrong.
+
+   Same discipline one level up: mark the phases, put them on screen, then decide. */
+const PH = {}; let _phT = performance.now();
+const phase = name => { PH[name] = performance.now() - _phT; _phT = performance.now(); };
+const PAGE_T0 = performance.now();
+
 const V = '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
 const PROPS = await import('./w2h-props.js' + V);
 const BMAP  = await import('./w2h-basemap.js' + V);
+phase('import');
 
 /* THE BASEMAP, FETCHED BEFORE THE WORLD IS BUILT.
 
@@ -242,6 +257,7 @@ if (!location.search.includes('drawn')){
     console.warn('basemap unavailable, falling back to drawn outlines:', e.message);
   }
 }
+phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
@@ -581,8 +597,11 @@ function fitShadow(){
 
 
 /* The two content modules, in order. City kit first: the world needs its landmark builders. */
+phase('renderer');
 const kit     = createCityKit(renderer);
+phase('cityKit');
 const propKit = createPropKit();
+phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
@@ -602,6 +621,7 @@ const STATE = { WORLD:'world', DISTRICT:'district', PLACE:'place' };
 let state = STATE.WORLD;
 let activeDistrict = null, activePlace = null;
 
+phase('buildWorld');
 fitClip();
 
 const goal = { target:new THREE.Vector3(0,0,-40), dist:430, elev:300, angle:0, fov:52 };
@@ -1495,6 +1515,14 @@ function frame(){
   updateLabels();
   renderer.info.reset();
   composer.render();
+  /* FIRST FRAME, ONCE. Everything before this is setup the user is staring at a blank screen
+     through; everything after is the scene running. Shader compilation lands here rather than in
+     any of the phases above, because three.js compiles a material the first time it draws with it
+     — so a large first-frame number means programs, not geometry. */
+  if (PH.firstFrame === undefined){
+    PH.firstFrame = performance.now() - _phT;
+    PH['#page'] = performance.now() - PAGE_T0;
+  }
   frameStats(performance.now() - t0);
 
   if (DEBUG){
@@ -1518,6 +1546,9 @@ function frame(){
          showed four of eight, which is how a measurement turns into another guess: the two stages
          that were visible accounted for three seconds of fourteen and I could not see where the
          other eleven went. Pairs per line, so it fits and still reads. */
+      'phase  ' + Object.keys(PH).filter(k => k[0] !== '#')
+        .map(k => k + ' ' + Math.round(PH[k])).join('  ') + '\n' +
+      '       total ' + Math.round(PH['#page'] || 0) + ' ms\n' +
       (PERF ? (() => {
         const rows = Object.keys(PERF).filter(k => k[0] !== '#')
           .map(k => [k, Math.round(PERF[k])]).sort((a, b) => b[1] - a[1]);
