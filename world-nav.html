@@ -279,7 +279,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v50', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v51', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -897,7 +897,12 @@ function sunSafe(a){
    framing moves. */
 function fitDist(r, fovDeg){
   const v = Math.tan(fovDeg * Math.PI / 360);
-  return r / Math.min(v * (camera.aspect || 0.46), v);
+  /* Clamped, not trusted. aspect arrives from the DOM and the DOM is allowed to be briefly
+     absurd; a camera distance is not. 0.3 to 3.0 covers a folded phone through an ultrawide, and
+     anything outside that is a measurement error rather than a screen. */
+  const a = Math.min(3.0, Math.max(0.30, camera.aspect || 0.46));
+  const d = r / Math.min(v * a, v);
+  return Number.isFinite(d) ? d : r * 5.7;
 }
 
 /* Elevation as a fraction of DISTANCE, not of the subject radius, which is what keeps the pitch
@@ -1741,6 +1746,13 @@ composer.addPass(smaa);
 let _resized = false;
 function resize(){
   const w = window.innerWidth, h = window.innerHeight, pr = renderer.getPixelRatio();
+  /* REFUSE A ZERO. Android reports innerWidth or innerHeight as 0 during a fold transition and
+     when the tab is backgrounded, and this device folds. aspect then becomes 0, Infinity or NaN;
+     fitDist divides by it and hands goal.dist an Infinity; cur.dist lerps toward it and the
+     camera position goes non-finite. Nothing renders after that and nothing ever recovers,
+     because the only thing that would re-frame is another resize.
+     A black screen that survives every subsequent frame is the signature. */
+  if (!(w > 0 && h > 0)) return;
   const first = !_resized; _resized = true;
   let m = first ? performance.now() : 0;
   const mark = k => { if (first){ PH[k] = performance.now() - m; m = performance.now(); } };
@@ -1905,6 +1917,16 @@ function noteError(where, e){
   console.error(where, e);
 }
 window.addEventListener('error', ev => noteError('window', ev.error || ev.message));
+/* THE OTHER BLACK SCREEN. A lost WebGL context draws nothing and throws nothing: no exception,
+   no console line, a live page with an empty canvas. On Android it is caused by backgrounding
+   the tab or by memory pressure, and five islands of instanced footprints is a great deal more
+   memory than this page used to hold. Identical to a NaN camera from the outside; completely
+   different underneath. Naming it is the whole point. */
+canvas.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  noteError('webgl', new Error('context lost — reload required'));
+});
+canvas.addEventListener('webglcontextrestored', () => { ERR.msg = null; ERR.n = 0; });
 window.addEventListener('unhandledrejection', ev => noteError('promise', ev.reason));
 
 const attract = { on:false, i:0, until:0, lastInput:performance.now() };
@@ -2111,6 +2133,17 @@ function frame(){
     elev,
     cur.target.z + Math.cos(a) * dist
   );
+  /* THE LAST LINE OF DEFENCE, AND IT IS CHEAP. One NaN anywhere upstream — an aspect, a radius,
+     a lerp against an Infinity — propagates into camera.position and every frame after it draws
+     nothing. Three comparisons per frame buys a scene that recovers rather than one that is black
+     until the page is reloaded, and it says so on the overlay rather than recovering silently. */
+  if (!Number.isFinite(camera.position.x + camera.position.y + camera.position.z)){
+    noteError('camera', new Error('non-finite position — reframing'));
+    cur.dist = 600; cur.elev = 400; cur.angle = 0;
+    cur.target.set(0, 0, 0);
+    camera.position.set(0, 400, 600);
+    reframe();
+  }
   camera.lookAt(cur.target);
 
   /* THE HAZE FOLLOWS THE CAMERA, EVERY FRAME. cur.dist and cur.elev are the damped values the
@@ -2285,6 +2318,8 @@ function frame(){
       /* THE LOOP, ON SCREEN. "It stopped flying" has three causes that look identical from the
          outside — the flag is set, the user touched something, or it threw — and the overlay
          could distinguish none of them. */
+      'cam    aspect ' + (camera.aspect || 0).toFixed(2) + '  dist ' + Math.round(cur.dist) +
+        '  elev ' + Math.round(cur.elev) + '  fov ' + Math.round(camera.fov) + '\n' +
       'loop   ' + (ATTRACT_OFF ? 'off (?still)'
         : attract.dead ? 'DEAD'
         : attract.on ? ('leg ' + attract.i + ' ' + (ATTRACT[attract.i].id || 'world') + '  next in ' +
