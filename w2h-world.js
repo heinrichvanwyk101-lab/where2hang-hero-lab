@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v96';
+export const BUILD = 'world v100';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -109,6 +109,9 @@ if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via
    to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
    fault came from the data or from everything else. */
 const BASE = opts.basemap || null;
+/* Read here rather than passed through opts: it governs one line in one function and threading it
+   through the module boundary would be more surface than the flag is worth. */
+const NO_CLIP = typeof location !== 'undefined' && location.search.includes('noclip');
 
 /* STAGE TIMING, AND IT IS HERE BECAUSE SIXTEEN SECONDS IS TOO SLOW TO GUESS AT.
 
@@ -4630,6 +4633,24 @@ function footprintsFor(d, list){
   let real = 0;
   for (const b of list){
     const nx = b.x / d.r, ny = -b.z / d.r;
+    /* THE COASTLINE TEST, WHICH THIS NEVER HAD AND urbanFabric ALWAYS DID.
+
+       The generator tests every plot against insideIsle before it emits. footprintsFor placed
+       whatever the payload contained, and the bake selects buildings by BOUNDING BOX — so piers,
+       reclaimed edges and anything OSM holds inside the box but outside the shore came with them.
+
+       Both symptoms are this one cause. Well outside the outline a building stands in open water.
+       JUST outside it still sits at GROUND while the ground beneath it is the beach skirt sloping
+       away, so it hangs in the air over the sand. Same test fixes both.
+
+       The frame is measured, not argued: Corniche passes 17,772 of 18,776 against this convention
+       and 8,964 against the flipped one, so the normalisation is right and the thousand that fail
+       are genuinely off the island. That measurement is the only reason this line is here — the
+       earlier version of it was reasoned about and thrown away twice.
+
+       ?noclip disables it, because a filter that removes a thousand objects should stay
+       switchable and because the comparison is what proved it in the first place. */
+    if (!NO_CLIP && !insideIsle(d.id, nx, ny)) continue;
     let h = b.h, isReal = h != null && h > 1;
     if (isReal) real++;
     else {
