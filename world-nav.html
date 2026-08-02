@@ -1550,14 +1550,15 @@ function frame(){
   updateLabels();
   renderer.info.reset();
   composer.render();
-  /* FIRST FRAME, ONCE. Everything before this is setup the user is staring at a blank screen
-     through; everything after is the scene running. Shader compilation lands here rather than in
-     any of the phases above, because three.js compiles a material the first time it draws with it
-     — so a large first-frame number means programs, not geometry. */
-  if (PH.firstFrame === undefined){
-    PH.firstFrame = performance.now() - _phT;
-    PH['#page'] = performance.now() - PAGE_T0;
-  }
+  /* THE FIRST-FRAME MARK LIVES IN THE PROBE BLOCK BELOW, and it used to live here as well.
+
+     Two drops each inserted a block guarded on `PH.firstFrame === undefined` immediately above
+     frameStats. The first ran, set the flag, and left the second — the one with the probes in it —
+     permanently unreachable. The overlay showed no upload, shadowPass or postFX rows and I spent a
+     round trip wondering why the diagnostics were silent, which is the same duplicate-guard fault
+     this file's own header warns about for cache strings.
+
+     One block, one guard. */
   /* THREE PROBE RENDERS, ONCE, BEFORE THE FIRST REAL FRAME IS MEASURED.
 
      compile came back at 13 ms, so the 10 seconds is not shader programs — it is upload, the
