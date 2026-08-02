@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v15';
+export const BUILD = 'city v16';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -432,19 +432,41 @@ function emiratesPalace(x0, z0){
      the generated fabric, because the palace is the one building on the island made of dressed
      stone rather than render or precast — and at dusk that difference is most of what makes it
      read as a palace instead of a long low block. */
+  /* THE PALACE WENT THE SAME COLOUR AS THE CITY, and that is a new fault created by fixing an
+     older one.
+
+     world v77 added painted white render at 0xE9E4DA and gave it a third of the fabric, which is
+     right — it is the commonest wall in Abu Dhabi and its absence was why the island read gold.
+     But the palace stone was 0xE7D5B0, which is within a couple of points of it. So the one
+     building that had been distinct by being warmer than everything around it is now the same
+     value as a third of its neighbours, and the separation that identified it is gone.
+
+     Every photograph has this building as terracotta-rose against pale towers. That contrast does
+     as much identifying work as the domes do — arguably more at distance, where the dome rhythm
+     is a few pixels and the colour is the whole silhouette. Pulled warm and red, and away from
+     anything the fabric can produce: the warmest thing in the generated stock is limestone render
+     at 0xE0C79A, and this now sits clearly on the red side of it.
+
+     THE ARCADE AND THE DOMES STAY PALE. The building is not one colour — the dressed stone is
+     rose, the arcade soffits and the dome shells catch the light and go almost cream. Warming all
+     three together would have produced a uniform terracotta block and thrown away the internal
+     contrast that makes the mass legible. */
   const stone = new THREE.MeshStandardMaterial({
-    color:0x14110C, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
-  stone.userData.duskColor = 0xE7D5B0;
+    color:0x191009, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
+  stone.userData.duskColor = 0xC98F63;
   /* The palace has its own three materials rather than going through cityMaterial, so it needs
      its Day colours set here or it falls through to the switcher's flat fallback exactly as the
      towers did. No map: this is limestone with arcades cut into it, not a curtain wall, and a
      window grid on it would be wrong at any hour. The relief comes from the geometry. */
   stone.userData.dayMats = new THREE.MeshStandardMaterial({
-    color:0xE4D7BE, roughness:0.92, metalness:0.03 });
+    color:0xC98055, roughness:0.92, metalness:0.03 });
   const arch = new THREE.MeshStandardMaterial({
     color:0x1A150E, roughness:0.9, emissive:C.gold, emissiveIntensity:0.10 });
-  arch.userData.duskColor = 0xEFE0C0;
-  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEDE2C9, roughness:0.9 });
+  /* Warmed a step to stay in the same family as the stone below it — an arcade cut into rose
+     limestone is not cream — but kept clearly lighter, because it is the step up in the three-tone
+     hierarchy this builder has always used. */
+  arch.userData.duskColor = 0xE8BE93;
+  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6BB92, roughness:0.9 });
   const glow = new THREE.MeshStandardMaterial({
     color:0x2A2216, roughness:0.7, emissive:C.gold, emissiveIntensity:0.34 });
   glow.userData.duskColor = 0xF4E4BC;
