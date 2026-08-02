@@ -213,11 +213,31 @@ let basemap = null;
 if (!location.search.includes('drawn')){
   try {
     const idx = await BMAP.loadIndex('data/');
-    basemap = BMAP.sceneIslands(idx, 0);
+    const isles = BMAP.sceneIslands(idx, 0);
     window.__basemapIndex = idx;
-    console.info('basemap: ' + Object.keys(basemap).length + ' islands, ' +
-      Object.entries(basemap).map(([k, v]) =>
-        k + ' r=' + Math.round(v.r) + ' x' + v.scale.toFixed(2)).join('  '));
+
+    /* AN EMPTY TABLE IS A FAILURE, NOT A BASEMAP, and the first deploy proved why this check has
+       to exist. index.json was a bake old — it carried counts.outline but no outline array — so
+       sceneIslands skipped every island and returned {}. `opts.basemap || null` then saw an object,
+       called it present, and buildWorld fell back island by island to the drawn shapes. The scene
+       rendered exactly as v77 and said nothing. Twenty minutes went into looking for a fault in
+       geometry that had never been reached.
+
+       Silence is the bug. Fall back if you must, but say which and say why. */
+    const n = Object.keys(isles).length;
+    if (!n){
+      console.warn('basemap: index.json has no outlines — re-run the bake Action. ' +
+                   'Falling back to drawn shapes.');
+    } else if (n < (idx.islands || []).length){
+      console.warn('basemap: only ' + n + ' of ' + idx.islands.length +
+                   ' islands have outlines; the rest fall back to drawn shapes.');
+    }
+    if (n){
+      basemap = isles;
+      console.info('basemap: ' + n + ' islands — ' +
+        Object.entries(isles).map(([k, v]) =>
+          k + ' r=' + Math.round(v.r) + ' x' + v.scale.toFixed(2)).join('  '));
+    }
   } catch (e){
     console.warn('basemap unavailable, falling back to drawn outlines:', e.message);
   }
