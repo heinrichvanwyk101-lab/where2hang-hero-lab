@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v87';
+export const BUILD = 'world v88';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3168,8 +3168,23 @@ urbanFabric  = timed('urbanFabric',  urbanFabric);
    Derived from the landmark anchors rather than typed, so it follows the bake: the centre is the
    midpoint of the palace and ADNOC, and the radius is the distance between them with a margin.
    Re-bake the city and the shot re-aims itself. */
+/* A SHOT FOR EVERY ISLAND, because framing d.r is wrong at both ends of the size range and the
+   attract loop flies through all of it.
+
+   Corniche is nineteen kilometres and the subject is four of them. Al Maryah is 2.4 kilometres and
+   d.r * 5.7 puts the camera INSIDE the towers looking up — the same arithmetic failing in the
+   opposite direction, because a small island's radius is smaller than the distance needed to see
+   anything at all.
+
+   So the framing radius is clamped to a floor. Below about 320 units the shot stops shrinking with
+   the island and holds a distance that keeps the camera outside the city looking at it, which is
+   the only thing the loop is for. */
+const SHOT_MIN_R = 320;
 for (const d of DISTRICTS){
-  if (d.id !== 'corniche') continue;
+  if (d.id !== 'corniche'){
+    d.shot = { x:0, z:0, r:Math.max(SHOT_MIN_R, d.r) };
+    continue;
+  }
   const a = LM.palace, b = LM.adnoc;
   d.shot = {
     x: (a.x + b.x) / 2,
@@ -3179,7 +3194,7 @@ for (const d of DISTRICTS){
        rather than a city. The span between the palace and ADNOC is the SUBJECT, not the frame —
        the frame wants that span plus the sea in front of it and some sky above, which is what
        every reference photograph of the Corniche is. */
-    r: Math.hypot(b.x - a.x, b.z - a.z) * 1.05,
+    r: Math.max(SHOT_MIN_R, Math.hypot(b.x - a.x, b.z - a.z) * 1.05),
   };
 }
 
@@ -4718,6 +4733,11 @@ function buildIsland(id){
   const t = performance.now();
   buildFabricFor(d);
   buildGroundFor(d);
+  /* NO LONGER A PLACEHOLDER. `built` is what the breadcrumb reads to decide between "Tap a place"
+     and "Placeholder island", and it was a static property of the table describing whether an
+     island had hand-authored content. Deferred building made it a lifecycle fact instead: these
+     islands now acquire their city at run time and the label has to follow. */
+  d.built = true;
   console.info('buildIsland ' + id + ' ' + Math.round(performance.now() - t) + ' ms');
   return true;
 }
