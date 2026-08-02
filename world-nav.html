@@ -1567,6 +1567,7 @@ function fillCorniche(){
 }
 if (window.requestIdleCallback) requestIdleCallback(fillCorniche, { timeout:2000 });
 else setTimeout(fillCorniche, 800);
+
 cur.target.copy(goal.target);
 cur.dist = goal.dist; cur.elev = goal.elev; cur.angle = goal.angle; cur.fov = goal.fov;
 phase('setWorld');
@@ -1595,8 +1596,96 @@ function frameStats(ms){
            (1000 / med).toFixed(0) + 'fps';
 }
 
+/* ===========================================================================
+   THE ATTRACT LOOP.
+
+   A hero that opens on a still frame asks the viewer to work out what they are looking at. A hero
+   that is already moving does the explaining itself: the camera flies the archipelago, the city
+   turns under it, and anyone who wants control takes it by touching the screen.
+
+   IT IS ALSO THE LOADING STRATEGY, and that is the part worth noticing. Only the Corniche
+   waterfront is built at load; every other island builds the first time the camera commits to it,
+   which used to mean a hitch on arrival. A scripted path knows where it is going next, so leg n
+   builds leg n+1's island while the viewer is watching leg n. The work happens in full view of
+   something else, which is the only place it is genuinely free.
+
+   NOTHING IS WITHHELD. This is not a title sequence and there is no skip button to find: the first
+   touch cancels it mid-flight and hands the camera over exactly where it is. It comes back after
+   IDLE_MS of nothing, because someone who has stopped interacting is either gone or watching, and
+   both are better served by a moving scene than a parked one.
+
+   Durations are per leg rather than one constant because the legs are not equal: the Corniche
+   opening is the shot that has to land, and Al Maryah is a sliver worth four seconds at most. */
+const ATTRACT = [
+  { id:'corniche', ms:9000 },
+  { id:'maryah',   ms:5000 },
+  { id:'reem',     ms:5500 },
+  { id:'saadiyat', ms:6000 },
+  { id:'yas',      ms:6500 },
+  { world:true,    ms:8000 },
+];
+const IDLE_MS = 22000;
+const attract = { on:false, i:0, until:0, lastInput:performance.now() };
+
+/* Building the NEXT island now, so its arrival is a camera move rather than a camera move plus a
+   second of frozen thread. Wrapped exactly like setDistrict's own call, because a freshly built
+   island needs its materials snapshotted and registered before any view touches them — the fault
+   that killed the render loop the first time this was deferred. */
+function attractPrefetch(n){
+  const leg = ATTRACT[n % ATTRACT.length];
+  if (!leg || !leg.id || !buildIsland) return;
+  const d = DISTRICTS.find(x => x.id === leg.id);
+  if (!d || !buildIsland(d.id)) return;
+  snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
+}
+
+function attractGo(i){
+  attract.i = i % ATTRACT.length;
+  const leg = ATTRACT[attract.i];
+  attract.until = performance.now() + leg.ms;
+  if (leg.world) setWorld();
+  else {
+    const d = DISTRICTS.find(x => x.id === leg.id);
+    if (d) setDistrict(d);
+  }
+  /* Next island built during THIS leg, not at the moment it is needed. */
+  attractPrefetch(attract.i + 1);
+}
+
+function attractStart(){
+  if (attract.on) return;
+  attract.on = true;
+  attractGo(attract.i + 1);
+}
+
+/* Cancel leaves the camera wherever the flight had reached: the goal is not reset, so the ease
+   that was in progress simply finishes and the viewer inherits a composed shot rather than being
+   snapped back to wherever they last were. */
+function attractStop(){
+  attract.on = false;
+  attract.lastInput = performance.now();
+}
+['pointerdown', 'wheel', 'keydown'].forEach(ev =>
+  window.addEventListener(ev, attractStop, { passive:true }));
+
+function attractTick(now){
+  if (attract.on){ if (now >= attract.until) attractGo(attract.i + 1); return; }
+  if (now - attract.lastInput > IDLE_MS) attractStart();
+}
+
+/* KICK OFF HERE, not up beside setDistrict(corniche) where it reads more naturally. ATTRACT is a
+   const declared in this block, and a const is in the temporal dead zone until its declaration
+   runs — referencing it two hundred lines earlier is a ReferenceError, not a hoist. The opening
+   shot is already composed by then; this only decides how long it holds before the flight moves.
+
+   attract.i starts at 0 and the first advance goes to 1, so leg 0 IS that composed shot. */
+attract.on = true;
+attract.until = performance.now() + ATTRACT[0].ms;
+attractPrefetch(1);
+
 function frame(){
   requestAnimationFrame(frame);
+  attractTick(performance.now());
   const t0 = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   const t  = clock.elapsedTime;
