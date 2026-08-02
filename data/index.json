@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-02T07:43:38.187Z",
+ "generated": "2026-08-02T07:50:11.686Z",
  "source": "OpenStreetMap contributors, ODbL 1.0",
  "origin": {
   "lat": 24.49,
@@ -36,18 +36,18 @@
    "name": "Al Maryah",
    "file": "isle-maryah.json",
    "extent": {
-    "x0": -2941.3,
-    "y0": -2004.1,
-    "x1": 650.1,
-    "y1": 1274.9,
-    "w": 3591.4,
-    "d": 3279,
-    "cx": -1145.6,
-    "cy": -364.6
+    "x0": -3412,
+    "y0": 136.3,
+    "x1": -2492.5,
+    "y1": 2571.6,
+    "w": 919.5,
+    "d": 2435.3,
+    "cx": -2952.2,
+    "cy": 1354
    },
-   "bytes": 87512,
+   "bytes": 83728,
    "counts": {
-    "outline": 296,
+    "outline": 47,
     "roads": 661,
     "buildings": 256,
     "withHeight": 185,
@@ -59,20 +59,20 @@
    "name": "Al Reem",
    "file": "isle-reem.json",
    "extent": {
-    "x0": -2719.3,
-    "y0": 1582.6,
-    "x1": 5813.9,
-    "y1": 10883.3,
-    "w": 8533.2,
-    "d": 9300.7,
-    "cx": 1547.3,
-    "cy": 6233
+    "x0": -2941.3,
+    "y0": -2004.1,
+    "x1": 650.1,
+    "y1": 1274.9,
+    "w": 3591.4,
+    "d": 3279,
+    "cx": -1145.6,
+    "cy": -364.6
    },
-   "bytes": 119622,
+   "bytes": 116723,
    "counts": {
-    "outline": 408,
-    "roads": 884,
-    "buildings": 231,
+    "outline": 296,
+    "roads": 871,
+    "buildings": 230,
     "withHeight": 118,
     "parks": 27
    }
@@ -82,18 +82,18 @@
    "name": "Saadiyat",
    "file": "isle-saadiyat.json",
    "extent": {
-    "x0": 3879.4,
-    "y0": -1161.6,
-    "x1": 11479.1,
-    "y1": 9006.2,
-    "w": 7599.7,
-    "d": 10167.8,
-    "cx": 7679.3,
-    "cy": 3922.3
+    "x0": -2719.3,
+    "y0": 1582.6,
+    "x1": 5813.9,
+    "y1": 10883.3,
+    "w": 8533.2,
+    "d": 9300.7,
+    "cx": 1547.3,
+    "cy": 6233
    },
-   "bytes": 250616,
+   "bytes": 244936,
    "counts": {
-    "outline": 772,
+    "outline": 408,
     "roads": 1550,
     "buildings": 761,
     "withHeight": 470,
