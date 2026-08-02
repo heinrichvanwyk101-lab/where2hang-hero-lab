@@ -278,6 +278,27 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.info.autoReset = false;
 
+/* SIZE THE DRAWING BUFFER NOW, WHILE THE SCENE IS EMPTY. This one line was 5,463 ms of a fourteen
+   second load — more than building the entire city, and the largest single cost in the page.
+
+   resize() ran after buildWorld and after compile, by which point 17 Mpx of textures and three
+   million triangles were resident on the GPU. renderer.setSize reallocates the WebGL drawing
+   buffer, and reallocating it forces the driver to revalidate everything already uploaded against
+   the new framebuffer. The three composer sizings in the same function measured 0 ms each — it was
+   only ever this call, and only because of when it happened.
+
+   Called here the buffer is allocated against nothing, which is free. resize() still runs later
+   for the composer targets and still handles every subsequent orientation change; setSize is
+   idempotent, so the second call with the same dimensions costs nothing.
+
+   The size cannot come from resize() itself because the composer does not exist yet — that is why
+   the call was down there in the first place, and why splitting it is the whole fix. */
+{
+  const t = performance.now();
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  PH['r.setSize@empty'] = performance.now() - t;
+}
+
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(C.night);
