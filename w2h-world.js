@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v92';
+export const BUILD = 'world v93';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3217,7 +3217,7 @@ urbanFabric  = timed('urbanFabric',  urbanFabric);
    island's centre looking at nothing. So unbaked anchors do not vote, and if what is left spans
    less than a fifth of the island the whole thing falls back to the coastline: a small spread is
    far more likely to mean bad data than a genuinely compact subject. */
-const SHOT_MIN_SPREAD = 0.20;               // as a fraction of the island's own radius
+const SHOT_MIN_SPREAD = 0.28;               // of the island's own radius, against the framed r
 for (const d of DISTRICTS){
   const pts = (d.places || []).filter(p => p.baked !== false && (p.x || p.z));
   d.shot = { x:0, z:0, r:d.r };
@@ -3226,8 +3226,16 @@ for (const d of DISTRICTS){
   const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
   let far = 0;
   for (const p of pts) far = Math.max(far, Math.hypot(p.x - cx, p.z - cz));
-  if (far < d.r * SHOT_MIN_SPREAD) continue;
-  d.shot = { x:cx, z:cz, r:far * 1.05 };
+  /* TIMES 2.1, NOT 1.05, AND THE FACTOR OF TWO IS THE WHOLE POINT.
+
+     Corniche's tuned figure was hypot(adnoc - palace) * 1.05 — the full SPAN between the two
+     landmarks. far is measured from the centroid, which for two points is half that span, so
+     carrying 1.05 across halved Corniche's framing radius and stood the camera at half the
+     distance on the one island whose shot had already been tuned by eye. 2.1 is 2 x 1.05, which
+     reproduces the old number exactly on two anchors and generalises honestly to more. */
+  const r = far * 2.1;
+  if (r < d.r * SHOT_MIN_SPREAD) continue;
+  d.shot = { x:cx, z:cz, r };
 }
 
 /* REAL CENTRELINES, ATTACHED WHEN THEY EXIST RATHER THAN WHEN THE ISLAND IS DECLARED.
