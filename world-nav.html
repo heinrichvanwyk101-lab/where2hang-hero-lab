@@ -1514,9 +1514,23 @@ function frame(){
       /* THE BUILD BREAKDOWN, ON SCREEN RATHER THAN IN THE CONSOLE. This is authored on a phone,
          where console.table might as well not exist — a timing that can only be read by attaching
          a desktop debugger is a timing nobody will look at. Top four stages, one line. */
-      (PERF ? 'stages ' + Object.keys(PERF).filter(k => k[0] !== '#')
-          .map(k => [k, PERF[k]]).sort((a, b) => b[1] - a[1]).slice(0, 4)
-          .map(([k, v]) => k + ' ' + Math.round(v)).join('  ') + '\n' : '') +
+      /* ONE STAGE PER LINE. The single-line version ran off the right edge of a folded phone and
+         showed four of eight, which is how a measurement turns into another guess: the two stages
+         that were visible accounted for three seconds of fourteen and I could not see where the
+         other eleven went. Pairs per line, so it fits and still reads. */
+      (PERF ? (() => {
+        const rows = Object.keys(PERF).filter(k => k[0] !== '#')
+          .map(k => [k, Math.round(PERF[k])]).sort((a, b) => b[1] - a[1]);
+        const named = rows.reduce((a, r) => a + r[1], 0);
+        rows.push(['(rest)', Math.max(0, Math.round(PERF['#total'] || 0) - named)]);
+        let out = '';
+        for (let i = 0; i < rows.length; i += 2){
+          out += (i ? '       ' : 'stages ') +
+            rows.slice(i, i + 2).map(([k, v]) =>
+              (k + ' ' + v).padEnd(24)).join('') + '\n';
+        }
+        return out;
+      })() : '') +
       'cache  ' + V + '   shadow ' + shadowNote + '\n' +
       // The number to tune against, on the device rather than in an estimate.
       'frame  ' + ftStat;

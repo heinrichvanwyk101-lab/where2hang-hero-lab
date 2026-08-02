@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v81';
+export const BUILD = 'world v82';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4572,6 +4572,7 @@ try {
   const named = rows.reduce((a, r) => a + r.ms, 0);
   rows.push({ stage:'(everything else)', ms:Math.round(total - named), calls:1,
               pct:Math.round((total - named) / total * 100) });
+  PERF['#total'] = total;      // so the on-screen overlay can name the remainder honestly
   console.info('buildWorld ' + Math.round(total) + ' ms');
   console.table ? console.table(rows) : rows.forEach(r =>
     console.info('  ' + r.stage.padEnd(14) + String(r.ms).padStart(6) + ' ms  ' +
