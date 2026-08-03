@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v78', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v80', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1636,6 +1636,19 @@ document.getElementById('vProg').addEventListener('click', () => {
             return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
           } catch (e){ return '?'; } })(),
       'frames   ' + FRAME_MS.join(', ') + '  ms',
+      /* THE ALLOCATION, IN THE UNITS THAT MAKE IT ARGUABLE. Pixels and samples, not megabytes,
+         because the fix is a cap on one of them. */
+      'target   ' + (() => { try {
+          const t = composer.renderTarget1, db = new THREE.Vector2();
+          renderer.getDrawingBufferSize(db);
+          return 'css ' + window.innerWidth + 'x' + window.innerHeight +
+                 '  dpr ' + renderer.getPixelRatio() +
+                 '  buffer ' + Math.round(db.x) + 'x' + Math.round(db.y) +
+                 '  rt ' + t.width + 'x' + t.height +
+                 '  samples ' + (t.samples || 0) +
+                 '  = ' + (t.width * t.height * Math.max(1, t.samples || 1) / 1e6).toFixed(1) +
+                 ' Mpx-samples';
+        } catch (e){ return '?'; } })(),
       '',
       'phase    ' + Object.entries(PH).sort((a, b) => b[1] - a[1])
         .map(([k, v]) => k + ' ' + Math.round(v)).join('  '),
@@ -1953,8 +1966,35 @@ function updateLabels(){
 }
 
 /* ---------- post ---------- */
+/* ?dpr=N and ?msaa=0 — THE TWO NUMBERS THAT DECIDE WHAT THE COMPOSER ALLOCATES.
+
+   p0render came back at 21,037 ms with the world HIDDEN, against bloom 69, tilt 16, output 15 and
+   SMAA 18. An empty scene through the RenderPass. Nothing is being drawn, so the cost is not
+   drawing — it is the target the pass draws into.
+
+   Two things size that target and neither has ever been printed. It is allocated at window size
+   times the device pixel ratio, which on a Fold is not 1. And EffectComposer asks for a
+   MULTISAMPLED target on WebGL2 — four samples by default — so the allocation is four times what
+   the resolution suggests.
+
+   MSAA is also redundant here: SMAA is in this same chain doing the antialiasing, and the renderer
+   itself was constructed with antialias:false for exactly that reason. Nobody asked for four-sample
+   MSAA; EffectComposer's default did.
+
+   Flags rather than a change, because two candidates and one load each settles it — and a
+   diagnostic that needs a deploy per attempt is one nobody runs. */
+const DPR_CAP = (() => {
+  const m = location.search.match(/[?&]dpr=(\d+(?:\.\d+)?)/);
+  const v = m ? parseFloat(m[1]) : 0;
+  return isFinite(v) && v > 0 ? v : 0;
+})();
+if (DPR_CAP) renderer.setPixelRatio(Math.min(renderer.getPixelRatio(), DPR_CAP));
+
 const composer = new EffectComposer(renderer);
 composer.setPixelRatio(renderer.getPixelRatio());
+if (location.search.includes('msaa=0')){
+  [composer.renderTarget1, composer.renderTarget2].forEach(t => { if (t) t.samples = 0; });
+}
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight), 0.60, 0.55, 0.46);
@@ -2832,6 +2872,17 @@ function frame(){
        created after this point is a variant of a family that already compiled, so the realistic
        failure mode is a black object rather than a silent one. ?shadercheck keeps it on. */
     if (!location.search.includes('shadercheck')) renderer.debug.checkShaderErrors = false;
+    /* THE ATTRACT CLOCK STARTS HERE, NOT WHERE IT IS DECLARED.
+
+       attract.until was set at module top-level to now + 9000, and the first frame then blocked for
+       twenty seconds. So the opening leg's deadline had already passed by eleven seconds before the
+       first attractTick ever ran, and the loop advanced immediately — Corniche appeared and was
+       gone, and the flight opened on Al Maryah.
+
+       Nine seconds means nine seconds of someone LOOKING at it. A timer that starts before the
+       first pixel is drawn is measuring the wrong thing, and it will keep being wrong at every
+       load time we get this down to. */
+    attract.until = performance.now() + (ATTRACT[attract.i] || ATTRACT[0]).ms;
     PH.render0    = performance.now() - _tR0;
     PH.render0wall = Date.now() - _dR0;
     /* render0 minus the pipeline pass above. The two together are the old firstFrame. */
