@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v102';
+export const BUILD = 'world v103';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -127,6 +127,17 @@ const NO_CLIP = typeof location !== 'undefined' && location.search.includes('noc
    geometry on stale coordinates and the fix is to rebase the kit onto the baked landmarks the way
    the anchors already were. If they survive, they are footprints and the cause is elsewhere. */
 const NO_KIT = typeof location !== 'undefined' && location.search.includes('nokit');
+
+/* ?fp — read here as well as in the nav, because two decisions about the hand-built kit have to be
+   made at BUILD time and cannot be taken back afterwards: whether the generic filler is added at
+   all, and where the landmark exclusion zones fall. The nav owns the footprint policy; this module
+   owns the geometry, and the geometry has to be authored differently rather than masked. */
+const FP_MODE = typeof location !== 'undefined' && location.search.includes('fp');
+
+/* Island-local rectangles where an authored landmark stands and a surveyed footprint must not.
+   Populated when the kit is built, read by footprintsFor. Empty for every island with no kit,
+   which is every island except Corniche today. */
+const KIT_ZONES = {};
 
 /* STAGE TIMING, AND IT IS HERE BECAUSE SIXTEEN SECONDS IS TOO SLOW TO GUESS AT.
 
@@ -4519,6 +4530,32 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   // the island instead of 2.9 units inside it.
   if (!NO_KIT) [palace, etihad, adnoc].forEach(o => { o.position.y = GROUND; D.add(o); });
 
+  /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
+
+     OSM holds Emirates Palace, Etihad Towers and ADNOC HQ as extruded boxes, and once the real
+     footprints arrived they stood in the same ground as the authored versions — two ADNOC HQs
+     interpenetrating, one of them a flat slab. Deleting the authored one is the wrong way to
+     resolve it: the recognisable silhouette is the whole reason a visitor knows where they are,
+     and a box with a height tag is not a silhouette.
+
+     So the zone is recorded here, where the authored coordinates exist, and footprintsFor drops
+     anything standing in it. MEASURED FROM THE OBJECT, NOT WRITTEN DOWN. A literal rectangle per
+     landmark would be a fourth place the palace's dimensions live, and it would be wrong the
+     first time the kit changed. updateMatrixWorld before the box because the group has not been
+     added to a parent yet, which is exactly why the box comes out in island-local coordinates —
+     the frame the footprint specs are already in. */
+  KIT_ZONES[corniche.id] = [];
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc]){
+    o.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(o);
+    if (!isFinite(b.min.x)) continue;
+    /* Two units of margin, about sixteen metres. The authored landmark and the surveyed footprint
+       agree on roughly where the building is and not on its exact edge, so a zone drawn tight to
+       the kit leaves a sliver of the real one poking out of one side — which reads worse than
+       either fault alone because it looks like a rendering error rather than a decision. */
+    KIT_ZONES[corniche.id].push({ x0:b.min.x - 2, x1:b.max.x + 2, z0:b.min.z - 2, z1:b.max.z + 2 });
+  }
+
   // Low-rise seaward of the towers: the scale contrast that makes the cluster read as enormous.
   const low = kit.lowRise(16, -40, 26, -18, 3, 0.55);
   /* A second row of mixed tower types behind the landmarks, giving the skyline profiles the
@@ -4532,7 +4569,17 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      ground. The western third of the island is now palace grounds and nothing else, which is
      also what is actually there. */
   const row = kit.cityRow(18, -6, 66, 4, 5, 4, 13, 0.62, 0.08, 0.22);
-  if (!NO_KIT) [low, row].forEach(o => { o.position.y = GROUND; D.add(o); });
+  /* GONE WHEN THE FOOTPRINTS ARE ON, and not merely hidden.
+
+     These 44 buildings exist to fill ground the generator could not describe. That ground now has
+     20,245 surveyed buildings on it, and low and row stand in the middle of them at coordinates
+     that were authored when nothing real was there. They are Groups of plain Meshes, so hideFabric
+     — which only looks at InstancedMesh — has never once been able to see them, which is why they
+     survived every pass of the masking work.
+
+     Not added at all rather than added and hidden, because a landmark is worth keeping and a
+     filler block is not, and the distinction is the whole point of this change. */
+  if (!NO_KIT && !FP_MODE) [low, row].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* CORNICHE MASS — the silhouette shown when this island is NOT active. Same two-part
      treatment as the detail layer and the same footprints, so the world-scale silhouette is a
@@ -4646,6 +4693,11 @@ function footprintsFor(d, list){
      construction, so everything is sized before anything is written. */
   const specs = [];
   let real = 0;
+  /* Read once. KIT_ZONES is populated when the island's kit is built, which is strictly before any
+     footprint payload can resolve, so an empty list here means the island has no hand-built
+     landmarks rather than that the kit has not run yet. */
+  const zones = KIT_ZONES[d.id] || [];
+  let zoned = 0;
   for (const b of list){
     const nx = b.x / d.r, ny = -b.z / d.r;
     /* THE COASTLINE TEST, WHICH THIS NEVER HAD AND urbanFabric ALWAYS DID.
@@ -4666,6 +4718,25 @@ function footprintsFor(d, list){
        ?noclip disables it, because a filter that removes a thousand objects should stay
        switchable and because the comparison is what proved it in the first place. */
     if (!NO_CLIP && !insideIsle(d.id, nx, ny)) continue;
+
+    /* AND THE SECOND CLIP: ground an authored landmark already occupies.
+
+       Same shape of test as the coastline one and for the same reason — the payload describes
+       everything that is there, and some of what is there has already been built by hand and built
+       better. ADNOC HQ, Etihad Towers and Emirates Palace each exist twice the moment footprints
+       arrive, and OSM's version is a flat extrusion of the outline standing inside a modelled
+       silhouette. Whichever one you delete you lose nothing; whichever one you keep, keeping both
+       is the only genuinely wrong answer, and it is what was happening.
+
+       Counted, not silent. zoned goes on the fp overlay row, so an exclusion that starts eating
+       half an island is visible as a number rather than as a suspicion about a screenshot. */
+    if (zones.length){
+      let blocked = false;
+      for (const z of zones){
+        if (b.x >= z.x0 && b.x <= z.x1 && b.z >= z.z0 && b.z <= z.z1){ blocked = true; break; }
+      }
+      if (blocked){ zoned++; continue; }
+    }
     /* THE GATE WAS IN THE WRONG UNIT, BY A FACTOR OF 7.8.
 
        h arrives from buildingsUnits already divided by M_PER_UNIT, so `h > 1` was asking for
@@ -4758,7 +4829,7 @@ function footprintsFor(d, list){
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
     g.add(m);
   });
-  d.fpCount = specs.length; d.fpReal = real;
+  d.fpCount = specs.length; d.fpReal = real; d.fpZoned = zoned;
   return g;
 }
 
