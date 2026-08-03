@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v67', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v68', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -751,8 +751,12 @@ const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
    dark ground plane and there is nothing underneath it to see, so allowing the camera below the
    waterline only ever produces a broken frame. Zoom is bounded either side of the state's own
    distance rather than absolutely, so the same gesture means the same thing at every scale. */
-const orbit = { yaw:0, lift:0, zoom:1, on:false };
-function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; }
+/* panX / panZ are a world-space offset added to the camera's target. They are NOT part of the
+   nav's goal: the nav owns where the camera is pointed and this is a hand-held deviation from it,
+   so a tap on a place still reframes cleanly and resetOrbit still returns everything to the shot
+   the nav composed. */
+const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
+function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0; }
 
 function applyLOD(){
   DISTRICTS.forEach(d => {
@@ -1094,8 +1098,16 @@ document.getElementById('back').addEventListener('click', () => {
    the lighting, the tone curve, the fog, the bloom and every other mesh, and shows the island as
    nothing but the painted canvas. One screenshot decides whether the remaining work is addressing
    or art direction, and no amount of further palette guessing can substitute for it. */
-const MODES = ['dusk', 'day', 'night', 'sil', 'plan'];
-const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette', plan:'Plan' };
+/* CHECK is the sixth mode and it is the opposite of Plan. Plan strips every mesh except the ground
+   so the painted canvas can be judged with nothing on top of it. Check keeps EVERY layer in and
+   flattens the lighting instead — buildings, props, ground, all of it, lit evenly so nothing is
+   lost in a shadow — because the question it answers is whether the buildings stand where the
+   streets say they should. That is a registration question between two datasets and it cannot be
+   answered from an oblique shot with a low sun across it.
+
+   It also unlocks the camera: pan on two fingers, and the tilt clamp opens up to true overhead. */
+const MODES = ['dusk', 'day', 'night', 'sil', 'plan', 'check'];
+const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette', plan:'Plan', check:'Check' };
 let view = 'dusk';
 
 const silMat    = new THREE.MeshBasicMaterial({ color:0x000000 });
@@ -1336,24 +1348,40 @@ function applyView(next){
   const sil   = view === 'sil',  day   = view === 'day';
   const dusk  = view === 'dusk', night = view === 'night';
   const plan  = view === 'plan';
+  /* Treated as an unlit mode for background, fog, tone mapping and environment — the same
+     decisions Plan makes — but it never hides anything and never swaps a material for planMats. */
+  const check = view === 'check';
 
   const chip = document.getElementById('vMode');
   chip.textContent = LABEL[view];
   chip.setAttribute('aria-pressed', String(!dusk));
 
   scene.background = plan ? new THREE.Color(0x101418)
+                   : check ? new THREE.Color(0x8FA3AE)
                    : sil ? new THREE.Color(0xC8D8DF)
                    : day ? new THREE.Color(0x9FC4DA)
                    : dusk ? duskSkyTex : nightSkyTex;
-  fogKey = sil || plan ? null : day ? 'day' : dusk ? 'dusk' : 'night';
+  /* No haze in Check. Distance fog is exactly what stops you comparing a street at the near edge
+     of the island with the one at the far edge, which is the comparison this mode is for. */
+  fogKey = sil || plan || check ? null : day ? 'day' : dusk ? 'dusk' : 'night';
   scene.fog = fogKey ? new THREE.Fog(FOG[fogKey].hex, 1, 2) : null;   // near/far set by the loop
-  scene.environment = (sil || day || plan) ? null : dusk ? duskEnv : nightEnv;
+  scene.environment = (sil || day || plan || check) ? null : dusk ? duskEnv : nightEnv;
 
   moon.visible = night;
   rim.visible  = night;
   hemiNight.visible = night;
-  sun.visible     = day || dusk;
-  daySky.visible  = day || dusk;
+  /* CHECK IS LIT, AND LIT FROM STRAIGHT OVERHEAD.
+
+     Without this it renders black: the sun, the sky hemisphere and the environment map are all
+     tied to day/dusk/night, and Check uses the day materials, which are lit. Silhouette and Plan
+     get away with it because both swap in unlit materials.
+
+     Overhead and shadowless on purpose. A registration check compares a building's footprint with
+     the street painted beneath it, and a low sun lays a copy of every building across exactly the
+     ground being read. The hemisphere carries most of the load with the sun as a weak key, so
+     surfaces stay distinguishable from each other without anything being thrown into a hole. */
+  sun.visible     = day || dusk || check;
+  daySky.visible  = day || dusk || check;
   /* Not in Silhouette or Plan: both are diagnostics that want one unambiguous key so massing
      reads as massing, and a fill light is the opposite of that. */
   sunFill.visible = day || dusk;
@@ -1371,6 +1399,14 @@ function applyView(next){
     // The dusk sky env map is already a strong ambient source. Stacking a bright hemisphere on
     // top of it flattens the massing, which is the one thing the low sun is there to reveal.
     daySky.intensity = 0.52;
+  } else if (check){
+    sun.color.setHex(0xFFFFFF); sun.intensity = 0.55;
+    sunFill.visible = true;
+    sunFill.color.setHex(0xFFFFFF); sunFill.intensity = 0.35;
+    // Near-vertical, so what shadow there is falls under the building rather than across the road.
+    SUN_OFF.set(-40, 900, 30);
+    daySky.color.setHex(0xE8EEF2); daySky.groundColor.setHex(0x8A8378);
+    daySky.intensity = 1.15;
   } else if (day){
     /* SUN 3.0 -> 1.8 AND FILL 1.30 -> 0.55, and this is why the ground plan looked like an
        unbroken cream plain in Day while the same texture read perfectly at dusk.
@@ -1402,7 +1438,7 @@ function applyView(next){
   bloom.enabled  = night || dusk;
   // NoToneMapping in Plan so the render is the canvas, byte for byte. Tone mapping is part of the
   // program cache key, so three recompiles for us and the switch costs one frame.
-  renderer.toneMapping = plan ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = (plan || check) ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
   /* ===========================================================================
      GLOW IS RADIUS, NOT STRENGTH — and the numbers on the device say we can afford it.
 
@@ -1500,6 +1536,15 @@ function applyView(next){
       if (o.userData.ground) o.material = o.userData.planMats;
       return;
     }
+    /* CHECK: nothing hidden, and the ground keeps its plan material so the painted streets read at
+       full contrast underneath the buildings standing on them. Everything else takes the flat day
+       material — no dusk warmth, no night emissive, no silhouette flattening — because a building
+       has to be distinguishable from the tarmac it is sitting on and from the building beside it. */
+    if (check){
+      o.material = o.userData.ground ? (o.userData.planMats || o.material)
+                 : (o.userData.litMat ? o.userData.origMat : (o.userData.dayMats || dayMat));
+      return;
+    }
     /* Props opt out of every diagnostic except silhouette. A palm frond is already the colour a
        palm frond should be under any light in this scene, and turning it into pale stone in the
        one mode built to judge a daytime render would be a strange thing to have built. */
@@ -1541,7 +1586,7 @@ let dx0=0, dy0=0, dt0=0;
    streams and the second one can be released first; keeping them by pointerId is the only way
    the pinch distance stays meaningful when that happens. */
 const pointers = new Map();
-let pinch0 = 0, zoom0 = 1, lx = 0, ly = 0;
+let pinch0 = 0, zoom0 = 1, lx = 0, ly = 0, twist0 = 0, yaw0 = 0;
 
 canvas.addEventListener('pointerdown', e => {
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
@@ -1553,8 +1598,22 @@ canvas.addEventListener('pointerdown', e => {
     const [a, b] = [...pointers.values()];
     pinch0 = Math.hypot(a.x - b.x, a.y - b.y);
     zoom0  = orbit.zoom;
+    twist0 = Math.atan2(b.y - a.y, b.x - a.x);
+    yaw0   = orbit.yaw;
   }
 });
+
+/* TWO GESTURE MODELS, AND WHICH ONE APPLIES DEPENDS ON WHAT THE VIEW IS FOR.
+
+   In the lit modes the camera is a diorama turntable: one finger orbits, because that is the whole
+   interaction and there is nothing to pan to — the nav decides what you are looking at.
+
+   Plan and Check are inspection views, and inspecting means going somewhere specific and comparing
+   it with somewhere else. Every map on this phone pans on one finger, so these do too: one finger
+   drags the ground, two fingers pinch to zoom and twist to rotate. Pan on two fingers WHILE
+   pinching, which is where I started, is unusable on a folded Fold — the fingers are two
+   centimetres apart and every pan reads as a pinch. */
+const mapGesture = () => view === 'plan' || view === 'check';
 
 canvas.addEventListener('pointermove', e => {
   if (!pointers.has(e.pointerId)) return;
@@ -1567,15 +1626,52 @@ canvas.addEventListener('pointermove', e => {
       // Pinching APART should move the camera closer, so the ratio is inverted.
       orbit.zoom = Math.max(0.35, Math.min(2.6, zoom0 * (pinch0 / d)));
       orbit.on = true;
+      /* Twist to rotate, in the map modes only. Two fingers on a turntable already mean zoom and
+         adding rotation to them there would make every pinch drift the heading. */
+      if (mapGesture()){
+        let t = Math.atan2(b.y - a.y, b.x - a.x) - twist0;
+        while (t >  Math.PI) t -= Math.PI * 2;
+        while (t < -Math.PI) t += Math.PI * 2;
+        orbit.yaw = yaw0 + t;
+      }
     }
     return;
   }
+
+  if (mapGesture()){
+    /* PAN, IN WORLD UNITS RATHER THAN PIXELS.
+
+       The conversion is the height of the view frustum at the target distance divided by the
+       viewport height, so a finger holds the same piece of ground at any zoom or any island scale.
+       Without it a drag that crosses Al Maryah barely moves on Corniche.
+
+       Rotated by the camera's heading, because the pan has to be along the screen axes and those
+       are only the world axes when the yaw happens to be zero. Screen-up maps to -Z when facing
+       north, and the camera looks from +Z toward the target, so dragging DOWN moves the ground
+       down the screen, which means the camera walks toward +Z. */
+    const dxp = e.clientX - lx, dyp = e.clientY - ly;
+    const dist = Math.max(1, cur.dist * orbit.zoom);
+    const perPx = 2 * dist * Math.tan(cur.fov * Math.PI / 360) / window.innerHeight;
+    const a = cur.angle + orbit.yaw;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const wx = -dxp * perPx, wz = -dyp * perPx;
+    orbit.panX += wx * ca - wz * sa;
+    orbit.panZ += -wx * sa - wz * ca;
+    lx = e.clientX; ly = e.clientY;
+    if (Math.hypot(e.clientX - dx0, e.clientY - dy0) > 12) orbit.on = true;
+    return;
+  }
+
   /* Scaled by viewport width, so the same swipe turns the model by the same amount on any
      screen — a fixed pixels-per-radian figure makes the gesture feel twice as fast on a folded
      Z Fold as on an unfolded one. */
   orbit.yaw  -= (e.clientX - lx) / window.innerWidth * 3.2;
   orbit.lift += (e.clientY - ly) / window.innerHeight * 1.9;
-  orbit.lift  = Math.max(-0.55, Math.min(1.5, orbit.lift));
+  /* The upper clamp opens right up in the inspection modes. 1.5 tops out at a shallow oblique,
+     and the registration question — is this building on this street — can only be answered from
+     directly above. It stays clamped in the lit modes, where flying over the top of the diorama
+     and seeing it end is the thing the clamp was put there to prevent. */
+  orbit.lift  = Math.max(-0.55, Math.min(mapGesture() ? 9 : 1.5, orbit.lift));
   lx = e.clientX; ly = e.clientY;
   if (Math.hypot(e.clientX - dx0, e.clientY - dy0) > 12) orbit.on = true;
 });
@@ -2284,10 +2380,15 @@ function frame(){
      up looking down from the height the world view wanted. Floored just above the ground plane:
      this is a diorama and there is nothing under it to look at. */
   const elev = Math.max(GROUND + 4, (cur.elev - GROUND) * orbit.zoom * (1 + orbit.lift) + GROUND);
+  /* THE PAN OFFSET IS APPLIED HERE AND NOWHERE ELSE, to both the eye and the aim, so panning
+     slides the view across the model without turning it. Kept out of cur.target on purpose: the
+     nav owns cur.target, and folding a hand-held offset into it would mean the next flight
+     departed from wherever the finger left off rather than from the shot the nav composed. */
+  const tx = cur.target.x + orbit.panX, tz = cur.target.z + orbit.panZ;
   camera.position.set(
-    cur.target.x + Math.sin(a) * dist,
+    tx + Math.sin(a) * dist,
     elev,
-    cur.target.z + Math.cos(a) * dist
+    tz + Math.cos(a) * dist
   );
   /* THE LAST LINE OF DEFENCE, AND IT IS CHEAP. One NaN anywhere upstream — an aspect, a radius,
      a lerp against an Infinity — propagates into camera.position and every frame after it draws
@@ -2300,7 +2401,7 @@ function frame(){
     camera.position.set(0, 400, 600);
     reframe();
   }
-  camera.lookAt(cur.target);
+  camera.lookAt(tx, cur.target.y, tz);
 
   /* THE HAZE FOLLOWS THE CAMERA, EVERY FRAME. cur.dist and cur.elev are the damped values the
      camera was just built from, so this is the distance actually being looked through rather
