@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v85', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v86', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1661,7 +1661,8 @@ document.getElementById('vProg').addEventListener('click', () => {
       ...(WARM_COST.length ? ['', 'slowest first draws:'].concat(
         WARM_COST.slice().sort((a, b) => b.ms - a.ms).slice(0, 25)
           .map(w => '  ' + String(w.ms).padStart(6) + ' ms  ' + String(w.c).padStart(6) + ' inst  ' +
-                    String(w.v).padStart(6) + ' verts  ' + w.m + '  ' + w.n)) : []),
+                    String(w.v).padStart(6) + ' verts  ' + w.m + '  "' + w.n + '" in "' + w.par +
+                    '"\n            ' + w.t)) : []),
       /* THE ALLOCATION, IN THE UNITS THAT MAKE IT ARGUABLE. Pixels and samples, not megabytes,
          because the fix is a cap on one of them. */
       'target   ' + (() => { try {
@@ -2179,8 +2180,17 @@ const NO_WARM = location.search.includes('nowarm');
    of twenty thousand buildings turns out to be nine seconds, that is the answer and it has a fix.
    If it is four hundred meshes at fifty milliseconds each, that is also the answer and the fix is a
    different one. Either beats another theory. */
+/* A COUNT PER FRAME, NOT A TIME BUDGET — the first version of this drained instantly.
+
+   It popped meshes while the elapsed time stayed under 10 ms. But revealing a mesh is a flag write
+   costing nanoseconds; the cost lands in the RENDER that follows. So ten milliseconds of flag
+   writes drained the entire queue in one frame and the first render paid for everything exactly as
+   before. warmDone read 4 ms, which was the queue emptying, not the work finishing.
+
+   A fixed count per frame cannot fail that way: eight meshes revealed is eight meshes' worth of
+   first draws on the next render, whatever they cost. */
 const WARM_ONE = location.search.includes('warm1');
-const WARM_MS = WARM_ONE ? 0 : 10;
+const WARM_N = WARM_ONE ? 1 : 8;
 const WARM_COST = [];
 let warmQueue = null, _warmLast = null;
 
@@ -2201,17 +2211,12 @@ function warmHideAll(){
 
 function warmStep(){
   if (!warmQueue) return;
-  if (WARM_ONE){
+  for (let i = 0; i < WARM_N; i++){
     const o = warmQueue.pop();
-    if (o){ o.userData.warmHidden = false; o.visible = true; _warmLast = o; }
-  } else {
-    const t0 = performance.now();
-    do {
-      const o = warmQueue.pop();
-      if (!o) break;
-      o.userData.warmHidden = false;
-      o.visible = true;
-    } while (warmQueue.length && performance.now() - t0 < WARM_MS);
+    if (!o) break;
+    o.userData.warmHidden = false;
+    o.visible = true;
+    if (WARM_ONE) _warmLast = o;
   }
   if (!warmQueue.length){
     warmQueue = null;
@@ -3074,13 +3079,37 @@ function frame(){
   const _fms = performance.now() - t0;
   /* Charged to the mesh revealed at the top of this frame. Only in ?warm1, where exactly one was. */
   if (_warmLast){
+    /* THE EXPENSIVE ONE HAS 22 VERTICES AND A BASIC MATERIAL, AND COST 21,960 ms.
+
+       The next 180 meshes together came to 880. So this is not geometry and not shading — a mesh
+       that trivial can only be expensive because of what is BOUND to it, and the usual culprit is a
+       texture the driver has to convert, decode or mipmap synchronously on first use.
+
+       So the record carries the maps now, with their dimensions and formats. Naming the object and
+       naming its textures is the whole remaining question. */
+    const _mat = _warmLast.material && (Array.isArray(_warmLast.material)
+                   ? _warmLast.material[0] : _warmLast.material);
+    const _tex = [];
+    if (_mat) for (const k of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap',
+                               'aoMap','alphaMap','bumpMap','envMap','displacementMap']){
+      const t = _mat[k];
+      if (!t) continue;
+      const im = t.image || {};
+      _tex.push(k + ' ' + (im.width || '?') + 'x' + (im.height || '?') +
+                (t.mipmaps && t.mipmaps.length ? ' mips' + t.mipmaps.length : '') +
+                (t.generateMipmaps ? ' genmip' : '') +
+                ' ' + (t.colorSpace || '') +
+                (im.data ? ' raw' : im instanceof HTMLCanvasElement ? ' canvas' : ''));
+    }
     WARM_COST.push({
       ms: Math.round(_fms),
       n:  _warmLast.name || _warmLast.type,
       c:  _warmLast.count || 1,
       v:  (_warmLast.geometry && _warmLast.geometry.attributes.position
            && _warmLast.geometry.attributes.position.count) || 0,
-      m:  (_warmLast.material && (_warmLast.material.type || '?')) || '?',
+      m:  (_mat && _mat.type) || '?',
+      par:(_warmLast.parent && (_warmLast.parent.name || _warmLast.parent.type)) || '?',
+      t:  _tex.join(' | ') || 'no maps',
     });
     _warmLast = null;
   }
