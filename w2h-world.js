@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v108';
+export const BUILD = 'world v109';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1673,7 +1673,26 @@ function paintGround(d, plan){
      small islands gain nothing from a canvas finer than their own coastline, 3072 because Corniche
      would otherwise ask for 3172 and each step costs memory as the square. At 3072 Corniche paints
      at 6.2 m to the pixel: ring 5.0, major 4.5, minor 2.9, local 1.6. */
-  const TARGET_M_PER_PX = 6;
+  /* ?gpx=N — the ground resolution target, in metres per pixel, from the URL.
+
+     It is here because the cost of this number is not measurable from inside the code that sets it.
+     Raising the canvas to 3072 took firstFrame from about 12 seconds to 23, and NONE of that shows
+     in the phase list: paintGround is 157 ms, upload 81, and the stages together account for under
+     five seconds of the twenty-three. The rest is texture creation and mipmap generation on an
+     eight megapixel canvas, happening inside the browser where this file cannot instrument it.
+
+     So the only honest way to find the knee is to try values and read firstFrame, and doing that
+     as a deploy per attempt is three minutes a data point. From the URL it is a reload.
+
+     Six is the default because it is what the road widths were tuned against. But the cartographic
+     floors in MIN_PX mean resolution no longer decides whether a road is VISIBLE — only how fine
+     the ground grain is — so a coarser canvas now costs much less than it did an hour ago. Ten
+     would put Corniche at about 1850 pixels and a third of the texture. */
+  const TARGET_M_PER_PX = (() => {
+    const m = typeof location !== 'undefined' && location.search.match(/[?&]gpx=(\d+(?:\.\d+)?)/);
+    const v = m ? parseFloat(m[1]) : 6;
+    return isFinite(v) && v >= 2 && v <= 40 ? v : 6;
+  })();
   const spanM = 2 * d.r * M_PER_UNIT * h.x * GROUND_PAD;
   const W  = d.r >= 50 ? Math.min(3072, Math.max(GROUND_W, Math.round(spanM / TARGET_M_PER_PX)))
                        : 768;
@@ -1682,7 +1701,7 @@ function paintGround(d, plan){
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   console.info('ground ' + d.id + ': ' + W + 'x' + H + ' px, ' +
-               (spanM / W).toFixed(1) + ' m/px');
+               (spanM / W).toFixed(1) + ' m/px  (gpx target ' + TARGET_M_PER_PX + ')');
 
   const U  = W * 0.5 / (h.x * GROUND_PAD);  // pixels per normalised island unit, both axes
   const PX = n => W * 0.5 + n * U;
