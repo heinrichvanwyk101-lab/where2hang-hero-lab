@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v82', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v85', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1539,6 +1539,9 @@ function applyView(next){
        and this flag outranks a view: a mesh the footprints replaced has no version in any
        lighting mode. */
     if (o.userData.fpHidden){ o.visible = false; return; }
+    /* Same durability argument as fpHidden: warm-up hides a mesh so its first upload can be paid on
+       a later frame, and applyView writing visible=true underneath would undo that silently. */
+    if (o.userData.warmHidden){ o.visible = false; return; }
     /* NIGHT-ONLY MESHES EXIST OR THEY DO NOT — there is no daytime version of them.
 
        The lamp pools are additive quads standing in for 628 point lights that could not be real
@@ -1653,6 +1656,12 @@ document.getElementById('vProg').addEventListener('click', () => {
             return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
           } catch (e){ return '?'; } })(),
       'frames   ' + FRAME_MS.join(', ') + '  ms',
+      'warm     ' + (WARM_COST.length ? WARM_COST.length + ' meshes, ' +
+          Math.round(WARM_COST.reduce((a, w) => a + w.ms, 0)) + ' ms total' : 'off'),
+      ...(WARM_COST.length ? ['', 'slowest first draws:'].concat(
+        WARM_COST.slice().sort((a, b) => b.ms - a.ms).slice(0, 25)
+          .map(w => '  ' + String(w.ms).padStart(6) + ' ms  ' + String(w.c).padStart(6) + ' inst  ' +
+                    String(w.v).padStart(6) + ' verts  ' + w.m + '  ' + w.n)) : []),
       /* THE ALLOCATION, IN THE UNITS THAT MAKE IT ARGUABLE. Pixels and samples, not megabytes,
          because the fix is a cap on one of them. */
       'target   ' + (() => { try {
@@ -2120,11 +2129,95 @@ setWorld();
 /* THE OPENING SHOT IS LEG 0's SHOT, composed here rather than defaulting to the district view.
 
    attract.i starts at 0 and the first advance goes to 1, so whatever is composed here IS leg 0 and
-   attractGo never runs for it. */
+   attractGo never runs for it.
+
+   MATCHED ON label, NOT name. A place anchor is { label, osm, x, z, h, r } — there is no `name` on
+   it, so the first version of this looked up undefined, found nothing, and fell through to the
+   district shot without a word. The overlay said leg 0 corniche and the camera said dist 4191, and
+   both were telling the truth about different things. osm is checked too because that is the field
+   the bake matches on and the two can differ. */
 (() => {
-  const a = corniche.placeAnchors.find(pl => pl.name === OPENING_PLACE);
-  if (a) setPlace(corniche, a); else setDistrict(corniche);
+  const a = placeByName(corniche, OPENING_PLACE);
+  if (a) setPlace(corniche, a);
+  else { console.warn('opening place "' + OPENING_PLACE + '" not found on corniche'); setDistrict(corniche); }
 })();
+
+/* ---------- PROGRESSIVE WARM-UP ----------------------------------------------------------------
+
+   THE FIRST FRAME PAYS FOR EVERY MESH IT DRAWS, AND IT WAS DRAWING THE WHOLE ISLAND.
+
+   The other four islands are deferred — they sit `pending` until the flight reaches them. Corniche
+   is not: its fabric, ground and props are built inline at module evaluation, so the scene is
+   complete before the first render and that render uploads all of it. Seventeen to twenty seconds,
+   in one unbreakable block, on a driver that gives us no way to defer or parallelise it.
+
+   Holding the camera on a landmark did not help because the cost is not the camera's — every mesh
+   in the scene is uploaded on first draw whether it is in shot or not.
+
+   So the meshes are hidden before the first frame and revealed a few at a time afterwards, with a
+   time budget per frame. The same total work happens; it is broken into pieces the size of a frame
+   instead of one piece the size of a page load. Frame one draws the sea and the sky and costs
+   nothing, and the city arrives over the following second or two while the camera is already live.
+
+   Marked rather than merely hidden, for the reason fpHidden exists: applyView writes visible on
+   everything it walks, and a bare visible=false does not survive it.
+
+   ?nowarm disables it, because "was it better before" has to stay answerable. */
+const NO_WARM = location.search.includes('nowarm');
+/* ?warm1 — ONE MESH PER FRAME, AND EACH FRAME'S COST CHARGED TO THE MESH IT REVEALED.
+
+   Two days of phase markers have failed to localise the twenty seconds because the driver defers
+   the work and it surfaces at whatever touches the GPU next: compile moved to upload, p0render moved
+   to liftReg. No marker around a call can attribute cost that has been deferred past it.
+
+   This can, because it does not measure a call — it measures a difference in the scene. Reveal
+   exactly one mesh, render, and whatever that frame cost more than the last is what that mesh's
+   first draw costs. There is nowhere for the work to be deferred TO: the next frame reveals a
+   different mesh.
+
+   The output is a list of objects by name, instance count and milliseconds. If one instanced mesh
+   of twenty thousand buildings turns out to be nine seconds, that is the answer and it has a fix.
+   If it is four hundred meshes at fifty milliseconds each, that is also the answer and the fix is a
+   different one. Either beats another theory. */
+const WARM_ONE = location.search.includes('warm1');
+const WARM_MS = WARM_ONE ? 0 : 10;
+const WARM_COST = [];
+let warmQueue = null, _warmLast = null;
+
+function warmHideAll(){
+  if (NO_WARM) return;
+  warmQueue = [];
+  world.traverse(o => {
+    if (!o.isMesh || !o.visible || o.userData.fpHidden) return;
+    o.visible = false;
+    o.userData.warmHidden = true;
+    warmQueue.push(o);
+  });
+  /* Biggest first. A frame's budget is spent better on one instanced mesh of twenty thousand
+     buildings than on twenty lamp posts, and the heavy ones are what would otherwise stall a frame
+     late in the sequence when the camera is already moving. */
+  warmQueue.sort((a, b) => (b.count || 1) - (a.count || 1));
+}
+
+function warmStep(){
+  if (!warmQueue) return;
+  if (WARM_ONE){
+    const o = warmQueue.pop();
+    if (o){ o.userData.warmHidden = false; o.visible = true; _warmLast = o; }
+  } else {
+    const t0 = performance.now();
+    do {
+      const o = warmQueue.pop();
+      if (!o) break;
+      o.userData.warmHidden = false;
+      o.visible = true;
+    } while (warmQueue.length && performance.now() - t0 < WARM_MS);
+  }
+  if (!warmQueue.length){
+    warmQueue = null;
+    PH.warmDone = performance.now() - _phT;
+  }
+}
 
 /* ---------- compile, AFTER the view and the shot, not before ----------
 
@@ -2535,6 +2628,14 @@ function isleReady(d){
   return st === 'on' || st === 'none' || st === 'thin';
 }
 
+/* ONE LOOKUP FOR BOTH CALLERS, matching label first and osm second — the two names a place can be
+   known by, and the reason the first attempt at this failed silently. */
+function placeByName(d, nm){
+  if (!d || !d.placeAnchors || !nm) return null;
+  return d.placeAnchors.find(pl => pl.label === nm) ||
+         d.placeAnchors.find(pl => pl.osm === nm) || null;
+}
+
 function attractGo(i){
   attract.i = i % ATTRACT.length;
   const leg = ATTRACT[attract.i];
@@ -2547,7 +2648,7 @@ function attractGo(i){
       /* A named place on a leg composes a place shot rather than a district one. Looked up by name
          against the island's own anchors, so a landmark leaving the bake degrades to the district
          shot rather than throwing. */
-      const a = leg.place && d.placeAnchors.find(pl => pl.name === leg.place);
+      const a = leg.place && placeByName(d, leg.place);
       if (a) setPlace(d, a); else setDistrict(d);
     }
   }
@@ -2595,6 +2696,11 @@ function attractTick(now){
    shot is already composed by then; this only decides how long it holds before the flight moves.
 
    attract.i starts at 0 and the first advance goes to 1, so leg 0 IS that composed shot. */
+/* Hidden here: after the shot is composed and after compile, and before the first frame. Anything
+   built later — the other four islands, the footprints — is not in this queue and arrives by its
+   own route, which is correct: they are already deferred. */
+warmHideAll();
+
 attract.on = !ATTRACT_OFF;
 attract.until = performance.now() + ATTRACT[0].ms;
 attractPrefetch(1);
@@ -2829,6 +2935,9 @@ function frame(){
      seconds. Whatever this is, the driver defers it and it surfaces at the next thing to touch the
      GPU. Same signature as compile versus upload. A number that relocates is not a number that has
      been reduced, and the fix is not wherever it happens to be standing. */
+  /* One budgeted slice per frame, before the render, so the meshes revealed this frame are the
+     ones this frame pays for. */
+  warmStep();
   const _tR0 = _frame0 ? performance.now() : 0;
   /* A SECOND CLOCK ACROSS THE SAME CALL. performance.now() is monotonic and sub-millisecond and
      there is no reason to doubt it — but it is the only witness to the nineteen seconds, and a
@@ -2962,7 +3071,20 @@ function frame(){
     PH['#page']   = performance.now() - PAGE_T0;
     _frame0 = false;
   }
-  if (FRAME_MS.length < 12) FRAME_MS.push(Math.round(performance.now() - t0));
+  const _fms = performance.now() - t0;
+  /* Charged to the mesh revealed at the top of this frame. Only in ?warm1, where exactly one was. */
+  if (_warmLast){
+    WARM_COST.push({
+      ms: Math.round(_fms),
+      n:  _warmLast.name || _warmLast.type,
+      c:  _warmLast.count || 1,
+      v:  (_warmLast.geometry && _warmLast.geometry.attributes.position
+           && _warmLast.geometry.attributes.position.count) || 0,
+      m:  (_warmLast.material && (_warmLast.material.type || '?')) || '?',
+    });
+    _warmLast = null;
+  }
+  if (FRAME_MS.length < 12) FRAME_MS.push(Math.round(_fms));
   frameStats(performance.now() - t0);
 
   if (DEBUG){
