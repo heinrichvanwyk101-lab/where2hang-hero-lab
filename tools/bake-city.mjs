@@ -863,6 +863,10 @@ async function bakeIsland(isle, proj){
      between the fetch boxes, and if it ever comes out near zero on Corniche the boxes have moved. */
   if (outline.length){
     const before = buildings.length;
+    /* Kept on the island object, not just logged. This is the number the probe's `Overture` column
+       measures and the number the renderer's fp row calls `raw`, and having all three name the same
+       quantity is what makes them checkable against each other. */
+    isle._inBox = before;
     buildings = clipToOutline(buildings, outline, CLIP_MARGIN_M);
     process.stderr.write(`  ${isle.id}: coast pre-clip ${before} -> ${buildings.length} ` +
       `(dropped ${before - buildings.length} beyond ${CLIP_MARGIN_M} m of the shore)\n`);
@@ -889,7 +893,11 @@ async function bakeIsland(isle, proj){
                        (extent ? `, extent ${(extent.w/1000).toFixed(2)} x ${(extent.d/1000).toFixed(2)} km` : '') +
                        `\n`);
 
-  return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks };
+  /* inBox rides on the returned object rather than on the island definition, so a re-bake of the
+     same island in one process cannot read a stale value from the previous pass. It is consumed by
+     the index writer and never written into an island file. */
+  return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
+           inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
 const rd1 = p => Array.isArray(p) ? [Math.round(p[0]*10)/10, Math.round(p[1]*10)/10]
@@ -940,7 +948,11 @@ async function probe(proj){
                        `${'change'.padStart(9)}${'with height'.padStart(14)}\n`);
   for (const isle of ISLANDS){
     const got = kept(isle);
-    const was = prev[isle.id] ? prev[isle.id].buildings : null;
+    /* inBox where the index has it, because this column counts the fetch box and so does inBox.
+       An older index only has the post-nothing `buildings`, which happened to mean the same thing
+       then — so the fallback is right for old indexes and inBox is right for new ones. */
+    const p = prev[isle.id];
+    const was = p ? (p.inBox != null ? p.inBox : p.buildings) : null;
     const h = got.filter(b => b.h != null).length;
     const sc = scales[isle.id] || 1;
     const chg = was ? (got.length / was).toFixed(2) + 'x' : '—';
@@ -1094,7 +1106,10 @@ async function main(){
       `${before} -> ${baked.buildings.length}\n`);
 
     const path = `data/isle-${baked.id}.json`;
-    await fs.writeFile(path, JSON.stringify(baked));
+    /* inBox is bookkeeping for the index and the guard. It does not go in the artefact the hero
+       downloads — a field with no consumer is a question for whoever reads this next. */
+    const { inBox, ...file } = baked;
+    await fs.writeFile(path, JSON.stringify(file));
     const bytes = (await fs.stat(path)).size;
 
     /* A ROADS-ONLY ARTEFACT, and it exists because of where the scene needs this data.
@@ -1126,8 +1141,16 @@ async function main(){
     index.islands.push({ id:baked.id, name:baked.name, file:`isle-${baked.id}.json`,
                          extent:baked.extent, outline:baked.outline,
                          landmarks:baked.landmarks, bytes,
+                         /* inBox is what the fetch box held before the coastline pre-clip, and it
+                            exists so `buildings` can never again be compared against a number that
+                            counted something else. The first Overture bake tripped its own
+                            regression guard on exactly that: 256 in-box against 104 on-shore, read
+                            as a fall of sixty per cent when the on-island stock had tripled. A
+                            count is only comparable to a count measured the same way, and the only
+                            reliable way to guarantee that is to write down which way it was. */
                          counts:{ outline:baked.outline.length, roads:baked.roads.length,
                                   buildings:baked.buildings.length,
+                                  inBox:baked.inBox,
                                   withHeight:baked.buildings.filter(b => b.h).length,
                                   parks:baked.parks.length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
@@ -1137,13 +1160,21 @@ async function main(){
        finish would mean the only way to accept a real improvement is to disable the guard. The
        workflow's contract has always been "run it, look at the diff, keep it or revert it", so
        this makes the thing worth looking at impossible to scroll past. */
+    /* COMPARED ONLY AGAINST A COUNT MEASURED THE SAME WAY. An index without inBox predates the
+       pre-clip, so its `buildings` counted the fetch box and this one counts the shore — no ratio
+       between them means anything. Silent for one run after the upgrade, correct from then on,
+       which is the right way round: a guard that fires wrongly gets ignored, and a guard that is
+       ignored is not a guard. */
     const was = prevCounts[baked.id];
-    if (was && was.buildings > 0){
+    if (was && was.inBox != null && was.buildings > 0){
       const now = baked.buildings.length;
       if (now < was.buildings * 0.8){
         process.stderr.write(`  !! ${baked.id}: BUILDINGS FELL ${was.buildings} -> ${now} ` +
           `(${Math.round(100 * now / was.buildings)}%). Check the diff before keeping this.\n`);
       }
+    } else if (was){
+      process.stderr.write(`  ${baked.id}: no comparable previous count ` +
+        `(the committed index predates the coastline pre-clip) — regression check skipped\n`);
     }
   }
 
