@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v76', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v77', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2083,10 +2083,23 @@ setDistrict(corniche);
    compileAsync resolves when compilation has actually happened rather than when it has been
    queued, so the number it reports is real. Guarded on existence: it arrived in r162 and the
    importmap pin is not something to discover the hard way at run time. */
-try {
-  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
-  else renderer.compile(scene, camera);
-} catch (e){ console.warn('compile:', e.message); }
+/* THE COMPILE IS GONE, AND IT WAS COSTING RATHER THAN SAVING.
+
+   Two independent reasons, both measured on the device:
+
+   KHR_parallel_shader_compile is NO on the Adreno 830. three.js implements compileAsync by polling
+   COMPLETION_STATUS_KHR; with no extension there is nothing to poll and the promise resolves
+   immediately. `compile 24 ms` never meant anything had been compiled — only that the call
+   returned. It could not defer a millisecond of work.
+
+   And it compiled for the wrong output. compile() builds programs against the currently bound
+   target, which here is the canvas — srgb. Every frame afterwards goes through the composer, into
+   a render target — srgb-linear — and three.js treats those as different programs. So it linked a
+   parallel set of the same materials that is never drawn. That is the 9-versus-10 split still
+   sitting in the program dump after the probe renders were removed.
+
+   Removing the probes took 54 programs to 43 and 620 ms off the first frame. This should take the
+   srgb column out of the dump entirely. */
 phase('compile');
 
 /* THE REST OF THE CORNICHE, ONE IDLE FRAME AFTER THE FIRST.
@@ -2676,6 +2689,26 @@ function frame(){
 
      prefetch and attract0 both read zero, so this call and the wait to reach it are the only things
      left in the span. Naming it costs one variable. */
+  /* SPLITTING THE FIRST FRAME INTO PIPELINE AND SCENE.
+
+     Eleven fewer programs bought 620 ms. Extrapolated, all 43 come to about 2.4 seconds against a
+     first frame of 21.2 — so either linking is not the bulk of it or the cost is very uneven, and
+     both readings are guesses. This is not.
+
+     One composer render with the world hidden, then one with it shown. Same composer, same target,
+     same output colour space, so neither pass creates a program the other would not have — the
+     only difference is whether the scene is in it.
+
+     f0pipe is what the post chain costs on its own: render targets, bloom buffers, SMAA lookup
+     textures, the output pass. f0scene is what the city costs. If f0pipe is most of twenty seconds
+     then none of this was ever about the city and the composer is the thing to look at. */
+  if (_frame0){
+    const _w = world.visible, _t = performance.now();
+    world.visible = false;
+    try { composer.render(); } catch (e){ console.warn('f0pipe:', e.message); }
+    PH.f0pipe = performance.now() - _t;
+    world.visible = _w;
+  }
   const _tR0 = _frame0 ? performance.now() : 0;
   /* A SECOND CLOCK ACROSS THE SAME CALL. performance.now() is monotonic and sub-millisecond and
      there is no reason to doubt it — but it is the only witness to the nineteen seconds, and a
@@ -2772,6 +2805,8 @@ function frame(){
     if (!location.search.includes('shadercheck')) renderer.debug.checkShaderErrors = false;
     PH.render0    = performance.now() - _tR0;
     PH.render0wall = Date.now() - _dR0;
+    /* render0 minus the pipeline pass above. The two together are the old firstFrame. */
+    PH.f0scene    = Math.max(0, PH.render0 - (PH.f0pipe || 0));
 
     /* WHAT THE PROGRAMS ACTUALLY ARE.
 
