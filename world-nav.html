@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v69', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v71', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2656,6 +2656,34 @@ function frame(){
        failure mode is a black object rather than a silent one. ?shadercheck keeps it on. */
     if (!location.search.includes('shadercheck')) renderer.debug.checkShaderErrors = false;
     PH.render0    = performance.now() - _tR0;
+
+    /* WHAT THE PROGRAMS ACTUALLY ARE.
+
+       upload came back at 16,870 of a render0 of 16,990, and awaiting compileAsync moved the same
+       time into compile without shrinking it. That is shader program building, and `prog` on the
+       overlay is the count.
+
+       The count is not what a scene of boxes should need, and it grows with islands rather than
+       with view modes: 53 with Corniche alone, 74 after Al Maryah, 85 after Al Reem, 96 after
+       Saadiyat and Yas. Roughly ten per island that three.js cannot share with the ones already
+       built. Ten what is the question, and guessing at it has cost this session repeatedly.
+
+       three.js keys its program cache on a string of every define and flag, so printing the keys
+       side by side shows which single axis is multiplying. Console only — it is a page of text and
+       has no business on the overlay — and once, on the first frame, because renderer.info.programs
+       is populated as programs are built. */
+    try {
+      const ps = renderer.info.programs || [];
+      const byName = {};
+      for (const p of ps) byName[p.name || '?'] = (byName[p.name || '?'] || 0) + 1;
+      console.info('programs ' + ps.length + ' — ' +
+        Object.entries(byName).sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => k + ' x' + v).join(', '));
+      console.info(ps.map((p, i) =>
+        String(i).padStart(3) + '  ' + (p.name || '?') + '  ' +
+        String(p.cacheKey || '').slice(0, 320)).join('\n'));
+    } catch (e){ console.warn('programs:', e.message); }
+
     PH.firstFrame = performance.now() - _phT;
     PH['#page']   = performance.now() - PAGE_T0;
     _frame0 = false;
