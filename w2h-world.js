@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v103';
+export const BUILD = 'world v104';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4691,6 +4691,46 @@ function footprintsFor(d, list){
 
   /* Two passes for the same reason urbanFabric uses two: an InstancedMesh needs its count at
      construction, so everything is sized before anything is written. */
+  /* ---------- THE HEIGHT MODEL IS THE ISLAND'S OWN SURVEYED STOCK ----------
+
+     Five in six buildings on Corniche arrive without a height and something has to invent one. The
+     inherited model was urbanFabric's falloff — distance from the core against a district ceiling —
+     which worked while a plot's size and its height were chosen together and stopped working the
+     moment real footprints arrived, because a 130 m² shophouse and a 4,000 m² podium then had equal
+     claim on a 52-unit ceiling. tallest is 52 and M_PER_UNIT is 7.8, so the FLOOR under that model
+     at the island's edge was 49 metres and in the core 223. Hence a field of needles.
+
+     The obvious repair is a curve through footprint area, and it is wrong. Corniche's 3,807
+     surveyed buildings say height rises with area to about 600–1,200 m² and then FALLS: median 6 m
+     under 300 m², 22 m at 300–600, 49 m at 600–1,200, and 15 m above 3,000, because the largest
+     footprints in a city are malls, terminals and warehouses. No monotonic function of area
+     reproduces that, and every one I would have written was monotonic.
+
+     So nothing is fitted. The surveyed buildings on THIS island are binned by footprint, and an
+     unsurveyed building draws a height from the bin its own footprint falls in. The spread comes
+     free and it is the real spread — Corniche's 300–600 band has a median of 22 m and a ninetieth
+     percentile of 80, so a few genuinely tall slabs appear among the low stock exactly as often as
+     they actually do. It improves on its own as OSM and Overture improve, and it cannot be wrong
+     about a city in a way that city's own data does not already say. */
+  const HB = [0, 150, 300, 600, 1200, 3000, Infinity];
+  const bandOf = a => { for (let i = 1; i < HB.length; i++) if (a < HB[i]) return i - 1;
+                        return HB.length - 2; };
+  const areaOf = b => Math.max(1, (b.w || 0) * (b.dp || 0)) * M_PER_UNIT * M_PER_UNIT;
+  const bands = HB.slice(0, -1).map(() => []);
+  const anyReal = [];
+  for (const b of list){
+    if (b.h == null || b.h * M_PER_UNIT <= 2) continue;
+    bands[bandOf(areaOf(b))].push(b.h);
+    anyReal.push(b.h);
+  }
+  bands.forEach(v => v.sort((p, q) => p - q));
+  anyReal.sort((p, q) => p - q);
+  /* Eight is enough to carry a spread and few enough that only genuinely empty bands fall through
+     to the island-wide pool. Twenty island-wide is the point below which resampling is just
+     repeating three numbers, and the old falloff — wrong but continuous — is the better failure. */
+  const poolFor = a => { const b = bands[bandOf(a)];
+                         return b.length >= 8 ? b : anyReal.length >= 20 ? anyReal : null; };
+
   const specs = [];
   let real = 0;
   /* Read once. KIT_ZONES is populated when the island's kit is built, which is strictly before any
@@ -4750,18 +4790,53 @@ function footprintsFor(d, list){
     let h = b.h, isReal = h != null && h * M_PER_UNIT > 2;
     if (isReal) real++;
     else {
-      /* The fabric's own falloff, in the fabric's own normalised frame: distance from the core,
-         squared off, against the district ceiling, then softened where a low-rise zone reaches.
-         The jitter is seeded per island so a re-load produces the same city. */
+      /* THE FALLOFF WAS ORPHANED THE DAY REAL FOOTPRINTS ARRIVED.
+
+         It came from urbanFabric, where a plot's size and its height were chosen together — a tall
+         block got a big plot by construction, so a model that knew only WHERE a building stood
+         could infer how tall it was. Real footprints break that link completely: a 130 m²
+         shophouse and a 4,000 m² podium arrive at the same coordinate with the same claim on the
+         district ceiling.
+
+         And the ceiling is enormous. tallest is 52 units on Corniche, M_PER_UNIT is 7.8, so at the
+         island's EDGE the cap was 89 m and the floor beneath it — cap x 0.55 — was 49 metres.
+         Sixteen storeys, for the shortest modelled building anywhere on the island. In the core the
+         floor was 223 m. Five in six of Corniche's buildings are modelled, so five in six were
+         being handed a height between 49 m and 446 m regardless of what they are. That is the
+         bristle-brush: not a city, a field of needles at roughly one height.
+
+         So the footprint gets a veto. Area is a far better predictor of what a building IS than
+         position is — a small base cannot carry a tower, for reasons of lifts and cores rather
+         than of taste — and the falloff drops to a gentle modifier that keeps the core reading
+         taller than the edge for two buildings of the same size.
+
+         WHY THIS CANNOT FLATTEN ANYTHING REAL: it only runs where no surveyed height exists, and
+         surveyed heights cluster on exactly the buildings that genuinely are tall. Corniche's 3,460
+         real heights are its towers. Al Maryah's are all of them. What is left for the model is the
+         ordinary stock, and the ordinary stock is short. */
       const dd = Math.min(1, Math.hypot(nx - core[0], ny - core[1]) / 1.45);
       const fall = 1 - dd * dd;
-      const cap = Math.min(tallest * (0.22 + 0.78 * fall), cellCap(d, nx, ny, tallest));
-      /* 0.4 units, about 3 metres — one storey. It was 2.2, which is SEVENTEEN metres, so
-         nothing this model produced could be shorter than a five-storey block. Dense low stock
-         all pushed to the same minimum stops reading as buildings and starts reading as raised
-         ground, and the falloff varies slowly enough across an island that they land at similar
-         heights rather than varied ones. */
-      h = Math.max(0.4, cap * (0.55 + rnd() * 0.55));
+      const pool = poolFor(areaOf(b));
+      if (pool){
+        /* Drawn, not derived. rnd() is the same seeded generator the rest of this function uses, so
+           a reload rebuilds the identical city. */
+        h = pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))];
+        /* A LEAN, NOT A FALLOFF. The band already encodes what kind of building this is; position
+           only says that two of the same kind read a little taller downtown than on the edge. 0.85
+           to 1.15 rather than 0.22 to 1.0, because it is now adjusting a measured number instead of
+           being the entire estimate. */
+        h *= 0.85 + 0.30 * fall;
+        /* The local ceiling still binds. A low-rise zone means low rise whatever the island's
+           surveyed stock says about buildings of this size elsewhere on it. */
+        h = Math.max(0.4, Math.min(h, cellCap(d, nx, ny, tallest)));
+      } else {
+        /* THE OLD MODEL, KEPT FOR THE ISLAND THAT HAS NO SURVEYED STOCK TO RESAMPLE. Wrong in the
+           way described above, and still better than a flat city: it is continuous, it respects the
+           low-rise zones, and it never produces nothing. Nothing reaches it today — every island
+           carries at least fifty-six surveyed heights — but an island added tomorrow might. */
+        const cap = Math.min(tallest * (0.22 + 0.78 * fall), cellCap(d, nx, ny, tallest));
+        h = Math.max(0.4, cap * (0.55 + rnd() * 0.55));
+      }
     }
     specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h });
   }
