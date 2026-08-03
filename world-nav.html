@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v75', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v76', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2731,18 +2731,24 @@ function frame(){
       PH.texWorst = texWorst;
     } catch (e){ console.warn('texprobe:', e.message); }
 
-    try {
-      const sw = renderer.shadowMap.enabled;
-      let m = performance.now();
-      renderer.shadowMap.enabled = false;
-      renderer.render(scene, camera);
-      PH.upload = performance.now() - m; m = performance.now();
-      renderer.shadowMap.enabled = sw;
-      renderer.render(scene, camera);
-      PH.shadowPass = performance.now() - m; m = performance.now();
-      composer.render();
-      PH.postFX = performance.now() - m;
-    } catch (e){ console.warn('probe:', e.message); }
+    /* THE PROBE RENDERS ARE GONE, AND THEY WERE COSTING WHAT THEY MEASURED.
+
+       They split the first frame three ways — a plain render with shadows off, one with shadows on,
+       then the composer — so that upload, shadowPass and postFX could be told apart. That question
+       is now answered: parallel-compile is NO on the Adreno 830, frame 1 is 21,871 ms and frame 2
+       is 7, and both clocks agree. It is shader linking, serially, on the main thread.
+
+       But renderer.render() draws straight to the canvas and composer.render() draws into a render
+       target, and three.js compiles a SEPARATE PROGRAM for each output colour space. The dump shows
+       it plainly: of 28 MeshStandard programs, 18 carry srgb and 10 srgb-linear — the canvas set
+       and the target set, the same materials linked twice.
+
+       So the probes were linking a full set of programs that are never drawn again, on the one
+       frame in the whole session where linking costs twenty seconds. A measurement that changes the
+       thing it measures, by roughly the amount being measured.
+
+       upload, shadowPass and postFX disappear from the phase list with them. frames[0] is the
+       number that replaced them and it needs no extra render at all. */
   }
   composer.render();
   /* ONE BLOCK, ONE GUARD, and the guard is _frame0 rather than a second test on PH.firstFrame.
