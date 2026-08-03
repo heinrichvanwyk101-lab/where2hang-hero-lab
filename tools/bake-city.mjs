@@ -913,24 +913,45 @@ async function probe(proj){
     process.exit(1);
   }
   let prev = {};
+  const extents = {};
   try {
     const fs = await import('node:fs/promises');
     const idx = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
-    for (const i of idx.islands || []) prev[i.id] = i.counts || {};
-  } catch { /* first run, or a fresh checkout — the comparison column simply stays blank */ }
+    for (const i of idx.islands || []){
+      prev[i.id] = i.counts || {};
+      if (i.extent) extents[i.id] = i.extent;
+    }
+  } catch { /* first run, or a fresh checkout — the comparison columns stay blank */ }
+  const scales = displayScales(extents);
 
-  process.stderr.write(`\n${'island'.padEnd(10)}${'OSM now'.padStart(10)}${'Overture'.padStart(10)}` +
-                       `${'change'.padStart(10)}${'with height'.padStart(14)}\n`);
+  /* THE FILTER HAS TO BE THE BAKE'S FILTER, and this table did not have it for one run.
+
+     overtureFor stopped applying a threshold when the threshold became per-island — it cannot know
+     one until every outline is measured — so this counted everything above the 20 m² floor and
+     reported Corniche at 1.74x when the bake would produce 1.00x. A probe exists to predict the
+     artefact. One that predicts something else is worse than none, because it is believed. */
+  const kept = isle => {
+    const thr = areaThresholdFor(scales[isle.id] || 1);
+    return (overtureFor(isle) || []).filter(b => b.a == null || b.a >= thr);
+  };
+
+  process.stderr.write(`\n${'island'.padEnd(10)}${'scale'.padStart(7)}${'thresh'.padStart(9)}` +
+                       `${'OSM now'.padStart(10)}${'Overture'.padStart(10)}` +
+                       `${'change'.padStart(9)}${'with height'.padStart(14)}\n`);
   for (const isle of ISLANDS){
-    const got = overtureFor(isle);
+    const got = kept(isle);
     const was = prev[isle.id] ? prev[isle.id].buildings : null;
     const h = got.filter(b => b.h != null).length;
+    const sc = scales[isle.id] || 1;
     const chg = was ? (got.length / was).toFixed(2) + 'x' : '—';
-    process.stderr.write(`${isle.id.padEnd(10)}${String(was == null ? '—' : was).padStart(10)}` +
-      `${String(got.length).padStart(10)}${chg.padStart(10)}` +
+    process.stderr.write(`${isle.id.padEnd(10)}${('x' + sc.toFixed(2)).padStart(7)}` +
+      `${(Math.round(areaThresholdFor(sc)) + 'm²').padStart(9)}` +
+      `${String(was == null ? '—' : was).padStart(10)}` +
+      `${String(got.length).padStart(10)}${chg.padStart(9)}` +
       `${(h + ' (' + Math.round(100 * h / Math.max(got.length, 1)) + '%)').padStart(14)}\n`);
   }
-  process.stderr.write(`\nProbe only — nothing written, nothing committed.\n`);
+  process.stderr.write(`\nPre-coastline. The bake clips each island to its own shore afterwards.\n`);
+  process.stderr.write(`Probe only — nothing written, nothing committed.\n`);
 
   /* ---------- WHAT THE AREA THRESHOLD IS COSTING, PER ISLAND ----------
 
@@ -958,40 +979,24 @@ async function probe(proj){
   process.stderr.write(`\nRe-run with W2H_MIN_AREA set to try another base threshold — no refetch ` +
     `needed if the extract is still on the runner.\n`);
 
-  /* ---------- WHAT THE SCALE CORRECTION BUYS ----------
+  /* ---------- WHAT THE SCALE CORRECTION IS WORTH ----------
 
-     The bake divides the threshold by the square of each island's display scale, so this is the
-     column that actually predicts the artefact. Scales come from the committed index's extents,
-     which is where the bake will get them too when only one island is being re-baked. */
-  const extents = {};
-  try {
-    const fsp = await import('node:fs/promises');
-    const idx = JSON.parse(await fsp.readFile('data/index.json', 'utf8'));
-    for (const i of idx.islands || []) if (i.extent) extents[i.id] = i.extent;
-  } catch { /* no index to scale against */ }
-  const scales = displayScales(extents);
-  if (!Object.keys(scales).length){
-    process.stderr.write(`\nNo committed index, so the display scales are unknown — ` +
-      `the flat ${MIN_BUILDING_AREA} m² column above is what a first bake would keep.\n`);
-    return;
-  }
-
-  process.stderr.write(`\n${'island'.padEnd(10)}${'scale'.padStart(8)}${'threshold'.padStart(11)}` +
-    `${'flat ' + MIN_BUILDING_AREA}`.padStart(11) + `${'scaled'.padStart(10)}${'change'.padStart(9)}\n`);
+     The headline table already applies the scaled threshold, so this exists only to show the
+     alternative: what a flat threshold would have kept on each island, and therefore what the
+     correction is actually buying. One column, no second scan. */
+  process.stderr.write(`\n${'island'.padEnd(10)}${'flat ' + MIN_BUILDING_AREA}`.padStart(21) +
+    `${'scaled'.padStart(10)}${'gain'.padStart(9)}\n`);
   for (const isle of ISLANDS){
-    const [s, w, n, e] = isle.bbox;
-    const mine = OVERTURE.rows.filter(r => r.lat >= s && r.lat <= n && r.lon >= w && r.lon <= e);
-    const sc = scales[isle.id] || 1;
-    const thr = areaThresholdFor(sc);
+    const mine = OVERTURE.rows.filter(r =>
+      r.lat >= isle.bbox[0] && r.lat <= isle.bbox[2] &&
+      r.lon >= isle.bbox[1] && r.lon <= isle.bbox[3]);
     const flat = mine.filter(r => r.a >= MIN_BUILDING_AREA).length;
-    const scaled = mine.filter(r => r.a >= thr).length;
-    process.stderr.write(`${isle.id.padEnd(10)}${('x' + sc.toFixed(2)).padStart(8)}` +
-      `${(Math.round(thr) + ' m²').padStart(11)}${String(flat).padStart(11)}` +
+    const scaled = mine.filter(r => r.a >= areaThresholdFor(scales[isle.id] || 1)).length;
+    process.stderr.write(`${isle.id.padEnd(10)}${String(flat).padStart(11)}` +
       `${String(scaled).padStart(10)}${((scaled / Math.max(flat, 1)).toFixed(2) + 'x').padStart(9)}\n`);
   }
-  process.stderr.write(`\nThese are pre-coastline counts. The bake clips each island to its own ` +
-    `shore afterwards.\n`);
 }
+
 
 async function main(){
   /* Flags are filtered out so `--probe` cannot be mistaken for an island name, which it would have
@@ -1016,11 +1021,15 @@ async function main(){
   /* WHAT THE COMMITTED DATA HOLDS NOW, read before anything overwrites it. A bake that quietly
      halves an island is the failure mode this change can produce and cannot detect from inside a
      single run — the numbers all look self-consistent. Comparing against the previous index is the
-     only place the regression is visible. */
-  let prevCounts = {};
+     only place the regression is visible. Extents come from the same read: an island's display
+     scale is relative to the LARGEST island, so a single-island re-bake needs the other four. */
+  let prevCounts = {}, extents = {};
   try {
     const idx = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
-    for (const i of idx.islands || []) prevCounts[i.id] = i.counts || {};
+    for (const i of idx.islands || []){
+      prevCounts[i.id] = i.counts || {};
+      if (i.extent) extents[i.id] = i.extent;
+    }
   } catch { /* nothing committed yet */ }
 
   /* ONE FILE PER ISLAND, plus a small index.
@@ -1053,11 +1062,7 @@ async function main(){
 
      An island's display scale is a function of the LARGEST island's span, so no island's threshold
      can be known until every outline has been measured. Baking into memory first costs about six
-     megabytes and buys a filter that is correct rather than uniform.
-
-     A partial bake fills the gaps from the committed index. The extents are the most stable thing
-     in this file — an outline moves by metres between bakes — so re-baking Al Reem alone gets the
-     same scale it would have got in a full run. */
+     megabytes and buys a filter that is correct rather than uniform. */
   const bakedAll = [];
   for (const isle of list){
     bakedAll.push(await bakeIsland(isle, proj));
@@ -1066,11 +1071,6 @@ async function main(){
     if (isle !== list[list.length - 1]) await new Promise(r => setTimeout(r, 4000));
   }
 
-  const extents = {};
-  try {
-    const prevIdx = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
-    for (const i of prevIdx.islands || []) if (i.extent) extents[i.id] = i.extent;
-  } catch { /* first run */ }
   for (const b of bakedAll) if (b.extent) extents[b.id] = b.extent;
   const scales = displayScales(extents);
 
