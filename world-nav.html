@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v66', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v67', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2425,7 +2425,18 @@ function frame(){
       'state  ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') +
         '   view ' + view + '\n' +
       'tris   ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
-      'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures + '\n' +
+      /* PROGRAMS, because compile came back at 23,681 ms and nothing on this overlay said why.
+
+         compileAsync builds shader programs and nothing else — no geometry, no textures — so a
+         twenty-four second compile is a program count problem, and the program count was the one
+         thing renderer.info exposes that was not on screen. three.js caches by program key, so
+         this is the number of DISTINCT material configurations in the scene, not the mesh count.
+
+         It counts the whole scene, including everything hideFabric made invisible: about 420
+         generated-fabric InstancedMeshes are still parented, still walked by compileAsync, and
+         still compiled, to be never drawn. */
+      'geo    ' + info.memory.geometries + '   tex ' + info.memory.textures +
+        '   prog ' + (info.programs ? info.programs.length : '?') + '\n' +
       'props  ' + propCount.palms + ' palm  ' + (propCount.shrubs||0) + ' shrub  ' + propCount.lamps + ' lamp  ' +
         propCount.cars + ' car  ' + propCount.boats + ' boat  ' +
         (propCount.signals || 0) + ' signal\n' +
