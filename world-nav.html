@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v73', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v74', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1611,6 +1611,18 @@ document.getElementById('vProg').addEventListener('click', () => {
       'state    ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') + '   view ' + view,
       'built    ' + DISTRICTS.filter(d => d.built).map(d => d.id).join(', '),
       'tex      ' + renderer.info.memory.textures + '   geo ' + renderer.info.memory.geometries,
+      '',
+      /* THE TIMINGS TRAVEL WITH THE DUMP.
+
+         The program list and the phase block answer halves of the same question and were arriving
+         separately — a text file and a screenshot, taken minutes apart, sometimes from different
+         loads. Twice now I have had a dump with no way to tell whether the run it came from was
+         faster or slower. One file, both halves, same load. */
+      'phase    ' + Object.entries(PH).sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => k + ' ' + Math.round(v)).join('  '),
+      'stages   ' + Object.entries(PERF).filter(([k]) => k[0] !== '#')
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => k + ' ' + Math.round(v)).join('  '),
       '',
       'by shader: ' + Object.entries(by).sort((a, b) => b[1] - a[1])
         .map(([k, v]) => k + ' x' + v).join(', '),
