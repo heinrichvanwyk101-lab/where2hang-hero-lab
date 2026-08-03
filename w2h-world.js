@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v109';
+export const BUILD = 'world v110';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -127,6 +127,32 @@ const NO_CLIP = typeof location !== 'undefined' && location.search.includes('noc
    geometry on stale coordinates and the fix is to rebase the kit onto the baked landmarks the way
    the anchors already were. If they survive, they are footprints and the cause is elsewhere. */
 const NO_KIT = typeof location !== 'undefined' && location.search.includes('nokit');
+
+/* ?lambert — swap the purely diffuse materials from Standard to Lambert.
+
+   compile came back at 22,326 ms with prog at 67, which is about 330 ms per shader program: normal
+   for a mobile GL driver linking a heavy one. Not the program COUNT, then, but the size of each,
+   and this file declares 34 MeshStandardMaterials and no Lambert or Phong at all.
+
+   MeshStandardMaterial is three.js's PBR shader and by a wide margin the most expensive it has to
+   compile. Most of these declare metalness 0 and roughness near 1, which is a plain diffuse
+   surface — Lambert renders it almost identically and compiles a fraction of the code.
+
+   ONLY THE ONES THAT CAN'T BE MUTATED LATER. applyLift writes roughness, metalness and
+   envMapIntensity on every registered building and glass material at each view change, and those
+   properties do not exist on Lambert. So the swap is restricted to metalness 0 with roughness at
+   or above 0.85 — sand, rock, stone, decking, terrain — and every façade stays Standard.
+
+   Behind a flag because it is a look change as well as a speed one, and one reload with and one
+   without settles both questions at once. */
+const LAMBERT = typeof location !== 'undefined' && location.search.includes('lambert');
+
+function stdMat(o){
+  const diffuse = (!o.metalness || o.metalness === 0) && (o.roughness == null || o.roughness >= 0.85);
+  if (!LAMBERT || !diffuse) return new THREE.MeshStandardMaterial(o);
+  const { roughness, metalness, envMapIntensity, ...rest } = o;
+  return new THREE.MeshLambertMaterial(rest);
+}
 
 /* ?fp — read here as well as in the nav, because two decisions about the hand-built kit have to be
    made at BUILD time and cannot be taken back afterwards: whether the generic filler is added at
@@ -270,7 +296,7 @@ const waterNormal = makeWaterNormal();
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(3200, 3200, 70, 70),
-  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.58, metalness:0.05,
+  stdMat({ color:0x050A10, roughness:0.58, metalness:0.05,
     envMapIntensity:0.95, normalMap:waterNormal,
     normalScale:new THREE.Vector2(0.42, 0.42) })
 );
@@ -285,7 +311,7 @@ scene.add(water);
 
 const farSea = new THREE.Mesh(
   new THREE.PlaneGeometry(14000, 14000, 1, 1),
-  new THREE.MeshStandardMaterial({ color:0x050A10, roughness:0.62, metalness:0.05 })
+  stdMat({ color:0x050A10, roughness:0.62, metalness:0.05 })
 );
 farSea.rotation.x = -Math.PI/2;
 /* -1.15, NOT -0.45, AND THE OLD COMMENT WAS WRONG ON ITS OWN TERMS.
@@ -1548,16 +1574,81 @@ const PLOT_DEPTH_M = 34;
 const PAVEMENT_M   = 9;
 const coreR = d => roadW(d, CORE_R_M);       // roundabout outer kerb, matching the painter
 
+/* ---------- THE ROAD TEST, INDEXED ------------------------------------------------------------
+
+   MEASURED, NOT SUSPECTED. A performance trace of the load put distToPolyline at 46.8 per cent of
+   a 6.1 second task and 66.1 per cent of a 4.6 second one — the two longest main-thread tasks in
+   the whole recording. Both are urbanFabric, and it reaches distToPolyline through onRoad.
+
+   The old test walked every ring segment and every arterial for every candidate plot, and walked
+   every point of each polyline computing an exact minimum distance — when the only question ever
+   asked is "is anything closer than this threshold". Plots times roads times points, with no index
+   and no early exit, on an island 19 km across.
+
+   So the segments go in a uniform grid once, each stored with the clearance it needs, and each
+   binned into every cell its clearance region touches. A query then looks at the cells within pad
+   of the point and stops at the first hit. Same answer, and the honest reason it is the same answer
+   is that a segment whose clearance region can reach the query point is guaranteed to be in one of
+   the bins that region covers — the expansion happens at insert time, not at query time.
+
+   Built lazily and cached on d.roads, because it is only ever asked for by the fabric and an island
+   that never runs the fabric should not pay for it. R.arterials is the GENERATED skeleton and is
+   written once at build; drawArterials, the real network, is a different field this never sees. */
+function roadGrid(d){
+  const R = d.roads;
+  if (R._grid) return R._grid;
+  const segs = [];
+  const push = (pts, clear) => {
+    for (let i = 0; i < pts.length - 1; i++)
+      segs.push([pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], clear]);
+  };
+  const ringClear = roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB;
+  for (const r of (R.ring || [])) push(r, ringClear);
+  for (const a of (R.arterials || []))
+    push(a, roadW(d, a.major ? ROAD_MAJOR_M : ROAD_ART_M) * 0.5 * ROAD_KERB);
+
+  let maxClear = 0;
+  for (const s of segs) if (s[4] > maxClear) maxClear = s[4];
+  /* Cell size against the widest clearance rather than a constant. Too small and a wide road is
+     inserted into hundreds of bins; too large and every query scans half the island. */
+  const cell = Math.max(maxClear * 2, 0.01);
+  const bins = new Map();
+  for (let k = 0; k < segs.length; k++){
+    const s = segs[k], c = s[4];
+    const i0 = Math.floor((Math.min(s[0], s[2]) - c) / cell), i1 = Math.floor((Math.max(s[0], s[2]) + c) / cell);
+    const j0 = Math.floor((Math.min(s[1], s[3]) - c) / cell), j1 = Math.floor((Math.max(s[1], s[3]) + c) / cell);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++){
+      const key = i * 73856093 ^ j * 19349663;
+      let b = bins.get(key);
+      if (!b) bins.set(key, b = []);
+      b.push(k);
+    }
+  }
+  return (R._grid = { segs, cell, bins });
+}
+
 function onRoad(d, x, y, pitch){
   const R = d.roads;
   if (!R) return false;
   const pad = pitch * 0.62;
-  for (let i = 0; i < R.ring.length; i++){
-    if (distToPolyline(x, y, R.ring[i]) < roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB + pad) return true;
-  }
-  for (let i = 0; i < R.arterials.length; i++){
-    const aw = R.arterials[i].major ? ROAD_MAJOR_M : ROAD_ART_M;
-    if (distToPolyline(x, y, R.arterials[i]) < roadW(d, aw) * 0.5 * ROAD_KERB + pad) return true;
+  const g = roadGrid(d);
+  const { segs, cell, bins } = g;
+  const i0 = Math.floor((x - pad) / cell), i1 = Math.floor((x + pad) / cell);
+  const j0 = Math.floor((y - pad) / cell), j1 = Math.floor((y + pad) / cell);
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++){
+    const b = bins.get(i * 73856093 ^ j * 19349663);
+    if (!b) continue;
+    for (let n = 0; n < b.length; n++){
+      const s = segs[b[n]];
+      const ax = s[0], ay = s[1], dx = s[2] - ax, dy = s[3] - ay;
+      const L2 = dx*dx + dy*dy;
+      let t = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = ax + t*dx - x, py = ay + t*dy - y;
+      const lim = s[4] + pad;
+      /* Squared, so the inner loop never calls sqrt. It runs tens of millions of times. */
+      if (px*px + py*py < lim*lim) return true;
+    }
   }
   if (R.core && Math.hypot(x - R.core[0], y - R.core[1]) < coreR(d) + pad) return true;
   return false;
@@ -2574,7 +2665,7 @@ function paintGround(d, plan){
    Abu Dhabi's islands sit two to four metres above the sea. The cliff is a deliberate diorama
    convention rather than an oversight, but it is a convention, and dropping ISLE_DEPTH would
    carry the whole city with it since GROUND is derived from it. */
-const matBeach    = new THREE.MeshStandardMaterial({ color:0x3E3B32, roughness:1, metalness:0 });
+const matBeach    = stdMat({ color:0x3E3B32, roughness:1, metalness:0 });
 matBeach.userData.duskColor = 0x9C8C6F;           // the platform's wet lower edge, unchanged in effect
 
 /* THE BEACH SKIRT'S THREE MODES. Same three colours the platform's bevel already uses, so the
@@ -2680,23 +2771,23 @@ function mergeShore(list){
    night/day/dusk shape as the beach, since they sit on the same edge and go through the same
    view switcher. */
 const shoreMat = {
-  stone: { night: new THREE.MeshStandardMaterial({ color:0x33322C, roughness:0.94 }),
-           day:   new THREE.MeshStandardMaterial({ color:0xBFB6A2, roughness:0.94 }),
-           dusk:  new THREE.MeshStandardMaterial({ color:0xAFA48D, roughness:0.94 }) },
-  rock:  { night: new THREE.MeshStandardMaterial({ color:0x2A2823, roughness:1.0 }),
-           day:   new THREE.MeshStandardMaterial({ color:0x9A9384, roughness:1.0 }),
-           dusk:  new THREE.MeshStandardMaterial({ color:0x8C8371, roughness:1.0 }) },
-  deck:  { night: new THREE.MeshStandardMaterial({ color:0x3A3830, roughness:0.8 }),
-           day:   new THREE.MeshStandardMaterial({ color:0xD6CDB6, roughness:0.8 }),
-           dusk:  new THREE.MeshStandardMaterial({ color:0xC6BBA1, roughness:0.8 }) },
+  stone: { night: stdMat({ color:0x33322C, roughness:0.94 }),
+           day:   stdMat({ color:0xBFB6A2, roughness:0.94 }),
+           dusk:  stdMat({ color:0xAFA48D, roughness:0.94 }) },
+  rock:  { night: stdMat({ color:0x2A2823, roughness:1.0 }),
+           day:   stdMat({ color:0x9A9384, roughness:1.0 }),
+           dusk:  stdMat({ color:0x8C8371, roughness:1.0 }) },
+  deck:  { night: stdMat({ color:0x3A3830, roughness:0.8 }),
+           day:   stdMat({ color:0xD6CDB6, roughness:0.8 }),
+           dusk:  stdMat({ color:0xC6BBA1, roughness:0.8 }) },
 };
 
 const beachSand = {
-  night: new THREE.MeshStandardMaterial({ color:0x5A5548, roughness:1, metalness:0, vertexColors:true }),
-  day:   new THREE.MeshStandardMaterial({ color:0xC9B896, roughness:1, metalness:0, vertexColors:true }),
-  dusk:  new THREE.MeshStandardMaterial({ color:0xB8A582, roughness:1, metalness:0, vertexColors:true }),
+  night: stdMat({ color:0x5A5548, roughness:1, metalness:0, vertexColors:true }),
+  day:   stdMat({ color:0xC9B896, roughness:1, metalness:0, vertexColors:true }),
+  dusk:  stdMat({ color:0xB8A582, roughness:1, metalness:0, vertexColors:true }),
 };
-const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1, metalness:0 });
+const matLandFlat = stdMat({ color:0x424E58, roughness:1, metalness:0 });
 
 /* FOUR SURFACES, AND NOW THEY CAN ACTUALLY BE FOUR COLOURS.
 
@@ -2720,13 +2811,13 @@ const matLandFlat = new THREE.MeshStandardMaterial({ color:0x424E58, roughness:1
    Night colours stay near-black and close together, because at night these surfaces are lit by
    window spill and should not have opinions. The glass classifier decides on the NIGHT hex, so
    every one of these keeps b <= 1.75r and stays out of the glass path. */
-const matPlaceStone = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
+const matPlaceStone = stdMat({ color:0x161C22, roughness:0.9 });
 matPlaceStone.userData.duskColor = 0xD3C4A6;      // precast concrete, neutral
 
-const matStoneRend  = new THREE.MeshStandardMaterial({ color:0x1A1A20, roughness:0.99, metalness:0.0 });
+const matStoneRend  = stdMat({ color:0x1A1A20, roughness:0.99, metalness:0.0 });
 matStoneRend.userData.duskColor  = 0xE0C79A;      // warm limestone
 
-const matStoneClad  = new THREE.MeshStandardMaterial({ color:0x171B21, roughness:0.26, metalness:0.62 });
+const matStoneClad  = stdMat({ color:0x171B21, roughness:0.26, metalness:0.62 });
 matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 
 /* PAINTED WHITE RENDER, AND THE MISSING MAJORITY FINISH.
@@ -2742,7 +2833,7 @@ matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 
    Night hex keeps b/r at 1.12, well inside the 1.75 the glass classifier tests, so this stays out
    of the glass path like every other body material. */
-const matStoneWhite = new THREE.MeshStandardMaterial({ color:0x1A1B1D, roughness:0.95, metalness:0.0 });
+const matStoneWhite = stdMat({ color:0x1A1B1D, roughness:0.95, metalness:0.0 });
 matStoneWhite.userData.duskColor = 0xE9E4DA;      // painted white render, barely warmed by the dusk
 
 /* A SECOND GLAZING, AND A ROOF THAT IS NOT A WALL.
@@ -2764,12 +2855,12 @@ matStoneWhite.userData.duskColor = 0xE9E4DA;      // painted white render, barel
 
    Both keep blue-over-red on the NIGHT hex on the correct side of 1.75, since that is still what
    the lift classifies on. */
-const matGlassBronze = new THREE.MeshStandardMaterial({ color:0x101A22, roughness:0.35, metalness:0.44 });
+const matGlassBronze = stdMat({ color:0x101A22, roughness:0.35, metalness:0.44 });
 Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, duskMetal:0.44, duskEnv:1.15 });
 
-const matRoofDeck = new THREE.MeshStandardMaterial({ color:0x101216, roughness:0.97, metalness:0.02 });
+const matRoofDeck = stdMat({ color:0x101216, roughness:0.97, metalness:0.02 });
 matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
-const matPlaceGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.35, metalness:0.1 });
+const matPlaceGlass = stdMat({ color:0x111C22, roughness:0.35, metalness:0.1 });
 /* ===========================================================================
    FACADE WINDOWS, AND THE END OF THE BAND.
 
@@ -2951,7 +3042,7 @@ const DAY_FAMILY = {
   roof:   0x9A9384,      // ballast and plant
 };
 function dayFacade(family, tex){
-  const m = new THREE.MeshStandardMaterial({
+  const m = stdMat({
     color: DAY_FAMILY[family], roughness: 0.86, metalness: 0.0 });
   if (tex) m.map = tex;
   return m;
@@ -4688,11 +4779,11 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      Five separate slim towers rather than one lump matters even at this size: the gaps are what
      make the cluster countable, and countability is the whole identity of Etihad. */
   const cm = corniche.mass;
-  const massDark  = new THREE.MeshStandardMaterial({ color:0x161C22, roughness:0.9 });
-  const massGlass = new THREE.MeshStandardMaterial({ color:0x111C22, roughness:0.4, metalness:0.1 });
-  const bandWarm  = new THREE.MeshStandardMaterial({
+  const massDark  = stdMat({ color:0x161C22, roughness:0.9 });
+  const massGlass = stdMat({ color:0x111C22, roughness:0.4, metalness:0.1 });
+  const bandWarm  = stdMat({
     color:0x0E141A, roughness:0.6, emissive:C.gold, emissiveIntensity:0.42 });
-  const bandCool  = new THREE.MeshStandardMaterial({
+  const bandCool  = stdMat({
     color:0x0E141A, roughness:0.6, emissive:0x8FD3E8, emissiveIntensity:0.34 });
 
   function massBlock(x, z, w, h, dp, glass, warm, bandFrac){
@@ -5126,10 +5217,10 @@ corniche.glow = cglow;
    Deliberately the last thing that happens. The painter needs the cell list, the cell list only
    exists after generation, and doing it in one sweep at the end means there is exactly one place
    to look when a road lands in the wrong district. */
-const dayGround  = new THREE.MeshStandardMaterial({ color:0xD8D2C4, roughness:0.92, metalness:0 });
-const dayBeach   = new THREE.MeshStandardMaterial({ color:0xAB9A7C, roughness:1, metalness:0 });
-const duskGround = new THREE.MeshStandardMaterial({ color:0xC6B99E, roughness:0.94, metalness:0 });
-const duskBeach  = new THREE.MeshStandardMaterial({ color:0x9C8C6F, roughness:1, metalness:0 });
+const dayGround  = stdMat({ color:0xD8D2C4, roughness:0.92, metalness:0 });
+const dayBeach   = stdMat({ color:0xAB9A7C, roughness:1, metalness:0 });
+const duskGround = stdMat({ color:0xC6B99E, roughness:0.94, metalness:0 });
+const duskBeach  = stdMat({ color:0x9C8C6F, roughness:1, metalness:0 });
 
 let propCount = { palms:0, lamps:0, cars:0, boats:0, shrubs:0, signals:0 };
 const signalTicks = [];
@@ -5190,7 +5281,7 @@ function buildGroundFor(d){
     if (n.tickSignals){ signalTicks.push(n.tickSignals); delete n.tickSignals; }
     Object.keys(n).forEach(k => propCount[k] = (propCount[k] || 0) + n[k]);
   }
-  const night = new THREE.MeshStandardMaterial({
+  const night = stdMat({
     color:0x68737E, roughness:1, metalness:0, map:tex });
   const day  = dayGround.clone();  day.map  = tex;
   const dusk = duskGround.clone(); dusk.map = tex;
