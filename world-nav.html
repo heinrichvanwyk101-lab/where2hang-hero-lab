@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v72', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v73', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -705,11 +705,8 @@ fitClip();
 
    Guarded on existence — compileAsync arrived in three r162 and the importmap pin is not something
    to discover the hard way at run time. */
-try {
-  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
-  else renderer.compile(scene, camera);
-} catch (e){ console.warn('compile:', e.message); }
-phase('compile');
+/* MOVED. This used to sit here, thirteen hundred lines before the view was applied — see the
+   block after setDistrict(corniche) for what it was compiling and why it was the wrong set. */
 
 /* WHERE THE 67 PROGRAMS COME FROM, by shader, once, to the console.
 
@@ -2033,6 +2030,33 @@ phase('applyView');
    Copying goal into cur once, before the loop starts, makes the opening shot the shot. */
 setWorld();
 setDistrict(corniche);
+
+/* ---------- compile, AFTER the view and the shot, not before ----------
+
+   THIS RAN THIRTEEN HUNDRED LINES EARLIER AND COMPILED THE WRONG MATERIALS.
+
+   Ground meshes are created holding their NIGHT materials; applyView swaps every one of them to
+   duskMats. Compiling before that produced a full set of night programs, and then the first frame
+   met a scene of dusk materials it had never seen and compiled all of them again. The work was
+   never avoided, only moved: compile read 22,326 ms in one build and 23 ms in another while the
+   total sat at twenty seconds either way, which is the signature of a measurement straddling the
+   thing it is trying to measure.
+
+   Cutting the program count did not touch it, which is what ruled out permutations as the cause —
+   85 programs down to 54 and upload went from 19,865 to 21,511.
+
+   AND THE SHOT MATTERS AS MUCH AS THE VIEW. three.js compile() walks VISIBLE objects, and
+   setDistrict decides which LOD layer is visible. Called before it, this compiled the layer the
+   first frame does not draw. Called here, it compiles exactly what is about to be rendered.
+
+   compileAsync resolves when compilation has actually happened rather than when it has been
+   queued, so the number it reports is real. Guarded on existence: it arrived in r162 and the
+   importmap pin is not something to discover the hard way at run time. */
+try {
+  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+  else renderer.compile(scene, camera);
+} catch (e){ console.warn('compile:', e.message); }
+phase('compile');
 
 /* THE REST OF THE CORNICHE, ONE IDLE FRAME AFTER THE FIRST.
 
