@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v70', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v68', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -291,6 +291,18 @@ const DEBUG = location.hash.indexOf('debug') >= 0;
    A fault that hits exactly one of five cases and looks like a data problem on the other four.
    The error trap named it in one load; without it this would have read as "Corniche has no
    footprints" and sent me looking at the bake. */
+/* THE OPENING SUBJECT, NAMED ONCE.
+
+   Read in two places two hundred lines apart — where the first shot is composed, and in the attract
+   table — and ATTRACT is a const in a later block, so the shot cannot reach into the table without
+   a ReferenceError. One string above both of them is the only arrangement where the two cannot
+   disagree, and a disagreement here is the flight opening wide and cutting to the landmark, which
+   is the single transition the hold exists to prevent.
+
+   Emirates Palace because it is hand-built kit geometry: no payload, on screen in about two
+   seconds, and wide and low enough to fill a frame without the unbuilt city behind it showing. */
+const OPENING_PLACE = 'Emirates Palace';
+
 const FP_ON = location.search.includes('fp');
 const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -710,6 +722,21 @@ try {
 } catch (e){ console.warn('compile:', e.message); }
 phase('compile');
 
+/* WHERE THE 67 PROGRAMS COME FROM, by shader, once, to the console.
+
+   prog on the overlay says how many; it cannot say what they are, and 67 heavy programs and 67
+   cheap ones are the same number with completely different fixes. renderer.info.programs carries
+   a name per entry, so grouping by it turns one figure into a list — and if forty of them are
+   MeshStandardMaterial then the swap is the work, while if they are spread across ten shader types
+   it is the count and the swap will not help. */
+try {
+  const by = {};
+  for (const pr of (renderer.info.programs || [])) by[pr.name] = (by[pr.name] || 0) + 1;
+  console.info('programs ' + (renderer.info.programs || []).length + ':',
+    Object.entries(by).sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => k + ' x' + v).join(', '));
+} catch (e){ console.warn('progs:', e.message); }
+
 /* Total texture pixels, since 330 textures says nothing about their size and a single 4096 ground
    canvas outweighs a hundred window maps. Counted from the scene rather than assumed. */
 try {
@@ -956,6 +983,10 @@ function setDistrict(d){
      apply. Applying a view to meshes that have not been snapshotted sets their material to
      undefined, which kills the render loop from inside projectObject with an error that names
      neither the mesh nor the island. */
+  /* Hidden the instant it acquires geometry, revealed by attractTick when it has settled. Set here
+     rather than inside buildIsland because visibility is a shell concern: the world module builds
+     islands, the nav decides when a visitor is allowed to see one. */
+  if (buildIsland && d && d !== corniche && d.pending) d.group.visible = false;
   if (buildIsland && d && buildIsland(d.id)){
     snapshotMats(d.group);
     registerLift(d.group);
@@ -1793,12 +1824,35 @@ function overlaps(a, b){
          Math.abs(a.y - b.y) * 2 < (a.h + b.h) + LABEL_PAD * 2;
 }
 
+/* MEASURED ONCE PER TEXT, NOT ONCE PER FRAME PER LABEL.
+
+   A profile put `get offsetWidth` at 5.2 per cent of the whole load window with layoutLabels at
+   2.3 — and unlike everything else on that list this is paid on EVERY frame for the life of the
+   page, not once during the build.
+
+   The cause was the shape of the loop rather than the number of labels. It read offsetWidth, then
+   wrote style.left, style.top and a class, then read offsetWidth on the next label — and a read
+   after a write forces the browser to flush layout before it can answer. Ten labels, ten forced
+   layouts, sixty times a second.
+
+   A label's size only changes when its text does, so it is cached against the text and remeasured
+   when that changes. A hidden element reports zero, so a zero is never cached — otherwise the
+   first frame a label is off-screen would poison its width for good. */
+function labelSize(el){
+  if (el._mw && el._mTxt === el.textContent) return;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  if (w){ el._mw = w; el._mh = h; el._mTxt = el.textContent; }
+}
+
 function layoutLabels(items){
   items.sort((a, b) => a.p.depth - b.p.depth);
+  /* EVERY READ BEFORE ANY WRITE. On the frames where nothing has been remeasured this loop touches
+     no layout at all; on the frames where something has, it costs one flush rather than ten. */
+  for (const it of items) labelSize(it.el);
   const placed = [];
   for (const it of items){
-    const w = it.el.offsetWidth  || 70;
-    const h = it.el.offsetHeight || 24;
+    const w = it.el._mw || 70;
+    const h = it.el._mh || 24;
     let y = it.p.y, box = null, ok = false;
     for (let n = 0; n <= NUDGE_MAX; n++){
       box = { x:it.p.x, y:y - n * NUDGE, w, h };
@@ -1941,7 +1995,16 @@ phase('applyView');
    from the default world position means the scene opens by flying in from somewhere nobody chose.
    Copying goal into cur once, before the loop starts, makes the opening shot the shot. */
 setWorld();
-setDistrict(corniche);
+/* THE OPENING SHOT IS LEG 0's SHOT, composed here rather than falling back to the district view.
+
+   attract.i starts at 0 and the first advance goes to 1, so whatever is composed here IS leg 0 and
+   attractGo never runs for it. If this said setDistrict while the table said place, the flight
+   would open wide and then cut to the landmark on the first advance — the one transition the hold
+   exists to avoid. */
+(() => {
+  const a = corniche.placeAnchors.find(p => p.name === OPENING_PLACE);
+  if (a) setPlace(corniche, a); else setDistrict(corniche);
+})();
 
 /* THE REST OF THE CORNICHE, ONE IDLE FRAME AFTER THE FIRST.
 
@@ -2046,7 +2109,21 @@ function frameStats(ms){
    Durations are per leg rather than one constant because the legs are not equal: the Corniche
    opening is the shot that has to land, and Al Maryah is a sliver worth four seconds at most. */
 const ATTRACT = [
-  { id:'corniche', ms:9000 },
+  /* THE OPENING LEG HOLDS UNTIL CORNICHE IS FINISHED, rather than for a fixed nine seconds.
+
+     What a visitor used to watch was the island assembling itself in three visible steps: bare
+     ground, then a generated city popping in, then that city being replaced by the real one when
+     isle-corniche.json landed seven seconds later. Blank, empty, populated. It would look wrong at
+     two seconds as much as at twenty — it is not a load-time fault, it is a fault of showing work
+     in progress.
+
+     So the shot is tight on Emirates Palace, which is hand-built kit geometry with no payload
+     dependency and is on screen within about two seconds, and it stays there until the island
+     behind it has settled. The churn happens across the island while the landmark fills the frame.
+
+     maxMs is a ceiling, not a duration. A payload that never arrives must not leave the camera
+     parked on one building forever, so after it the flight starts regardless. */
+  { id:'corniche', place:OPENING_PLACE, hold:true, ms:9000, maxMs:25000 },
   { id:'maryah',   ms:5000 },
   { id:'reem',     ms:5500 },
   { id:'saadiyat', ms:6000 },
@@ -2255,6 +2332,10 @@ async function addFootprints(d){
 }
 
 function buildAndRegister(d){
+  /* Same rule as the setDistrict path: hidden the moment it acquires geometry. The prefetch is
+     precisely the case this matters for — it builds an island a whole leg before the camera
+     arrives, so without this you watch it assemble in the distance. */
+  if (d !== corniche && d.pending) d.group.visible = false;
   if (!buildIsland(d.id)) return;
   snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   addFootprints(d);
@@ -2285,14 +2366,33 @@ function attractPrefetch(n){
   whenRoads(leg.id).then(() => { if (d.pending) buildAndRegister(d); });
 }
 
+/* AN ISLAND IS READY WHEN THERE IS NOTHING LEFT TO WATCH ARRIVE.
+
+   Built is not enough: under ?fp the footprints land on a promise well after the build returns, and
+   the swap from generated fabric to real buildings is the most conspicuous of the three stages. So
+   ready means built AND the footprint state has settled to something final — on, none or thin. */
+function isleReady(d){
+  if (!d || !d.built) return false;
+  if (!FP_ON) return true;
+  const st = fpState.get(d.id);
+  return st === 'on' || st === 'none' || st === 'thin';
+}
+
 function attractGo(i){
   attract.i = i % ATTRACT.length;
   const leg = ATTRACT[attract.i];
   attract.until = performance.now() + leg.ms;
+  attract.hold = leg.hold ? performance.now() + (leg.maxMs || 25000) : 0;
   if (leg.world) setWorld();
   else {
     const d = DISTRICTS.find(x => x.id === leg.id);
-    if (d) setDistrict(d);
+    if (d){
+      /* A named place on the leg composes a place shot rather than a district one. Looked up by
+         name against the island's own anchors, so a landmark that leaves the bake does not become
+         a crash — it becomes the district shot it was before. */
+      const a = leg.place && d.placeAnchors.find(p => p.name === leg.place);
+      if (a) setPlace(d, a); else setDistrict(d);
+    }
   }
   /* Next island built during THIS leg, not at the moment it is needed. */
   attractPrefetch(attract.i + 1);
@@ -2315,7 +2415,20 @@ function attractStop(){
   window.addEventListener(ev, attractStop, { passive:true }));
 
 function attractTick(now){
-  if (attract.on){ if (now >= attract.until) attractGo(attract.i + 1); return; }
+  /* REVEALED WHOLE, NEVER HALF. An island being built is off camera — the flight is somewhere else
+     and the prefetch runs a leg ahead — so hiding it until it has settled costs nothing to look at
+     and removes the pop-in you would otherwise watch on arrival. Corniche is exempt: it is the
+     opening subject and the hold leg is what covers its assembly. */
+  for (const d of DISTRICTS){
+    if (d === corniche || !d.built || d._shown) continue;
+    if (isleReady(d)){ d.group.visible = true; d._shown = true; }
+  }
+  if (attract.on){
+    /* The hold leg waits for the island rather than for the clock, up to its ceiling. */
+    if (attract.hold && now < attract.hold && !isleReady(activeDistrict)) return;
+    if (now >= attract.until) attractGo(attract.i + 1);
+    return;
+  }
   if (now - attract.lastInput > IDLE_MS) attractStart();
 }
 
@@ -2327,6 +2440,9 @@ function attractTick(now){
    attract.i starts at 0 and the first advance goes to 1, so leg 0 IS that composed shot. */
 attract.on = !ATTRACT_OFF;
 attract.until = performance.now() + ATTRACT[0].ms;
+/* Leg 0 is composed above rather than by attractGo, so its hold has to be armed by hand — the one
+   place in the loop where the shot and its timer are set in different statements. */
+attract.hold = ATTRACT[0].hold ? performance.now() + (ATTRACT[0].maxMs || 25000) : 0;
 attractPrefetch(1);
 /* SPLITTING THE SIXTEEN SECONDS, because everything already measured inside it is small.
 
@@ -2592,6 +2708,18 @@ function frame(){
      permanently unreachable, and I spent a round trip wondering why the diagnostics were silent.
      A single flag, cleared in exactly one place, cannot fail that way. */
   if (_frame0){
+    /* SHADER ERROR CHECKING OFF, AFTER THE FRAME THAT PROVES THE SHADERS COMPILED.
+
+       getProgramInfoLog was 5.5 per cent of the entire load window — more than any single build
+       stage. three.js calls it per program, and every call is a synchronous round trip to the GPU
+       driver that stalls the main thread until the driver answers.
+
+       Turned off HERE rather than at renderer construction, so every program built during startup
+       is still validated and a genuine compile failure still reaches the console with a shader
+       source dump. What is given up is diagnosis of a shader that fails later — and a material
+       created after this point is a variant of a family that already compiled, so the realistic
+       failure mode is a black object rather than a silent one. ?shadercheck keeps it on. */
+    if (!location.search.includes('shadercheck')) renderer.debug.checkShaderErrors = false;
     PH.render0    = performance.now() - _tR0;
     PH.firstFrame = performance.now() - _phT;
     PH['#page']   = performance.now() - PAGE_T0;

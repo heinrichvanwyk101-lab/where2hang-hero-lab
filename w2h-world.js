@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v110';
+export const BUILD = 'world v111';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -292,7 +292,14 @@ function makeWaterNormal(N = 512){
   t.colorSpace = THREE.NoColorSpace;
   return t;
 }
-const waterNormal = makeWaterNormal();
+/* 256, DOWN FROM 512, AND THE SPECTRUM IS WHY IT COSTS NOTHING.
+
+   This is 26 wave components evaluated per pixel, so 512 squared is 6.8 million sine pairs and a
+   profile put it at 11.8 per cent of the longest task in the load. The band runs 3 to 16 cycles
+   across the tile: at 256 that is still sixteen pixels per wavelength at the fine end, eight times
+   Nyquist, and the field is smooth by construction. Halving the side quarters the work and the
+   normal map is visually the same thing. */
+const waterNormal = makeWaterNormal(256);
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(3200, 3200, 70, 70),
