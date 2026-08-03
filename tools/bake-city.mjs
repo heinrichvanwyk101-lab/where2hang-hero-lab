@@ -1114,17 +1114,26 @@ async function main(){
 
     /* A ROADS-ONLY ARTEFACT, and it exists because of where the scene needs this data.
 
-       The island file is 2.7 MB on Corniche and the roads inside it are a fraction of that — the
-       rest is 18,776 buildings. But the ground canvas is painted while the island is built, so the
-       centrelines have to be in hand BEFORE the first frame, and putting 2.7 MB on that path would
+       The island file is 3.6 MB on Corniche and the roads inside it are a fraction of that — the
+       rest is 20,262 buildings. But the ground canvas is painted while the island is built, so the
+       centrelines have to be in hand BEFORE the first frame, and putting 3.6 MB on that path would
        undo a load that is now two seconds.
 
-       Major and minor only. Local streets are most of the count and the least of the picture at
-       7.8 metres to the unit, and they can come later with the buildings if they are ever wanted.
+       LOCAL STREETS ARE NOW INCLUDED, and the earlier note saying they could come later "if they
+       are ever wanted" was written before the ground was going to be carved by the street network.
+       They are what makes a block a block: Corniche has 6,217 of them against 4,447 arterials, and
+       without them the floor has a motorway grid on it and no city.
+
+       The reason it was worth reversing is that the cost turned out to be nothing. Measured on the
+       committed payloads, gzipped as GitHub Pages serves them, Corniche goes from 100 KB to 258 KB
+       and Al Maryah from 9 KB to 14 KB. A hundred and fifty kilobytes against a 3.6 MB island file
+       and a two second load, for two thirds of the street network.
+
        Written even when empty, so a consumer never has to distinguish "no roads" from "not baked
        yet". */
     const rd = { id:baked.id,
-                 roads:(baked.roads || []).filter(r => r.cls === 'major' || r.cls === 'minor') };
+                 roads:(baked.roads || []).filter(r => r.cls === 'major' || r.cls === 'minor' ||
+                                                       r.cls === 'local') };
     const rpath = `data/roads-${baked.id}.json`;
     await fs.writeFile(rpath, JSON.stringify(rd));
     const rbytes = (await fs.stat(rpath)).size;
