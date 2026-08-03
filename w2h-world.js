@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v112';
+export const BUILD = 'world v113';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3562,6 +3562,32 @@ DISTRICTS.forEach(d => {
   const detail = new THREE.Group(); detail.name = 'detail';
   detail.visible = false;
   g.add(mass, detail);
+  /* THE GLOW LIGHT IS CREATED HERE, FOR EVERY ISLAND, BEFORE ANY OF THEM IS BUILT.
+
+     It used to be created inside buildFabricFor, which is deferred — so each island added a
+     PointLight to the scene the moment it was built. three.js compiles the light count into every
+     shader as NUM_POINT_LIGHTS, so adding one invalidates the entire material set and the whole
+     lot is compiled again from scratch.
+
+     A dump of the program cache is unambiguous about it: 49 of the 85 programs are ordinary
+     MeshStandard, and they split five ways on exactly one field — the light count — 9 programs at
+     0 lights, 18 at 1, 7 at 2, 8 at 3, 7 at 4. Four islands built, five recompiles of everything.
+     That is the twenty seconds, and it is why prog climbs from 53 to 96 as the flight goes round
+     rather than settling after the first island.
+
+     ADDED TO d.group, NOT d.detail, AND THAT MATTERS AS MUCH AS THE TIMING. three.js gathers
+     lights while walking VISIBLE objects, and applyLOD toggles detail every time the camera enters
+     or leaves an island — so a light in there changes the count on every LOD switch and triggers
+     the same full recompile mid-flight. In the group it is always visible, and the count is a constant
+     from the first frame to the last.
+
+     Intensity 0 until applyLOD wants it, exactly as before: this changes when the light EXISTS,
+     not when it shines. */
+  const glow = new THREE.PointLight(d.tint, 0, 150, 2);
+  glow.position.set(0, GROUND + 20, 0);
+  g.add(glow);
+  d.glow = glow;
+
   d.group = g; d.mass = mass; d.detail = detail;
 
   /* Island platform, in both layers so the ground never disappears during the LOD swap. TWO
@@ -5144,10 +5170,6 @@ function buildFabricFor(d){
                            { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   d.fabric = built;
 
-  const glow = new THREE.PointLight(d.tint, 0, 150, 2);
-  glow.position.set(0, GROUND + 20, 0);
-  d.detail.add(glow);
-  d.glow = glow;
 }
 
 /* THE FOUR OUTER ISLANDS ARE NOT BUILT AT LOAD, and this is the largest lever left.
@@ -5239,10 +5261,18 @@ urbanFabric(corniche, corniche.mass,
 corniche.fabric = cornicheFabric;
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
-const cglow = new THREE.PointLight(C.gold, 0, 170, 2);
+/* CORNICHE'S GLOW IS THE ONE EVERY ISLAND ALREADY HAS, RECONFIGURED — not a second light.
+
+   It used to be built here and added to corniche.detail, which is now two faults rather than one:
+   a light inside the LOD toggle changes the visible light count every time the camera enters or
+   leaves the island, and with the generic glow now created for every district up front this would
+   have put TWO point lights on Corniche and pushed NUM_POINT_LIGHTS to six for the whole scene.
+
+   Colour, height, offset and range are Corniche's own; only the light object is shared. */
+const cglow = corniche.glow;
+cglow.color.setHex(C.gold);
+cglow.distance = 170;
 cglow.position.set(0, GROUND + 22, -10);
-corniche.detail.add(cglow);
-corniche.glow = cglow;
 
 /* ---------- paint the ground, once the fabric knows where the blocks are ----------
 
