@@ -122,6 +122,7 @@
 <button class="back" id="back">Back</button>
 
 <div class="views">
+  <button class="chip" id="vProg" style="display:none">Progs</button>
   <button class="chip" id="vMode" aria-pressed="false">Dusk</button>
 </div>
 <div id="err"></div>
@@ -276,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v71', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v72', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1590,6 +1591,45 @@ function applyView(next){
   applyLOD();
 }
 
+/* THE PROGRAM DUMP GOES TO A FILE, NOT TO THE CONSOLE.
+
+   The console needs DevTools, DevTools needs the page open on a desktop, and the desktop is behind
+   a network that blocks github.io. A diagnostic you cannot reach is not a diagnostic — the same
+   argument the URL flags in this file were written under.
+
+   So it saves a text file instead. One tap, on the device that has the problem, over the network
+   that works. Shown only under #debug, and only once the first frame has been drawn, because
+   renderer.info.programs fills as programs are built.
+
+   TAP IT AT THE END OF A FULL LOOP. The count climbs with islands — 53 with Corniche alone, 96
+   once all five are up — so a dump taken during the opening leg describes a fifth of the problem. */
+document.getElementById('vProg').addEventListener('click', () => {
+  try {
+    const ps = renderer.info.programs || [];
+    const by = {};
+    for (const p of ps) by[p.name || '?'] = (by[p.name || '?'] || 0) + 1;
+    const lines = [
+      'programs ' + ps.length,
+      'build    ' + B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS,
+      'state    ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') + '   view ' + view,
+      'built    ' + DISTRICTS.filter(d => d.built).map(d => d.id).join(', '),
+      'tex      ' + renderer.info.memory.textures + '   geo ' + renderer.info.memory.geometries,
+      '',
+      'by shader: ' + Object.entries(by).sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => k + ' x' + v).join(', '),
+      '',
+      ...ps.map((p, i) => String(i).padStart(3) + '  ' + (p.name || '?') + '\n     ' +
+                          String(p.cacheKey || '')),
+    ];
+    const blob = new Blob([lines.join('\n')], { type:'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'programs-' + ps.length + '.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  } catch (e){ noteError('progs', e); }
+});
+
 document.getElementById('vMode').addEventListener('click', () => {
   const next = MODES[(MODES.indexOf(view) + 1) % MODES.length];
   /* lift MEANS SOMETHING DIFFERENT EITHER SIDE OF THIS BOUNDARY — a height multiplier in the lit
@@ -2672,17 +2712,7 @@ function frame(){
        side by side shows which single axis is multiplying. Console only — it is a page of text and
        has no business on the overlay — and once, on the first frame, because renderer.info.programs
        is populated as programs are built. */
-    try {
-      const ps = renderer.info.programs || [];
-      const byName = {};
-      for (const p of ps) byName[p.name || '?'] = (byName[p.name || '?'] || 0) + 1;
-      console.info('programs ' + ps.length + ' — ' +
-        Object.entries(byName).sort((a, b) => b[1] - a[1])
-          .map(([k, v]) => k + ' x' + v).join(', '));
-      console.info(ps.map((p, i) =>
-        String(i).padStart(3) + '  ' + (p.name || '?') + '  ' +
-        String(p.cacheKey || '').slice(0, 320)).join('\n'));
-    } catch (e){ console.warn('programs:', e.message); }
+    if (DEBUG) document.getElementById('vProg').style.display = '';
 
     PH.firstFrame = performance.now() - _phT;
     PH['#page']   = performance.now() - PAGE_T0;
