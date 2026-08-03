@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v68', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v69', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -291,18 +291,6 @@ const DEBUG = location.hash.indexOf('debug') >= 0;
    A fault that hits exactly one of five cases and looks like a data problem on the other four.
    The error trap named it in one load; without it this would have read as "Corniche has no
    footprints" and sent me looking at the bake. */
-/* THE OPENING SUBJECT, NAMED ONCE.
-
-   Read in two places two hundred lines apart — where the first shot is composed, and in the attract
-   table — and ATTRACT is a const in a later block, so the shot cannot reach into the table without
-   a ReferenceError. One string above both of them is the only arrangement where the two cannot
-   disagree, and a disagreement here is the flight opening wide and cutting to the landmark, which
-   is the single transition the hold exists to prevent.
-
-   Emirates Palace because it is hand-built kit geometry: no payload, on screen in about two
-   seconds, and wide and low enough to fill a frame without the unbuilt city behind it showing. */
-const OPENING_PLACE = 'Emirates Palace';
-
 const FP_ON = location.search.includes('fp');
 const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
 if (DEBUG) document.getElementById('dbg').classList.add('on');
@@ -983,10 +971,6 @@ function setDistrict(d){
      apply. Applying a view to meshes that have not been snapshotted sets their material to
      undefined, which kills the render loop from inside projectObject with an error that names
      neither the mesh nor the island. */
-  /* Hidden the instant it acquires geometry, revealed by attractTick when it has settled. Set here
-     rather than inside buildIsland because visibility is a shell concern: the world module builds
-     islands, the nav decides when a visitor is allowed to see one. */
-  if (buildIsland && d && d !== corniche && d.pending) d.group.visible = false;
   if (buildIsland && d && buildIsland(d.id)){
     snapshotMats(d.group);
     registerLift(d.group);
@@ -1611,10 +1595,23 @@ document.getElementById('vMode').addEventListener('click', () => {
   /* lift MEANS SOMETHING DIFFERENT EITHER SIDE OF THIS BOUNDARY — a height multiplier in the lit
      modes, a 0-to-1 pitch in Plan and Check — so carrying a value across reinterprets it and jumps
      the camera. A lift of 0.8 left over from orbiting would arrive in Check as most of the way to
-     vertical. Zeroed on the crossing only, so cycling Dusk to Day to Night leaves the view alone. */
+     vertical.
+
+     AND THE TWO MAP MODES WANT DIFFERENT ANSWERS, which is what zeroing both of them got wrong.
+
+     Check is a comparison view: it exists to be held against the lit modes, so it should open on
+     exactly the framing you just left, and 0 does that. Plan is a plan. An overhead view is the
+     whole meaning of the word, and it was opening at the same oblique as everything else.
+
+     Reaching overhead by hand was not a workaround either — in these views one finger pans, so the
+     only control that touches lift is the two-finger vertical midpoint, and that gesture is also
+     pinch-to-zoom and twist-to-rotate. On a folded Fold the fingers are two centimetres apart and
+     every attempt to raise the pitch also changes the zoom and the bearing. The control existed and
+     could not be operated. It still works for fine adjustment; it is no longer the only way. */
   const wasMap = view === 'plan' || view === 'check';
   const isMap  = next === 'plan' || next === 'check';
-  if (wasMap !== isMap) orbit.lift = 0;
+  if (isMap) orbit.lift = next === 'plan' ? 1 : 0;
+  else if (wasMap) orbit.lift = 0;
   applyView(next);
 });
 
@@ -1995,16 +1992,7 @@ phase('applyView');
    from the default world position means the scene opens by flying in from somewhere nobody chose.
    Copying goal into cur once, before the loop starts, makes the opening shot the shot. */
 setWorld();
-/* THE OPENING SHOT IS LEG 0's SHOT, composed here rather than falling back to the district view.
-
-   attract.i starts at 0 and the first advance goes to 1, so whatever is composed here IS leg 0 and
-   attractGo never runs for it. If this said setDistrict while the table said place, the flight
-   would open wide and then cut to the landmark on the first advance — the one transition the hold
-   exists to avoid. */
-(() => {
-  const a = corniche.placeAnchors.find(p => p.name === OPENING_PLACE);
-  if (a) setPlace(corniche, a); else setDistrict(corniche);
-})();
+setDistrict(corniche);
 
 /* THE REST OF THE CORNICHE, ONE IDLE FRAME AFTER THE FIRST.
 
@@ -2109,21 +2097,7 @@ function frameStats(ms){
    Durations are per leg rather than one constant because the legs are not equal: the Corniche
    opening is the shot that has to land, and Al Maryah is a sliver worth four seconds at most. */
 const ATTRACT = [
-  /* THE OPENING LEG HOLDS UNTIL CORNICHE IS FINISHED, rather than for a fixed nine seconds.
-
-     What a visitor used to watch was the island assembling itself in three visible steps: bare
-     ground, then a generated city popping in, then that city being replaced by the real one when
-     isle-corniche.json landed seven seconds later. Blank, empty, populated. It would look wrong at
-     two seconds as much as at twenty — it is not a load-time fault, it is a fault of showing work
-     in progress.
-
-     So the shot is tight on Emirates Palace, which is hand-built kit geometry with no payload
-     dependency and is on screen within about two seconds, and it stays there until the island
-     behind it has settled. The churn happens across the island while the landmark fills the frame.
-
-     maxMs is a ceiling, not a duration. A payload that never arrives must not leave the camera
-     parked on one building forever, so after it the flight starts regardless. */
-  { id:'corniche', place:OPENING_PLACE, hold:true, ms:9000, maxMs:25000 },
+  { id:'corniche', ms:9000 },
   { id:'maryah',   ms:5000 },
   { id:'reem',     ms:5500 },
   { id:'saadiyat', ms:6000 },
@@ -2332,10 +2306,6 @@ async function addFootprints(d){
 }
 
 function buildAndRegister(d){
-  /* Same rule as the setDistrict path: hidden the moment it acquires geometry. The prefetch is
-     precisely the case this matters for — it builds an island a whole leg before the camera
-     arrives, so without this you watch it assemble in the distance. */
-  if (d !== corniche && d.pending) d.group.visible = false;
   if (!buildIsland(d.id)) return;
   snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   addFootprints(d);
@@ -2366,33 +2336,14 @@ function attractPrefetch(n){
   whenRoads(leg.id).then(() => { if (d.pending) buildAndRegister(d); });
 }
 
-/* AN ISLAND IS READY WHEN THERE IS NOTHING LEFT TO WATCH ARRIVE.
-
-   Built is not enough: under ?fp the footprints land on a promise well after the build returns, and
-   the swap from generated fabric to real buildings is the most conspicuous of the three stages. So
-   ready means built AND the footprint state has settled to something final — on, none or thin. */
-function isleReady(d){
-  if (!d || !d.built) return false;
-  if (!FP_ON) return true;
-  const st = fpState.get(d.id);
-  return st === 'on' || st === 'none' || st === 'thin';
-}
-
 function attractGo(i){
   attract.i = i % ATTRACT.length;
   const leg = ATTRACT[attract.i];
   attract.until = performance.now() + leg.ms;
-  attract.hold = leg.hold ? performance.now() + (leg.maxMs || 25000) : 0;
   if (leg.world) setWorld();
   else {
     const d = DISTRICTS.find(x => x.id === leg.id);
-    if (d){
-      /* A named place on the leg composes a place shot rather than a district one. Looked up by
-         name against the island's own anchors, so a landmark that leaves the bake does not become
-         a crash — it becomes the district shot it was before. */
-      const a = leg.place && d.placeAnchors.find(p => p.name === leg.place);
-      if (a) setPlace(d, a); else setDistrict(d);
-    }
+    if (d) setDistrict(d);
   }
   /* Next island built during THIS leg, not at the moment it is needed. */
   attractPrefetch(attract.i + 1);
@@ -2415,20 +2366,7 @@ function attractStop(){
   window.addEventListener(ev, attractStop, { passive:true }));
 
 function attractTick(now){
-  /* REVEALED WHOLE, NEVER HALF. An island being built is off camera — the flight is somewhere else
-     and the prefetch runs a leg ahead — so hiding it until it has settled costs nothing to look at
-     and removes the pop-in you would otherwise watch on arrival. Corniche is exempt: it is the
-     opening subject and the hold leg is what covers its assembly. */
-  for (const d of DISTRICTS){
-    if (d === corniche || !d.built || d._shown) continue;
-    if (isleReady(d)){ d.group.visible = true; d._shown = true; }
-  }
-  if (attract.on){
-    /* The hold leg waits for the island rather than for the clock, up to its ceiling. */
-    if (attract.hold && now < attract.hold && !isleReady(activeDistrict)) return;
-    if (now >= attract.until) attractGo(attract.i + 1);
-    return;
-  }
+  if (attract.on){ if (now >= attract.until) attractGo(attract.i + 1); return; }
   if (now - attract.lastInput > IDLE_MS) attractStart();
 }
 
@@ -2440,9 +2378,6 @@ function attractTick(now){
    attract.i starts at 0 and the first advance goes to 1, so leg 0 IS that composed shot. */
 attract.on = !ATTRACT_OFF;
 attract.until = performance.now() + ATTRACT[0].ms;
-/* Leg 0 is composed above rather than by attractGo, so its hold has to be armed by hand — the one
-   place in the loop where the shot and its timer are set in different statements. */
-attract.hold = ATTRACT[0].hold ? performance.now() + (ATTRACT[0].maxMs || 25000) : 0;
 attractPrefetch(1);
 /* SPLITTING THE SIXTEEN SECONDS, because everything already measured inside it is small.
 

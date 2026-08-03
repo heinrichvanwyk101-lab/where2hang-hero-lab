@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v111';
+export const BUILD = 'world v112';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -178,12 +178,20 @@ const KIT_ZONES = {};
    is monotonic and sub-millisecond, and the wrapper costs a few microseconds against stages that
    run for hundreds of milliseconds. */
 const PERF = {};
-const timed = (name, fn) => function(...a){
-  const t0 = performance.now();
-  const r = fn.apply(this, a);
-  PERF[name] = (PERF[name] || 0) + (performance.now() - t0);
-  PERF['#' + name] = (PERF['#' + name] || 0) + 1;
-  return r;
+/* THE COUNT KEY IS BUILT ONCE, NOT ON EVERY CALL.
+
+   `'#' + name` inside the wrapper allocated a fresh string per invocation. On a stage that runs
+   once per island that is nothing; on anything hot it is a garbage generator sitting inside the
+   measurement, and a profiler then reports the instrument as the cost. Hoisted. */
+const timed = (name, fn) => {
+  const ck = '#' + name;
+  return function(...a){
+    const t0 = performance.now();
+    const r = fn.apply(this, a);
+    PERF[name] = (PERF[name] || 0) + (performance.now() - t0);
+    PERF[ck] = (PERF[ck] || 0) + 1;
+    return r;
+  };
 };
 const T0 = performance.now();
 
@@ -851,6 +859,9 @@ const gridCache = new Map();
 function isleGridOf(id){
   let g = gridCache.get(id);
   if (g) return g;
+  /* Timed here rather than by the wrapper, so only the build is measured. See the note where the
+     stages are wrapped for why this one cannot go through timed(). */
+  const _t = performance.now();
   const pts = outlineClosed(id);
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of pts){
@@ -880,6 +891,8 @@ function isleGridOf(id){
   }
   g = { pts, n, x0, y0, cw, ch, nc, cells, rows };
   gridCache.set(id, g);
+  PERF.isleGridOf = (PERF.isleGridOf || 0) + (performance.now() - _t);
+  PERF['#isleGridOf'] = (PERF['#isleGridOf'] || 0) + 1;
   return g;
 }
 
@@ -3401,7 +3414,19 @@ if (BASE){
 /* Wrapped after every declaration and before the first call. These are function declarations, so
    the binding is assignable and every existing call site picks the wrapper up unchanged. */
 isleCoast    = timed('isleCoast',    isleCoast);
-isleGridOf   = timed('isleGridOf',   isleGridOf);
+/* isleGridOf IS NOT WRAPPED, AND THAT IS THE POINT.
+
+   It is a memoised getter: a Map read on every call but the first. insideIsle and
+   distToOutlineFast both call it on EVERY invocation, and those two run per candidate plot —
+   millions of times per island. Wrapping it put a rest-array allocation, two performance.now()
+   calls and a string concatenation in front of a Map.get.
+
+   A profile of the load put the wrapper at 21.8 per cent of the longest task, ahead of every real
+   function in the build. The measurement was the third biggest cost in the thing it measured.
+
+   The stage number is not lost. What anyone ever wanted from `isleGridOf` on the overlay is how
+   long the GRID TOOK TO BUILD, not how long a cache hit takes, so the function times its own miss
+   path and the hits cost nothing. */
 isleShape    = timed('isleShape',    isleShape);
 roadSkeleton = timed('roadSkeleton', roadSkeleton);
 groundPlan   = timed('groundPlan',   groundPlan);
