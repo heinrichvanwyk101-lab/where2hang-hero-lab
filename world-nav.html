@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v64', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v65', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2231,10 +2231,14 @@ attractPrefetch(1);
    test. */
 phase('prefetch');
 
-let _frame0 = true;
+let _frame0 = true, _tick0Done = false;
 function frame(){
   requestAnimationFrame(frame);
   const _t0tick = _frame0 ? performance.now() : 0;
+  /* THE WAIT FOR THE FIRST ANIMATION FRAME TO RUN AT ALL, separated from what happens inside it.
+     Everything before this point is module top-level work; if this number is large the main thread
+     was still busy when the loop was scheduled, and no amount of render tuning will touch it. */
+  if (_frame0) PH.rafWait = _t0tick - _phT;
   /* CONTAINED, BECAUSE THIS LINE SITS IN FRONT OF THE RENDER. attractTick reaches setDistrict and
      buildIsland, which between them touch geometry, textures and materials for an island being
      built for the first time — the most failure-prone call in the file, executed before anything
@@ -2249,7 +2253,7 @@ function frame(){
   catch (e){ noteError('attract', e); attract.on = false; attract.dead = true; }
   /* The first tick only. It is the one that can build an island, and it is the one that has been
      hiding inside firstFrame. Every later tick is a camera update and costs nothing. */
-  if (_frame0){ PH.attract0 = performance.now() - _t0tick; _frame0 = false; }
+  if (_frame0 && !_tick0Done){ PH.attract0 = performance.now() - _t0tick; _tick0Done = true; }
   const t0 = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   const t  = clock.elapsedTime;
@@ -2360,9 +2364,23 @@ function frame(){
     }
   }
 
+  const _tLbl = _frame0 ? performance.now() : 0;
   updateLabels();
+  if (_frame0) PH.labels0 = performance.now() - _tLbl;
   renderer.info.reset();
+  /* THE FIRST RENDER, MEASURED — AND IT WAS NOT BEFORE.
+
+     The probe block below claims to run "before the first real frame is measured". It does not: it
+     sits after this line, so this call pays every texture upload, every buffer, the first shadow
+     pass and the composer's target allocation, and the probes then measure the second, third and
+     fourth renders, which are cheap because this one already paid. That is how upload came back at
+     81 ms inside a firstFrame of 19,840.
+
+     prefetch and attract0 both read zero, so this call and the wait to reach it are the only things
+     left in the span. Naming it costs one variable. */
+  const _tR0 = _frame0 ? performance.now() : 0;
   composer.render();
+  if (_frame0) PH.render0 = performance.now() - _tR0;
   /* THE FIRST-FRAME MARK LIVES IN THE PROBE BLOCK BELOW, and it used to live here as well.
 
      Two drops each inserted a block guarded on `PH.firstFrame === undefined` immediately above
@@ -2397,6 +2415,7 @@ function frame(){
     } catch (e){ console.warn('probe:', e.message); }
     PH.firstFrame = performance.now() - _phT;
     PH['#page'] = performance.now() - PAGE_T0;
+    _frame0 = false;
   }
   frameStats(performance.now() - t0);
 
