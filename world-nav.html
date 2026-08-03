@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v68', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v70', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1575,8 +1575,17 @@ function applyView(next){
   applyLOD();
 }
 
-document.getElementById('vMode').addEventListener('click',
-  () => applyView(MODES[(MODES.indexOf(view) + 1) % MODES.length]));
+document.getElementById('vMode').addEventListener('click', () => {
+  const next = MODES[(MODES.indexOf(view) + 1) % MODES.length];
+  /* lift MEANS SOMETHING DIFFERENT EITHER SIDE OF THIS BOUNDARY — a height multiplier in the lit
+     modes, a 0-to-1 pitch in Plan and Check — so carrying a value across reinterprets it and jumps
+     the camera. A lift of 0.8 left over from orbiting would arrive in Check as most of the way to
+     vertical. Zeroed on the crossing only, so cycling Dusk to Day to Night leaves the view alone. */
+  const wasMap = view === 'plan' || view === 'check';
+  const isMap  = next === 'plan' || next === 'check';
+  if (wasMap !== isMap) orbit.lift = 0;
+  applyView(next);
+});
 
 /* ---------- tap ---------- */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
@@ -1586,7 +1595,7 @@ let dx0=0, dy0=0, dt0=0;
    streams and the second one can be released first; keeping them by pointerId is the only way
    the pinch distance stays meaningful when that happens. */
 const pointers = new Map();
-let pinch0 = 0, zoom0 = 1, lx = 0, ly = 0, twist0 = 0, yaw0 = 0;
+let pinch0 = 0, zoom0 = 1, lx = 0, ly = 0, twist0 = 0, yaw0 = 0, mid0 = 0, lift0 = 0;
 
 canvas.addEventListener('pointerdown', e => {
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
@@ -1600,6 +1609,8 @@ canvas.addEventListener('pointerdown', e => {
     zoom0  = orbit.zoom;
     twist0 = Math.atan2(b.y - a.y, b.x - a.x);
     yaw0   = orbit.yaw;
+    mid0   = (a.y + b.y) * 0.5;
+    lift0  = orbit.lift;
   }
 });
 
@@ -1633,6 +1644,13 @@ canvas.addEventListener('pointermove', e => {
         while (t >  Math.PI) t -= Math.PI * 2;
         while (t < -Math.PI) t += Math.PI * 2;
         orbit.yaw = yaw0 + t;
+        /* AND THE MIDPOINT'S VERTICAL TRAVEL TILTS, which is the gesture every map on this phone
+           uses and the one I left out. One finger pans in these modes, so there was nothing left
+           to tilt with — I opened the tilt clamp in the two modes whose tilt gesture I had just
+           removed. Dragging two fingers UP raises the camera toward overhead. */
+        const my = (a.y + b.y) * 0.5;
+        orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 2.2));
+        orbit.on = true;
       }
     }
     return;
@@ -1671,7 +1689,7 @@ canvas.addEventListener('pointermove', e => {
      and the registration question — is this building on this street — can only be answered from
      directly above. It stays clamped in the lit modes, where flying over the top of the diorama
      and seeing it end is the thing the clamp was put there to prevent. */
-  orbit.lift  = Math.max(-0.55, Math.min(mapGesture() ? 9 : 1.5, orbit.lift));
+  orbit.lift  = Math.max(-0.55, Math.min(1.5, orbit.lift));
   lx = e.clientX; ly = e.clientY;
   if (Math.hypot(e.clientX - dx0, e.clientY - dy0) > 12) orbit.on = true;
 });
@@ -2379,16 +2397,39 @@ function frame(){
   /* Elevation scales with distance rather than adding to it, so a zoomed-in camera does not end
      up looking down from the height the world view wanted. Floored just above the ground plane:
      this is a diorama and there is nothing under it to look at. */
-  const elev = Math.max(GROUND + 4, (cur.elev - GROUND) * orbit.zoom * (1 + orbit.lift) + GROUND);
+  /* TWO MEANINGS FOR lift, BECAUSE THE LIT MODES AND THE MAP MODES WANT DIFFERENT THINGS.
+
+     In the lit modes it scales height while horizontal distance stays put — a turntable that can
+     be raised. That is why it can never reach overhead however far the clamp is opened: the camera
+     climbs but never comes in, so it asymptotes to a steep oblique. Fine for a diorama.
+
+     In Plan and Check it is a PITCH from 0 to 1, and 1 is straight down. The camera swings along an
+     arc of constant distance from the target, so the framing holds while the angle changes and the
+     top of the arc is genuinely vertical. At 0 it reproduces the lit-mode framing exactly, so
+     switching into Check does not move the camera. */
+  let elev, horiz = dist;
+  if (mapGesture()){
+    const base = Math.max(1, (cur.elev - GROUND) * orbit.zoom);
+    const r    = Math.hypot(dist, base);
+    const a0   = Math.atan2(base, Math.max(1, dist));
+    const ang  = a0 + (Math.PI / 2 - a0) * Math.max(0, Math.min(1, orbit.lift));
+    horiz = r * Math.cos(ang);
+    elev  = Math.max(GROUND + 4, r * Math.sin(ang) + GROUND);
+  } else {
+    /* Elevation scales with distance rather than adding to it, so a zoomed-in camera does not end
+       up looking down from the height the world view wanted. Floored just above the ground plane:
+       this is a diorama and there is nothing under it to look at. */
+    elev = Math.max(GROUND + 4, (cur.elev - GROUND) * orbit.zoom * (1 + orbit.lift) + GROUND);
+  }
   /* THE PAN OFFSET IS APPLIED HERE AND NOWHERE ELSE, to both the eye and the aim, so panning
      slides the view across the model without turning it. Kept out of cur.target on purpose: the
      nav owns cur.target, and folding a hand-held offset into it would mean the next flight
      departed from wherever the finger left off rather than from the shot the nav composed. */
   const tx = cur.target.x + orbit.panX, tz = cur.target.z + orbit.panZ;
   camera.position.set(
-    tx + Math.sin(a) * dist,
+    tx + Math.sin(a) * horiz,
     elev,
-    tz + Math.cos(a) * dist
+    tz + Math.cos(a) * horiz
   );
   /* THE LAST LINE OF DEFENCE, AND IT IS CHEAP. One NaN anywhere upstream — an aspect, a radius,
      a lerp against an Infinity — propagates into camera.position and every frame after it draws
@@ -2492,6 +2533,44 @@ function frame(){
        off pays geometry and texture upload; enabling shadows and rendering again adds the shadow
        map; composer.render adds the post chain's targets. Every later render is cheap, so the
        differences are the costs. */
+    /* TEXTURES FIRST, ON THEIR OWN, BECAUSE upload IS STILL THREE THINGS IN ONE NUMBER.
+
+       prog came back at 53 and compile at 23 ms, so it is not shader programs — compileAsync did
+       the work and it was cheap. What is left inside that first render is texture upload, buffer
+       upload and the draw, and they are indistinguishable from outside it.
+
+       renderer.initTexture uploads one texture and returns, which makes them separable exactly.
+       Walking the scene's materials for every map, timing each, and reporting the total and the
+       single worst one turns "upload 35,048" into either "the ground canvases are 34 seconds" or
+       "textures are 200 ms and it is the geometry", and those are completely different jobs.
+
+       The worst-single number matters as much as the total: one 8 Mpx ground canvas behaving
+       badly is a different problem from three hundred window maps each costing a little. */
+    try {
+      const seen = new Set(); let texN = 0, texWorst = 0, texMs = 0;
+      const MAPS = ['map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap',
+                    'alphaMap','bumpMap','envMap','lightMap'];
+      scene.traverse(o => {
+        const mats = !o.material ? [] : Array.isArray(o.material) ? o.material : [o.material];
+        for (const mt of mats) for (const k of MAPS){
+          const t = mt && mt[k];
+          if (!t || seen.has(t.uuid)) continue;
+          seen.add(t.uuid);
+          const m0 = performance.now();
+          try { renderer.initTexture(t); } catch { continue; }
+          const ms = performance.now() - m0;
+          texMs += ms; texN++;
+          if (ms > texWorst) texWorst = ms;
+        }
+      });
+      /* Both numeric. The phase renderer runs Math.round over every value, so a formatted string
+         here would print NaN — which is precisely the sort of silent-instrument fault this file
+         has already lost a round trip to twice. */
+      PH.texUp    = texMs;
+      PH.texCount = texN;
+      PH.texWorst = texWorst;
+    } catch (e){ console.warn('texprobe:', e.message); }
+
     try {
       const sw = renderer.shadowMap.enabled;
       let m = performance.now();
