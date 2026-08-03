@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v106';
+export const BUILD = 'world v107';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1657,11 +1657,32 @@ function paintGround(d, plan){
      number becomes a real setting to tune against legibility; if it does not, the cost is the
      other 320 textures and this goes back to 1536, where four rounds of legibility work put it. */
   const h  = isleHalf(d.id);
-  const W  = d.r >= 50 ? GROUND_W : 768;
+  /* THE CANVAS IS SIZED BY GROUND RESOLUTION, NOT BY A CONSTANT.
+
+     GROUND_W was 896 pixels for every island. Al Maryah is 2.4 km across, so that is 2.7 metres to
+     the pixel and a road is a road. Corniche is 19 km across, so it is 21 metres to the pixel — and
+     a 31 m carriageway paints 1.46 pixels wide, a 28 m major 1.32, an 18 m arterial 0.85 and a 10 m
+     street 0.47. strokePx floors at 0.8, so on the one island that matters most every class came out
+     as the same one-pixel hairline. Four road widths, one line.
+
+     That is why the street network has always looked right on the small islands and absent on the
+     big one, and why adding 6,217 local streets greyed the ground instead of drawing a city.
+
+     Six metres to the pixel is the target: enough that a 10 m street is a couple of pixels and a
+     dual carriageway has a median you can see. Clamped at both ends — 896 because below it the
+     small islands gain nothing from a canvas finer than their own coastline, 3072 because Corniche
+     would otherwise ask for 3172 and each step costs memory as the square. At 3072 Corniche paints
+     at 6.2 m to the pixel: ring 5.0, major 4.5, minor 2.9, local 1.6. */
+  const TARGET_M_PER_PX = 6;
+  const spanM = 2 * d.r * M_PER_UNIT * h.x * GROUND_PAD;
+  const W  = d.r >= 50 ? Math.min(3072, Math.max(GROUND_W, Math.round(spanM / TARGET_M_PER_PX)))
+                       : 768;
   const H  = Math.max(64, Math.round(W * h.y / h.x));
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
+  console.info('ground ' + d.id + ': ' + W + 'x' + H + ' px, ' +
+               (spanM / W).toFixed(1) + ' m/px');
 
   const U  = W * 0.5 / (h.x * GROUND_PAD);  // pixels per normalised island unit, both axes
   const PX = n => W * 0.5 + n * U;
