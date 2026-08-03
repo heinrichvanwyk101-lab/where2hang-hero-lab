@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v63', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v64', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2214,9 +2214,27 @@ function attractTick(now){
 attract.on = !ATTRACT_OFF;
 attract.until = performance.now() + ATTRACT[0].ms;
 attractPrefetch(1);
+/* SPLITTING THE SIXTEEN SECONDS, because everything already measured inside it is small.
 
+   firstFrame ran 16 to 26 seconds across five loads while upload was 85-226 ms, shadowPass 13-23,
+   postFX 3-8 and compile 22-36 with compileAsync so it is not deferring. Cutting the ground texture
+   from 9 Mpx to 2 moved firstFrame by about three seconds against a six second spread between runs
+   at the same size — so the texture is not it either, and neither is the module cache buster, which
+   only touches 126 KB and does not apply to the data files at all.
+
+   That leaves the one span with no marker in it: from phase('setWorld') to the point inside the
+   first frame where firstFrame is recorded. attractPrefetch runs in there, and so does the first
+   attractTick, which reaches setDistrict and buildIsland and can build an entire island before a
+   pixel is drawn. Both were being attributed to "first frame" because nothing said otherwise.
+
+   Four wrong guesses today, every one of them cheap to test and expensive to act on. This is the
+   test. */
+phase('prefetch');
+
+let _frame0 = true;
 function frame(){
   requestAnimationFrame(frame);
+  const _t0tick = _frame0 ? performance.now() : 0;
   /* CONTAINED, BECAUSE THIS LINE SITS IN FRONT OF THE RENDER. attractTick reaches setDistrict and
      buildIsland, which between them touch geometry, textures and materials for an island being
      built for the first time — the most failure-prone call in the file, executed before anything
@@ -2229,6 +2247,9 @@ function frame(){
      overlay line saying why — which is a bug report rather than a mystery. */
   try { attractTick(performance.now()); }
   catch (e){ noteError('attract', e); attract.on = false; attract.dead = true; }
+  /* The first tick only. It is the one that can build an island, and it is the one that has been
+     hiding inside firstFrame. Every later tick is a camera update and costs nothing. */
+  if (_frame0){ PH.attract0 = performance.now() - _t0tick; _frame0 = false; }
   const t0 = performance.now();
   const dt = Math.min(clock.getDelta(), 0.05);
   const t  = clock.elapsedTime;
