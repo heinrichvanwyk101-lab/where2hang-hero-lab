@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v87', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v88', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -317,6 +317,27 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+
+/* SHADER ERROR CHECKING OFF FROM CONSTRUCTION, NOT AFTER THE FIRST FRAME.
+
+   It was set false in the first-frame block, on the reasoning that every program built during
+   startup should still be validated and only later material variants would go unchecked. That
+   reasoning had the timing exactly backwards: the flag is read when a program is linked, and every
+   program that matters is linked during startup. Setting it false afterwards protected nothing and
+   saved nothing.
+
+   A trace says so directly. getProgramInfoLog costs 1,637 ms of a 5,618 ms first frame, and 1,484
+   of that sits under fromEquirectangularTexture — the PMREM environment build. It is still being
+   called from onFirstUse, so the flag was true at the only moment it counted.
+
+   WHY IT IS EXPENSIVE AND NOT MERELY WASTEFUL: getProgramInfoLog forces the driver to finish
+   linking before it can answer. On a driver with no KHR_parallel_shader_compile — which is what
+   the Adreno 830 reports — that is a synchronous stall per program, and three.js issues one per
+   program by default.
+
+   ?shadercheck restores it. Worth using whenever a shader is edited: with this off, a compile
+   failure is a black object rather than a console error with a source dump. */
+renderer.debug.checkShaderErrors = location.search.includes('shadercheck');
 /* ?noshadow and ?noenv — THE TWO THINGS THE FIRST REAL DRAW DOES THAT NOTHING HAS TESTED.
 
    The per-mesh probe charged 19,857 ms to a 22-vertex unlit mesh with no textures, and every mesh
@@ -3062,7 +3083,6 @@ function frame(){
        source dump. What is given up is diagnosis of a shader that fails later — and a material
        created after this point is a variant of a family that already compiled, so the realistic
        failure mode is a black object rather than a silent one. ?shadercheck keeps it on. */
-    if (!location.search.includes('shadercheck')) renderer.debug.checkShaderErrors = false;
     /* THE ATTRACT CLOCK STARTS HERE, NOT WHERE IT IS DECLARED.
 
        attract.until was set at module top-level to now + 9000, and the first frame then blocked for
