@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v5';
+export const BUILD = 'basemap v6';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -176,6 +176,19 @@ export function roadsNormalised(entry, roads){
   const half = Math.max(entry.extent.w, entry.extent.d) / 2;
   return roads.map(r => {
     const pts = r.pts.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+    /* THE CLASS, NOT JUST WHETHER IT IS THE TOP ONE.
+
+       This returned `major` alone, which was enough while the artefact held only major and minor —
+       false meant minor and there was nothing else it could mean. The bake now ships local streets
+       too, 6,217 of them on Corniche against 4,447 arterials, and under the boolean every one of
+       them arrives indistinguishable from a minor arterial: eighteen metres wide, kerbed, edge
+       lines, dashed centre and a parking comb, about seventy thousand canvas strokes.
+
+       major is kept because the generated skeleton sets the same property and the painter falls
+       back to it when an island has no real network. Adding cls rather than replacing it means the
+       two networks still answer the same question, which is the only reason they can share a
+       painter at all. */
+    pts.cls = r.cls;
     pts.major = r.cls === 'major';
     return pts;
   });

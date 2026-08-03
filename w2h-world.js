@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v105';
+export const BUILD = 'world v106';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2157,17 +2157,15 @@ function paintGround(d, plan){
     strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
   }
 
-  /* THE CLASS DISPATCH, AND IT HAS BEEN READING A PROPERTY THAT IS NOT THERE.
+  /* THE CLASS DISPATCH.
 
-     The generated skeleton sets a boolean `major` on each run. The real network does not: roadsUnits
-     carries OSM's classification through as the STRING `cls`, and `a.major` on one of those is
-     undefined. So every real road on every island has been drawn by roadSecondary at 18 m — the
-     Corniche road, the Mussafah and Sheikh Zayed bridges, the highway spine, all of them at side
-     street width, and roadPrimary has never once run on a real centreline.
+     The generated skeleton sets a boolean `major` on each run, and roadsNormalised sets the same
+     boolean on the real network from `cls === 'major'` — so major roads have always dispatched to
+     roadPrimary correctly, on both networks. What the boolean cannot express is a third class, and
+     with local streets in the artefact false no longer means minor.
 
-     That is the flat hierarchy. It is not that the widths are wrong; it is that there is only one
-     width. Reading cls first and falling back to the boolean keeps the generated skeleton working
-     unchanged on any island whose payload has not arrived. */
+     So cls is read first and the boolean is the fallback. The generated skeleton has no cls and
+     keeps working untouched; the real network has one and gets three widths instead of two. */
   const strokeFor = a => a.cls === 'major' ? roadPrimary
                        : a.cls === 'minor' ? roadSecondary
                        : a.cls === 'local' ? roadLocal
