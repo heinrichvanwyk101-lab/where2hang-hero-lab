@@ -277,7 +277,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v77', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v78', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2703,10 +2703,39 @@ function frame(){
      textures, the output pass. f0scene is what the city costs. If f0pipe is most of twenty seconds
      then none of this was ever about the city and the composer is the thing to look at. */
   if (_frame0){
-    const _w = world.visible, _t = performance.now();
+    /* WHICH PASS, one at a time, with the world hidden throughout.
+
+       f0pipe came back at 19,262 ms against a render0 of 1,005 and an f0scene of 0. The city is
+       not the cost — the post chain is, by a factor of nineteen. Everything either of us has
+       theorised about for two days has been about the scene.
+
+       Four passes: RenderPass, UnrealBloomPass, the tilt-shift ShaderPass, OutputPass, SMAAPass.
+       Each is enabled in turn and rendered, so each delta is that pass's own first-use cost —
+       program links, render target allocation, and for SMAA two lookup textures that arrive as
+       base64 images and have to be decoded and uploaded.
+
+       Every pass renders into the same target chain, so no pass here creates a program another
+       would not have. The world stays hidden the whole time, so nothing about the city is in any
+       of these numbers. */
+    const _w = world.visible;
     world.visible = false;
-    try { composer.render(); } catch (e){ console.warn('f0pipe:', e.message); }
-    PH.f0pipe = performance.now() - _t;
+    const _passes = composer.passes.slice();
+    const _was = _passes.map(p => p.enabled);
+    try {
+      _passes.forEach(p => { p.enabled = false; });
+      const names = ['p0render', 'p1bloom', 'p2tilt', 'p3output', 'p4smaa'];
+      let acc = 0;
+      for (let i = 0; i < _passes.length; i++){
+        _passes[i].enabled = true;
+        const t = performance.now();
+        composer.render();
+        const ms = performance.now() - t;
+        PH[names[i] || ('p' + i)] = ms;
+        acc += ms;
+      }
+      PH.f0pipe = acc;
+    } catch (e){ console.warn('f0pipe:', e.message); }
+    _passes.forEach((p, i) => { p.enabled = _was[i]; });
     world.visible = _w;
   }
   const _tR0 = _frame0 ? performance.now() : 0;
