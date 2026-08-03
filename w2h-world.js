@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v107';
+export const BUILD = 'world v108';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1997,8 +1997,27 @@ function paintGround(d, plan){
      tarmac band per direction, a planted median filling the gap, then markings. Drawing the
      tarmac as two bands rather than one wide band with a median painted over it means the median
      has real kerbs on both faces, which is what it looks like from above. */
+  /* CARTOGRAPHIC MINIMUM WIDTHS, IN CANVAS PIXELS.
+
+     Every printed map exaggerates roads. At 1:20,000 a real 10 m street would be half a millimetre
+     of ink and no cartographer draws it that way — they draw it at two, because a road's job on a
+     map is to be legible rather than to be to scale. This is a map.
+
+     Corniche paints at 6.2 metres to the pixel, so its true widths come out at 5.0, 4.5, 2.9 and
+     1.6 pixels: correct, and unreadable. The floors below take those to roughly double, which is a
+     restrained exaggeration by cartographic standards, and they leave the small islands almost
+     untouched — Al Maryah's true widths are already 11.4, 10.3, 6.6 and 3.7.
+
+     The floors keep the classes in nearly the same ratio as the real widths, 10:9:6:3.5 against
+     31:28:18:10, so the hierarchy survives the exaggeration instead of being flattened by it. And
+     they are a floor, never a ceiling: an island fine enough to draw a road at true width still
+     does. Everything derived from W — median, edge lines, footways, parking bays — is a fraction
+     of it, so it all scales with the exaggeration rather than drifting off the carriageway. */
+  const MIN_PX = { ring: 10, major: 9, minor: 6, local: 3.5 };
+  const corridor = (m, minPx) => Math.max(minPx, U * roadW(d, m));
+
   function roadPrimary(pts){
-    const W = U * roadW(d, ROAD_RING_M);          // full corridor, kerb to kerb
+    const W = corridor(ROAD_RING_M, MIN_PX.ring);   // full corridor, kerb to kerb
     const med = W * 0.16;                         // planted median
     const car = (W - med) / 2;                    // each carriageway
     const halfC = (med + car) / 2;                // centre of each carriageway from the axis
@@ -2046,7 +2065,8 @@ function paintGround(d, plan){
   /* SECONDARY. One carriageway, still kerbed, edge lines and a dashed centre. Narrower casing
      than the ring so the hierarchy shows even where the two run parallel. */
   function roadSecondary(pts){
-    const W = U * roadW(d, pts.major ? ROAD_MAJOR_M : ROAD_ART_M);
+    const W = pts.major ? corridor(ROAD_MAJOR_M, MIN_PX.major)
+                        : corridor(ROAD_ART_M,   MIN_PX.minor);
     g.lineCap = 'butt'; g.lineJoin = 'round';
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
@@ -2172,7 +2192,7 @@ function paintGround(d, plan){
      Which is also why they can be afforded at all. Corniche has 6,217 local ways against 4,447
      arterials, and roadSecondary makes eleven strokes per road; this makes two. */
   function roadLocal(pts){
-    const W = U * roadW(d, ROAD_LOCAL_M);
+    const W = corridor(ROAD_LOCAL_M, MIN_PX.local);
     g.lineCap = 'round'; g.lineJoin = 'round';
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
