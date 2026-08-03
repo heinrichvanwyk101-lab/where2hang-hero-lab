@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v104';
+export const BUILD = 'world v105';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1179,7 +1179,10 @@ function roundRect(g, x, y, w, h, r){
    bay width, superblock, plot depth, coastline segment — is already held in metres, and the roads
    were the last thing still expressed as a share of an island. */
 const M_PER_UNIT  = 7.8;                     // the scene's one scale constant
-const ROAD_RING_M = 31, ROAD_MAJOR_M = 28, ROAD_ART_M = 18;
+/* ROAD_LOCAL_M is new. 10 metres is a two-way residential street with no parking lane — narrow
+   enough that a block of them reads as a grain rather than as a field of tarmac, wide enough to
+   survive the kerb casing at district range. */
+const ROAD_RING_M = 31, ROAD_MAJOR_M = 28, ROAD_ART_M = 18, ROAD_LOCAL_M = 10;
 
 /* THE ROUNDABOUT, AND I GOT THIS ONE WRONG IN v60. Converting the roads to metres, I read the old
    `CORE_R = 0.040 * 1.18` as though it were already a metre figure and wrote 118. It is normalised:
@@ -2138,7 +2141,41 @@ function paintGround(d, plan){
      now a hazard rather than a help, because ringJunction searches from 40 per cent along and
      returns the nearest index to the ring, which on a curved shore can be a MIDDLE point. When it
      was, the street lost its far half and quietly stopped in the fabric. */
-  plan.arterials.forEach(a => { if (a.major) roadPrimary(a); else roadSecondary(a); });
+  /* LOCAL. Carriageway, kerb and nothing else.
+
+     A residential street is not a narrow arterial, and drawing it as one was never an option — it
+     is the ABSENCE of the furniture that identifies it. No median, no dashed centre, no edge lines,
+     no cycle track, no parking comb: at 7.8 metres to the unit a 10 m street is a couple of pixels
+     of tarmac, and every one of those details would land on top of the next.
+
+     Which is also why they can be afforded at all. Corniche has 6,217 local ways against 4,447
+     arterials, and roadSecondary makes eleven strokes per road; this makes two. */
+  function roadLocal(pts){
+    const W = U * roadW(d, ROAD_LOCAL_M);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
+    strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
+  }
+
+  /* THE CLASS DISPATCH, AND IT HAS BEEN READING A PROPERTY THAT IS NOT THERE.
+
+     The generated skeleton sets a boolean `major` on each run. The real network does not: roadsUnits
+     carries OSM's classification through as the STRING `cls`, and `a.major` on one of those is
+     undefined. So every real road on every island has been drawn by roadSecondary at 18 m — the
+     Corniche road, the Mussafah and Sheikh Zayed bridges, the highway spine, all of them at side
+     street width, and roadPrimary has never once run on a real centreline.
+
+     That is the flat hierarchy. It is not that the widths are wrong; it is that there is only one
+     width. Reading cls first and falling back to the boolean keeps the generated skeleton working
+     unchanged on any island whose payload has not arrived. */
+  const strokeFor = a => a.cls === 'major' ? roadPrimary
+                       : a.cls === 'minor' ? roadSecondary
+                       : a.cls === 'local' ? roadLocal
+                       : a.major ? roadPrimary : roadSecondary;
+  /* Locals first, so an arterial crossing a side street is drawn over it rather than under it —
+     which is the junction priority you actually see from above, and free at this order. */
+  plan.arterials.forEach(a => { if (strokeFor(a) === roadLocal) roadLocal(a); });
+  plan.arterials.forEach(a => { const f = strokeFor(a); if (f !== roadLocal) f(a); });
   plan.ring.forEach(seg => roadPrimary(seg));
 
   /* ===========================================================================
