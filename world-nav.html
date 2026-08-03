@@ -276,7 +276,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v65', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v66', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2379,28 +2379,18 @@ function frame(){
      prefetch and attract0 both read zero, so this call and the wait to reach it are the only things
      left in the span. Naming it costs one variable. */
   const _tR0 = _frame0 ? performance.now() : 0;
-  composer.render();
-  if (_frame0) PH.render0 = performance.now() - _tR0;
-  /* THE FIRST-FRAME MARK LIVES IN THE PROBE BLOCK BELOW, and it used to live here as well.
+  if (_frame0){
+    /* THE PROBES NOW RUN BEFORE THE FIRST REAL RENDER, WHICH IS WHAT THEY ALWAYS CLAIMED TO DO.
 
-     Two drops each inserted a block guarded on `PH.firstFrame === undefined` immediately above
-     frameStats. The first ran, set the flag, and left the second — the one with the probes in it —
-     permanently unreachable. The overlay showed no upload, shadowPass or postFX rows and I spent a
-     round trip wondering why the diagnostics were silent, which is the same duplicate-guard fault
-     this file's own header warns about for cache strings.
+       They sat after composer.render(). So that call paid every texture upload, every buffer, the
+       first shadow pass and the composer's target allocation, and these three then measured the
+       second, third and fourth renders — warm, and therefore cheap. That is how upload read 110 ms
+       inside a render0 of 25,820.
 
-     One block, one guard. */
-  /* THREE PROBE RENDERS, ONCE, BEFORE THE FIRST REAL FRAME IS MEASURED.
-
-     compile came back at 13 ms, so the 10 seconds is not shader programs — it is upload, the
-     shadow pass, or post-processing, and from outside they are one number. Rendering deliberately
-     three times separates them: the first draw pays every texture and buffer upload, the second
-     adds the shadow maps, the third adds the composer's targets. Each subsequent render is cheap,
-     so the differences are the costs.
-
-     Two guesses have already been wrong today — paintGround and shader compilation — and both
-     would have been cheap to test and expensive to act on. This is the cheap test. */
-  if (PH.firstFrame === undefined){
+       Ordered so each one adds exactly one thing to the one before it: a plain render with shadows
+       off pays geometry and texture upload; enabling shadows and rendering again adds the shadow
+       map; composer.render adds the post chain's targets. Every later render is cheap, so the
+       differences are the costs. */
     try {
       const sw = renderer.shadowMap.enabled;
       let m = performance.now();
@@ -2413,8 +2403,18 @@ function frame(){
       composer.render();
       PH.postFX = performance.now() - m;
     } catch (e){ console.warn('probe:', e.message); }
+  }
+  composer.render();
+  /* ONE BLOCK, ONE GUARD, and the guard is _frame0 rather than a second test on PH.firstFrame.
+
+     Two drops once each inserted a block guarded on `PH.firstFrame === undefined` above
+     frameStats. The first ran, set the flag, and left the second — the one with the probes in it —
+     permanently unreachable, and I spent a round trip wondering why the diagnostics were silent.
+     A single flag, cleared in exactly one place, cannot fail that way. */
+  if (_frame0){
+    PH.render0    = performance.now() - _tR0;
     PH.firstFrame = performance.now() - _phT;
-    PH['#page'] = performance.now() - PAGE_T0;
+    PH['#page']   = performance.now() - PAGE_T0;
     _frame0 = false;
   }
   frameStats(performance.now() - t0);
