@@ -1277,6 +1277,7 @@ async function main(){
   }
   process.stderr.write(`\n`);
 
+  const failed = [];
   for (const baked of bakedAll){
     /* THE THRESHOLD, APPLIED ONCE, AND THE AREA STRIPPED ON THE WAY OUT. `a` exists to make this
        decision and has no consumer downstream; leaving it in would put a hundred kilobytes of
@@ -1290,6 +1291,32 @@ async function main(){
       `${before} -> ${baked.buildings.length}\n`);
 
     const path = `data/isle-${baked.id}.json`;
+
+    /* AN ISLAND WITH NO OUTLINE IS NOT WRITTEN, AND THIS GUARD IS NOT OPTIONAL.
+
+       Al Maryah shipped with outline 0, roads 0, parks 0 and 401 buildings. Overpass returned a
+       504 for that island and the run carried on: buildings come from Overture and did not care,
+       so the payload looked populated while the one thing everything else depends on was empty.
+
+       WITHOUT AN OUTLINE THERE IS NO EXTENT, and without an extent the basemap cannot compute the
+       island's radius, its display scale or its origin. The coastline clip then rejects every
+       footprint — 401 in, 0 kept — and the island renders as bare ground. One failed HTTP request
+       silently deleted a district.
+
+       THE EXISTING GUARD COULD NOT SEE IT. That one compares building counts against the previous
+       bake, and buildings went UP, 104 to 401. A count that rises is exactly what a healthy bake
+       looks like, which is why this needs to be a different test rather than a stricter threshold.
+
+       Keeping the previous file is the right failure: a district one release out of date is worth
+       far more than a district that is not there. */
+    if (!baked.outline || baked.outline.length < 8 || !baked.extent){
+      process.stderr.write(`  ${baked.id}: NOT WRITTEN — outline ${baked.outline ? baked.outline.length : 0} pt, ` +
+        `extent ${baked.extent ? 'ok' : 'null'}. Overpass almost certainly failed for this island; ` +
+        `the previous ${path} is left in place. Re-run the bake.\n`);
+      failed.push(baked.id);
+      continue;
+    }
+
     /* inBox is bookkeeping for the index and the guard. It does not go in the artefact the hero
        downloads — a field with no consumer is a question for whoever reads this next. */
     const { inBox, ...file } = baked;
@@ -1386,6 +1413,16 @@ async function main(){
   }
 
   await fs.writeFile('data/index.json', JSON.stringify(index, null, 1));
+
+  /* RED, NOT GREEN. An island skipped above means the artefact set is incomplete, and a workflow
+     that reports success on an incomplete bake is how a missing district reaches the scene without
+     anyone looking. The files already written stay written — a partial improvement is still an
+     improvement — but the run has to end in a way somebody notices. */
+  if (failed.length){
+    process.stderr.write(`\nBAKE INCOMPLETE — not written: ${failed.join(', ')}. ` +
+      `Overpass failures are usually transient; re-running is normally enough.\n`);
+    process.exitCode = 1;
+  }
   const total = index.islands.reduce((a, i) => a + (i.bytes || 0), 0);
   process.stderr.write(`\nwrote data/index.json  —  ${index.islands.length} islands, ` +
                        `${(total/1048576).toFixed(2)} MB total\n`);
