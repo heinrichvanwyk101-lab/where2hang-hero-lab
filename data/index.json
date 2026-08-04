@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-03T02:36:49.250Z",
+ "generated": "2026-08-04T06:59:30.844Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -7667,14 +7667,16 @@
      "y": -3491
     }
    },
-   "bytes": 3731196,
+   "bytes": 3813818,
    "counts": {
     "outline": 1905,
-    "roads": 10664,
+    "roads": 10608,
     "buildings": 20262,
     "inBox": 32589,
     "withHeight": 3468,
-    "parks": 845
+    "parks": 1321,
+    "golf": 2,
+    "raceway": 0
    }
   },
   {
@@ -7895,14 +7897,16 @@
      "y": 1272.9
     }
    },
-   "bytes": 80219,
+   "bytes": 83135,
    "counts": {
     "outline": 47,
     "roads": 661,
     "buildings": 104,
     "inBox": 401,
     "withHeight": 28,
-    "parks": 4
+    "parks": 10,
+    "golf": 0,
+    "raceway": 0
    }
   },
   {
@@ -9111,14 +9115,16 @@
      "y": 689.5
     }
    },
-   "bytes": 124290,
+   "bytes": 126361,
    "counts": {
     "outline": 296,
     "roads": 884,
     "buildings": 179,
     "inBox": 518,
     "withHeight": 56,
-    "parks": 27
+    "parks": 39,
+    "golf": 0,
+    "raceway": 0
    }
   },
   {
@@ -10783,14 +10789,16 @@
      "y": 4815.5
     }
    },
-   "bytes": 413297,
+   "bytes": 426586,
    "counts": {
     "outline": 408,
     "roads": 1550,
     "buildings": 1842,
     "inBox": 2600,
     "withHeight": 500,
-    "parks": 49
+    "parks": 94,
+    "golf": 1,
+    "raceway": 0
    }
   },
   {
@@ -12683,14 +12691,16 @@
      "y": -3306.2
     }
    },
-   "bytes": 797739,
+   "bytes": 817396,
    "counts": {
     "outline": 462,
     "roads": 2528,
     "buildings": 3938,
     "inBox": 5674,
     "withHeight": 32,
-    "parks": 305
+    "parks": 353,
+    "golf": 2,
+    "raceway": 38
    }
   }
  ]
