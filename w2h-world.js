@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v113';
+export const BUILD = 'world v114';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -83,6 +83,18 @@ const MAX_ANISO = opts.maxAnisotropy || 4;
    out and everything else still builds. Same argument as the city kit: a module that can be
    omitted can be bisected when something breaks. */
 const props = opts.props || null;
+
+/* PER-DISTRICT CHARACTER, OPTIONAL, AND NOT AN IMPORT.
+
+   Block sizes, height ceilings and the vacancy mask live in w2h-districts.js so they can be tuned
+   without opening a 5,450-line file. It arrives through opts for the same reason C and rnd do: a
+   static specifier cannot carry ?v=, and a local module fetched without one is served from cache
+   forever.
+
+   ABSENT, EVERY LOOKUP BELOW FALLS BACK to the constants that were here before. Paste this file
+   alone and nothing should move — that is the test, and it is what makes the two files
+   independently deployable. */
+const DIS = opts.districts || null;
 
 /* C AND rnd ARRIVE AS ARGUMENTS NOW, and this file imports nothing local at all.
 
@@ -159,6 +171,17 @@ function stdMat(o){
    all, and where the landmark exclusion zones fall. The nav owns the footprint policy; this module
    owns the geometry, and the geometry has to be authored differently rather than masked. */
 const FP_MODE = typeof location !== 'undefined' && location.search.includes('fp');
+
+/* ?vac — THE VACANCY MASK, OFF BY DEFAULT AND DELIBERATELY SO.
+
+   Holding ground empty is the one change in this pass that interacts with parkland: groundPlan
+   fills every cell-free area with lawns on purpose, so a mask that removes cells and nothing else
+   turns Saadiyat green. The park suppression below is the fix, and a flag is how you find out in
+   one reload whether it worked rather than in a day of bisecting commits.
+
+   Shipped dormant. Load ?vac#debug to see it, drop the flag to switch it off. No revert, no
+   redeploy, no wait for Pages. Same argument as ?fp, ?nokit, ?noclip and ?drawn. */
+const VAC_ON = typeof location !== 'undefined' && location.search.includes('vac');
 
 /* Island-local rectangles where an authored landmark stands and a surveyed footprint must not.
    Populated when the kit is built, read by footprintsFor. Empty for every island with no kit,
@@ -1389,8 +1412,11 @@ function roadSkeleton(d){
     const th = (d.gridRot !== undefined ? d.gridRot : d.rot || 0);
     const ca = Math.cos(th), sa = Math.sin(th);
     // Normalised grid pitches. SB is the superblock centre-to-centre spacing.
-    const su = roadW(d, d.sb ? d.sb[0] : SUPERBLOCK_M[0]);
-    const sv = roadW(d, d.sb ? d.sb[1] : SUPERBLOCK_M[1]);
+    /* THE SUPERBLOCK IS THE STREET GRID, so roads and plots move together or the fabric ends up
+       laid across carriageways. Same lookup in urbanFabric below. */
+    const _sbR = d.sb || (DIS ? DIS.fabricFor(d.id).sb : SUPERBLOCK_M);
+    const su = roadW(d, _sbR[0]);
+    const sv = roadW(d, _sbR[1]);
 
     /* Sweep far enough to cross the island whatever the angle: the half-diagonal of the
        normalised bounding box, rounded out to a whole number of pitches so the grid is
@@ -1712,6 +1738,12 @@ function groundPlan(d, cells, blocks){
   for (let nx = -0.95; nx <= 0.95; nx += q){
     for (let ny = -0.95; ny <= 0.95; ny += q){
       if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
+      /* PLATTED GROUND IS NOT PARKLAND, and this line is the whole reason the vacancy mask can
+         ship at all. The lawn filler exists to green ground the generator could not describe, and
+         it reads a cleared plot as exactly that. Without this test Saadiyat at a 0.35 built ratio
+         comes back two thirds lawn — the opposite of the sand-and-kerbs condition being aimed at.
+         Same predicate the plot loop used, so the two cannot disagree. */
+      if (VAC_ON && DIS && DIS.vacantAt(d.id, nx, ny)) continue;
       if (distToOutline(d.id, nx, ny) < 0.045) continue;   // real margin, not a radial scale
       if (inPatch(nx, ny)) continue;
       // A lawn's own half-size is its clearance; there is no lattice pitch to borrow any more.
@@ -1733,6 +1765,7 @@ function groundPlan(d, cells, blocks){
 
   return {
     outline, core, inside, ring, arterials, crossings:d.roads.crossings, parks, coastLine, cells, blocks,
+    parkN: parks.length,     // on the overlay: the lawn-flood detector for ?vac
     beachN: roadW(d, BEACH_M),
     coastPark: d.coastPark, ground: GROUND,
     rndPaint: localRnd(seed ^ 0x9E3779B1),
@@ -4582,8 +4615,10 @@ function urbanFabric(d, layer, opts){
   const CA = Math.cos(th), SA = Math.sin(th);
   const toWorldN = (u, v) => [core0[0] + u * CA - v * SA, core0[1] + u * SA + v * CA];
 
-  const su = roadW(d, d.sb ? d.sb[0] : SUPERBLOCK_M[0]);
-  const sv = roadW(d, d.sb ? d.sb[1] : SUPERBLOCK_M[1]);
+  const _fab = DIS ? DIS.fabricFor(d.id) : null;
+  const _sbF = d.sb || (_fab ? _fab.sb : SUPERBLOCK_M);
+  const su = roadW(d, _sbF[0]);
+  const sv = roadW(d, _sbF[1]);
 
   /* Street half-width plus a pavement, in normalised units: the distance from the street
      centreline to the front of a plot. Taken from the same ROAD_ART figure onRoad clears against,
@@ -4593,9 +4628,18 @@ function urbanFabric(d, layer, opts){
      whether its bounding line is a major. Half a metre of extra pavement on a side street is not a
      fault; a tower in a dual carriageway is. */
   const frontN = roadW(d, ROAD_MAJOR_M) * 0.5 * ROAD_KERB + roadW(d, PAVEMENT_M);
-  const plotDN = roadW(d, PLOT_DEPTH_M);
-  const frontMin = roadW(d, PLOT_FRONT_M[0]);
-  const frontMax = roadW(d, PLOT_FRONT_M[1]);
+  /* PLOT SIZE PER DISTRICT, and this is the one that fixes the corduroy. A 30 to 46 metre
+     frontage on a 34 metre depth repeated along every block edge gives parallel bars; at world
+     zoom that averages into texture and at district zoom it is ribbing across a whole island.
+     Al Maryah wants a 90 by 140 financial floorplate and Yas a 140 by 260 attraction footprint.
+
+     NOTE THIS DRIVES THE PAINTED GROUND, NOT THE BUILDINGS. The generated fabric's meshes are
+     masked on every island that swapped to real footprints; its cells and blocks still feed
+     groundPlan and the prop placer. So this changes what is painted and where palms stand. */
+  const _pf = _fab ? _fab.plotFront : PLOT_FRONT_M;
+  const plotDN = roadW(d, _fab ? _fab.plotDepth : PLOT_DEPTH_M);
+  const frontMin = roadW(d, _pf[0]);
+  const frontMax = roadW(d, _pf[1]);
 
   const cells = [];
   /* The block outlines go back with the cells. The ground painter used to reconstruct the street
@@ -4640,6 +4684,16 @@ function urbanFabric(d, layer, opts){
           if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
           if (onRoad(d, jx, jy, plotDN)) continue;      // THE ROAD STILL WINS, as a backstop
           if (rnd() > 0.90) continue;                   // the occasional cleared plot
+          /* PLATTED AND EMPTY. Roughly a quarter of Abu Dhabi's ground carries buildings; the
+             rest carries kerbs, roundabouts and lamp standards with nothing behind them.
+
+             DETERMINISTIC IN (id, jx, jy) AND CONSUMES NO RANDOM NUMBERS, so mass and detail take
+             the same branch and stay the same city — the contract at line 1322. It sits AFTER the
+             rnd() call for exactly that reason.
+
+             groundPlan runs the same test when it places parkland, or this would clear the plots
+             and then cover them in lawn. */
+          if (VAC_ON && DIS && DIS.vacantAt(d.id, jx, jy)) continue;
           // Frontage across the street, depth back from it: the two are not interchangeable.
           used = true;
           cells.push({ jx, jy, rot,
@@ -4929,7 +4983,13 @@ function footprintsFor(d, list){
   if (!list || !list.length) return null;
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   const MATS = fabricMats(cool);
-  const tallest = { corniche:52, maryah:40, reem:44, saadiyat:14, yas:18 }[d.id] || 24;
+  /* THE CEILING FOR INVENTING A HEIGHT ON A REAL FOOTPRINT — a different quantity from the
+     generated-stock ceiling in buildFabricFor, though both were called `tallest`. Corniche ships
+     3,460 surveyed heights against 20,236 buildings, so five in six of the island's skyline comes
+     from this number. It is the one height change in this pass that is actually visible. */
+  const tallest = DIS ? DIS.fpTallest(d.id)
+                      : ({ corniche:52, maryah:40, reem:44, saadiyat:14, yas:18 }[d.id] || 24);
+  let clash = 0;
   const core = d.coreN || [0, 0];
   const rnd = localRnd(hashId(d.id) ^ 0x5BD1E995);
 
@@ -5002,6 +5062,14 @@ function footprintsFor(d, list){
        ?noclip disables it, because a filter that removes a thousand objects should stay
        switchable and because the comparison is what proved it in the first place. */
     if (!NO_CLIP && !insideIsle(d.id, nx, ny)) continue;
+
+    /* CLASH COUNT. A real building standing on ground the vacancy mask cleared is the one failure
+       this pass can produce that is not obvious from a screenshot — the zones are hand-placed
+       guesses at where each island's voids sit, and a zone in the wrong place looks plausible
+       until you notice the buildings have no streets. Counted rather than judged: the number goes
+       on the overlay, so a misplaced zone is a figure to argue with instead of a suspicion.
+       Nothing is removed on the strength of it. */
+    if (VAC_ON && DIS && DIS.vacantAt(d.id, nx, ny)) clash++;
 
     /* AND THE SECOND CLIP: ground an authored landmark already occupies.
 
@@ -5148,7 +5216,7 @@ function footprintsFor(d, list){
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
     g.add(m);
   });
-  d.fpCount = specs.length; d.fpReal = real; d.fpZoned = zoned;
+  d.fpCount = specs.length; d.fpReal = real; d.fpZoned = zoned; d.fpClash = clash;
   return g;
 }
 
@@ -5156,7 +5224,11 @@ function footprintsFor(d, list){
 function buildFabricFor(d){
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   // Per-district character: where downtown sits, and how tall it gets there.
-  const tallest = { maryah:40, reem:44, saadiyat:14, yas:18 }[d.id];
+  /* THE CEILING FOR GENERATED STOCK. Saadiyat asked for 14 units — 109 m — on an island whose
+     real tallest is about 55. Worth correcting, but note it is invisible today: these meshes are
+     masked wherever footprints landed, so this only shows if a payload fails to arrive. */
+  const tallest = DIS ? DIS.genTallest(d.id)
+                      : ({ maryah:40, reem:44, saadiyat:14, yas:18 }[d.id]);
 
   /* DENSITY UP, because the road network now takes its cut first. Reserving the ring and the
      arterials removed about forty per cent of the blocks — correctly, that ground is carriageway
