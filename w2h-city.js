@@ -542,114 +542,216 @@ function emiratesPalace(x0, z0){
    so it is exaggerated here — two steps rather than one, and the upper step wider than the
    shaft so it throws a distinct shoulder against the sky. Nobody complains that a landmark is
    too recognisable. */
-/* FERRARI WORLD — the only colour anchor in the whole silhouette, and until now a flat OSM box.
+/* FERRARI WORLD AND YAS MALL — built as a pair, because they are one complex.
 
-   WHY THIS ONE FIRST. Every other unbuilt landmark is a shape problem; this one is a shape
-   problem AND the single saturated thing in a city rendered entirely in sand, glass and gold.
-   At any distance where the Grand Mosque is four pale bumps, this is still unmistakably a red
-   star. It earns its geometry more cheaply than anything else on the list.
+   THEY TOUCH. The mall's eastern edge runs into the roof's western points; the two are joined by
+   a bridge and read as a single mass from every angle. Building one and leaving the other a flat
+   OSM extrusion would look worse than leaving both flat, because a modelled roof beside a grey
+   slab draws attention to the slab.
 
-   TWO READS, BOTH OF WHICH HAVE TO WORK. From above it is a swept five-point star. From the
-   horizon it is a long low red wedge, highest at the centre and tapering to near-ground at the
-   tips. A shape that only works in plan is a logo, not a building.
+   SIZED TO THE ANCHOR GAP, NOT TO TRUE METRES, and this is the compromise worth naming. The two
+   anchors sit 20.9 units — 163 m — apart, while the real buildings are about 550 m centre to
+   centre. The anchors were placed for label legibility and checked against the coastline, so
+   moving them risks putting something in the water for a cosmetic gain. A true-scale roof at
+   R_OUT 45 would reach 24 units PAST the mall's centre and swallow it whole.
 
-   THE BLACK RIM IS NOT DECORATION. Solid red against sand reads as an amorphous blob at
-   distance — the dark edge banding is what gives the star its outline, and it is the difference
-   between recognising the building and seeing a stain. It gets its own material group rather
-   than a second mesh, so the two can never drift apart.
+   So the pair is built to abut at the gap it actually has: R_OUT 13 and a mall half-length of 8
+   come to 21 against 20.9. The complex reads correctly relative to itself, which is what the eye
+   checks, and is small relative to the island, which almost nothing checks. The diorama already
+   compresses buildings about 2.6x against the ground — Emirates Palace is 384 m for a real 1,000
+   — so this is the established direction, just further along it.
 
-   SCALE. 1 unit is 7.8 m, the scene's one constant. R_OUT 45 gives a 669 m span against a real
-   ~700, and PEAK 9.0 gives 70 m against a real 86 — the ratio matters more than either figure,
-   and 9.5:1 span-to-height is what the reference measures off the captures. PEAK also matches
-   the h:9 the Yas anchor already declared, so the label sits where the roof actually is.
+   IF THE ANCHORS EVER MOVE APART, both sizes can grow together. They are two constants. */
 
-   THE SWEEP IS WHAT MAKES IT FERRARI. Straight-edged points give a sheriff's badge. The real
-   roof's points curve as they extend, so the angular offset grows with radius — one term, and
-   without it the whole thing reads wrong in a way that is hard to name and impossible to miss. */
+/* The roof profile: asymmetric, flat, three-toned at the edge.
+
+   NOT A REGULAR STAR. Five equal points is the tell of a generated shape, and the real roof has
+   one long western point with the other four noticeably shorter and unequal. The amplitude table
+   is what stops this reading as a logo.
+
+   FLAT. 8.7:1 span to height. Every instinct says lift it and every photograph says do not — it
+   is a shallow shell lying on the desert, and a taller version reads as a circus tent.
+
+   THREE TONES AT THE EDGE. Red top, a thin pale stripe, black underside. The dark edge is what
+   gives the star an outline at distance; the pale stripe between is what stops the dark reading
+   as shadow. Two material groups plus the rim ring, all on one geometry so they cannot drift. */
 function ferrariWorld(x0, z0){
   const g = new THREE.Group();
 
-  const R_OUT = 45, R_IN = 16, PEAK = 9.0;
-  const T0 = 0.12;              // oculus, as a fraction of the radial span
-  const SWEEP = 0.34;           // radians of twist from oculus rim to tip
-  const LOBE_P = 1.9;           // higher = sharper points
-  const RIM = 2;                // radial rings given the dark edge material
-  const segA = 160, segR = 18;
+  const R_OUT = 13, R_IN = 4.6, PEAK = 3.4;
+  const T0 = 0.14, SWEEP = 0.30, LOBE_P = 2.1;
+  const RIM = 2, STRIPE = 1;
+  const segA = 180, segR = 20;
+  /* One long point west, the rest unequal. Measured off the reference obliques rather than
+     chosen: the longest is roughly 1.6x the shortest, which is far more asymmetry than looks
+     right written down and exactly what the building has. */
+  const AMP = [1.00, 0.55, 0.80, 0.44, 0.86];
+  const PHASE = 0.55;
 
-  const pos = [], idx = [];
+  function amp(th){
+    let num = 0, den = 0;
+    for (let k = 0; k < 5; k++){
+      const tk = PHASE + k * Math.PI * 2 / 5;
+      const w = Math.pow(0.5 + 0.5 * Math.cos(th - tk), 9);
+      num += AMP[k] * w; den += w;
+    }
+    return den > 1e-9 ? num / den : 1;
+  }
+
+  const pos = [];
   for (let i = 0; i <= segA; i++){
     const th = (i / segA) * Math.PI * 2;
     for (let j = 0; j <= segR; j++){
       const t = T0 + (1 - T0) * (j / segR);
       const u = (t - T0) / (1 - T0);
-      /* The twist grows with u, so a point leaves the body on one bearing and arrives at its tip
-         on another. That is the curve. */
-      const the = th + SWEEP * u;
-      const lobe = Math.pow(0.5 + 0.5 * Math.cos(5 * the), LOBE_P);
-      const r = (R_IN + (R_OUT - R_IN) * lobe) * t;
-      /* Highest at the oculus rim, on the ground at every edge — between the points as well as
-         at the tips, because the roof meets the deck all the way round. */
-      pos.push(Math.cos(th) * r, PEAK * Math.pow(1 - u, 1.25), Math.sin(th) * r);
+      const the = th + SWEEP * u;          // the twist is what curves the points
+      const lobe = Math.pow(0.5 + 0.5 * Math.cos(5 * (the - PHASE)), LOBE_P);
+      const r = (R_IN + (R_OUT - R_IN) * lobe * amp(the)) * t;
+      pos.push(Math.cos(th) * r, PEAK * Math.pow(1 - u, 1.30), Math.sin(th) * r);
     }
   }
-  const row = segR + 1;
-  const inner = [], outer = [];
+  const row = segR + 1, red = [], pale = [], dark = [];
   for (let i = 0; i < segA; i++){
     for (let j = 0; j < segR; j++){
       const a = i * row + j, b = a + row;
-      const quad = [a, b, a + 1, b, b + 1, a + 1];
-      (j >= segR - RIM ? outer : inner).push(...quad);
+      const q = [a, b, a + 1, b, b + 1, a + 1];
+      if (j >= segR - RIM) dark.push(...q);
+      else if (j >= segR - RIM - STRIPE) pale.push(...q);
+      else red.push(...q);
     }
   }
-  idx.push(...inner, ...outer);
-
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setIndex(idx);
-  geo.addGroup(0, inner.length, 0);
-  geo.addGroup(inner.length, outer.length, 1);
+  geo.setIndex([...red, ...pale, ...dark]);
+  geo.addGroup(0, red.length, 0);
+  geo.addGroup(red.length, pale.length, 1);
+  geo.addGroup(red.length + pale.length, dark.length, 2);
   geo.computeVertexNormals();
 
-  /* DoubleSide because the roof is a shell, not a solid: from a low angle on the approach road
-     you see its underside, and a single-sided surface disappears there. */
-  const red = new THREE.MeshStandardMaterial({
+  const mRed = new THREE.MeshStandardMaterial({
     color:0x3A0A11, roughness:0.55, metalness:0.06,
     emissive:0xC8102E, emissiveIntensity:0.30, side:THREE.DoubleSide });
-  red.userData.duskColor = 0xC8102E;
-  red.userData.dayMats = new THREE.MeshStandardMaterial({
+  mRed.userData.duskColor = 0xC8102E;
+  mRed.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0xC8102E, roughness:0.55, metalness:0.06, side:THREE.DoubleSide });
 
-  const rim = new THREE.MeshStandardMaterial({
-    color:0x0B0B0C, roughness:0.85, metalness:0.05, side:THREE.DoubleSide });
-  rim.userData.duskColor = 0x1A1A1C;
-  rim.userData.dayMats = new THREE.MeshStandardMaterial({
+  const mPale = new THREE.MeshStandardMaterial({
+    color:0x2A2A2C, roughness:0.5, emissive:0xE8E4DC, emissiveIntensity:0.22,
+    side:THREE.DoubleSide });
+  mPale.userData.duskColor = 0xE8E4DC;
+  mPale.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0xE8E4DC, roughness:0.5, side:THREE.DoubleSide });
+
+  const mDark = new THREE.MeshStandardMaterial({
+    color:0x0B0B0C, roughness:0.85, side:THREE.DoubleSide });
+  mDark.userData.duskColor = 0x1A1A1C;
+  mDark.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0x1A1A1C, roughness:0.85, side:THREE.DoubleSide });
 
-  const roof = new THREE.Mesh(geo, [red, rim]);
+  const roof = new THREE.Mesh(geo, [mRed, mPale, mDark]);
   roof.userData.hero = true;
   roof.castShadow = true; roof.receiveShadow = true;
   g.add(roof);
 
-  /* THE OCULUS RING. The centre of the real roof is an open funnel, and without something in the
-     hole you see straight through the building to the sea behind it. A short dark cylinder reads
-     as the funnel wall and closes the silhouette. */
-  const oR = R_IN * T0 * 1.02;
+  /* THE OCULUS. A funnel, not a hole — without a wall in it you see the sea through the middle
+     of the building. */
+  const oR = R_IN * T0 * 1.6;
   const ring = new THREE.Mesh(
-    new THREE.CylinderGeometry(oR * 1.35, oR, PEAK * 0.55, 28, 1, true),
-    new THREE.MeshStandardMaterial({ color:0x14171B, roughness:0.8, side:THREE.DoubleSide }));
-  ring.position.y = PEAK * 0.92;
-  ring.userData.hero = true;
+    new THREE.CylinderGeometry(oR * 1.5, oR, PEAK * 0.5, 24, 1, true),
+    new THREE.MeshStandardMaterial({ color:0x9FB0BC, roughness:0.4, metalness:0.3,
+                                     side:THREE.DoubleSide }));
+  ring.position.y = PEAK * 0.95;
   g.add(ring);
 
-  /* THE DECK UNDER IT. Not detail — without a floor the oculus and the shell's own edge both
-     show sky, and a building you can see through does not read as a building. */
+  /* THE SHIELD. Not decoration at this scale — it is a large gold mark on a red field and it is
+     legible from further away than the point geometry is. Laid flat just above the roof surface
+     on the long western flank, where the reference has it. */
+  const sh = new THREE.Mesh(
+    new THREE.PlaneGeometry(R_OUT * 0.20, R_OUT * 0.26),
+    new THREE.MeshStandardMaterial({ color:0x3A2E08, roughness:0.5,
+      emissive:0xE8B547, emissiveIntensity:0.55, side:THREE.DoubleSide }));
+  sh.rotation.x = -Math.PI / 2;
+  sh.position.set(-R_OUT * 0.30, PEAK * 0.58, R_OUT * 0.14);
+  sh.material.userData = { duskColor:0xE8B547,
+    dayMats:new THREE.MeshStandardMaterial({ color:0xE8B547, roughness:0.5,
+                                             side:THREE.DoubleSide }) };
+  g.add(sh);
+
   const deck = new THREE.Mesh(
-    new THREE.CylinderGeometry(R_IN * 0.95, R_IN * 0.95, 1.6, 32),
+    new THREE.CylinderGeometry(R_IN * 0.9, R_IN * 0.9, 1.2, 28),
     new THREE.MeshStandardMaterial({ color:0x1B1E22, roughness:0.9 }));
-  deck.position.y = 0.8;
+  deck.position.y = 0.6;
   deck.receiveShadow = true;
   g.add(deck);
 
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
+/* YAS MALL — a sprawl, deliberately.
+
+   The reference shows no single mass: a jumble of grey boxes at slightly different heights with a
+   pale skylight ridge running through the middle and car decks on the western side. A mall
+   rendered as one clean rectangle is the thing that makes a generated city look generated, and
+   this is the largest roof on the island after Ferrari World.
+
+   ORIENTED EAST-WEST, long axis toward the roof, because that is how it meets it. */
+function yasMall(x0, z0){
+  const g = new THREE.Group();
+  const HALF = 8;
+
+  const body = new THREE.MeshStandardMaterial({
+    color:0x181C20, roughness:0.85, emissive:0xE8B547, emissiveIntensity:0.06 });
+  body.userData.duskColor = 0xB9B4A8;
+  body.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xB9B4A8, roughness:0.85 });
+
+  const glass = new THREE.MeshStandardMaterial({
+    color:0x1C2A30, roughness:0.35, metalness:0.2,
+    emissive:0xBFE4EC, emissiveIntensity:0.30 });
+  glass.userData.duskColor = 0xD6EAF0;
+  glass.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0xD6EAF0, roughness:0.35, metalness:0.2 });
+
+  /* Eleven boxes rather than one. Heights step between 1.6 and 3.2 units — 12 to 25 m — which is
+     the range a mall of this size actually occupies, and the variation is what stops the roofline
+     reading as a single extruded outline. */
+  const boxes = [
+    [ -1.0,  0.0, 11.0, 2.6,  9.0], [  5.2, -3.4,  5.0, 2.2,  4.6],
+    [  5.6,  3.2,  4.4, 2.0,  4.2], [ -6.4, -3.0,  4.6, 3.2,  4.0],
+    [ -6.0,  3.4,  4.2, 2.4,  4.4], [  0.4, -6.2,  7.0, 1.8,  3.0],
+    [  0.0,  6.4,  6.4, 2.0,  3.0], [ -9.0,  0.2,  3.0, 1.6,  6.0],
+    [  8.0,  0.0,  3.2, 2.8,  5.0], [  2.6,  4.8,  3.0, 3.0,  2.6],
+    [  2.2, -4.6,  2.8, 2.6,  2.4],
+  ];
+  for (const [dx, dz, w, h, dp] of boxes){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), body);
+    m.position.set(dx, h / 2, dz);
+    m.castShadow = true; m.receiveShadow = true;
+    g.add(m);
+  }
+
+  /* The skylight ridge. Pale and slightly raised, running the long axis — the one feature that
+     identifies this as a mall rather than a warehouse. */
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(10.0, 0.7, 1.8), glass);
+  ridge.position.set(-1.0, 2.95, 0);
+  g.add(ridge);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass);
+  dome.position.set(-1.0, 2.6, 0);
+  g.add(dome);
+
+  /* Car decks west, flat and low. Reference has these as a large pale apron, and without them the
+     mall floats in sand. */
+  const deckMat = new THREE.MeshStandardMaterial({ color:0x14181C, roughness:0.95 });
+  deckMat.userData.duskColor = 0x9A968C;
+  deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x9A968C, roughness:0.95 });
+  for (const [dx, dz, w, dp] of [[-11.5, -4.0, 5.0, 6.0], [-11.5, 3.6, 5.0, 5.6]]){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.1, dp), deckMat);
+    m.position.set(dx, 0.55, dz);
+    m.receiveShadow = true;
+    g.add(m);
+  }
+
+  g.userData.half = HALF;
   g.position.set(x0, 0, z0);
   return g;
 }
@@ -774,6 +876,6 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld,
+         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall,
          boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }

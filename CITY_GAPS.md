@@ -185,3 +185,81 @@ would be the complete fix — but only Corniche has enough real data for that to
 work, and even there it is 27%. Improving the generator serves all five islands
 now; more footprint data serves one. Worth doing 1–4 before returning to
 stage 3b.
+
+
+---
+
+# Landmarks — added after seeing them rendered
+
+## Nothing here was ever looked at
+
+Every landmark in the scene was authored blind: proportions from references,
+maths verified in a script, shipped. That works for a vacancy mask, where the
+test is a number. It fails for a silhouette, where the test is whether it looks
+right.
+
+`bench/` closes that. `node preview.mjs <file>` renders one building alone from
+three angles. **Ferrari World passed every numeric check and came out a
+starfish**, which is the whole argument for the bench in one sentence.
+
+## Move landmarks out of w2h-city.js
+
+One file each, under `landmarks/`. Each exports:
+
+```js
+export const BUILD = 'lm-ferrari-world v1';
+export const FOOT  = { w, d };                 // units, drives KIT_ZONES
+export function build(THREE){ ... }            // Group, base at y = 0
+```
+
+`w2h-city.js` keeps textures, materials and generic tower types. `w2h-world.js`
+gets a landmark registry instead of hardcoded calls, so adding one is a file
+plus a table row — and `KIT_ZONES` comes from the declared `FOOT` rather than
+being measured after the fact.
+
+Import path: same constraint as `w2h-districts.js`. A static specifier cannot
+carry `?v=`, so `world-nav.html` imports the landmark files with `+ V` and
+passes them in through `opts`.
+
+## Wrong — built blind, confirmed bad
+
+| Landmark | What is wrong |
+|---|---|
+| **Ferrari World** | Body far too small — `R_IN` 4.6 of `R_OUT` 13 is 35%, should be 55–60%. Points read as tubular arms because height falls off radially; the real roof is a smooth shell, thin toward the tips. Oculus ring stands up like a chimney. Shield is a flat rectangle at the wrong angle. Horizon view reads as a circus tent, which the reference explicitly warned against. |
+| **Emirates Palace** | Undersized. Reference shows it spanning roughly twice the Etihad cluster; currently `PALACE_FOOT.w` 49.2 against a cluster of ~38 — only 1.3x. It is the horizontal counterweight and reads as a tan blob. Note the geometry is built to internal dimensions inside `emiratesPalace()`, so changing `PALACE_FOOT` alone moves the exclusion zone and not the building. |
+| **Etihad Towers** | Shapes wrong. Needs rework against the low obliques. |
+| **ADNOC HQ** | Shape wrong. |
+| **Yas Mall** | Eleven boxes, never rendered, unknown. |
+
+## Missing entirely
+
+| Landmark | Island | Why it matters |
+|---|---|---|
+| **Qasr Al Watan** | Corniche | Large, low, single dome, long colonnaded wings, formal forecourt. Silhouette unlike anything else on the island. Proportions in `city-reference.js`. Needs a new `places` anchor with the nearest-anchor clearance check — the one that caught four of five Etihad towers standing in the ring road. |
+| **Grand Hyatt / Emirates Pearl** | Corniche | Prominent on the western Corniche, absent. |
+| **Burj Mohammed bin Rashid** | Corniche | 381 m, tallest in the city. The skyline currently has nothing standing clear of the Etihad cluster. |
+
+## Still no KIT_ZONES list
+
+Saadiyat and Reem. The Louvre and the Gate Towers will interpenetrate their OSM
+boxes exactly as ADNOC did until `KIT_ZONES[<island>.id] = []` is added.
+
+## Order
+
+1. `bench/` committed, then Ferrari World fixed until the plan and horizon views
+   both read
+2. Emirates Palace — read `emiratesPalace()` in full first
+3. Etihad Towers, ADNOC HQ
+4. Qasr Al Watan, Burj Mohammed bin Rashid, Grand Hyatt
+
+---
+
+# Reading the repo directly
+
+Files can be pulled from
+`https://raw.githubusercontent.com/heinrichvanwyk101-lab/where2hang-hero-lab/main/<path>`
+so nothing needs uploading. Caveats: only what is committed to `main` is
+visible, and the raw CDN caches a few minutes, so a stale stamp right after a
+commit means read again.
+
+Screenshots are still the only way to see the running scene.

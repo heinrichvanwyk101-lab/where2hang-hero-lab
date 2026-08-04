@@ -112,48 +112,70 @@ model, or it will interpenetrate the OSM box exactly as ADNOC did.
 
 ---
 
-# Addendum — Ferrari World
+# Addendum — Ferrari World + Yas Mall
 
-Stamps now `nav v89 / city v17 / world v115`. Three more files, all paste-whole.
+Stamps `nav v89 / city v17 / world v115`.
 
 | File | Path |
 |---|---|
-| `w2h-city.js` | `w2h-city.js` — adds the `ferrariWorld` builder |
-| `w2h-world.js` | `w2h-world.js` — places it on Yas, opens `KIT_ZONES[yas.id]` |
+| `w2h-city.js` | `w2h-city.js` — adds `ferrariWorld` and `yasMall` |
+| `w2h-world.js` | `w2h-world.js` — places both, opens `KIT_ZONES[yas.id]` |
 | `world-nav.html` | `world-nav.html` — stamp only |
 
-Order: city, then world, then nav. The world file guards on `kit.ferrariWorld`,
-so pasting it before the city file degrades to no landmark rather than an error.
+Order: city, then world, then nav. The world file guards on both kit functions,
+so pasting it first degrades to no landmarks rather than an error.
 
-## The model
+## Built as a pair, because they touch
 
-- **669 m span, 70 m peak**, 9.5:1 — the ratio the reference measures off the
-  captures. Peak is 9.0 units because the Yas anchor already declared `h:9`, so
-  the label sits where the roof is.
-- **Five swept points.** The angular offset grows with radius, which is what
-  curves them. Without that term it reads as a sheriff's badge.
-- **Black rim as its own material group**, not a second mesh. Solid red at
-  distance is a blob; the dark edge is what gives the star an outline.
-- Oculus ring and deck, because a roof with a hole in it shows sea through the
-  middle and stops reading as a building.
+The reference obliques show one complex, not two buildings. The mall's eastern
+edge runs into the roof's western points. Modelling one and leaving the other a
+flat OSM box would look worse than leaving both flat — a shaped roof beside a
+grey slab draws the eye to the slab.
 
-Built to the existing anchor rather than to a new coordinate, so nothing new
-was invented that could disagree with the label.
+## Sized to the anchor gap, not to true metres
+
+This is the compromise worth knowing about. The two anchors sit **20.9 units
+(163 m)** apart; the real buildings are about 550 m centre to centre. The
+anchors were placed for label legibility and checked against the coastline, so
+moving them risks putting something in the water for a cosmetic gain.
+
+A true-scale roof would reach **24 units past the mall's centre** and swallow
+it. So the pair is built to abut at the gap it has: Ferrari's west reach 10.5 +
+mall half-length 8 = 18.5 against 20.9. Verified, no interpenetration.
+
+The complex reads correctly relative to itself, which is what the eye checks,
+and small relative to the island, which almost nothing checks. The diorama
+already compresses buildings ~2.6x against the ground — Emirates Palace is
+384 m for a real 1,000 — so this is the established direction, further along.
+
+**If the anchors ever move apart, both sizes grow together.** Two constants.
+
+## The roof, corrected against the references
+
+- **Asymmetric**, longest point 1.53x the shortest. Five equal points is the
+  tell of a generated shape; the real roof has one long western point.
+- **Flat** — 7.6:1 span to height, 202 m by 27 m. Every instinct says lift it
+  and every photograph says do not.
+- **Three-tone edge**: red top, thin pale stripe, black underside. One geometry,
+  three material groups, so they cannot drift apart.
+- **Gold shield** on the long western flank. Legible from further out than the
+  point geometry is.
+- Oculus funnel and deck, so you cannot see sea through the middle.
+
+Yas Mall is eleven boxes at stepping heights with a pale skylight ridge and
+dome, plus car decks west. A mall rendered as one clean rectangle is what makes
+a generated city look generated.
 
 ## What to check
 
-1. **`yas z1` on the fp row.** Yas showed no `z` field before. It should now
-   read `z1` or similar — that is the flat OSM box being dropped underneath the
-   model. **If `z` is absent, the zone missed and there are two Ferrari Worlds
-   in the same ground, one of them a slab.** That is the single failure this
-   change can produce.
-2. Roof reads as a red star from above, and as a low red wedge from the horizon.
-   Both must work; a shape that only works in plan is a logo.
-3. `yas 3938>3925` should drop by whatever `z` reports.
+1. **`yas` should show a `z` field on the fp row** — it had none before. Expect
+   `z2` or thereabouts: the two flat OSM boxes being dropped underneath.
+   **If `z` is absent, the zones missed and there are duplicates in the same
+   ground.** That is the one failure this change can produce.
+2. Red star reads from above **and** as a low red wedge from the horizon. A
+   shape that only works in plan is a logo.
+3. Ferrari World and the mall should abut without interpenetrating.
 
-## Why this matters beyond Yas
+## Still no zone list
 
-`KIT_ZONES[corniche.id]` was the only list initialised, because Corniche was the
-only island with a kit. Saadiyat and Reem still are not. The Louvre and the Gate
-Towers will hit this in exactly the same shape — model and OSM box in the same
-ground — and the fix is the one line this block adds for Yas.
+Saadiyat and Reem. The Louvre and the Gate Towers will hit this identically.
