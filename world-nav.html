@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v89', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v91', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -700,7 +700,8 @@ phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, footprintsFor } =
+        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, footprintsFor,
+        groundFeaturesFor } =
   buildWorld(scene, kit, {
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -1024,7 +1025,7 @@ function setDistrict(d){
     fitClip();
     applyView(view);
   }
-  if (d) addFootprints(d);
+  if (d){ addFootprints(d); addGroundFeatures(d); }
 
   /* Every state change composes a shot, so a leftover angle from the last one would arrive as a
      camera that lands somewhere the transition did not intend. orbit.on stays as it is: once the
@@ -1661,6 +1662,9 @@ document.getElementById('vProg').addEventListener('click', () => {
     const lines = [
       'programs ' + ps.length,
       'build    ' + B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS,
+      'gf       ' + DISTRICTS.map(x => x.id.slice(0,4) + ' ' +
+        (gfState.get(x.id) || '-') + (x.trackN ? ' t' + x.trackN : '') +
+        (x.golfN ? ' g' + x.golfN : '') + (x.parkRealN ? ' p' + x.parkRealN : '')).join('  '),
       'state    ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') + '   view ' + view,
       'built    ' + DISTRICTS.filter(d => d.built).map(d => d.id).join(', '),
       'tex      ' + renderer.info.memory.textures + '   geo ' + renderer.info.memory.geometries,
@@ -2519,6 +2523,52 @@ async function footprintsFrom(d){
   return (units && units.length) ? units : null;
 }
 
+/* THE GOLF COURSE AND THE CIRCUIT, on the same async path and for the same reason.
+
+   These are ground features and conceptually belong in the ground canvas. They are meshes because
+   paintGround runs at island BUILD time while the payload arrives later, so painting them would
+   mean loading the payload before the build — and a prefetch race of exactly that shape already
+   made Al Maryah render generated-or-real non-deterministically per load. Adding after the island
+   exists is the path footprintsFor already proves.
+
+   INERT WITHOUT THE BAKE. golfUnits and racewayUnits are new in basemap v7 and the arrays they
+   read are new in the bake; against an older payload both come back empty, gfState records
+   'none', and nothing is added. */
+const gfState = new Map();
+
+async function groundFeaturesFrom(d){
+  const idx = window.__basemapIndex;
+  if (!idx || !BMAP.loadIsland || !BMAP.golfUnits || !BMAP.racewayUnits) return null;
+  const entry = (idx.islands || []).find(i => i.id === d.id);
+  if (!entry) return null;
+  const data = await BMAP.loadIsland(idx, d.id);
+  const origin = BMAP.islandOrigin(entry);
+  const golf = BMAP.golfUnits(data, origin);
+  const raceway = BMAP.racewayUnits(data, origin);
+  const parks = BMAP.parksUnits ? BMAP.parksUnits(data, origin) : [];
+  return (golf.length || raceway.length || parks.length) ? { golf, raceway, parks } : null;
+}
+
+async function addGroundFeatures(d){
+  if (!groundFeaturesFor || gfState.has(d.id)) return;
+  gfState.set(d.id, 'pending');
+  try {
+    const feats = await groundFeaturesFrom(d);
+    if (!feats){ gfState.set(d.id, 'none'); return; }
+    const g = groundFeaturesFor(d, feats);
+    if (!g){ gfState.set(d.id, 'none'); return; }
+    d.detail.add(g);
+    /* Same order the deferred islands taught us: snapshot and register BEFORE any view touches
+       the new meshes, or applyView sets a material to undefined and the render loop dies inside
+       projectObject naming neither the mesh nor the island. */
+    snapshotMats(g); registerLift(g); applyView(view);
+    gfState.set(d.id, 'on');
+  } catch (e){
+    gfState.set(d.id, 'fail');
+    console.warn('groundFeatures ' + d.id + ': ' + e.message);
+  }
+}
+
 /* Hides the generated fabric's MESHES without touching its arithmetic. The cells and blocks it
    returned are still in d.fabric and still feeding groundPlan; only the boxes stop drawing. */
 function hideFabric(d){
@@ -2629,6 +2679,7 @@ function buildAndRegister(d){
   if (!buildIsland(d.id)) return;
   snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   addFootprints(d);
+  addGroundFeatures(d);
 }
 
 

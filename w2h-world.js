@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v116';
+export const BUILD = 'world v118';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1962,8 +1962,19 @@ function paintGround(d, plan){
     pathOutline(sc); g.fill();
   });
 
-  // 4. Parks, straight from the plan.
-  plan.parks.forEach(p => {
+  /* 4. Parks, straight from the plan — UNLESS THE ISLAND HAS REAL ONES.
+
+        These blobs exist because the bake used to return almost no parkland: its query asked only
+        for ways, and the branch gated on el.geometry, so every multipolygon park was dropped
+        twice over and the largest green area on Yas was 29 hectares. That is fixed, and the real
+        polygons now arrive as meshes in groundFeaturesFor.
+
+        Drawing both would green the same ground twice — and worse, in two different shapes, so
+        the seams between them would read as a rendering fault rather than as landscaping. The
+        count comes from the index because it is the only thing available this early: the real
+        polygons load asynchronously, long after this texture is painted. */
+  const realParks = BASE && BASE[d.id] && BASE[d.id].nParks > 20;
+  if (!realParks) plan.parks.forEach(p => {
     const x = PX(p.x), y = PY(p.y), rr = U * p.r;
     const grd = g.createRadialGradient(x, y, rr*0.15, x, y, rr);
     grd.addColorStop(0, SURF.lawnLt + '0.90)');
@@ -5053,6 +5064,162 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
    skyline in the city to one number and look instantly wrong next to the 3,807 that are right.
    Which is which is recorded and shown, since a modelled height and a surveyed one are otherwise
    indistinguishable and only one of them is evidence. */
+/* ===========================================================================
+   GROUND FEATURES — THE GOLF COURSE AND THE RACE CIRCUIT.
+
+   FLAT MESHES, NOT PAINT, AND THAT WAS A DELIBERATE FORK. Both could have gone into the ground
+   canvas, which is where they conceptually belong. They did not, because paintGround runs at
+   island BUILD time and the island payload arrives asynchronously — so painting them would have
+   required loading the payload before the build, and a prefetch race of exactly that shape
+   already made Al Maryah render generated-or-real non-deterministically per load. These take the
+   path footprintsFor already proves works: build the island, then add to it.
+
+   A dark ribbon with kerbs reads the same whether it is canvas or geometry, and geometry can do
+   two things canvas cannot at this scale — real kerb edges, and the run-off apron sitting under
+   the track rather than being composited with it.
+
+   COORDINATES. golfUnits and racewayUnits return WORLD-space units on the island's own frame,
+   the same convention buildingsUnits uses, so the coastline test converts the same way
+   footprintsFor's does: nx = x / d.r, ny = -z / d.r.
+   =========================================================================== */
+
+/* One ribbon. Offsets each point along the averaged normal of its adjacent segments, which miters
+   the joints well enough at this width and avoids the pinching a per-segment normal gives on the
+   hairpins — and this circuit has several. */
+function ribbon(pts, half, y, mat){
+  const n = pts.length;
+  if (n < 2) return null;
+  const pos = [], idx = [];
+  for (let i = 0; i < n; i++){
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    let dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    dx /= L; dz /= L;
+    const nx = -dz, nz = dx;                  // left normal
+    pos.push(pts[i][0] + nx * half, y, pts[i][1] + nz * half);
+    pos.push(pts[i][0] - nx * half, y, pts[i][1] - nz * half);
+  }
+  for (let i = 0; i < n - 1; i++){
+    const a = i * 2;
+    idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat);
+  m.receiveShadow = true;
+  return m;
+}
+
+function flatMat(dusk, day, rough){
+  const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough == null ? 0.9 : rough });
+  m.userData.duskColor = dusk;
+  m.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, roughness:rough == null ? 0.9 : rough });
+  return m;
+}
+
+function groundFeaturesFor(d, feats){
+  if (!feats) return null;
+  const g = new THREE.Group();
+  g.name = 'groundFeatures';
+  const onIsle = (x, z) => insideIsle(d.id, x / d.r, -z / d.r);
+
+  /* ---- the golf course ---- */
+  const fairway = flatMat(0x2C4426, 0x6E8F4E);
+  let golfN = 0;
+  for (const ring of (feats.golf || [])){
+    if (ring.length < 4) continue;
+    let inside = 0;
+    for (const p of ring) if (onIsle(p[0], p[1])) inside++;
+    /* A course that is mostly outside the shore is a course the bake picked up from the
+       neighbouring island's bounding box, not one of ours. Majority test rather than all, because
+       a links course legitimately runs right down to the waterline and clips it. */
+    if (inside < ring.length * 0.5) continue;
+    const shape = new THREE.Shape();
+    shape.moveTo(ring[0][0], -ring[0][1]);
+    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1]);
+    shape.closePath();
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(geo, fairway);
+    m.position.y = GROUND + 0.008;
+    m.receiveShadow = true;
+    g.add(m); golfN++;
+  }
+
+  /* ---- real parkland ----
+     TWO FILTERS, AND BOTH ARE LOAD-BEARING. Corniche returns 1,321 polygons totalling 3,380
+     hectares, a third of the island, because `landuse=grass` and `forest` are draped over desert
+     scrub in blankets up to 986 ha. Greening that is the lawn flood.
+
+       KIND — genuine amenity greenery is drawn at any size. Landuse blankets are drawn only if
+       they are small enough to be a real field rather than a survey of the scrub.
+       SIZE — the cap is in hectares because that is the unit the fault appears in.
+
+     ONE MERGED GEOMETRY, NOT ONE MESH PER RING. 1,321 meshes is 1,321 draw calls on the island
+     that is already the heaviest in the scene. */
+  const AMENITY = { park:1, garden:1, common:1, recreation_ground:1, pitch:1, village_green:1,
+                    nature_reserve:1 };
+  const BLANKET_CAP = 12e4;                 // 12 ha; above this a landuse ring is scrub, not lawn
+  const lawn = flatMat(0x2E4728, 0x6F8C52);
+  const pv = [], pi = [];
+  let parkN = 0;
+  for (const ring of (feats.parks || [])){
+    if (ring.length < 4) continue;
+    if (!AMENITY[ring.kind] && ring.areaM2 > BLANKET_CAP) continue;
+    let inside = 0;
+    for (const p of ring) if (onIsle(p[0], p[1])) inside++;
+    if (inside < ring.length * 0.5) continue;
+    const shape = new THREE.Shape();
+    shape.moveTo(ring[0][0], -ring[0][1]);
+    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1]);
+    shape.closePath();
+    let geo;
+    try { geo = new THREE.ShapeGeometry(shape); } catch (e){ continue; }
+    const pos = geo.attributes.position, ix = geo.index;
+    if (!pos || !ix) continue;
+    const base = pv.length / 3;
+    for (let i = 0; i < pos.count; i++)
+      pv.push(pos.getX(i), GROUND + 0.006, -pos.getY(i));   // ShapeGeometry is XY; y -> -z
+    for (let i = 0; i < ix.count; i++) pi.push(base + ix.getX(i));
+    geo.dispose();
+    parkN++;
+  }
+  if (pv.length){
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(pv, 3));
+    pg.setIndex(pi);
+    pg.computeVertexNormals();
+    const pm = new THREE.Mesh(pg, lawn);
+    pm.receiveShadow = true;
+    g.add(pm);
+  }
+
+  /* ---- the circuit ----
+     ALTERNATE LAYOUTS ARE DROPPED. Yas returns 13.3 km of raceway, of which only 5.3 km is the
+     Grand Prix circuit; 5.0 km of it is the shorter configurations, which run over the SAME
+     tarmac. Drawing them lays four circuits on top of each other and the ribbon z-fights itself. */
+  const asphalt = flatMat(0x24262A, 0x3A3D42, 0.95);
+  const kerb    = flatMat(0xB8AFA2, 0xE4DED2, 0.8);
+  const runoff  = flatMat(0x2A5E76, 0x3E8FB0, 0.85);
+  const W = { circuit:[0.95, 1.22, 2.60], pit:[0.72, 0.90, 0], kart:[0.42, 0.52, 0] };
+  let trackN = 0;
+  for (const way of (feats.raceway || [])){
+    const w = W[way.kind];
+    if (!w || way.length < 2) continue;
+    const mid = way[Math.floor(way.length / 2)];
+    if (!onIsle(mid[0], mid[1])) continue;
+    if (w[2]){ const r = ribbon(way, w[2], GROUND + 0.010, runoff); if (r) g.add(r); }
+    const k = ribbon(way, w[1], GROUND + 0.014, kerb);    if (k) g.add(k);
+    const a = ribbon(way, w[0], GROUND + 0.018, asphalt); if (a) g.add(a);
+    trackN++;
+  }
+
+  d.golfN = golfN; d.trackN = trackN; d.parkRealN = parkN;
+  return (golfN || trackN || parkN) ? g : null;
+}
+
 function footprintsFor(d, list){
   if (!list || !list.length) return null;
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
@@ -5583,7 +5750,7 @@ function buildIsland(id){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
-         buildIsland, buildCornicheRest, footprintsFor,
+         buildIsland, buildCornicheRest, footprintsFor, groundFeaturesFor,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which

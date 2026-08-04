@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v6';
+export const BUILD = 'basemap v8';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -253,6 +253,10 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
       r: (Math.max(entry.extent.w, entry.extent.d) / 2) / M_PER_UNIT,
       scale: tf.scale, x: tf.x, z: tf.z,
       extent: entry.extent,
+      /* Read at BUILD time so paintGround can decide whether to draw its generated lawn blobs at
+         all. The real polygons arrive asynchronously, long after the ground texture is painted, so
+         the count is the only thing available early enough to make that call. */
+      nParks: (entry.counts && entry.counts.parks) || 0,
     };
   }
   return out;
@@ -295,7 +299,55 @@ export function buildingsUnits(island, origin){
   }));
 }
 
+/* PARKS, WITH THEIR KIND. Tolerates both payload shapes: the bake now emits { k, a, r } and used
+   to emit a bare ring. Nothing ever consumed the bare form - this function was exported and never
+   called - but an old payload in a browser cache should degrade rather than throw. */
 export function parksUnits(island, origin){
   const [ox, oy] = origin;
-  return (island.parks || []).map(r => r.map(([x, y]) => [m2u(x - ox), -m2u(y - oy)]));
+  return (island.parks || []).map(p => {
+    const ring = Array.isArray(p) ? p : p.r;
+    if (!ring) return null;
+    const pts = ring.map(([x, y]) => [m2u(x - ox), -m2u(y - oy)]);
+    pts.kind = Array.isArray(p) ? 'park' : (p.k || 'park');
+    pts.areaM2 = Array.isArray(p) ? 0 : (p.a || 0);
+    return pts;
+  }).filter(Boolean);
+}
+
+/* GOLF AND THE RACEWAY, WORLD SPACE, same convention as buildingsUnits and parksUnits above:
+   north flipped to -z, because these are placed directly in the world rather than going through
+   the island's ExtrudeGeometry rotation. Getting that backwards mirrors the feature north to
+   south, which still looks plausible and is therefore the failure worth naming.
+
+   BOTH ARE NEW IN THE BAKE. tools/bake-city.mjs now fetches `leisure=golf_course` and
+   `highway=raceway`; before that neither existed in any payload, and a search near the Yas Marina
+   Circuit anchor returned 29 km of ordinary local streets with nothing to tell them apart. */
+export function golfUnits(island, origin){
+  const [ox, oy] = origin;
+  return (island.golf || []).map(r => r.map(([x, y]) => [m2u(x - ox), -m2u(y - oy)]));
+}
+
+/* THE FILTER IS THE POINT HERE, not the conversion. Yas returns 13.3 km of raceway across 38
+   ways, and only 5.26 km of it is the Grand Prix circuit — the rest is the pit lane, the shorter
+   alternative layouts that run over the same tarmac, the KartZone and a rallycross course. Drawing
+   all of it lays four circuits on top of each other.
+
+   `kind` is returned rather than filtered here so the consumer decides: the pit lane is worth
+   drawing narrower, the kart track thinner still, and the alternate layouts are worth dropping
+   entirely because their tarmac is already under the main ribbon.
+
+   That 5.26 km against a published 5.281 is also the check that the geometry is real and correctly
+   scaled — 0.4 per cent, from a source that knows nothing about this scene. */
+export function racewayUnits(island, origin){
+  const [ox, oy] = origin;
+  return (island.raceway || []).map(r => {
+    const name = r.name || '';
+    const kind = r.pit || /pit lane/i.test(name) ? 'pit'
+               : /kartzone|kart/i.test(name)     ? 'kart'
+               : /^yas marina circuit$/i.test(name) ? 'circuit'
+               : 'alt';
+    const pts = r.pts.map(([x, y]) => [m2u(x - ox), -m2u(y - oy)]);
+    pts.kind = kind; pts.name = name;
+    return pts;
+  });
 }
