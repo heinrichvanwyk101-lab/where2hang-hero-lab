@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v120';
+export const BUILD = 'world v121';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5099,9 +5099,17 @@ function ribbon(pts, half, y, set){
     pos.push(pts[i][0] + nx * half, y, pts[i][1] + nz * half);
     pos.push(pts[i][0] - nx * half, y, pts[i][1] - nz * half);
   }
+  /* WINDING, VERIFIED BY CROSS PRODUCT AND NOT BY READING IT. The first version wound these
+     clockwise seen from above, so computeVertexNormals gave every ribbon a normal of (0,-1,0) and
+     MeshStandardMaterial's default FrontSide culled the lot. Every gate passed, all fourteen ways
+     built, gfState said 'on', and the circuit was invisible because it was facing the seabed.
+
+     The parkland shapes came out the other way up — ShapeGeometry plus the y -> -z remap happens
+     to land normals at (0,+1,0) — which is why the greenery appeared and the track never did.
+     Same file, same pass, opposite winding, and only one of them checkable by looking. */
   for (let i = 0; i < n - 1; i++){
     const a = i * 2;
-    idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
