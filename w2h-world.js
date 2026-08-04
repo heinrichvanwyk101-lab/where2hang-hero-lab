@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v132';
+export const BUILD = 'world v133';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5442,6 +5442,67 @@ function footprintsFor(d, list){
   const poolFor = a => { const b = bands[bandOf(a)];
                          return b.length >= 8 ? b : anyReal.length >= 20 ? anyReal : null; };
 
+  /* PLOT OUTLINES ARE NOT BUILDINGS, AND OVERTURE CANNOT TELL YOU WHICH IS WHICH.
+
+     The conflation returns a box per source polygon, and some of those polygons are the PLOT: a
+     785 x 679 m rectangle on Yas at a flat 40 m, another at 713 x 694 with SIXTY-ONE mapped
+     buildings standing inside it. Extruded, they are half a million square metres of wall over
+     the district they are supposed to contain. On the Yas Bay plan they are the reason there are
+     buildings standing where the drawing shows promenade.
+
+     THE TEST IS CONTAINMENT, NOT AREA. Area alone cannot separate a mall from a plot — both are
+     enormous. But a real building does not have OTHER MAPPED BUILDINGS INSIDE ITS OWN OUTLINE,
+     and a plot nearly always does. Two is enough to be sure; one is a porch or a lean-to.
+
+     AND THE HEIGHT SAVES THE TOWERS. A 256 x 50 m box on Reem holds four small footprints and is
+     264 m tall — that is a real tower over a real podium, and hiding it would be the worst
+     outcome this rule can produce. Anything with a surveyed height above 45 m is kept whatever
+     it contains.
+
+     WHY HIDING IS SAFE: the contained buildings still draw. Losing the wrapper leaves the real
+     ones standing, so the failure mode is a gap rather than a hole. 89 boxes across five islands,
+     out of 26,325.
+
+     THE SECOND CLASS IS OPEN GROUND WITH A FENCE ROUND IT. A leisure venue over 10,000 m2 is a
+     pool deck, a beach club or a park — the bucket is park, beach, recreation, club, theme_park,
+     waterpark, zoo, aquarium, and every one of those is open air. There are three in the whole
+     city and the next largest leisure box is 4,789 m2, so the threshold sits in empty space
+     rather than on a judgement. One of the three is the 168 x 118 m box at 15 m standing on the
+     Hilton's pools. */
+  const MERGE_MIN_M2 = 4000, MERGE_HOLDS = 2, MERGE_TALL_M = 45;
+  const GROUNDS_M2 = 10000;
+  const merged = new Set();
+  {
+    const CELL = 120 / M_PER_UNIT, G = new Map();
+    list.forEach((b, i) => {
+      const gx = Math.floor(b.x / CELL), gy = Math.floor(b.z / CELL);
+      for (let p = -3; p <= 3; p++) for (let q = -3; q <= 3; q++){
+        const k = (gx + p) + ',' + (gy + q);
+        let a = G.get(k); if (!a) G.set(k, a = []); a.push(i);
+      }
+    });
+    const areaM2 = b => (b.w || 0) * (b.dp || 0) * M_PER_UNIT * M_PER_UNIT;
+    list.forEach((b, i) => {
+      const A = areaM2(b);
+      if (b.vk === 'leisure' && A > GROUNDS_M2){ merged.add(i); return; }
+      if (A < MERGE_MIN_M2) return;
+      if (b.h != null && b.h * M_PER_UNIT > MERGE_TALL_M) return;
+      const c = Math.cos(-b.rot), s = Math.sin(-b.rot);
+      const cand = G.get(Math.floor(b.x / CELL) + ',' + Math.floor(b.z / CELL)) || [];
+      let n = 0;
+      for (const j of cand){
+        if (j === i) continue;
+        const o = list[j];
+        if (areaM2(o) > A) continue;
+        const dx = o.x - b.x, dz = o.z - b.z;
+        const u = dx * c - dz * s, w = dx * s + dz * c;
+        if (Math.abs(u) <= b.w / 2 && Math.abs(w) <= b.dp / 2){ if (++n >= MERGE_HOLDS) break; }
+      }
+      if (n >= MERGE_HOLDS) merged.add(i);
+    });
+  }
+  let hidMerge = 0;
+
   const specs = [];
   let real = 0;
   /* Read once. KIT_ZONES is populated when the island's kit is built, which is strictly before any
@@ -5449,7 +5510,12 @@ function footprintsFor(d, list){
      landmarks rather than that the kit has not run yet. */
   const zones = KIT_ZONES[d.id] || [];
   let zoned = 0;
-  for (const b of list){
+  for (let bi = 0; bi < list.length; bi++){
+    const b = list[bi];
+    /* The plot outlines and the fenced open ground, decided in the pre-pass above. Skipped here
+       rather than filtered out of `list`, so every index in the pre-pass still lines up and the
+       counter reports against the same array the rest of this loop walks. */
+    if (merged.has(bi)){ hidMerge++; continue; }
     const nx = b.x / d.r, ny = -b.z / d.r;
     /* THE COASTLINE TEST, WHICH THIS NEVER HAD AND urbanFabric ALWAYS DID.
 
@@ -5684,6 +5750,11 @@ function footprintsFor(d, list){
     g.add(m);
   });
   d.fpCount = specs.length; d.fpReal = real; d.fpZoned = zoned; d.fpClash = clash;
+  /* PLOT OUTLINES AND FENCED OPEN GROUND, HIDDEN. On the overlay as `m` beside `z`, because the
+     two exclusions have opposite failure shapes: z eating the island means a kit zone is too
+     generous, m eating it means the containment rule is catching real buildings. Telling them
+     apart at a glance is the whole reason they are counted separately. */
+  d.fpMerged = hidMerge;
   return g;
 }
 

@@ -3306,6 +3306,7 @@ function frame(){
            the threshold can be argued with rather than trusted. */
         return head + (d.fpRaw || 0) + '>' + (d.fpCount || 0) + '/' + (d.fpReal || 0) + 'r' +
           (d.fpZoned ? ' z' + d.fpZoned : '') +
+          (d.fpMerged ? ' m' + d.fpMerged : '') +
           ' fab' + (d.fpFab || 0) +
           '  hid' + (d.fpHid || 0) + '/' + fabricVisible(d) + 'v' +
           /* THE TWO NUMBERS THE VACANCY MASK IS JUDGED ON, and the reason it can ship behind a

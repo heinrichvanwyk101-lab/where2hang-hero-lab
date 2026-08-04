@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v30';
+export const BUILD = 'city v31';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1175,6 +1175,35 @@ function hiltonYasBay(x0, z0, facing){
   const lob = new THREE.Mesh(new THREE.BoxGeometry(64 / M, 2 * F * 0.8, 0.5 / M), glassM);
   lob.position.set(14 / M, F * 0.9, -40 / M);
   g.add(lob);
+
+  /* THE SIDE WINGS AND THE FRONTAGE, FROM THE PLAN RATHER THAN FROM THE POINTS.
+
+     The eight points only ever described a spine, because that is where the spa, the ATM and the
+     treatment rooms are — amenities cluster in the middle of a hotel. The plan shows what the
+     points could not: the mass turns at both ends and carries a long low frontage on the seaward
+     face. Without those it reads as a slab, which is exactly the note that came back.
+
+     THESE ARE THE SOFT NUMBERS IN THIS FUNCTION. The plan is not registered to the bake frame, so
+     the wings are proportioned to the spine rather than measured off it. The spine, the
+     orientation and the eleven storeys are surveyed; these are not. If the plan is ever
+     registered, measure them and delete this note. */
+  const HW = 8 * F;
+  for (const dx of [-70 / M, 70 / M]){
+    const w = new THREE.Mesh(new THREE.BoxGeometry(36 / M, HW, 54 / M), stone);
+    w.position.set(dx, HW / 2, -34 / M);
+    w.castShadow = true; w.receiveShadow = true;
+    g.add(w);
+  }
+
+  /* THE FRONTAGE. Three storeys along the water — lobby, restaurants and terraces, which is what
+     the tan blocks on that face of the plan are. Low, so the spine still reads above it. */
+  const front = new THREE.Mesh(new THREE.BoxGeometry(184 / M, 3 * F, 20 / M), podM);
+  front.position.set(0, 1.5 * F, -52 / M);
+  front.castShadow = true; front.receiveShadow = true;
+  g.add(front);
+  const fg = new THREE.Mesh(new THREE.BoxGeometry(180 / M, 2 * F * 0.7, 0.5 / M), glassM);
+  fg.position.set(0, F * 1.1, -62.4 / M);
+  g.add(fg);
 
   /* The pool deck to the beach side — flat, low, and the reason the west end reads as resort
      rather than as an office block. */
