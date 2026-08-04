@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v114';
+export const BUILD = 'world v115';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4949,6 +4949,51 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
 
      The three landmark portraits stay. Those reserve their ground through the avoid rects and
      they are the point of the mass layer. */
+}
+
+/* ===========================================================================
+   YAS — THE FIRST HAND-BUILT LANDMARK OUTSIDE THE CORNICHE.
+
+   Ferrari World has been a flat OSM extrusion since footprints arrived: the outline is right and
+   everything else about it is wrong. It is also the one saturated object in a city built from
+   sand, glass and gold, so it does more identifying work per triangle than anything else unbuilt.
+
+   KIT_ZONES[yas.id] IS THE POINT OF THIS BLOCK, as much as the model is.
+
+   Until now only Corniche initialised its zone list, because only Corniche had a kit. Every other
+   island fell through to `KIT_ZONES[d.id] || []` and dropped nothing — which was correct while
+   there was nothing to drop. The moment a hand-built landmark stands on Yas without a zone, the
+   OSM box stands inside it: two Ferrari Worlds interpenetrating, one of them a flat slab. That is
+   exactly the ADNOC fault, and it is worth naming because it will recur on Saadiyat with the
+   Louvre and on Reem with the Gate Towers, in the same shape, for the same reason.
+
+   MEASURED FROM THE OBJECT, NOT WRITTEN DOWN. Same rule as the Corniche zones: a literal
+   rectangle would be a second place the roof's dimensions live and would be wrong the first time
+   the sweep or the radius changed.
+
+   THE ANCHOR IS NOT A NEW NUMBER. It comes from the island's own places table, where Ferrari
+   World has been declared at x 30, z -12 with h 9 since the marks were wired. The model is built
+   to the anchor rather than beside it, so the label and the roof cannot disagree — and PEAK is
+   9.0 units precisely because the anchor already said 9. */
+const yas = DISTRICTS.find(d => d.id === 'yas');
+KIT_ZONES[yas.id] = [];
+if (!NO_KIT && kit.ferrariWorld){
+  const fwAnchor = (yas.places || []).find(pl => pl.label === 'Ferrari World');
+  if (fwAnchor){
+    const fw = kit.ferrariWorld(fwAnchor.x, fwAnchor.z);
+    fw.position.y = GROUND;
+    yas.detail.add(fw);
+    fw.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(fw);
+    /* Two units of margin, about sixteen metres, for the reason the Corniche zones carry it: the
+       authored roof and the surveyed outline agree on roughly where the building is and not on
+       its exact edge, and a zone drawn tight leaves a sliver of the flat one poking out — which
+       reads worse than either fault alone because it looks like a rendering error rather than a
+       decision. */
+    if (isFinite(b.min.x)){
+      KIT_ZONES[yas.id].push({ x0:b.min.x - 2, x1:b.max.x + 2, z0:b.min.z - 2, z1:b.max.z + 2 });
+    }
+  }
 }
 
 /* ---------- the four placeholders ---------- */

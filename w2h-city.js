@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v16';
+export const BUILD = 'city v17';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -542,6 +542,118 @@ function emiratesPalace(x0, z0){
    so it is exaggerated here — two steps rather than one, and the upper step wider than the
    shaft so it throws a distinct shoulder against the sky. Nobody complains that a landmark is
    too recognisable. */
+/* FERRARI WORLD — the only colour anchor in the whole silhouette, and until now a flat OSM box.
+
+   WHY THIS ONE FIRST. Every other unbuilt landmark is a shape problem; this one is a shape
+   problem AND the single saturated thing in a city rendered entirely in sand, glass and gold.
+   At any distance where the Grand Mosque is four pale bumps, this is still unmistakably a red
+   star. It earns its geometry more cheaply than anything else on the list.
+
+   TWO READS, BOTH OF WHICH HAVE TO WORK. From above it is a swept five-point star. From the
+   horizon it is a long low red wedge, highest at the centre and tapering to near-ground at the
+   tips. A shape that only works in plan is a logo, not a building.
+
+   THE BLACK RIM IS NOT DECORATION. Solid red against sand reads as an amorphous blob at
+   distance — the dark edge banding is what gives the star its outline, and it is the difference
+   between recognising the building and seeing a stain. It gets its own material group rather
+   than a second mesh, so the two can never drift apart.
+
+   SCALE. 1 unit is 7.8 m, the scene's one constant. R_OUT 45 gives a 669 m span against a real
+   ~700, and PEAK 9.0 gives 70 m against a real 86 — the ratio matters more than either figure,
+   and 9.5:1 span-to-height is what the reference measures off the captures. PEAK also matches
+   the h:9 the Yas anchor already declared, so the label sits where the roof actually is.
+
+   THE SWEEP IS WHAT MAKES IT FERRARI. Straight-edged points give a sheriff's badge. The real
+   roof's points curve as they extend, so the angular offset grows with radius — one term, and
+   without it the whole thing reads wrong in a way that is hard to name and impossible to miss. */
+function ferrariWorld(x0, z0){
+  const g = new THREE.Group();
+
+  const R_OUT = 45, R_IN = 16, PEAK = 9.0;
+  const T0 = 0.12;              // oculus, as a fraction of the radial span
+  const SWEEP = 0.34;           // radians of twist from oculus rim to tip
+  const LOBE_P = 1.9;           // higher = sharper points
+  const RIM = 2;                // radial rings given the dark edge material
+  const segA = 160, segR = 18;
+
+  const pos = [], idx = [];
+  for (let i = 0; i <= segA; i++){
+    const th = (i / segA) * Math.PI * 2;
+    for (let j = 0; j <= segR; j++){
+      const t = T0 + (1 - T0) * (j / segR);
+      const u = (t - T0) / (1 - T0);
+      /* The twist grows with u, so a point leaves the body on one bearing and arrives at its tip
+         on another. That is the curve. */
+      const the = th + SWEEP * u;
+      const lobe = Math.pow(0.5 + 0.5 * Math.cos(5 * the), LOBE_P);
+      const r = (R_IN + (R_OUT - R_IN) * lobe) * t;
+      /* Highest at the oculus rim, on the ground at every edge — between the points as well as
+         at the tips, because the roof meets the deck all the way round. */
+      pos.push(Math.cos(th) * r, PEAK * Math.pow(1 - u, 1.25), Math.sin(th) * r);
+    }
+  }
+  const row = segR + 1;
+  const inner = [], outer = [];
+  for (let i = 0; i < segA; i++){
+    for (let j = 0; j < segR; j++){
+      const a = i * row + j, b = a + row;
+      const quad = [a, b, a + 1, b, b + 1, a + 1];
+      (j >= segR - RIM ? outer : inner).push(...quad);
+    }
+  }
+  idx.push(...inner, ...outer);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.addGroup(0, inner.length, 0);
+  geo.addGroup(inner.length, outer.length, 1);
+  geo.computeVertexNormals();
+
+  /* DoubleSide because the roof is a shell, not a solid: from a low angle on the approach road
+     you see its underside, and a single-sided surface disappears there. */
+  const red = new THREE.MeshStandardMaterial({
+    color:0x3A0A11, roughness:0.55, metalness:0.06,
+    emissive:0xC8102E, emissiveIntensity:0.30, side:THREE.DoubleSide });
+  red.userData.duskColor = 0xC8102E;
+  red.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0xC8102E, roughness:0.55, metalness:0.06, side:THREE.DoubleSide });
+
+  const rim = new THREE.MeshStandardMaterial({
+    color:0x0B0B0C, roughness:0.85, metalness:0.05, side:THREE.DoubleSide });
+  rim.userData.duskColor = 0x1A1A1C;
+  rim.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0x1A1A1C, roughness:0.85, side:THREE.DoubleSide });
+
+  const roof = new THREE.Mesh(geo, [red, rim]);
+  roof.userData.hero = true;
+  roof.castShadow = true; roof.receiveShadow = true;
+  g.add(roof);
+
+  /* THE OCULUS RING. The centre of the real roof is an open funnel, and without something in the
+     hole you see straight through the building to the sea behind it. A short dark cylinder reads
+     as the funnel wall and closes the silhouette. */
+  const oR = R_IN * T0 * 1.02;
+  const ring = new THREE.Mesh(
+    new THREE.CylinderGeometry(oR * 1.35, oR, PEAK * 0.55, 28, 1, true),
+    new THREE.MeshStandardMaterial({ color:0x14171B, roughness:0.8, side:THREE.DoubleSide }));
+  ring.position.y = PEAK * 0.92;
+  ring.userData.hero = true;
+  g.add(ring);
+
+  /* THE DECK UNDER IT. Not detail — without a floor the oculus and the shell's own edge both
+     show sky, and a building you can see through does not read as a building. */
+  const deck = new THREE.Mesh(
+    new THREE.CylinderGeometry(R_IN * 0.95, R_IN * 0.95, 1.6, 32),
+    new THREE.MeshStandardMaterial({ color:0x1B1E22, roughness:0.9 }));
+  deck.position.y = 0.8;
+  deck.receiveShadow = true;
+  g.add(deck);
+
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
 function adnocHQ(x0, z0){
   const g = new THREE.Group();
   const rot = 0.20;
@@ -662,6 +774,6 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, adnocHQ,
+         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld,
          boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }
