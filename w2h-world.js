@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v137';
+export const BUILD = 'world v138';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -177,6 +177,14 @@ const FP_MODE = typeof location !== 'undefined' && location.search.includes('fp'
    one reload whether it worked rather than in a day of bisecting commits. Same argument as ?fp,
    ?nokit, ?noclip and ?drawn. */
 const VAC_ON = typeof location !== 'undefined' && location.search.includes('vac');
+/* YAS BAY DIAGNOSTICS, TWO FLAGS, AND THE NAMES ARE DELIBERATELY LONG. `fp` already proves that a
+   short flag becomes a substring of another query string sooner or later.
+     ?bayall    skips the onIsle clip on the bay cells only. Nothing else in the file changes.
+     ?baydebug  paints the four bands magenta / cyan / lime / orange in all three light states.
+   Together they answer, in ONE load, a question two rounds of counters did not: whether the block
+   runs, whether the clip is what empties it, and whether the surfaces are simply sand on sand. */
+const BAY_ALL   = typeof location !== 'undefined' && location.search.includes('bayall');
+const BAY_DEBUG = typeof location !== 'undefined' && location.search.includes('baydebug');
 
 /* Island-local rectangles where an authored landmark stands and a surveyed footprint must not.
    Populated when the kit is built, read by footprintsFor. Empty for every island with no kit,
@@ -5446,13 +5454,17 @@ function groundFeaturesFor(d, feats){
 
     const CELL = 5 / M_PER_UNIT;
     const cells = [[], [], [], []];
+    /* Counted BEFORE the clip, because `b` absent has meant two different things all evening —
+       block never ran, and block ran and kept nothing — and the counter could not tell them apart. */
+    let siteN = 0;
     let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
     for (const p of SITE_YASBAY){ bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]);
                                   bz0 = Math.min(bz0, p[1]); bz1 = Math.max(bz1, p[1]); }
     for (let x = bx0; x < bx1; x += CELL) for (let z = bz0; z < bz1; z += CELL){
       const mx = x + CELL / 2, mz = z + CELL / 2;
       if (!inPoly(SITE_YASBAY, mx, mz)) continue;
-      if (!onIsle(mx, mz)) continue;
+      siteN++;
+      if (!BAY_ALL && !onIsle(mx, mz)) continue;
       const dd = nearM(mx, mz);
       let b;
       if (dd < 43){
@@ -5463,10 +5475,15 @@ function groundFeaturesFor(d, feats){
     }
     /* Sand, paving, planted deck, built ground. Keyed off the island's own day/dusk/night ramp
        through flatSet, so they move with it instead of being three colours picked once. */
-    const BAY = [flatSet(0x6E6552, 0xC6B393, 0xE4D2A8, 0.95, 6),
-                 flatSet(0x5F6670, 0xB6AE9E, 0xD8D2C4, 0.92, 6),
-                 flatSet(0x3E4C3A, 0x6F7A54, 0x7A8A62, 0.90, 6),
-                 flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.90, 6)];
+    const BAY = BAY_DEBUG
+      ? [flatSet(0xFF00AA, 0xFF00AA, 0xFF00AA, 0.95, 6),
+         flatSet(0x00E5FF, 0x00E5FF, 0x00E5FF, 0.95, 6),
+         flatSet(0x7CFF00, 0x7CFF00, 0x7CFF00, 0.95, 6),
+         flatSet(0xFF8A00, 0xFF8A00, 0xFF8A00, 0.95, 6)]
+      : [flatSet(0x6E6552, 0xC6B393, 0xE4D2A8, 0.95, 6),
+         flatSet(0x5F6670, 0xB6AE9E, 0xD8D2C4, 0.92, 6),
+         flatSet(0x3E4C3A, 0x6F7A54, 0x7A8A62, 0.90, 6),
+         flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.90, 6)];
     let bayN = 0;
     cells.forEach((cs, i) => {
       if (!cs.length) return;
@@ -5519,7 +5536,10 @@ function groundFeaturesFor(d, feats){
       pm.position.set(c3[0], GROUND + 0.010, c3[1]);
       g.add(tagGround(pm, wat));
     }
-    d.baySurf = bayN;
+    /* A STRING, AND THAT IS THE POINT. The overlay prints `' b' + x.baySurf` behind a truthiness
+       test, so a numeric zero printed nothing — the one outcome the counter existed to report.
+       'kept/insite' is always truthy, so `b0/10512` and no `b` at all are now different answers. */
+    d.baySurf = bayN + '/' + siteN;
   }
 
   return (golfN || trackN || parkN || d.baySurf) ? g : null;
