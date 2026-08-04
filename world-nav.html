@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v94', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v95', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -814,6 +814,11 @@ const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
    nav's goal: the nav owns where the camera is pointed and this is a hand-held deviation from it,
    so a tap on a place still reframes cleanly and resetOrbit still returns everything to the shot
    the nav composed. */
+/* CLOSE ENOUGH TO PHOTOGRAPH. 0.35 held the camera at about 1,170 units off the district shot,
+   which is roughly a whole island in frame — fine for composition and useless for showing anyone
+   a 5 m paving cell. 0.08 reaches about 270 units. The near clip is 1 unit, so there is a long
+   way to go before anything intersects it. */
+const ZOOM_MIN = 0.08;
 const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
 function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0; }
 
@@ -1841,7 +1846,7 @@ canvas.addEventListener('pointermove', e => {
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     if (pinch0 > 8){
       // Pinching APART should move the camera closer, so the ratio is inverted.
-      orbit.zoom = Math.max(0.35, Math.min(2.6, zoom0 * (pinch0 / d)));
+      orbit.zoom = Math.max(ZOOM_MIN, Math.min(2.6, zoom0 * (pinch0 / d)));
       orbit.on = true;
       /* Twist to rotate, in the map modes only. Two fingers on a turntable already mean zoom and
          adding rotation to them there would make every pinch drift the heading. */
@@ -1906,7 +1911,7 @@ canvas.addEventListener('pointercancel', endPointer);
 // Desktop convenience while working on the thing; harmless on a phone.
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  orbit.zoom = Math.max(0.35, Math.min(2.6, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.10)));
+  orbit.zoom = Math.max(ZOOM_MIN, Math.min(2.6, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.10)));
   orbit.on = true;
 }, { passive:false });
 canvas.addEventListener('pointerup', e => {

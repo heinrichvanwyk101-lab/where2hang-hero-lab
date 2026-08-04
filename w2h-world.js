@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v139';
+export const BUILD = 'world v140';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5453,7 +5453,7 @@ function groundFeaturesFor(d, feats){
       return c; };
 
     const CELL = 5 / M_PER_UNIT;
-    const cells = [[], [], [], []];
+    const cells = [[], [], [], [], []];
     /* Counted BEFORE the clip, because `b` absent has meant two different things all evening —
        block never ran, and block ran and kept nothing — and the counter could not tell them apart. */
     let siteN = 0;
@@ -5470,7 +5470,12 @@ function groundFeaturesFor(d, feats){
       if (dd < 43){
         const chan = mx > -53.6 && mx < -22.8 && mz > 397.4 && mz < 420.5;
         b = (dd < 22 && !chan) ? 0 : 1;
-      } else b = dd < 83 ? 2 : 3;
+      } else if (dd < 83){
+        /* NOT A LAWN. Everything from the buildings down to the sand is hard landscaping — the
+           green band read as parkland and it is concrete. What breaks it is a planted ribbon
+           rather than an expanse: one strip, 60 to 68 m out, which is where the tree line runs. */
+        b = (dd >= 60 && dd < 68) ? 4 : 2;
+      } else b = 3;
       cells[b].push([x, z]);
     }
     /* Sand, paving, planted deck, built ground. Keyed off the island's own day/dusk/night ramp
@@ -5479,17 +5484,35 @@ function groundFeaturesFor(d, feats){
       ? [flatSet(0xFF00AA, 0xFF00AA, 0xFF00AA, 0.95, 6),
          flatSet(0x00E5FF, 0x00E5FF, 0x00E5FF, 0.95, 6),
          flatSet(0x7CFF00, 0x7CFF00, 0x7CFF00, 0.95, 6),
-         flatSet(0xFF8A00, 0xFF8A00, 0xFF8A00, 0.95, 6)]
-      : [flatSet(0x6E6552, 0xC6B393, 0xE4D2A8, 0.95, 6),
+         flatSet(0xFF8A00, 0xFF8A00, 0xFF8A00, 0.95, 6),
+         flatSet(0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0.95, 6)]
+      /* THE SAND WAS LOSING TO THE GROUND IT SITS ON. Every one of these was within a few per cent
+         of the island's own painted sand, so four correct surfaces read as one. The beach is now
+         pushed light and warm, the promenade and the deck are separated from each other, and the
+         planted ribbon is the only green left. */
+      : [flatSet(0x7C7160, 0xDCC9A4, 0xF3E4C2, 0.95, 6),
          flatSet(0x5F6670, 0xB6AE9E, 0xD8D2C4, 0.92, 6),
-         flatSet(0x3E4C3A, 0x6F7A54, 0x7A8A62, 0.90, 6),
-         flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.90, 6)];
+         flatSet(0x4A5158, 0x9E9A90, 0xBFBAAE, 0.90, 6),
+         flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.90, 6),
+         flatSet(0x36452F, 0x63734A, 0x6E8154, 0.90, 6)];
     let bayN = 0;
     cells.forEach((cs, i) => {
       if (!cs.length) return;
       const pos = new Float32Array(cs.length * 18), nor = new Float32Array(cs.length * 18);
+      /* THE LEDGE, AND WHY THE SAND STOPPED SHORT OF THE WATER. Every island is an ExtrudeGeometry
+         with bevelSize 1.6 units, so its flat top ends 12.5 m INSIDE the coastline and a sloped
+         bevel carries the last 12.5 m down half a unit to the waterline. A flat plate at GROUND
+         therefore ends 12.5 m short of the sea and floats over the slope on the way. Each vertex
+         inside that margin is now dropped onto the bevel instead, so the beach runs into the water
+         the way a beach does. Only the outer bands are draped — nothing 43 m inland is near it. */
+      const drape = (vx, vz) => {
+        if (i > 1) return 0;
+        const du = nearM(vx, vz) / M_PER_UNIT;
+        return du >= ISLE_BEVEL_S ? 0 : -ISLE_BEVEL_T * (1 - du / ISLE_BEVEL_S);
+      };
       cs.forEach(([x, z], j) => {
         const o = j * 18, X = x + CELL, Z = z + CELL;
+        const yA = drape(x, z), yB = drape(X, z), yC = drape(X, Z), yD = drape(x, Z);
         /* WINDING, AND IT IS THE WHOLE FAULT. The first version wound both triangles
            (x,z)-(X,z)-(X,Z), whose cross product is -Y: every quad faced DOWNWARD while its
            written vertex normal said up. flatSet materials are MeshStandardMaterial with no
@@ -5497,7 +5520,7 @@ function groundFeaturesFor(d, feats){
            above the ground. Nothing threw, the counter was correct, the clip was correct, and
            the surfaces were built exactly where they belong — facing the seabed. The pools
            survived because PlaneGeometry winds itself. */
-        const q = [x,0,z, x,0,Z, X,0,Z, x,0,z, X,0,Z, X,0,z];
+        const q = [x,yA,z, x,yD,Z, X,yC,Z, x,yA,z, X,yC,Z, X,yB,z];
         for (let t = 0; t < 18; t++){ pos[o + t] = q[t]; nor[o + t] = t % 3 === 1 ? 1 : 0; }
       });
       const bg = new THREE.BufferGeometry();
