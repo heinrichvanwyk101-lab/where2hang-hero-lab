@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v119';
+export const BUILD = 'world v120';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5086,7 +5086,7 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
 /* One ribbon. Offsets each point along the averaged normal of its adjacent segments, which miters
    the joints well enough at this width and avoids the pinching a per-segment normal gives on the
    hairpins — and this circuit has several. */
-function ribbon(pts, half, y, mat){
+function ribbon(pts, half, y, set){
   const n = pts.length;
   if (n < 2) return null;
   const pos = [], idx = [];
@@ -5107,16 +5107,50 @@ function ribbon(pts, half, y, mat){
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  const m = new THREE.Mesh(g, mat);
+  const m = new THREE.Mesh(g, set.base);
   m.receiveShadow = true;
-  return m;
+  return tagGround(m, set);
 }
 
-function flatMat(dusk, day, rough){
-  const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough == null ? 0.9 : rough });
-  m.userData.duskColor = dusk;
-  m.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, roughness:rough == null ? 0.9 : rough });
-  return m;
+/* A FULL MATERIAL SET, NOT ONE MATERIAL, AND THE FIRST VERSION OF THIS WAS WRONG IN THREE WAYS.
+
+   applyView reads dayMats, duskMats, planMats and `ground` off the MESH. The first flatMat hung
+   dayMats on the MATERIAL, which every other call site in this file does not — so in Day these
+   features fell through to the switcher's generic pale dayMat and lost their colour entirely.
+
+   Worse at dusk. registerLift skips any mesh carrying duskMats; without one, every ribbon and
+   fairway was registered and repainted with DUSK_STONE along with the city. That is why Yas read
+   uniformly brown at dusk and green at night — same geometry, two different materials, and only
+   one of them mine.
+
+   And with no `ground` flag they were hidden outright in Plan, which is the one view built for
+   judging exactly this: whether a painted street and the thing standing on it register.
+
+   Six views, and a mesh has to answer for all of them. */
+function flatSet(dusk, day, rough){
+  const r = rough == null ? 0.9 : rough;
+  const base = new THREE.MeshStandardMaterial({ color:dusk, roughness:r });
+  base.userData.duskColor = dusk;
+  const duskM = new THREE.MeshStandardMaterial({ color:dusk, roughness:r });
+  duskM.userData.duskColor = dusk;
+  return {
+    base,
+    dayM:  new THREE.MeshStandardMaterial({ color:day, roughness:r }),
+    duskM,
+    /* MeshBasic for Plan and Check, matching what the island ground does: no light, no shadow, no
+       exposure. A lit green polygon lying on an unlit plan texture reads as a different drawing. */
+    planM: new THREE.MeshBasicMaterial({ color:day }),
+  };
+}
+
+/* Every ground-feature mesh is tagged the same way, in one place, because doing it at each
+   construction site is how three of the four fields got missed the first time. */
+function tagGround(mesh, set){
+  mesh.userData.dayMats  = set.dayM;
+  mesh.userData.duskMats = set.duskM;
+  mesh.userData.planMats = set.planM;
+  mesh.userData.ground   = true;
+  return mesh;
 }
 
 function groundFeaturesFor(d, feats){
@@ -5126,7 +5160,7 @@ function groundFeaturesFor(d, feats){
   const onIsle = (x, z) => insideIsle(d.id, x / d.r, -z / d.r);
 
   /* ---- the golf course ---- */
-  const fairway = flatMat(0x2C4426, 0x6E8F4E);
+  const fairway = flatSet(0x2C4426, 0x6E8F4E);
   let golfN = 0;
   for (const ring of (feats.golf || [])){
     if (ring.length < 4) continue;
@@ -5142,10 +5176,10 @@ function groundFeaturesFor(d, feats){
     shape.closePath();
     const geo = new THREE.ShapeGeometry(shape);
     geo.rotateX(-Math.PI / 2);
-    const m = new THREE.Mesh(geo, fairway);
+    const m = new THREE.Mesh(geo, fairway.base);
     m.position.y = GROUND + 0.008;
     m.receiveShadow = true;
-    g.add(m); golfN++;
+    g.add(tagGround(m, fairway)); golfN++;
   }
 
   /* ---- real parkland ----
@@ -5173,9 +5207,9 @@ function groundFeaturesFor(d, feats){
   const TONE = { park:0, garden:0, common:0, recreation_ground:0, village_green:0, pitch:0,
                  grass:1, meadow:1,
                  forest:2, nature_reserve:2 };
-  const greenMat = [ flatMat(0x2E4728, 0x6F8C52),      // mown
-                     flatMat(0x36402A, 0x87895A),      // dry
-                     flatMat(0x1E3221, 0x4A6B3C) ];    // canopy
+  const greenMat = [ flatSet(0x2E4728, 0x6F8C52),      // mown
+                     flatSet(0x36402A, 0x87895A),      // dry
+                     flatSet(0x1E3221, 0x4A6B3C) ];    // canopy
   const gv = [[], [], []], gi = [[], [], []];
   let parkN = 0;
   for (const ring of (feats.parks || [])){
@@ -5208,19 +5242,25 @@ function groundFeaturesFor(d, feats){
     pg.setAttribute('position', new THREE.Float32BufferAttribute(gv[t], 3));
     pg.setIndex(gi[t]);
     pg.computeVertexNormals();
-    const pm = new THREE.Mesh(pg, greenMat[t]);
+    const pm = new THREE.Mesh(pg, greenMat[t].base);
     pm.receiveShadow = true;
-    g.add(pm);
+    g.add(tagGround(pm, greenMat[t]));
   }
 
   /* ---- the circuit ----
      ALTERNATE LAYOUTS ARE DROPPED. Yas returns 13.3 km of raceway, of which only 5.3 km is the
      Grand Prix circuit; 5.0 km of it is the shorter configurations, which run over the SAME
      tarmac. Drawing them lays four circuits on top of each other and the ribbon z-fights itself. */
-  const asphalt = flatMat(0x24262A, 0x3A3D42, 0.95);
-  const kerb    = flatMat(0xB8AFA2, 0xE4DED2, 0.8);
-  const runoff  = flatMat(0x2A5E76, 0x3E8FB0, 0.85);
-  const W = { circuit:[0.95, 1.22, 2.60], pit:[0.72, 0.90, 0], kart:[0.42, 0.52, 0] };
+  const asphalt = flatSet(0x24262A, 0x3A3D42, 0.95);
+  const kerb    = flatSet(0xC8BFAE, 0xF0EADC, 0.8);
+  const runoff  = flatSet(0x2E6E8E, 0x49A6CB, 0.85);
+  /* WIDER THAN LIFE, DELIBERATELY. Drawn at its true 15 m the circuit was invisible: every gate
+     passed, all fourteen ways built, and at district range a 15 m ribbon on a 7.3 km island is a
+     hairline that reads as one more dark road among ten thousand. What identifies this circuit
+     from the air is the BLUE RUN-OFF, so it is the widest band and carries the colour; the kerb
+     is the bright edge that gives the loop its outline. Same argument as Ferrari World's black
+     rim — at this scale the edge makes a shape legible, not the fill. */
+  const W = { circuit:[1.15, 1.75, 4.20], pit:[0.85, 1.15, 2.10], kart:[0.50, 0.70, 0] };
   let trackN = 0;
   for (const way of (feats.raceway || [])){
     const w = W[way.kind];

@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v91', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v92', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3208,6 +3208,14 @@ function frame(){
       'state  ' + state + (activeDistrict ? ' / ' + activeDistrict.id : '') +
         '   view ' + view + '\n' +
       'tris   ' + info.render.triangles + '   calls ' + info.render.calls + '\n' +
+      /* GROUND FEATURES, ON THE OVERLAY AND NOT ONLY IN THE PROGS DUMP. The first version of this
+         line went into the vProg click handler, which is a dump you have to ask for — so the one
+         row that says whether the golf course, the circuit and the real parkland loaded at all
+         was invisible on the screen you actually watch. Per island: state, then t tracks,
+         g golf rings, p parkland polygons. */
+      'gf     ' + DISTRICTS.map(x => x.id.slice(0, 4) + ' ' + (gfState.get(x.id) || '-') +
+        (x.trackN ? ' t' + x.trackN : '') + (x.golfN ? ' g' + x.golfN : '') +
+        (x.parkRealN ? ' p' + x.parkRealN : '')).join('  ') + '\n' +
       /* PROGRAMS, because compile came back at 23,681 ms and nothing on this overlay said why.
 
          compileAsync builds shader programs and nothing else — no geometry, no textures — so a
