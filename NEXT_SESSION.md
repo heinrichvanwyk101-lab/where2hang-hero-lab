@@ -1,108 +1,104 @@
 # Next session — opening line
 
-> Read the where2hang-hero-lab repo. Build the bench, then do Emirates Palace.
+> Read the where2hang-hero-lab repo. Fix the Yas Bay pier and the parkland at dusk.
 
 Nothing needs uploading. Files read from
 `raw.githubusercontent.com/heinrichvanwyk101-lab/where2hang-hero-lab/main/<path>`.
 The GitHub **API** is rate-limited from the container's shared IP — use the
 tarball (`codeload.github.com/.../tar.gz/refs/heads/main`) or raw file URLs.
 
+**Read the repo before saying anything about what is or is not deployed.** Stamps
+lie less than memory does, and this was got wrong more than once.
+
 ## Bench
 
 ```
 npm i three
 node preview.mjs w2h-city.js#ferrariWorld
+node preview.mjs w2h-city.js#etihadArena
+node preview.mjs w2h-city.js#yasBayPier
 ```
 
 See `BENCH.md`. Use the `file#fn` form — it renders what actually ships, so the
-geometry never exists in two places.
+geometry never exists in two places. Four views: plan, oblique, horizon, front.
+The bench reads material colour and **ignores emissive**, so nothing about night
+lighting can be judged there.
 
-## Live
+## Live at handover
 
-`nav v89 / city v24 / world v116`, plus `w2h-districts.js`,
-`data/city-reference.js`, `data/city-geography.js`.
+`nav v94 / city v28 / world v129 / props v22 / basemap v9`
 
-## Done
+Bake is healthy on all five islands. Al Maryah restored after an Overpass 504
+silently emptied it; `tools/bake-city.mjs` now refuses to write an island with no
+outline and exits non-zero so the Action goes red.
 
-**Ferrari World** — rebuilt four times. The answer: it is a TRI-FORM with three
-arms at 120 degrees, and EACH ARM TIP FORKS into two thin horns. Benoy's "three
-tri-form arms" and the five-or-six points visible in obliques are both true, and
-every earlier attempt built one half of that. It now carries a measured PLAN
-table segmented off the yasisland.com island plan.
+## OPEN — the two things to fix first
 
-Correlation proved the arm COUNT — secondary peaks at exactly 120-degree
-intervals, which only a genuinely three-fold shape produces. It could not prove
-the ORIENTATION, and for one revision it was wrongly treated as if it had: a
-three-fold shape self-correlates almost equally at 0/120/240 (0.895, 0.868,
-0.922 — noise), and the best was reported as validation. The building sat ~30
-degrees out of true.
+**1. The Yas Bay pier still is not visible.** Placed in `w2h-world.js` from the
+surveyed coordinate 24.457964, 54.600196 (Asia Asia, which stands on it),
+converted through the bake's projection to island (-36.4, 406.4), then pushed
+seaward until outside the outline and 55 m clear — about 100 m out. Two earlier
+attempts were worse: one measured off a rotated Google capture landed it 519 m
+INLAND, buried. Verify in this order:
+  - is `kit.yasBayPier` reached at all — the block sits inside the Yas kit guard
+  - does the seaward search find a point, or does it hit the `console.warn`
+  - is `GROUND - 0.45` right, or is the deck under the water plane
+  - render it alone on the bench first; it builds fine there
 
-Orientation is now registered on the island's northern BAY, a deep asymmetric
-notch, by a two-point similarity fit against the bake's own coordinates, which
-agrees independently on scale to 4%. Arms land near compass 95, 210, 355.
+**2. Parkland at dusk: fritzing, and colour not reading.** The fritzing is
+z-fighting and `world v129` should fix it — the features sat 3-14 cm above the
+island top and one depth step at the district camera is 5.2 METRES, so they were
+100x below precision. v129 adds polygonOffset to every ground-feature material.
+**If it still fritzes after v129, that diagnosis was wrong** and the next
+suspect is the merged park geometry overlapping itself where OSM rings overlap.
 
-**Yas Mall** — rebuilt to the BUILT form: symmetric about a north-south axis,
-glazed pyramid over the central atrium, wings on axes and diagonals, six large
-flat car decks. The widely-circulated night render with the huge circular finned
-roof was never built; don't build to it. PROVISIONAL — proportioned from
-photographs, not measured.
+The colour question is separate and may already be fixed by v127, which derives
+each feature's dusk and night values from its per-channel ratio to the island
+ground (0xD8D2C4 day / 0xC6B99E dusk / 0x68737E night) instead of eyeballing them.
 
-**The attachment** — the mall's north face meets the roof. Its own anchor gives
-DIRECTION only; the distance is probed off the built roof. The 785 x 679 merged
-Overture polygon covers Ferrari World plus attached retail, not the car parks,
-so it is no longer the acceptance test — the full complex really is ~700 m and
-the pair legitimately bounds ~1,200 m.
+## What was built this session
 
-## The rule that came out of it
+- **Ferrari World** — measured PLAN table, tri-form with forked arm tips
+- **Yas Mall** — built form, pyramid atrium, car decks
+- **Etihad Arena** — surveyed 158x151 m footprint, gold shell, hipped roof,
+  entrance recess and screen, corner light strips
+- **Yas Bay pier** — white/cream built scheme, fabric canopy, gangway
+- **Golf, circuit, parkland** as flat meshes from the bake
+- **Venue-driven facades** — 10,420 venues joined to footprints by coordinate;
+  2,063 buildings carry one and choose their facade from `vk` instead of a hash
+- **Circuit floodlighting** — teal run-off, white kerbs, emissive at dusk/night
 
-**Do not parameterise a real building.** Four attempts, four starfish, each
-more confidently wrong than the last, because every one assumed a symmetry the
-building does not have. Segment a clean plan and ship the table.
+## Rules this session paid for
 
-**Validate the segmentation against a second source.** The first table came from
-a Google Maps capture and was silently corrupted — label text across the west
-arm, and the closing that bridged it also swallowed red rollercoaster track,
-inventing arms. Nothing in the render revealed that. Only a second independent
-profile did.
-
-**When prose and photographs disagree, suspect BOTH are partly right.** Benoy's
-"three arms" and the obvious five-plus points were not in conflict; the arms
-fork. Two revisions were lost to treating it as an either/or.
+- **Verify winding by cross product, never by reading it.** The circuit ribbons
+  faced the seabed for a whole deploy: every gate passed, gfState said `on`, and
+  FrontSide culled the lot.
+- **Do not parameterise a real building.** Four formulas, four starfish.
+  Segment a clean plan and ship the table.
+- **A coordinate beats any measurement off an image.** Two hand-registered
+  literals were silently wrong. If a landmark needs placing, ask for a lat/lon.
+- **Google draws the compass rosette only when the map is ROTATED.** Assuming
+  north-up cost two rebuilds.
+- **Never accept a symmetry-blind statistic as evidence about orientation.**
+  A three-fold shape self-correlates at 0/120/240; 0.922 proved nothing.
+- **Check both call sites.** The footprint bucket key is computed twice and the
+  second was nearly missed, which would have written into unallocated buckets.
+- **Re-audit after rebuilding from a stale base.** Two fixes were silently
+  clobbered that way and caught only on a marker grep.
+- **applyView reads dayMats off the MESH, not the material.** Every kit landmark
+  declares it on the material; `snapshotMats` in world-nav.html promotes it.
+  Ferrari World was never red in Day until that landed.
+- **Six view modes, not four**: day, dusk, night, check, plan, sil. A mesh needs
+  dayMats, duskMats, planMats and `ground` to behave in all of them. `nightOnly`
+  is for things with no daytime existence — lamp pools, nothing else.
 
 ## Next, in order
 
-1. **Emirates Palace** — worst remaining offender. Check its 25:1 against
-   published dimensions AND against a plan capture before building to it.
-2. Etihad Towers, ADNOC HQ — both flagged as wrong.
-3. Missing: Grand Hyatt / Emirates Pearl, Qasr Al Watan, Burj Mohammed bin
-   Rashid.
-4. **Yas Mall** deserves a measured pass if a clean plan source turns up.
-5. **The landmark registry** in `w2h-world.js` — a table row per landmark
-   instead of hardcoded calls. Import path needs the `+ V` treatment through
-   `opts`, same as `w2h-districts.js`.
-
-## In flight — bake extended, not yet consumed
-
-`tools/bake-city.mjs` now fetches `leisure=golf_course`, `highway=raceway`, and
-parks as RELATIONS (the old query asked only for ways and the branch gated on
-`el.geometry`, so every multipolygon park was dropped twice over — the largest
-green area on Yas was 29 ha as a result).
-
-Run the workflow and read the log line: `parks N (max NNha), golf N, raceway N`.
-If Yas still tops out near 29 ha the parks are missing for another reason and
-that must be found before writing the painter.
-
-Then, in order: ground painting for the golf course and the circuit ribbon
-(`w2h-world.js`), then Etihad Arena and Yas Bay as kit buildings. Etihad Arena
-is buildable from a clean top-down: irregular octagon in plan, faceted sides
-flaring outward to an overhanging roof, bronze-gold, big screen on the entrance
-face.
-
-## Not yet tried
-
-`?vac` — the vacancy mask ships dormant. Load `?vac#debug` and read the two
-counters on the fp row: `park` catches the lawn flood, `clash` counts real
-buildings on cleared ground. Tuning is one number in `w2h-districts.js`.
-
-Most likely fix: Al Maryah's empty half landing east instead of west. Negate the
-comparison in its `zones` entry — `jx` is already in the island's frame.
+1. The two open items above.
+2. **Yas Viceroy / W Abu Dhabi** — the woven grid shell over the circuit, lit
+   purple at night. It dominates every night photograph of Yas Marina and is
+   currently just another footprint. Best remaining landmark candidate.
+3. **Facade palette tuning** — the venue mechanism works; the six-bucket colour
+   choice has not been judged against a deployed scene yet.
+4. Emirates Palace, Etihad Towers, ADNOC — all still flagged as wrong.
+5. Al Maryah `gf` reads `none`: its park rings fail the majority-inside test.

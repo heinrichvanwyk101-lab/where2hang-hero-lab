@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v128';
+export const BUILD = 'world v129';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5225,19 +5225,35 @@ function ribbon(pts, half, y, set){
    colour's per-channel ratio to the day ground, applied to the dusk and night ground. The
    relationship is then identical in all three, which is what makes the greenery read the same
    everywhere instead of only where it was eyeballed. */
-function flatSet(night, dusk, day, rough){
+function flatSet(night, dusk, day, rough, bias){
   const r = rough == null ? 0.9 : rough;
-  const base = new THREE.MeshStandardMaterial({ color:night, roughness:r });
+  /* POLYGON OFFSET, BECAUSE THE Y GAP IS FAR BELOW DEPTH PRECISION.
+
+     These features were lifted 3 to 14 cm above the island's top face and that is nowhere near
+     enough. With a 1..9258 frustum on a 24-bit buffer, one depth step is 7 cm at 400 units, 46 cm
+     at 1,000 and 5.2 METRES at the district camera's 3,334 — so the ground and the greenery
+     resolve to the same depth value and the hardware flickers between them. That is the fritzing,
+     and it is geometry, not colour: no palette change could ever have fixed it.
+
+     Raising the meshes is not the answer either, because the offset would have to be metres and
+     the parkland would visibly float. polygonOffset biases the depth TEST rather than the
+     position, so it is scale-independent and the features stay flush.
+
+     `bias` also preserves the stacking order — run-off under kerb under asphalt — which the tiny
+     y offsets alone can no longer be trusted to do. */
+  const po = { polygonOffset:true,
+               polygonOffsetFactor:-(bias || 1), polygonOffsetUnits:-(bias || 1) * 2 };
+  const base = new THREE.MeshStandardMaterial({ color:night, roughness:r, ...po });
   base.userData.duskColor = dusk;
-  const duskM = new THREE.MeshStandardMaterial({ color:dusk, roughness:r });
+  const duskM = new THREE.MeshStandardMaterial({ color:dusk, roughness:r, ...po });
   duskM.userData.duskColor = dusk;
   return {
     base,
-    dayM:  new THREE.MeshStandardMaterial({ color:day, roughness:r }),
+    dayM:  new THREE.MeshStandardMaterial({ color:day, roughness:r, ...po }),
     duskM,
     /* MeshBasic for Plan and Check, matching what the island ground does: no light, no shadow, no
        exposure. A lit green polygon lying on an unlit plan texture reads as a different drawing. */
-    planM: new THREE.MeshBasicMaterial({ color:day }),
+    planM: new THREE.MeshBasicMaterial({ color:day, ...po }),
   };
 }
 
@@ -5275,7 +5291,7 @@ function groundFeaturesFor(d, feats){
   const onIsle = (x, z) => insideIsle(d.id, x / d.r, -z / d.r);
 
   /* ---- the golf course ---- */
-  const fairway = flatSet(0x354E32, 0x657E3F, 0x6E8F4E);
+  const fairway = flatSet(0x354E32, 0x657E3F, 0x6E8F4E, 0.9, 2);
   let golfN = 0;
   for (const ring of (feats.golf || [])){
     if (ring.length < 4) continue;
@@ -5322,9 +5338,9 @@ function groundFeaturesFor(d, feats){
   const TONE = { park:0, garden:0, common:0, recreation_ground:0, village_green:0, pitch:0,
                  grass:1, meadow:1,
                  forest:2, nature_reserve:2 };
-  const greenMat = [ flatSet(0x354D35, 0x667B42, 0x6F8C52),   // mown
-                     flatSet(0x414B3A, 0x7C7949, 0x87895A),   // dry
-                     flatSet(0x243B27, 0x445E30, 0x4A6B3C) ]; // canopy
+  const greenMat = [ flatSet(0x354D35, 0x667B42, 0x6F8C52, 0.9, 1),   // mown
+                     flatSet(0x414B3A, 0x7C7949, 0x87895A, 0.9, 1),   // dry
+                     flatSet(0x243B27, 0x445E30, 0x4A6B3C, 0.9, 1) ]; // canopy
   const gv = [[], [], []], gi = [[], [], []];
   let parkN = 0;
   for (const ring of (feats.parks || [])){
@@ -5366,12 +5382,12 @@ function groundFeaturesFor(d, feats){
      ALTERNATE LAYOUTS ARE DROPPED. Yas returns 13.3 km of raceway, of which only 5.3 km is the
      Grand Prix circuit; 5.0 km of it is the shorter configurations, which run over the SAME
      tarmac. Drawing them lays four circuits on top of each other and the ribbon z-fights itself. */
-  const asphalt = flatSet(0x1C212A, 0x353635, 0x3A3D42, 0.95);
+  const asphalt = flatSet(0x1C212A, 0x353635, 0x3A3D42, 0.95, 5);
   /* The kerbs read as a bright white outline under the floods; the run-off is the teal ribbon
      that identifies this circuit from the air. Dusk is roughly half of night, because the sky
      still carries some light and a fully lit track before dark reads as a mistake. */
-  const kerb    = glow(flatSet(0x74808D, 0xDCCEB1, 0xF0EADC, 0.8),  0xFFF0D8, 0.55, 0.28);
-  const runoff  = glow(flatSet(0x235B82, 0x4392A4, 0x49A6CB, 0.85), 0x2FD5D0, 0.95, 0.45);
+  const kerb    = glow(flatSet(0x74808D, 0xDCCEB1, 0xF0EADC, 0.8, 4),  0xFFF0D8, 0.55, 0.28);
+  const runoff  = glow(flatSet(0x235B82, 0x4392A4, 0x49A6CB, 0.85, 3), 0x2FD5D0, 0.95, 0.45);
   /* WIDER THAN LIFE, DELIBERATELY. Drawn at its true 15 m the circuit was invisible: every gate
      passed, all fourteen ways built, and at district range a 15 m ribbon on a 7.3 km island is a
      hairline that reads as one more dark road among ten thousand. What identifies this circuit
