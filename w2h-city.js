@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v29';
+export const BUILD = 'city v30';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1083,6 +1083,115 @@ function yasBayPier(x0, z0, facing){
   return g;
 }
 
+/* HILTON ABU DHABI YAS ISLAND — and every number in it is derived, not eyeballed.
+
+   WHY IT IS BUILT AT ALL. The bake has it as ONE oriented box, 270 x 136 m at a flat 40 m, and
+   that box is the whole plot: podium, forecourt and car deck conflated into the hotel. Eleven
+   surveyed points inside it say the building is a long spine with a wing, not a slab.
+
+   THE PLAN COMES FROM THE POINTS. Eight of them fall on the built mass — eforea spa (two), the
+   Emirates NBD ATM in the lobby, the Sofia and Quag Rubi treatment rooms, and three dropped pins.
+   Fitted, they give a long axis at 11.8 degrees from east and a footprint 169 x 49 m. The bake's
+   own box is at 13.6 degrees: two independent sources, two degrees apart, so the orientation is
+   settled. Three further points — Bayside Burger, Bua Thai, Grand Massage — sit 80 to 90 m off
+   that spine on the beach side and are NOT in the hotel; they are the waterfront F&B row, and
+   including them is what makes a fit like this go square and wrong.
+
+   Inside the eight there is structure worth keeping. Five run the full length at v = -5 to -24;
+   three (ATM, Quag Rubi, Sofia) sit at v = +17 to +25 over a 69 m stretch. That is a spine with a
+   wing off the back of it, and that is what is built.
+
+   THE HEIGHT IS DERIVED FROM THE ROOM COUNT, which is the one published hard number: 545 rooms.
+   A 169 m spine on a double-loaded corridor at a 4.4 m room module, less fifteen per cent for
+   cores and service, is 65 rooms a floor. 545 / 65 is 9 guest floors. The ballrooms are on Floor
+   2, so two podium floors under them: ELEVEN storeys. At 3.6 m that is 39.6 m, and the bake
+   carries 40 m for this footprint from a source that knows nothing about the room count. Two
+   derivations, four tenths of a metre apart.
+
+   HORIZONTAL BANDING, BECAUSE THE ROOMS HAVE BALCONIES. Floor-to-ceiling glazing with a furnished
+   balcony to every room is in the room description, so the long elevations read as nine stacked
+   bands rather than a glass curtain. That is the one facade decision here, and it is sourced.
+
+   WHAT THIS IS NOT: a segmented plan. The masses are placed from a point envelope, not traced off
+   a survey, so the wing lengths are the soft numbers. If a plan ever arrives, replace the table
+   below rather than nudging it. */
+function hiltonYasBay(x0, z0, facing){
+  const g = new THREE.Group();
+  const M = 7.8;
+  const F = 3.6 / M;                 // one storey, and the only vertical unit used here
+
+  const mk = (dusk, day, rough, emis, ei) => {
+    const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough == null ? 0.8 : rough });
+    if (emis !== undefined){ m.emissive = new THREE.Color(emis); m.emissiveIntensity = ei; }
+    m.userData.duskColor = dusk;
+    m.userData.dayMats = new THREE.MeshStandardMaterial({
+      color:day, roughness:rough == null ? 0.8 : rough });
+    return m;
+  };
+  /* Pale precast against dark glazing — the Yas Bay palette, and the same family the arena and
+     the promontory blocks already use, so the waterfront reads as one scheme. */
+  const stone  = mk(0x8C877B, 0xE4DED0, 0.85, 0xFFE9C6, 0.08);
+  const band   = mk(0x736E63, 0xC8C0AE, 0.80, 0xFFE4BC, 0.10);
+  const glassM = mk(0x1F282E, 0x36444D, 0.30, 0x9FD4E4, 0.16);
+  const podM   = mk(0x7E796E, 0xD6CFC0, 0.90, 0xFFE9C6, 0.06);
+
+  /* THE PODIUM. Two storeys, and wider than the spine on every side — it is the thing the
+     forecourt and the ballrooms sit in, and it is what the bake mistook for the whole hotel. */
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(196 / M, 2 * F, 72 / M), podM);
+  pod.position.set(0, F, -4 / M);
+  pod.castShadow = true; pod.receiveShadow = true;
+  g.add(pod);
+
+  /* THE GUEST SPINE. Eleven storeys to the parapet, set on the long axis the points give. */
+  const HT = 11 * F;
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(176 / M, HT, 30 / M), stone);
+  spine.position.set(0, HT / 2, -11 / M);
+  spine.castShadow = true; spine.receiveShadow = true;
+  g.add(spine);
+
+  /* Nine balcony bands, one per guest floor, starting above the podium. Proud of the wall by
+     0.9 m so they catch the sun edge-on rather than reading as a printed stripe. */
+  for (let i = 0; i < 9; i++){
+    const y = 2 * F + i * F + F * 0.5;
+    /* The spine is 30 m deep centred on z = -11, so its faces are at -26 and +4. The band sits
+       0.9 m proud of each, the glass 0.2 m inside it. Getting this datum wrong once already put
+       nine slabs hanging in mid-air eleven metres off the building. */
+    for (const dz of [-15.9 / M, 15.9 / M]){
+      const b = new THREE.Mesh(new THREE.BoxGeometry(176 / M, F * 0.16, 1.8 / M), band);
+      b.position.set(0, y, -11 / M + dz);
+      g.add(b);
+    }
+    for (const dz of [-14.8 / M, 14.8 / M]){
+      const w = new THREE.Mesh(new THREE.BoxGeometry(172 / M, F * 0.62, 0.4 / M), glassM);
+      w.position.set(0, y + F * 0.06, -11 / M + dz);
+      g.add(w);
+    }
+  }
+
+  /* THE BACK WING. Three storeys over the 69 m stretch the ATM, Quag Rubi and Sofia points cover
+     — spa and meeting rooms, low against the spine. */
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(78 / M, 3 * F, 26 / M), stone);
+  wing.position.set(-10 / M, 1.5 * F, 22 / M);
+  wing.castShadow = true; wing.receiveShadow = true;
+  g.add(wing);
+
+  /* The lobby glazing, on the podium face toward the forecourt. */
+  const lob = new THREE.Mesh(new THREE.BoxGeometry(64 / M, 2 * F * 0.8, 0.5 / M), glassM);
+  lob.position.set(14 / M, F * 0.9, -40 / M);
+  g.add(lob);
+
+  /* The pool deck to the beach side — flat, low, and the reason the west end reads as resort
+     rather than as an office block. */
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(86 / M, F * 0.2, 44 / M), podM);
+  deck.position.set(-88 / M, F * 0.1, -30 / M);
+  deck.receiveShadow = true;
+  g.add(deck);
+
+  if (facing !== undefined) g.rotation.y = -facing;
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
 function yasMall(x0, z0, facing){
   /* YAS MALL, built form - not the competition render.
 
@@ -1304,5 +1413,5 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena, yasBayPier,
-         boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
+         hiltonYasBay, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }

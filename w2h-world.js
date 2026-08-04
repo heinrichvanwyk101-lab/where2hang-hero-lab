@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v131';
+export const BUILD = 'world v132';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5031,6 +5031,21 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (eaA && kit.etihadArena) built.push(kit.etihadArena(eaA.x, eaA.z));
   else if (!eaA) console.warn('w2h-world: no baked anchor for Etihad Arena — not placed');
 
+  /* THE HILTON, AND IT IS A LITERAL BECAUSE THE BAKE HAS NO ANCHOR FOR IT. Not in d.landmarks —
+     Yas carries six and this is not one — so unlike the arena there is nothing to read.
+
+     THE FIGURES COME FROM EIGHT SURVEYED POINTS ON THE BUILT MASS, fitted: centre at bake
+     (18353.4, -3428.1) m, which is island (-23.7, 388.7), long axis 11.8 degrees from east. The
+     bake's own conflated box for the same plot sits at 13.6 degrees, so the orientation has two
+     independent sources agreeing to within two degrees. Facing is the negative of the bake-frame
+     bearing because island z runs opposite to bake y.
+
+     IT GOES THROUGH `built`, WHICH IS THE WHOLE POINT. That loop pushes a KIT_ZONE, and this is
+     the one landmark on Yas that genuinely needs one: the footprint underneath is 270 x 136 m of
+     conflated plot at a flat 40 m, and without the zone the authored hotel would stand inside a
+     slab of its own forecourt. The pier never did this, and the pier was never right. */
+  if (kit.hiltonYasBay) built.push(kit.hiltonYasBay(-23.7, 388.7, -0.2057));
+
   /* THE YAS BAY PIER IS NOT PLACED, AND THE REASON IT WAS EVER PLACED HERE WAS A NAME.
 
      Every version of this block pushed a hand-built deck SEAWARD from the surveyed root until it
@@ -5538,6 +5553,19 @@ function footprintsFor(d, list){
         const cap = Math.min(tallest * (0.22 + 0.78 * fall), cellCap(d, nx, ny, tallest));
         h = Math.max(0.4, cap * (0.55 + rnd() * 0.55));
       }
+    }
+    /* A RESTAURANT IS ONE STOREY, AND THE MODEL HAD NO WAY TO KNOW THAT. Where no surveyed height
+       exists the height comes from the area pool, which is a fair reading of ordinary stock and a
+       poor one of a beachfront F&B unit: Yas Bay's dining boxes were being handed ten and fifteen
+       metres and standing over the promenade like offices.
+
+       3.6 m, one floor, applied only where the venue join says dining AND the footprint is small
+       enough that the venue IS the building — the same two gates the facade uses, so a unit cannot
+       be a restaurant for its walls and a warehouse for its height. A surveyed height still wins:
+       if the bake measured it, the bake is right and this never runs. */
+    const dineArea = Math.max(1.2, b.w) * Math.max(1.2, b.dp) * M_PER_UNIT * M_PER_UNIT;
+    if (b.vk === 'dine' && b.h == null && dineArea <= 2500 && (b.v || 0) < 4){
+      h = 3.6 / M_PER_UNIT;
     }
     specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h,
                  v:b.v || 0, vk:b.vk || null });

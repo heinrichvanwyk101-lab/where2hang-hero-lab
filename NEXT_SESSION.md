@@ -1,6 +1,6 @@
 # Next session — opening line
 
-> Read the where2hang-hero-lab repo. Build the Yas Bay jetty and check the parkland emissive.
+> Read the where2hang-hero-lab repo. Judge the Hilton in Day, then the Yas Bay jetty.
 
 Nothing needs uploading. Files read from
 `raw.githubusercontent.com/heinrichvanwyk101-lab/where2hang-hero-lab/main/<path>`.
@@ -90,23 +90,44 @@ venues the vk is dropped and `typeOf(h)` reads the building's own mass instead.
 2,500 m2 is about the 85th percentile of joined footprints, so roughly a fifth
 change and the small ones keep the mechanism untouched.
 
-## OPEN — the Hilton, and what one coordinate cannot buy
+## The Hilton — BUILT (city v30 / world v132)
 
-The coordinate anchors it and it fixed the facade. It does not give the FORM, and
-the form is where this one is currently wrong: the bake has it as a single flat
-slab 270 x 136 m at a uniform 40 m. The real hotel is not flat — it is towers over
-a podium, and 40 m is the podium.
+Eleven surveyed points. Eight sit on the built mass — eforea spa (two), the
+Emirates NBD ATM, Quag Rubi, Sofia, and three dropped pins. Three do NOT and were
+excluded: Bayside Burger, Bua Thai and Grand Massage sit 80-90 m off the spine on
+the beach side and are the waterfront F&B row. Including them swings the fit
+square, which is the same failure shape as the pier's 143 m width.
 
-Also worth knowing: **only 32 of Yas's 3,938 footprints carry any height at all**,
-and two of those "buildings" are 785 x 679 m and 713 x 694 m — Overture conflation
-merges, not buildings. Large complexes on this island are not reliable geometry.
+  - **Plan from the eight:** centre bake (18353.4, -3428.1) m = island
+    (-23.7, 388.7), long axis 11.8 deg from east, footprint 169 x 49 m. The bake's
+    conflated box for the plot is at 13.6 deg — two independent sources, two
+    degrees apart, so orientation is settled.
+  - **Height derived, not guessed.** 545 rooms is the published figure. A 169 m
+    spine, double-loaded, 4.4 m room module, less 15 per cent for cores and
+    service = 65 rooms a floor. 545/65 = 9 guest floors. Ballrooms are on Floor 2,
+    so two podium floors under them: **11 storeys x 3.6 m = 39.6 m**. The bake
+    carries 40 m for this footprint from a source that knows nothing about room
+    counts. Four tenths of a metre apart.
+  - **Form:** podium 196 x 72 m at two storeys, guest spine 176 x 30 m at eleven,
+    back wing 78 x 26 m at three over the stretch the spa and ATM points cover,
+    pool deck to the beach side. Nine balcony bands, one per guest floor — the
+    room description specifies floor-to-ceiling glazing with a balcony to every
+    room, so the banding is sourced rather than styling.
+  - **It goes through `built`,** so it takes a KIT_ZONE. This is the one Yas
+    landmark that genuinely needed one: without it the hotel stands inside a
+    270 x 136 m slab of its own forecourt.
 
-To build it properly, per the rule that a clean plan beats a formula:
-  - a coordinate on each tower, so the towers can be placed inside the envelope
-  - storey count per tower — height falls out at about 3.2 m a storey, and that is
-    the number that stops it being a slab
-Photographs of the finished building for the facade, not renders. That rule has
-already been paid for twice on this waterfront.
+Bench: `node preview.mjs w2h-city.js#hiltonYasBay` -> 229 x 87 m, 40 m, 5.8:1.
+
+**Restaurants are one storey now.** 3.6 m, applied where the venue join says
+dining AND the footprint is small enough that the venue IS the building — the same
+two gates the facade uses, so nothing can be a restaurant for its walls and a
+warehouse for its height. A surveyed height still wins. 350 of 1,445 dine
+footprints drop; the rest already had a height or are too big to be one venue.
+
+Caveat worth keeping: the masses are placed from a point ENVELOPE, not traced off
+a plan. Wing lengths are the soft numbers. If a plan arrives, replace the table
+rather than nudging it.
 
 ## OPEN — the pier
 
