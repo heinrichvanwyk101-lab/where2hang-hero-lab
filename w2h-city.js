@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v33';
+export const BUILD = 'city v34';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -851,6 +851,8 @@ function etihadArena(x0, z0){
     m.userData.duskColor = dusk;
     m.userData.dayMats = new THREE.MeshStandardMaterial({
       color:day, roughness:rough, metalness:metal || 0 });
+    /* Plan and Check, same reason as the other mk() helpers in this file. */
+    m.userData.planMats = new THREE.MeshBasicMaterial({ color:day });
     return m;
   };
   const wallG  = mk(0x1B2126, 0x2B3238, 0.35, 0.25);
@@ -995,6 +997,14 @@ function yasBayPier(x0, z0, facing){
     m.userData.duskColor = dusk;
     m.userData.dayMats = new THREE.MeshStandardMaterial({
       color:day, roughness:rough == null ? 0.8 : rough });
+    /* PLAN AND CHECK, WHICH EVERY KIT MATERIAL WAS MISSING. Nineteen mk() materials across this
+       file declared dayMats and duskColor and nothing else, so in Plan and Check the landmarks
+       had no material to switch to and appeared in some view modes but not others — the pools
+       inside the Hilton being the case that finally showed it.
+
+       MeshBasic on the day colour, matching what flatSet does for ground features: Plan is an
+       unlit drawing, and a lit solid standing on an unlit plan reads as a different drawing. */
+    m.userData.planMats = new THREE.MeshBasicMaterial({ color:day });
     return m;
   };
   const deckM  = mk(0x736E64, 0xC9C3B6, 0.95);
@@ -1122,6 +1132,14 @@ function hiltonYasBay(x0, z0, facing){
     m.userData.duskColor = dusk;
     m.userData.dayMats = new THREE.MeshStandardMaterial({
       color:day, roughness:rough == null ? 0.8 : rough });
+    /* PLAN AND CHECK, WHICH EVERY KIT MATERIAL WAS MISSING. Nineteen mk() materials across this
+       file declared dayMats and duskColor and nothing else, so in Plan and Check the landmarks
+       had no material to switch to and appeared in some view modes but not others — the pools
+       inside the Hilton being the case that finally showed it.
+
+       MeshBasic on the day colour, matching what flatSet does for ground features: Plan is an
+       unlit drawing, and a lit solid standing on an unlit plan reads as a different drawing. */
+    m.userData.planMats = new THREE.MeshBasicMaterial({ color:day });
     return m;
   };
   /* Pale precast against dark glazing — the Yas Bay palette, and the same family the arena and
@@ -1259,6 +1277,8 @@ function yasBayJetty(x0, z0, facing){
     m.userData.duskColor = dusk;
     m.userData.dayMats = new THREE.MeshStandardMaterial({
       color:day, roughness:rough == null ? 0.9 : rough });
+    /* Plan and Check, same reason as the other mk() helpers in this file. */
+    m.userData.planMats = new THREE.MeshBasicMaterial({ color:day });
     return m;
   };
   const deckM = mk(0x6E6A60, 0xC2BCAE, 0.95);
