@@ -814,7 +814,21 @@ async function bakeIsland(isle, proj){
         (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
       if (geom && geom.length >= 4){
         const ring = toXY(geom);
-        if (area(ring) > 800) parks.push(simplify(ring, SIMPLIFY_M * 2).map(rd1));
+        /* THE TAG IS RECORDED, AND IT HAS TO BE. Widening this branch to relations took Corniche
+           from 29 ha of green to 3,380 - a third of the island - because `landuse=grass` and
+           `landuse=forest` are draped over desert scrub here in blankets up to 986 ha. A renderer
+           handed a bare list of rings cannot tell a city park from one of those, and greening all
+           of it is precisely the lawn-flood failure the ?vac counters exist to catch.
+
+           So each ring now carries its kind and its area, and the consumer decides. Shape change
+           from ring to { k, a, r }: nothing consumed parks before this - parksUnits was exported
+           and never called - so there is no reader to break. */
+        const a = area(ring);
+        if (a > 800) parks.push({
+          k: t.leisure || t.landuse || 'park',
+          a: Math.round(a),
+          r: simplify(ring, SIMPLIFY_M * 2).map(rd1),
+        });
       }
       continue;
     }
@@ -933,7 +947,7 @@ async function bakeIsland(isle, proj){
 
   process.stderr.write(`  ${isle.id}: outline ${outline.length}pt, roads ${roads.length}, ` +
                        `buildings ${buildings.length} (${buildings.filter(b => b.h).length} with height), ` +
-                       `parks ${parks.length} (max ${Math.round(Math.max(0, ...parks.map(area))/1e4)}ha), ` +
+                       `parks ${parks.length} (max ${Math.round(Math.max(0, ...parks.map(p => p.a))/1e4)}ha), ` +
                        `golf ${golf.length}, raceway ${raceway.length}` +
                        (extent ? `, extent ${(extent.w/1000).toFixed(2)} x ${(extent.d/1000).toFixed(2)} km` : '') +
                        `\n`);
