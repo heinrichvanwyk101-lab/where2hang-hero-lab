@@ -289,50 +289,101 @@ export const LANDMARKS = {
      The only strong colour accent in the city silhouette.
   ------------------------------------------------------------------------- */
   ferrariWorld: {
-    /* DO NOT PARAMETERISE THIS ROOF. Three attempts were made to describe it with a formula -
-       five equal lobes at 72 degrees, then three "tri-form" arms at 120, then five swept spikes -
-       and all three produced a starfish. Every one of them assumed a symmetry the building does
-       not have. The arms sit at compass 60, 91, 188, 219 and 306, which is gaps of 30, 97, 30, 87
-       and 115 degrees, and the longest is twice the shortest. Nothing periodic can express that.
+    /* THREE ARMS AT 120 DEGREES, AND EACH ARM TIP FORKS INTO TWO HORNS.
 
-       The geometry now carries a measured PLAN table instead, segmented off an overhead capture
-       and sampled every 5 degrees from the funnel. See ferrariWorld in w2h-city.js. The numbers
-       below are for reading, not for building to.
+       That one sentence reconciles everything that went wrong here. Benoy publish "three
+       tri-form arms at 120 degrees". Overhead captures plainly show five or six sharp points.
+       Both are true. This entry said five, was "corrected" to three, then "corrected" back to
+       five, and every version built a starfish - because every version was symmetrical and the
+       building is not.
 
-       THE LESSON, KEPT ON PURPOSE. This entry was wrong, then "corrected" to something wronger on
-       the strength of Benoy's published wording, because prose beat a photograph in a workflow
-       built specifically to stop that. Benoy's "three tri-form arms" describes the three ENCLOSED
-       arms cradling the outdoor attractions; it is not the roof silhouette. Anything in this file
-       not traceable to a measurement should be treated as a guess until something looks at it. */
+       DO NOT PARAMETERISE IT. The geometry carries a measured PLAN table instead, segmented off
+       the yasisland.com island plan and sampled every 5 degrees from the funnel. See
+       ferrariWorld in w2h-city.js. The numbers below are for reading, not for building to.
+
+       WHY THAT SOURCE AND NOT GOOGLE MAPS. An earlier table came from a Google Maps capture and
+       was quietly corrupted - the label text sat across the west arm, and the morphological
+       closing that bridged it also swallowed nearby red rollercoaster track, inventing arms that
+       are not there. The yasisland plan draws the building in a flat highlight over itself alone.
+
+       CORRELATION PROVED THE ARM COUNT AND NOTHING ELSE. Cross-correlating the two independent
+       profiles shows secondary peaks at exactly 120-degree intervals - a shape only self-
+       correlates like that if it really is three-fold, which is proof of the count from data
+       rather than from anybody's prose.
+
+       IT COULD NOT PROVE THE ORIENTATION, and for one session it was wrongly treated as if it
+       had. A three-fold shape self-correlates almost equally at 0, 120 and 240 degrees: the
+       candidate shifts scored 0.895, 0.868 and 0.922, which is noise, and the best of them was
+       reported as 0.922 "validation". The building sat about 30 degrees out of true as a result.
+
+       ORIENTATION IS NOW REGISTERED ON THE ISLAND'S NORTHERN BAY - a deep asymmetric notch with
+       no rotational symmetry to hide in - by a two-point similarity fit against the bake's own
+       coordinates, which also agrees independently on scale to 4 per cent.
+
+       GENERAL RULE, and it cost a whole revision: never accept a symmetry-blind statistic as
+       evidence about the orientation of a symmetric object. Register on something asymmetric. */
     unit: 'peakHeight',         // 48 m at the crown; 45 m quoted as building height
-    plan: 'five-point swept star, ASYMMETRIC - unequal arms at unequal spacing',
+    plan: 'TRI-FORM - three arms at 120 degrees, each tip FORKED into two thin horns',
     measured: {
-      armBearings:   [60, 91, 188, 219, 306],   // compass
-      armRadiiM:     [228, 437, 437, 219, 295], // from the funnel, same order
-      bodyRadiusM:   102,
-      funnelOffsetM: 48,        // funnel sits NW of the centroid; it is the model's origin
-      funnelDiaM:    106,       // measured; published figure is 100, which validates the scale
-      logo:          { bearing: 106, radiusM: 145, sizeM: [65, 48.5] },
+      armBearings:   [95, 210, 355],      // compass, REGISTERED ON THE COASTLINE
+      armRadiiM:     [405, 356, 373],     // near-equal, unlike every guessed version
+      forkBearings:  [40, 100, 160, 220, 340],
+      forkRadiiM:    [142, 217, 144, 197, 213],
+      bodyRadiusM:   132,
+      funnelDiaM:    96,        // measured; published 100, which validates the scale
+      funnelOffset:  'NW of the centroid; it is the model origin, so the offset is free',
     },
     published: {
       spanM: 700, peakM: 48, buildingHeightM: 45,
       roofSurfaceM2: 200000, netRoofM2: 153000, funnelTopM: 100, funnelBaseM: 17,
       roofPerimeterM: 2200,   // DO NOT FIT TO THIS. It is about the perimeter of a 700 m CIRCLE,
                               // which a deeply scalloped star cannot have. It fought the
-                              // photograph and the photograph was right.
+                              // photographs and the photographs were right.
     },
     profile:
       'A ground-hugging form peeling up from the landscape like a red sand dune (Benoy). From ' +
-      'the horizon it is a long low red wedge, highest at the centre, tapering to near-ground ' +
-      'at the tips, with a dark notch at the crown where the funnel opens.',
+      'the horizon a long low red wedge, highest at the centre, tapering to near-ground at the ' +
+      'tips, with a dark notch at the crown where the funnel opens.',
     section:
       'The crown-to-edge descent is a DOUBLE CURVE - convex then concave - because the section ' +
       'is literally the Ferrari GT side profile applied in elevation. smootherstep produces it ' +
-      'and also flattens at both ends, giving the plateau at the funnel and the long run out.',
+      'and flattens at both ends, giving the plateau at the funnel and the long run out.',
     colours: { roof: PALETTE.ferrariRed, rim: '#1A1A1A', funnel: '#9FB0BC' },
     silhouetteRule:
       'The black rim against the red is what makes it legible at distance. And it must stay ' +
-      'LOW: at 12:1 it is a dune, at 5:1 it is a circus tent, and there is nothing in between.',
+      'LOW: at 13:1 it is a dune, at 5:1 it is a circus tent, and there is nothing in between.',
+  },
+
+  /* -------------------------------------------------------------------------
+     YAS MALL
+     PROVISIONAL - proportioned from photographs, not measured. It has no flat map
+     highlight to segment, and in satellite imagery its roof tones run into the
+     parking aprons and the roads.
+  ------------------------------------------------------------------------- */
+  yasMall: {
+    unit: 'metres',
+    plan: 'broadly SYMMETRIC about a north-south axis - glazed pyramid over a central atrium, ' +
+          'retail wings on the axes and diagonals, very large flat car decks all round',
+    warning:
+      'THE WIDELY-CIRCULATED NIGHT RENDER SHOWS A HUGE CIRCULAR ROOF WITH RADIAL FINS. It was ' +
+      'never built. Aerials of the finished mall show the pyramid-and-wings arrangement above. ' +
+      'Build to photographs of the finished thing, not to competition imagery.',
+    proportions: { complexM: [660, 700], retailCoreM: [400, 400], atriumM: 150,
+                   pyramidM: 144, retailHeightM: [20, 28], deckHeightM: 13 },
+    attachment:
+      'PHYSICALLY ATTACHED to Ferrari World, which stands off the mall\'s NORTH face - so the ' +
+      'axis of symmetry runs toward the roof and the entrance court sits at the far end. Its own ' +
+      'baked anchor is only 184 m from Ferrari World\'s and cannot be trusted for distance; ' +
+      'that point is a label node inside the merged complex. Direction only. The distance is ' +
+      'probed off the built roof in w2h-world.js.',
+    note:
+      'The 785 x 679 m merged Overture polygon covers Ferrari World plus the ATTACHED RETAIL ' +
+      'only, not the separate car-park structures. It was a good acceptance test while the mall ' +
+      'was undersized and is not one any more: the full complex really is about 700 m across, ' +
+      'so the pair legitimately bounds around 1,200 m.',
+    silhouetteRule:
+      'Car decks take more ground than the retail. Skylights are FLUSH except the atrium ' +
+      'pyramid. An early model had a single raised 30 m dome and read as a mosque.',
   },
 
   /* -------------------------------------------------------------------------
