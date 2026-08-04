@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v122';
+export const BUILD = 'world v123';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5030,6 +5030,39 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
             ? BASE[yas.id].landmarks['Etihad Arena'] : null;
   if (eaA && kit.etihadArena) built.push(kit.etihadArena(eaA.x, eaA.z));
   else if (!eaA) console.warn('w2h-world: no baked anchor for Etihad Arena — not placed');
+
+  /* THE YAS BAY PIER, AND IT IS THE ONE THING HERE WITH NO SURVEYED SOURCE AT ALL. It stands over
+     water, the footprint pass clips to the coastline, and Overture does not carry it — so unlike
+     every other building on this waterfront it cannot come from the bake.
+
+     The anchor is MEASURED rather than chosen: registered off a north-up capture with Etihad
+     Arena as the reference, which fixes the scale, and the pier lands 611 m from it. Written as a
+     literal because there is nothing in the data to derive it from, and a literal that says where
+     it came from is honester than a derivation that pretends to a source it does not have.
+
+     ORIENTATION IS DERIVED. The long axis runs parallel to the shore, so the facing is the
+     bearing to the nearest coastline point turned by a right angle — the same shape of rule the
+     mall uses, and it follows the coast if the outline is ever re-baked. */
+  if (kit.yasBayPier){
+    const PIER = { x:-29.5, z:309.1 };
+    let bs = null, bd = Infinity;
+    /* outlineClosed, NOT ISLE_SHAPES. The latter is the hand-drawn fallback and is replaced by the
+       baked coastline whenever the basemap is present — reading it directly would orient the pier
+       against an outline the scene is not using. This is the same resolved ring insideIsle tests. */
+    const ring = outlineClosed(yas.id) || [];
+    for (const p of ring){
+      const px = p[0] * yas.r, pz = -p[1] * yas.r;
+      const dd = (px - PIER.x) * (px - PIER.x) + (pz - PIER.z) * (pz - PIER.z);
+      if (dd < bd){ bd = dd; bs = [px, pz]; }
+    }
+    const bear = bs ? Math.atan2(bs[1] - PIER.z, bs[0] - PIER.x) : 0;
+    const pier = kit.yasBayPier(PIER.x, PIER.z, bear + Math.PI / 2);
+    /* Slightly below the promenade, because it is a pier and the island top is the quay. It is
+       NOT added to KIT_ZONES: it stands on open water, so there is no surveyed footprint beneath
+       it to exclude, and a zone out there would only clip things that are already clipped. */
+    pier.position.y = GROUND - 0.45;
+    yas.detail.add(pier);
+  }
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

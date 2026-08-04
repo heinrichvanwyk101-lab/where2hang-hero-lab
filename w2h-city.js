@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v25';
+export const BUILD = 'city v27';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -936,6 +936,114 @@ function etihadArena(x0, z0){
   return g;
 }
 
+/* YAS BAY PIER — the covered-market pier at Yas Bay Waterfront.
+
+   NOT IN THE BAKE, AND IT CANNOT BE. It stands over water, and the footprint pass clips to the
+   coastline: only 13 buildings on the whole of Yas fall outside the shore and none of them is
+   this. So it is the one thing on this waterfront that has to be hand-built — the hotels, the
+   arena forecourt and the F&B pavilions are all real surveyed footprints already.
+
+   THE ANCHOR IS MEASURED, NOT CHOSEN. Registered off a north-up capture using Etihad Arena as
+   the reference: the arena is 158 m across and 233 px wide in that image, which fixes the scale
+   at 0.68 m/px, and the pier's centre lands 611 m from the arena at island (-29.5, 309.1),
+   measuring 189 x 143 m. An earlier proposal was to run it out from the shoreline point nearest
+   the arena, which would have put it 500 m from where it is.
+
+   WHAT MAKES IT LEGIBLE is not the deck, it is the ROW OF COLOURED AWNINGS down one side. In
+   every capture that stripe of red, ochre, teal and orange is the first thing you see, and it is
+   the only strong colour anywhere on this waterfront. */
+function yasBayPier(x0, z0, facing){
+  /* WHITE AND CREAM, NOT RAINBOW. The first version gave this a row of red, ochre and teal
+     awnings, which comes from Aldar's early marketing render — a scheme that was never built. The
+     photographs and the current renders show the opposite: a pale concrete deck, white blocks,
+     and one big CREAM FABRIC CANOPY on timber posts. The only strong colour on the whole pier is
+     the art panels at the seaward end.
+
+     Two renders of the same building, years apart, and I built the one that does not exist. Same
+     failure as the Yas Mall circular finned roof — build to photographs of the finished thing. */
+  const g = new THREE.Group();
+  const M = 7.8;
+  const L = 185 / M, W = 92 / M, DECK = 1.4 / M;
+
+  const mk = (dusk, day, rough, emis, ei) => {
+    const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough == null ? 0.8 : rough });
+    if (emis !== undefined){ m.emissive = new THREE.Color(emis); m.emissiveIntensity = ei; }
+    m.userData.duskColor = dusk;
+    m.userData.dayMats = new THREE.MeshStandardMaterial({
+      color:day, roughness:rough == null ? 0.8 : rough });
+    return m;
+  };
+  const deckM  = mk(0x736E64, 0xC9C3B6, 0.95);
+  const white  = mk(0x8A857A, 0xEDE9E0, 0.8,  0xFFE9C6, 0.10);
+  const fabric = mk(0x847C6C, 0xE8E0CE, 0.85, 0xFFE2B4, 0.14);
+  const timber = mk(0x5B4934, 0xB0906A, 0.9);
+  const glassM = mk(0x1E262C, 0x33414A, 0.30);
+  const pileM  = mk(0x2A2721, 0x4A453C, 0.9);
+  /* The art panels: the one place the pier carries strong colour, on the seaward frontage. */
+  const art    = [mk(0x5E2A22, 0xB8503C, 0.7), mk(0x1E4646, 0x2F7F7C, 0.7),
+                  mk(0x63501A, 0xC49A34, 0.7)];
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(L, DECK, W), deckM);
+  deck.position.y = DECK / 2; deck.receiveShadow = true;
+  g.add(deck);
+
+  for (let i = -6; i <= 6; i++){
+    for (const zz of [-W / 2 + 0.25, W / 2 - 0.25]){
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.2 / M, 0.28), pileM);
+      p.position.set(i * L / 13.5, -1.2 / M, zz);
+      g.add(p);
+    }
+  }
+
+  /* THE GANGWAY. A narrow boardwalk running back to the promenade — in every capture the pier is
+     reached along it, and without it the deck is an island rather than a pier. */
+  const gang = new THREE.Mesh(new THREE.BoxGeometry(9 / M, DECK * 0.8, 62 / M), deckM);
+  gang.position.set(-L / 2 - 4 / M, DECK * 0.4, -W / 2 - 26 / M);
+  gang.receiveShadow = true;
+  g.add(gang);
+
+  /* The market hall at the inland end: one long flat-roofed white block. */
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(74 / M, 10 / M, 52 / M), white);
+  hall.position.set(-L / 2 + 42 / M, DECK + 5 / M, -6 / M);
+  hall.castShadow = true; hall.receiveShadow = true;
+  g.add(hall);
+
+  /* THE CANOPY, WHICH IS THE BUILDING. A broad cream fabric roof on timber posts over an open
+     terrace — pale, floating, and the thing you actually recognise from the water. */
+  const cano = new THREE.Mesh(new THREE.BoxGeometry(64 / M, 1.0 / M, 44 / M), fabric);
+  cano.position.set(6 / M, DECK + 11.5 / M, 2 / M);
+  cano.castShadow = true;
+  g.add(cano);
+  for (let i = -3; i <= 3; i++){
+    for (const zz of [-19 / M, 19 / M]){
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 11 / M, 0.22), timber);
+      post.position.set(6 / M + i * 10 / M, DECK + 5.5 / M, 2 / M + zz);
+      g.add(post);
+    }
+  }
+  const under = new THREE.Mesh(new THREE.BoxGeometry(52 / M, 6 / M, 20 / M), glassM);
+  under.position.set(2 / M, DECK + 3 / M, 6 / M);
+  g.add(under);
+
+  /* Two low white blocks and the plaza at the seaward end, with the art panels facing out. */
+  for (const [dx, dz, w, dp] of [[L * 0.32, -14 / M, 30 / M, 24 / M],
+                                 [L * 0.38,  16 / M, 26 / M, 20 / M]]){
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, 8 / M, dp), white);
+    b.position.set(dx, DECK + 4 / M, dz);
+    b.castShadow = true;
+    g.add(b);
+  }
+  for (let i = 0; i < 3; i++){
+    const pnl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6 / M, 13 / M), art[i]);
+    pnl.position.set(L / 2 - 4 / M, DECK + 3 / M, (i - 1) * 16 / M);
+    g.add(pnl);
+  }
+
+  if (facing !== undefined) g.rotation.y = -facing;
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
 function yasMall(x0, z0, facing){
   /* YAS MALL, built form - not the competition render.
 
@@ -1156,6 +1264,6 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena,
+         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena, yasBayPier,
          boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }
