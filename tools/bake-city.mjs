@@ -364,6 +364,21 @@ async function loadOverture(proj){
         w: rd1(b.w), d: rd1(b.d),
         rot: Math.round(b.rot * 1000) / 1000,
         h: overtureHeight(rec.height, rec.num_floors),
+        /* WHAT IT IS. Carried so the renderer can stop choosing a facade by hashing an id.
+
+           `class` is the specific one — hotel, apartments, retail, warehouse, hangar, parking —
+           and `subtype` the coarse bucket it sits in. Both are short strings and both are absent
+           on plenty of buildings, so anything reading them has to cope with null; that is still
+           strictly better than the id hash, which is wrong about every building it describes.
+
+           Roof and facade attributes are sparse. They are taken anyway because where they exist
+           they beat any inference, and where they do not they cost one null. */
+        cls: rec.class || null,
+        sub: rec.subtype || null,
+        rs:  rec.roof_shape || null,
+        rc:  rec.roof_color || null,
+        fm:  rec.facade_material || null,
+        fc:  rec.facade_color || null,
       },
     });
   }
