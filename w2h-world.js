@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v127';
+export const BUILD = 'world v128';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5241,6 +5241,23 @@ function flatSet(night, dusk, day, rough){
   };
 }
 
+/* LIT AT DUSK AND NIGHT, DARK BY DAY. The Abu Dhabi Grand Prix is a twilight race and the circuit
+   is floodlit: in every night capture the painted run-off is not merely visible, it is the
+   BRIGHTEST thing in the frame — a glowing teal ribbon with white kerbs, against a black island.
+
+   That solves the dusk problem properly rather than by tinting. Correcting the albedo got the
+   relationship to the ground right, but a horizontal surface at dusk takes grazing light from a
+   sun thirteen degrees up, so everything on the ground goes dim whatever colour it is. Emission
+   does not care about incidence.
+
+   Applied to the NIGHT and DUSK materials only. The day material is left alone, because in
+   daylight the run-off is just blue paint. */
+function glow(set, hex, iNight, iDusk){
+  set.base.emissive = new THREE.Color(hex);  set.base.emissiveIntensity = iNight;
+  set.duskM.emissive = new THREE.Color(hex); set.duskM.emissiveIntensity = iDusk;
+  return set;
+}
+
 /* Every ground-feature mesh is tagged the same way, in one place, because doing it at each
    construction site is how three of the four fields got missed the first time. */
 function tagGround(mesh, set){
@@ -5350,8 +5367,11 @@ function groundFeaturesFor(d, feats){
      Grand Prix circuit; 5.0 km of it is the shorter configurations, which run over the SAME
      tarmac. Drawing them lays four circuits on top of each other and the ribbon z-fights itself. */
   const asphalt = flatSet(0x1C212A, 0x353635, 0x3A3D42, 0.95);
-  const kerb    = flatSet(0x74808D, 0xDCCEB1, 0xF0EADC, 0.8);
-  const runoff  = flatSet(0x235B82, 0x4392A4, 0x49A6CB, 0.85);
+  /* The kerbs read as a bright white outline under the floods; the run-off is the teal ribbon
+     that identifies this circuit from the air. Dusk is roughly half of night, because the sky
+     still carries some light and a fully lit track before dark reads as a mistake. */
+  const kerb    = glow(flatSet(0x74808D, 0xDCCEB1, 0xF0EADC, 0.8),  0xFFF0D8, 0.55, 0.28);
+  const runoff  = glow(flatSet(0x235B82, 0x4392A4, 0x49A6CB, 0.85), 0x2FD5D0, 0.95, 0.45);
   /* WIDER THAN LIFE, DELIBERATELY. Drawn at its true 15 m the circuit was invisible: every gate
      passed, all fourteen ways built, and at district range a 15 m ribbon on a 7.3 km island is a
      hairline that reads as one more dark road among ten thousand. What identifies this circuit
