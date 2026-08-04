@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v92', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v93', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1277,10 +1277,41 @@ const GLASS_ROUGH = 0.24, GLASS_METAL = 0.62, GLASS_ENV = 1.5;
    Deferred building means registration has to be repeatable. Both passes are now functions over a
    root, idempotent through `seen` and the origMat guard, and buildIsland calls them on the new
    island before any view touches it. */
+/* SNAPSHOT, AND PROMOTE THE DAY MATERIALS OFF THE MATERIAL ONTO THE MESH.
+
+   applyView reads dayMats from the MESH. Every hand-built landmark in w2h-city.js declares it on
+   the MATERIAL instead — mRed.userData.dayMats, body.userData.dayMats, and so on for Ferrari
+   World, Yas Mall, Emirates Palace, Etihad Towers and ADNOC. Nothing anywhere bridged the two, so
+   in Day every one of them fell through to the switcher's generic pale dayMat and lost its
+   colour. Ferrari World has never been red in Day.
+
+   DUSK WAS NEVER AFFECTED, which is why this survived so long: registerLift reads the material's
+   own userData.duskColor, so the same landmarks are correctly coloured at dusk and at night and
+   wrong only in the two unlit-ish modes. A fault that appears in one tab out of six reads as a
+   lighting quirk rather than as a missing field.
+
+   ARRAY-AWARE, because it has to be. Ferrari World's roof is one mesh with three material groups
+   and applyView assigns whatever it is handed — so a mesh with an array material needs an ARRAY
+   of day materials, in the same order, exactly as the island ground already does. A material
+   without a declared day version falls back to itself rather than to the generic pale, since a
+   landmark that is deliberately one colour in every light should stay that colour.
+
+   Done here rather than at each builder because there are five landmarks, a dozen materials and
+   two files, and stamping a field at every construction site is precisely how it got missed. */
 function snapshotMats(root){
   root.traverse(o => {
     if (!o.isMesh || o.userData.helper) return;
     if (!o.userData.origMat) o.userData.origMat = o.material;
+    if (!o.userData.dayMats){
+      const list = Array.isArray(o.material) ? o.material : [o.material];
+      let any = false;
+      const day = list.map(m => {
+        const d = m && m.userData && m.userData.dayMats;
+        if (d) any = true;
+        return d || m;
+      });
+      if (any) o.userData.dayMats = Array.isArray(o.material) ? day : day[0];
+    }
   });
 }
 snapshotMats(world);
