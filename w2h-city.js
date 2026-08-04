@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v31';
+export const BUILD = 'city v33';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1131,86 +1131,171 @@ function hiltonYasBay(x0, z0, facing){
   const glassM = mk(0x1F282E, 0x36444D, 0.30, 0x9FD4E4, 0.16);
   const podM   = mk(0x7E796E, 0xD6CFC0, 0.90, 0xFFE9C6, 0.06);
 
-  /* THE PODIUM. Two storeys, and wider than the spine on every side — it is the thing the
-     forecourt and the ballrooms sit in, and it is what the bake mistook for the whole hotel. */
-  const pod = new THREE.Mesh(new THREE.BoxGeometry(196 / M, 2 * F, 72 / M), podM);
-  pod.position.set(0, F, -4 / M);
+  /* THE E, READ OFF ELEVEN REGISTERED POINTS RATHER THAN TRACED OFF THE DRAWING.
+
+     The sheet cannot be traced: its north arrow is 90 degrees out. The numbered run 1-4-5-6-7-8-9
+     reads top to bottom on the page and goes almost due EAST on the ground, so on that page east
+     points down and north points right. But it does not need tracing, because every landmark on
+     it carries a coordinate and coordinates do not care which way the page is turned.
+
+     In this hotel frame — +u east along the long axis, -v the sea, +v Yas Drive — the eleven
+     points fall into three clean rows, and the rows ARE the E:
+
+       INLAND SPINE   v +17..+25   ATM u -44,   point 6 u -13,   Sofia u +25
+       INNER MASS     v -5..-10    point 5 u -45,  point 7 u +32,  point 8 u +54
+       ARM TIPS       v -21..-24   point 4 u -89,                  point 9 u +80
+
+     Points 4 and 9 are the ends of two arms reaching seaward, not the ends of a bar — which is
+     exactly what a straight spine driven through the middle of them got wrong. The pool courtyard
+     sits between them, which is why point 7 is called pool side.
+
+     AND THE RESTAURANTS ARE NOT THE HOTEL. Bua Thai, L'Antica and Bayside Burger land at v -74 to
+     -80, a full 50 m seaward of the hotel's own edge. That is the promenade row the layout draws
+     in orange, built here as its own thing so the hotel stops swallowing it.
+
+     LOCAL +z IS THE SEA, so local z is -v. Island z is the negative of bake y, which puts a local
+     +z vector on the cross-axis component pointing away from the island. Written down because it
+     was got backwards for a whole deploy and the wings reached inland across Yas Drive. */
+
+  /* THE PODIUM, two storeys, over the registered extent u -100..+95, v -32..+32. */
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(195 / M, 2 * F, 64 / M), podM);
+  pod.position.set(-3 / M, F, 0);
   pod.castShadow = true; pod.receiveShadow = true;
   g.add(pod);
 
-  /* THE GUEST SPINE. Eleven storeys to the parapet, set on the long axis the points give. */
+  /* THE SPINE, on the inland row the ATM, point 6 and Sofia describe. Eleven storeys — 545 rooms
+     over a 169 m double-loaded corridor is nine guest floors, and the ballrooms are on Floor 2. */
   const HT = 11 * F;
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(176 / M, HT, 30 / M), stone);
-  spine.position.set(0, HT / 2, -11 / M);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(176 / M, HT, 26 / M), stone);
+  spine.position.set(-8 / M, HT / 2, -18 / M);
   spine.castShadow = true; spine.receiveShadow = true;
   g.add(spine);
 
-  /* Nine balcony bands, one per guest floor, starting above the podium. Proud of the wall by
-     0.9 m so they catch the sun edge-on rather than reading as a printed stripe. */
+  /* Nine balcony bands, one per guest floor. The room description specifies floor-to-ceiling
+     glazing with a balcony to every room, so this is sourced rather than styling. The spine is
+     26 m deep centred on z -18, so its faces are at -31 and -5. */
   for (let i = 0; i < 9; i++){
     const y = 2 * F + i * F + F * 0.5;
-    /* The spine is 30 m deep centred on z = -11, so its faces are at -26 and +4. The band sits
-       0.9 m proud of each, the glass 0.2 m inside it. Getting this datum wrong once already put
-       nine slabs hanging in mid-air eleven metres off the building. */
-    for (const dz of [-15.9 / M, 15.9 / M]){
-      const b = new THREE.Mesh(new THREE.BoxGeometry(176 / M, F * 0.16, 1.8 / M), band);
-      b.position.set(0, y, -11 / M + dz);
-      g.add(b);
+    for (const zz of [-31.9 / M, -4.1 / M]){
+      const bd = new THREE.Mesh(new THREE.BoxGeometry(176 / M, F * 0.16, 1.8 / M), band);
+      bd.position.set(-8 / M, y, zz);
+      g.add(bd);
     }
-    for (const dz of [-14.8 / M, 14.8 / M]){
-      const w = new THREE.Mesh(new THREE.BoxGeometry(172 / M, F * 0.62, 0.4 / M), glassM);
-      w.position.set(0, y + F * 0.06, -11 / M + dz);
-      g.add(w);
+    for (const zz of [-30.8 / M, -5.2 / M]){
+      const wg = new THREE.Mesh(new THREE.BoxGeometry(172 / M, F * 0.62, 0.4 / M), glassM);
+      wg.position.set(-8 / M, y + F * 0.06, zz);
+      g.add(wg);
     }
   }
 
-  /* THE BACK WING. Three storeys over the 69 m stretch the ATM, Quag Rubi and Sofia points cover
-     — spa and meeting rooms, low against the spine. */
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(78 / M, 3 * F, 26 / M), stone);
-  wing.position.set(-10 / M, 1.5 * F, 22 / M);
-  wing.castShadow = true; wing.receiveShadow = true;
-  g.add(wing);
-
-  /* The lobby glazing, on the podium face toward the forecourt. */
-  const lob = new THREE.Mesh(new THREE.BoxGeometry(64 / M, 2 * F * 0.8, 0.5 / M), glassM);
-  lob.position.set(14 / M, F * 0.9, -40 / M);
-  g.add(lob);
-
-  /* THE SIDE WINGS AND THE FRONTAGE, FROM THE PLAN RATHER THAN FROM THE POINTS.
-
-     The eight points only ever described a spine, because that is where the spa, the ATM and the
-     treatment rooms are — amenities cluster in the middle of a hotel. The plan shows what the
-     points could not: the mass turns at both ends and carries a long low frontage on the seaward
-     face. Without those it reads as a slab, which is exactly the note that came back.
-
-     THESE ARE THE SOFT NUMBERS IN THIS FUNCTION. The plan is not registered to the bake frame, so
-     the wings are proportioned to the spine rather than measured off it. The spine, the
-     orientation and the eleven storeys are surveyed; these are not. If the plan is ever
-     registered, measure them and delete this note. */
-  const HW = 8 * F;
-  for (const dx of [-70 / M, 70 / M]){
-    const w = new THREE.Mesh(new THREE.BoxGeometry(36 / M, HW, 54 / M), stone);
-    w.position.set(dx, HW / 2, -34 / M);
-    w.castShadow = true; w.receiveShadow = true;
-    g.add(w);
+  /* THE THREE ARMS, reaching seaward. The outer two land on points 4 and 9. The middle one is the
+     only invented member in this function, placed midway because an E has three arms and the
+     layout draws three. Eight storeys, so they sit below the spine rather than compete with it. */
+  const HA = 8 * F;
+  for (const du of [-87 / M, -3 / M, 80 / M]){
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(34 / M, HA, 40 / M), stone);
+    arm.position.set(du, HA / 2, 10 / M);
+    arm.castShadow = true; arm.receiveShadow = true;
+    g.add(arm);
   }
 
-  /* THE FRONTAGE. Three storeys along the water — lobby, restaurants and terraces, which is what
-     the tan blocks on that face of the plan are. Low, so the spine still reads above it. */
-  const front = new THREE.Mesh(new THREE.BoxGeometry(184 / M, 3 * F, 20 / M), podM);
-  front.position.set(0, 1.5 * F, -52 / M);
-  front.castShadow = true; front.receiveShadow = true;
-  g.add(front);
-  const fg = new THREE.Mesh(new THREE.BoxGeometry(180 / M, 2 * F * 0.7, 0.5 / M), glassM);
-  fg.position.set(0, F * 1.1, -62.4 / M);
-  g.add(fg);
+  /* THE POOL COURTYARDS, in the two gaps between the arms. The void is the point. */
+  for (const du of [-45 / M, 38 / M]){
+    const pool = new THREE.Mesh(new THREE.BoxGeometry(40 / M, 0.4 / M, 26 / M), glassM);
+    pool.position.set(du, 2 * F + 0.3 / M, 12 / M);
+    g.add(pool);
+  }
 
-  /* The pool deck to the beach side — flat, low, and the reason the west end reads as resort
-     rather than as an office block. */
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(86 / M, F * 0.2, 44 / M), podM);
-  deck.position.set(-88 / M, F * 0.1, -30 / M);
-  deck.receiveShadow = true;
+  /* THE PROMENADE RESTAURANT ROW at v -77, where Bua Thai, L'Antica and Bayside Burger register.
+     Single storey at 3.6 m. Four units of jittered width under one canopy, so it reads as a row of
+     separate places rather than as one long shed — believable rather than perfect. */
+  for (const [i, du] of [-34, -4, 32, 61].entries()){
+    const u = new THREE.Mesh(new THREE.BoxGeometry((16 + (i % 2 ? 5 : 0)) / M, F, 13 / M), stone);
+    u.position.set(du / M, F / 2, 77 / M);
+    u.castShadow = true; u.receiveShadow = true;
+    g.add(u);
+  }
+  const can = new THREE.Mesh(new THREE.BoxGeometry(120 / M, 0.5 / M, 17 / M), podM);
+  can.position.set(14 / M, F * 1.12, 77 / M);
+  can.castShadow = true;
+  g.add(can);
+
+  if (facing !== undefined) g.rotation.y = -facing;
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
+/* THE YAS BAY JETTY — four surveyed corners, and the first thing here with a real footprint.
+
+   THE CORNERS ARE MEASURED, NOT REGISTERED. 24.458035/54.600551, 24.456468/54.600270,
+   24.457872/54.599922 and 24.456605/54.600899. Through the bake's own projection they form a
+   rectangle: sides 66 and 162 m, diagonals 177 and 172 against a rectangle's predicted 175. That
+   closes, so it is a rectangle and not a trapezium read off a rotated image. Long axis -77.55 deg
+   from east, which is one of the two directions the whole Yas Bay building grid runs on. Centre
+   at bake (18276.5, -3646.3) = island (-33.55, 416.63).
+
+   WHAT WAS WRONG BEFORE: these corners were read as confirming the coastline and nothing was
+   built. The outline does agree with them to within 4 m — but agreeing about where the EDGE is
+   says nothing about what stands on it, and what stands on it is a jetty with finger berths, not
+   a piece of beach. The bake has no berths because they float and the footprint pass clips to the
+   shore.
+
+   THE BUILDINGS ON IT ARE NOT BUILT HERE, DELIBERATELY. Five real footprints already stand on
+   this deck — the 71 x 35 m Bushra/Siddharta block and four smaller ones — and they draw from the
+   bake. This adds the deck under them and the berths beside them and nothing else, so there is no
+   KIT_ZONE and nothing is drawn twice. Additive, which is the only safe way to touch ground that
+   already has real geometry on it.
+
+   THE BERTHS GO ON THE SEAWARD SIDE. Local +z is the water: island z is the negative of bake y,
+   so a local +z vector under rotation.y = TH lands on the cross-axis component that points away
+   from the island. Same derivation as the Hilton, and the Hilton had it backwards for a deploy. */
+function yasBayJetty(x0, z0, facing){
+  const g = new THREE.Group();
+  const M = 7.8;
+  const L = 162 / M, W = 66 / M;
+
+  const mk = (dusk, day, rough) => {
+    const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough == null ? 0.9 : rough });
+    m.userData.duskColor = dusk;
+    m.userData.dayMats = new THREE.MeshStandardMaterial({
+      color:day, roughness:rough == null ? 0.9 : rough });
+    return m;
+  };
+  const deckM = mk(0x6E6A60, 0xC2BCAE, 0.95);
+  const timber = mk(0x5A4B38, 0xA98B64, 0.9);
+  const pileM  = mk(0x2B2822, 0x4C473E, 0.9);
+
+  /* The deck. Low and flat — it is a surface, and the buildings that give it height come from the
+     bake and stand on top of this. */
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(L, 1.6 / M, W), deckM);
+  deck.position.y = 0.8 / M; deck.receiveShadow = true;
   g.add(deck);
+
+  /* Piles down both long edges, on the 16 m bay the berths use. */
+  for (let i = -5; i <= 5; i++){
+    for (const zz of [-W / 2 + 0.3 / M, W / 2 - 0.3 / M]){
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.5 / M, 5 / M, 0.5 / M), pileM);
+      p.position.set(i * 16 / M, -1.6 / M, zz);
+      g.add(p);
+    }
+  }
+
+  /* NINE FINGER BERTHS, seaward side, on a 16 m bay. Timber, low to the water, and the thing that
+     makes this read as a marina rather than as a slab of pale concrete in the bay. */
+  for (let i = -4; i <= 4; i++){
+    const f = new THREE.Mesh(new THREE.BoxGeometry(2.6 / M, 0.7 / M, 26 / M), timber);
+    f.position.set(i * 16 / M, 0.5 / M, W / 2 + 13 / M);
+    f.receiveShadow = true;
+    g.add(f);
+    const cleat = new THREE.Mesh(new THREE.BoxGeometry(0.4 / M, 1.9 / M, 0.4 / M), pileM);
+    cleat.position.set(i * 16 / M, 0.9 / M, W / 2 + 26 / M);
+    g.add(cleat);
+  }
+  /* The walkway the fingers hang off, so they are not nine loose planks. */
+  const walk = new THREE.Mesh(new THREE.BoxGeometry(L * 0.92, 0.7 / M, 3.2 / M), timber);
+  walk.position.set(0, 0.5 / M, W / 2 + 1.6 / M);
+  walk.receiveShadow = true;
+  g.add(walk);
 
   if (facing !== undefined) g.rotation.y = -facing;
   g.position.set(x0, 0, z0);
@@ -1438,5 +1523,5 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena, yasBayPier,
-         hiltonYasBay, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
+         hiltonYasBay, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }

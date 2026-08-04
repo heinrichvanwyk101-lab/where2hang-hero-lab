@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v133';
+export const BUILD = 'world v136';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4585,6 +4585,12 @@ function fabricMats(cool){
   return out;
 }
 
+/* THE YAS BAY SITE, IN ISLAND UNITS. The padded convex hull of 55 surveyed pins (the car park is
+   a separate plot and is excluded). 26.3 ha, which is the ground the land-use bands are computed
+   over — outside it the island keeps its ordinary paint. */
+const SITE_YASBAY = [[-88.17,416.83],[-80.86,428.85],[-36.22,430.96],[-27.01,429.10],[25.71,396.12],
+                     [23.05,383.86],[15.77,369.39],[-40.64,379.21],[-52.20,382.54]];
+
 function urbanFabric(d, layer, opts){
   const { coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
           cap = Infinity, avoid = false, minH = 0 } = opts;
@@ -5044,7 +5050,136 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      the one landmark on Yas that genuinely needs one: the footprint underneath is 270 x 136 m of
      conflated plot at a flat 40 m, and without the zone the authored hotel would stand inside a
      slab of its own forecourt. The pier never did this, and the pier was never right. */
+  /* YAS BAY GROUND, AND THE BANDS ARE MEASURED RATHER THAN CHOSEN.
+
+     Fifty-nine surveyed pins across this waterfront, sorted by distance to the baked coastline,
+     fall into groups with EMPTY GAPS between them. Nothing sits between 40 and 46 m, and nothing
+     between 79 and 88 m. So the two thresholds land in space the data does not occupy, which is
+     the only kind of threshold worth writing down:
+
+       BEACH        outer 22 m of the shore band
+       PROMENADE    22 to 43 m — paved walkway
+       DECK/GARDEN  43 to 83 m — pool terraces and planting
+       BUILT        beyond 83 m
+
+     THE ONE EXCEPTION IS THE CHANNEL between the pier and the shore. That edge is quay wall,
+     paved to the waterline, which is why Asia Asia stands 25 m out on hard standing rather than
+     on sand. Without the exception the whole marina edge came back as beach, which it plainly is
+     not — and that was visible the moment it was drawn.
+
+     WHY THIS IS GROUND AND NOT BUILDINGS. The bands say what the SURFACE is. They do not place a
+     single wall, and the built band is deliberately left as paving here rather than extruded: the
+     bake's own footprints and the Hilton landmark stand on it. Painting ground is reversible and
+     cannot hide anything; extruding 8.7 ha on a threshold would be the pier mistake again. */
+  if (SITE_YASBAY && outlineClosed(yas.id)){
+    const ring = outlineClosed(yas.id).map(p => [p[0] * yas.r, -p[1] * yas.r]);
+    const CO = [];
+    for (let i = 0; i < ring.length; i++){
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * M_PER_UNIT / 8));
+      for (let t = 0; t < n; t++) CO.push([a[0] + (b[0] - a[0]) * t / n, a[1] + (b[1] - a[1]) * t / n]);
+    }
+    const nearM = (x, z) => { let m = Infinity;
+      for (const q of CO){ const dx = q[0] - x, dz = q[1] - z, dd = dx * dx + dz * dz; if (dd < m) m = dd; }
+      return Math.sqrt(m) * M_PER_UNIT; };
+    const inPoly = (P, x, z) => { let c = false;
+      for (let i = 0, j = P.length - 1; i < P.length; j = i++){
+        const xi = P[i][0], zi = P[i][1], xj = P[j][0], zj = P[j][1];
+        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) c = !c; }
+      return c; };
+
+    /* 5 m cells, merged per band into one geometry each — four draw calls, not seven thousand. */
+    const CELL = 5 / M_PER_UNIT;
+    const bands = [[], [], [], []];
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const p of SITE_YASBAY){ x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
+                                  z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
+    for (let x = x0; x < x1; x += CELL) for (let z = z0; z < z1; z += CELL){
+      const mx = x + CELL / 2, mz = z + CELL / 2;
+      if (!inPoly(SITE_YASBAY, mx, mz)) continue;
+      if (!insideIsle(yas.id, mx / yas.r, -mz / yas.r)) continue;
+      const dd = nearM(mx, mz);
+      let b;
+      if (dd < 43){
+        const chan = mx > -53.6 && mx < -22.8 && mz > 397.4 && mz < 420.5;
+        b = (dd < 22 && !chan) ? 0 : 1;
+      } else b = dd < 83 ? 2 : 3;
+      bands[b].push([x, z]);
+    }
+    /* sand, paving, planted deck, built ground — all keyed off the island's own day/dusk/night
+       ramp so they move with it rather than being three colours picked once. */
+    const SET = [flatSet(0x6E6552, 0xC6B393, 0xE4D2A8, 0.95, 6),
+                 flatSet(0x5F6670, 0xB6AE9E, 0xD8D2C4, 0.92, 6),
+                 flatSet(0x3E4C3A, 0x6F7A54, 0x7A8A62, 0.9,  6),
+                 flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.9,  6)];
+    let laid = 0;
+    bands.forEach((cells, i) => {
+      if (!cells.length) return;
+      const pos = new Float32Array(cells.length * 18), nor = new Float32Array(cells.length * 18);
+      cells.forEach(([x, z], j) => {
+        const o = j * 18, X = x + CELL, Z = z + CELL;
+        const q = [x,0,z, X,0,z, X,0,Z, x,0,z, X,0,Z, x,0,Z];
+        for (let t = 0; t < 18; t++){ pos[o + t] = q[t]; nor[o + t] = t % 3 === 1 ? 1 : 0; }
+      });
+      const g2 = new THREE.BufferGeometry();
+      g2.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g2.setAttribute('normal',   new THREE.BufferAttribute(nor, 3));
+      const m = new THREE.Mesh(g2, SET[i].base);
+      m.position.y = GROUND + 0.004;
+      m.userData.dayMats = SET[i].dayM;
+      m.userData.duskMats = SET[i].duskM;
+      m.userData.planMats = SET[i].planM;
+      m.userData.ground = true;
+      m.receiveShadow = true;
+      yas.detail.add(m);
+      laid += cells.length;
+    });
+    yas.baySurf = laid;
+
+    /* THE CAR PARK, FOUR SURVEYED CORNERS. 99 x 227 m, diagonals 246 and 248 against a predicted
+       248 — it closes as a true rectangle, so this is a measurement and not a trace. Tarmac with
+       bay markings, flat, and OUTSIDE the site hull above because it is a separate plot with its
+       own edge rather than part of the waterfront's band structure. */
+    const CPk = [[-45.90,392.10],[-43.05,404.42],[-71.57,410.41],[-74.42,399.00]];
+    const cpc = CPk.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]);
+    const cpTh = Math.atan2(CPk[3][1] - CPk[0][1], CPk[3][0] - CPk[0][0]);
+    const tar = flatSet(0x22262B, 0x44484D, 0x4B5056, 0.95, 6);
+    const cp = new THREE.Mesh(new THREE.PlaneGeometry(227 / M_PER_UNIT, 99 / M_PER_UNIT), tar.base);
+    cp.rotation.x = -Math.PI / 2; cp.rotation.z = -cpTh;
+    cp.position.set(cpc[0], GROUND + 0.006, cpc[1]);
+    cp.userData.dayMats = tar.dayM; cp.userData.duskMats = tar.duskM;
+    cp.userData.planMats = tar.planM; cp.userData.ground = true;
+    cp.receiveShadow = true;
+    yas.detail.add(cp);
+    /* Six aisle stripes. Enough to read as parking from the district camera and no more. */
+    const line = flatSet(0x6A6E72, 0xB8BCC0, 0xD2D6DA, 0.9, 7);
+    for (let i = -2.5; i <= 2.5; i++){
+      const st = new THREE.Mesh(new THREE.PlaneGeometry(219 / M_PER_UNIT, 0.9 / M_PER_UNIT), line.base);
+      st.rotation.x = -Math.PI / 2; st.rotation.z = -cpTh;
+      const c = Math.cos(cpTh), s2 = Math.sin(cpTh), off = i * 15.5 / M_PER_UNIT;
+      st.position.set(cpc[0] - off * s2, GROUND + 0.008, cpc[1] + off * c);
+      st.userData.dayMats = line.dayM; st.userData.duskMats = line.duskM;
+      st.userData.planMats = line.planM; st.userData.ground = true;
+      yas.detail.add(st);
+    }
+  }
   if (kit.hiltonYasBay) built.push(kit.hiltonYasBay(-23.7, 388.7, -0.2057));
+
+  /* THE JETTY, AND IT DELIBERATELY DOES NOT GO THROUGH `built`.
+
+     Everything in that array gets a KIT_ZONE, which is right for a landmark that replaces the
+     footprints under it and wrong for this one. Five real footprints stand on this deck already —
+     the 71 x 35 m Bushra/Siddharta block and four smaller ones — and they are correct. A zone here
+     would delete the restaurants in order to draw the thing they stand on.
+
+     So it is added straight to the detail layer at GROUND: the deck goes UNDER what the bake
+     already draws, and the finger berths go beside it. Purely additive, nothing drawn twice.
+     Island (-33.55, 416.63) and facing 1.3535 come from the four surveyed corners. */
+  if (kit.yasBayJetty){
+    const j = kit.yasBayJetty(-33.55, 416.63, 1.3535);
+    j.position.y = GROUND;
+    yas.detail.add(j);
+  }
 
   /* THE YAS BAY PIER IS NOT PLACED, AND THE REASON IT WAS EVER PLACED HERE WAS A NAME.
 
@@ -5512,10 +5647,22 @@ function footprintsFor(d, list){
   let zoned = 0;
   for (let bi = 0; bi < list.length; bi++){
     const b = list[bi];
-    /* The plot outlines and the fenced open ground, decided in the pre-pass above. Skipped here
-       rather than filtered out of `list`, so every index in the pre-pass still lines up and the
-       counter reports against the same array the rest of this loop walks. */
-    if (merged.has(bi)){ hidMerge++; continue; }
+    /* THE PLOT OUTLINES ARE FLATTENED, NOT DELETED, AND THE FIRST VERSION DELETED THEM.
+
+       Hiding was argued as safe because the contained buildings still draw. Drawn against the Yas
+       Bay layout that argument collapses: the four merges over that waterfront are 120,000 m2 and
+       between them they contain FIVE, TWO, FOUR and ZERO small footprints. Removing them removed
+       the site. The strip between the hotel and the arena went bare, which is exactly the note
+       that came back — the full footprint not built as per the layout.
+
+       A plot merge is not nothing. It is the PODIUM: the deck, the terraces and the retail base
+       that the layout draws as one continuous built platform with buildings standing on it. So it
+       keeps its footprint and loses only its false height. Six metres is two storeys of base, and
+       the real buildings inside it still stand on top at their own heights.
+
+       Fenced open ground goes lower still. A pool deck or a beach club is a surface, not a base,
+       so 1.5 m — enough to read as paving rather than as water. */
+    if (merged.has(bi)) hidMerge++;
     const nx = b.x / d.r, ny = -b.z / d.r;
     /* THE COASTLINE TEST, WHICH THIS NEVER HAD AND urbanFabric ALWAYS DID.
 
@@ -5629,6 +5776,12 @@ function footprintsFor(d, list){
        enough that the venue IS the building — the same two gates the facade uses, so a unit cannot
        be a restaurant for its walls and a warehouse for its height. A surveyed height still wins:
        if the bake measured it, the bake is right and this never runs. */
+    /* The podium clamp, applied last so nothing above can put the false height back. `grounds` is
+       the leisure case, which is a surface rather than a base. */
+    if (merged.has(bi)){
+      const grounds = b.vk === 'leisure';
+      h = (grounds ? 1.5 : 6) / M_PER_UNIT;
+    }
     const dineArea = Math.max(1.2, b.w) * Math.max(1.2, b.dp) * M_PER_UNIT * M_PER_UNIT;
     if (b.vk === 'dine' && b.h == null && dineArea <= 2500 && (b.v || 0) < 4){
       h = 3.6 / M_PER_UNIT;
