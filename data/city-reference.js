@@ -289,28 +289,55 @@ export const LANDMARKS = {
      The only strong colour accent in the city silhouette.
   ------------------------------------------------------------------------- */
   ferrariWorld: {
-    unit: 'peakHeight',         // ~86 m at the central cone
-    plan: 'five-point star, points swept and curved — not straight-edged',
+    /* CORRECTED. This entry previously said "five-point star" with pointCount 5 and a 9.5:1
+       span, and the model was faithfully built to it and came out a starfish. All three numbers
+       were wrong. Benoy's published description is a THREE-pointed star — an enclosed core with
+       three "tri-form" arms at 120 degrees. Everything below is now from the factsheets
+       (Benoy / ArcelorMittal / e-architect), not inferred from captures.
+
+       THE LESSON, KEPT HERE ON PURPOSE: this entry was authored confidently, written down, and
+       then believed for a whole session because it was written down. Nothing in the numeric
+       checks could catch it, because the numbers were self-consistent — they just described a
+       different building. Anything in this file not traceable to a published source or a
+       measurement should be treated as a guess until something looks at it. */
+    unit: 'peakHeight',         // 48 m at the crown; 45 m quoted as building height
+    plan: 'three-point star — tri-form arms at 120 degrees, broad and rounded, not spiky',
     proportions: {
       peakHeight:      1.00,
-      spanAcross:      9.5,     // point to opposite point
-      pointCount:      5,
-      pointSweep:      0.35,    // curvature of each point, as a fraction of its length
-      centralOculus:   0.90,    // diameter of the roof opening, in peakHeights
-      edgeThickness:   0.11,
+      spanAcross:     14.20,    // ~681 m across, 665 m tip to tip
+      pointCount:      3,
+      pointSweep:      0.16,    // arms curve gently; 0.35 made propeller blades
+      innerRadius:     2.81,    // 135 m — fitted to the published perimeter and roof area
+      lobeExponent:    2.00,    // fitted with the above; together they set arm breadth
+      centralFunnel:   2.08,    // 100 m dia at the roof, tapering to 17 m at its base
+      rimHeightValley: 0.31,    // 15 m
+      rimHeightTip:    0.10,    //  5 m — the tips run out almost to the ground
+      logo:            [1.35, 1.01],   // 65 x 48.5 m
+    },
+    published: {
+      spanM: 700, peakM: 48, buildingHeightM: 45,
+      roofPerimeterM: 2200, roofSurfaceM2: 200000, netRoofM2: 153000,
+      funnelTopM: 100, funnelBaseM: 17, logoM: [65, 48.5],
     },
     profile:
-      'From the horizon (Layer C) it reads as a long low red wedge, highest ' +
-      'at the centre, tapering to near-ground at the tips. From above, a ' +
-      'swept five-point star. Both reads must work.',
+      'A ground-hugging form peeling up from the landscape like a red sand dune (Benoy). From ' +
+      'the horizon it is a long low red wedge, highest at the centre, tapering to near-ground ' +
+      'at the tips, with a dark notch at the crown where the funnel opens. From above, three ' +
+      'broad rounded arms at 120 degrees around a circular opening. Both reads must work.',
+    section:
+      'The crown-to-edge descent is a DOUBLE CURVE — convex then concave — because the section ' +
+      'is literally the Ferrari GT side profile applied in elevation. A power curve cannot ' +
+      'produce it; smootherstep can, and also flattens at both ends, which gives the plateau ' +
+      'around the funnel and the long run out to the tips.',
     colours: {
       roof: PALETTE.ferrariRed,
       rim:  '#1A1A1A',          // black edge banding, essential to the read
-      oculus: '#8A9AA5',
+      funnel: '#9FB0BC',
     },
     silhouetteRule:
-      'The black rim against the red is what makes it legible at distance. ' +
-      'Solid red alone reads as an amorphous blob.',
+      'The black rim against the red is what makes it legible at distance. Solid red alone ' +
+      'reads as an amorphous blob. And it must stay LOW: at 14:1 it is a dune, at 5:1 it is a ' +
+      'circus tent, and there is no value in between.',
   },
 
   /* -------------------------------------------------------------------------
