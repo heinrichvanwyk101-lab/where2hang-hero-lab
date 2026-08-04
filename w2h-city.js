@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v28';
+export const BUILD = 'city v29';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -952,11 +952,30 @@ function etihadArena(x0, z0){
    this. So it is the one thing on this waterfront that has to be hand-built — the hotels, the
    arena forecourt and the F&B pavilions are all real surveyed footprints already.
 
-   THE ANCHOR IS MEASURED, NOT CHOSEN. Registered off a north-up capture using Etihad Arena as
-   the reference: the arena is 158 m across and 233 px wide in that image, which fixes the scale
-   at 0.68 m/px, and the pier's centre lands 611 m from the arena at island (-29.5, 309.1),
-   measuring 189 x 143 m. An earlier proposal was to run it out from the shoreline point nearest
-   the arena, which would have put it 500 m from where it is.
+   IT IS NOT OVER WATER AND IT IS NOT MISSING FROM THE BAKE. Both halves of the original premise
+   were wrong. Four surveyed coordinates across Yas Bay all fall INSIDE the resampled outline:
+   Asia Asia 24.458075/54.600032 (26 m from the coast), the Waterfront View Point at the tip
+   24.456604/54.600592 (31 m), the Hilton 24.459403/54.600993 and Etihad Arena 24.460418/54.604002.
+   Pier71 is a reclaimed promontory - LAND with buildings standing on it - and the bake carries
+   both: the outline turns south around it, and nine footprints sit on it, the largest 71 x 35 m.
+   The name is what misled this: it is addressed as "The Pier, Yas Bay" and it is not a pier.
+
+   THE ACTUAL PIER IS A SEPARATE, SMALLER STRUCTURE alongside - the jetty with the moorings on it.
+   That one is over water, so the footprint pass does clip it, and it is the only thing here that
+   would ever need hand-building. It needs its own coordinates; nothing below describes it.
+
+   AND THE SCALE WAS A QUARTER TOO BIG. The old header said the centre lands 611 m from Etihad
+   Arena, registered off a north-up capture at 0.68 m/px. From the coordinates that distance is
+   452 m. Same rotated capture that put the pier 519 m inland - Google draws the compass rosette
+   only when the map is ROTATED, and it was drawn. So every quantity taken off that image is about
+   25 per cent oversized, and the sizes below have been divided through by 0.74 to match. 143 m was
+   never a width either: an axis-aligned box read off a ROTATED long rectangle always comes back
+   fatter and squarer than the rectangle.
+
+   THIS FUNCTION IS NO LONGER PLACED. w2h-world.js stopped calling it - the bake draws this
+   waterfront correctly on its own. It is kept because Pier71 is a fair landmark candidate, and if
+   it is ever wanted as one it goes on the promontory centre with a KIT_ZONE to suppress the nine
+   footprints underneath, NOT seaward into open water. */
 
    WHAT MAKES IT LEGIBLE is not the deck, it is the ROW OF COLOURED AWNINGS down one side. In
    every capture that stripe of red, ochre, teal and orange is the first thing you see, and it is
@@ -1047,6 +1066,17 @@ function yasBayPier(x0, z0, facing){
     pnl.position.set(L / 2 - 4 / M, DECK + 3 / M, (i - 1) * 16 / M);
     g.add(pnl);
   }
+
+  /* THE PLAN SCALE CORRECTION, IN ONE PLACE. Every horizontal metre figure above was authored to
+     hit the 189 x 143 m bounding box from the rotated capture, so they are all wrong by the same
+     factor and the composition between them is fine. 0.74 is 452/611 — the coordinate distance to
+     Etihad Arena over the claimed one. Applied to x and z only: the heights were not taken off
+     that image and a 10 m market hall is a 10 m market hall. Span goes 194 x 149 -> 144 x 110 m.
+
+     One scalar rather than twenty retyped literals because the literals are not independently
+     sourced — they share a single error, and a single error deserves a single correction that can
+     be deleted outright the day a real survey arrives. */
+  g.scale.x = g.scale.z = 0.74;
 
   if (facing !== undefined) g.rotation.y = -facing;
   g.position.set(x0, 0, z0);

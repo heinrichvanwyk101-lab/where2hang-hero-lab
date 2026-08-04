@@ -45,7 +45,11 @@ if (target.includes('#')){
   const end = src.indexOf('\n}\n', argEnd);
   if (end < 0){ console.error(`could not find the end of ${fn} — is it at top level?`); process.exit(1); }
   const body = src.slice(argEnd + 1, end);
-  build = new Function('THREE', `const x0 = 0, z0 = 0;\n${body}\n`);
+  /* `facing` is declared too, and undefined on purpose. Every kit builder that takes it guards
+     with `if (facing !== undefined)`, so the bench gets the unrotated form — which is the one
+     worth judging. Without the declaration the guard itself throws on a bare ReferenceError and
+     the function cannot be benched at all. */
+  build = new Function('THREE', `const x0 = 0, z0 = 0, facing = undefined;\n${body}\n`);
   name = fn;
 } else {
   const mod = await import(path.resolve(target));

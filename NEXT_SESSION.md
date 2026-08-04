@@ -1,6 +1,6 @@
 # Next session — opening line
 
-> Read the where2hang-hero-lab repo. Fix the Yas Bay pier and the parkland at dusk.
+> Read the where2hang-hero-lab repo. Build the Yas Bay jetty and check the parkland emissive.
 
 Nothing needs uploading. Files read from
 `raw.githubusercontent.com/heinrichvanwyk101-lab/where2hang-hero-lab/main/<path>`.
@@ -26,35 +26,66 @@ lighting can be judged there.
 
 ## Live at handover
 
-`nav v94 / city v28 / world v129 / props v22 / basemap v9`
+`nav v94 / city v29 / world v130 / props v22 / basemap v9`
 
 Bake is healthy on all five islands. Al Maryah restored after an Overpass 504
 silently emptied it; `tools/bake-city.mjs` now refuses to write an island with no
 outline and exits non-zero so the Action goes red.
 
-## OPEN — the two things to fix first
+## CLOSED — the two items from last session
 
-**1. The Yas Bay pier still is not visible.** Placed in `w2h-world.js` from the
-surveyed coordinate 24.457964, 54.600196 (Asia Asia, which stands on it),
-converted through the bake's projection to island (-36.4, 406.4), then pushed
-seaward until outside the outline and 55 m clear — about 100 m out. Two earlier
-attempts were worse: one measured off a rotated Google capture landed it 519 m
-INLAND, buried. Verify in this order:
-  - is `kit.yasBayPier` reached at all — the block sits inside the Yas kit guard
-  - does the seaward search find a point, or does it hit the `console.warn`
-  - is `GROUND - 0.45` right, or is the deck under the water plane
-  - render it alone on the bench first; it builds fine there
+**1. Yas Bay pier — the premise was wrong, not the placement.** It is not over
+water. Four coordinates all land INSIDE the resampled outline: Asia Asia
+24.458075/54.600032 (26 m from the coast), Waterfront View Point at the tip
+24.456604/54.600592 (31 m), Hilton 24.459403/54.600993, Etihad Arena
+24.460418/54.604002. Pier71 is a reclaimed promontory — the outline turns south
+around it and nine baked footprints stand on it, largest 71 x 35 m. The bake has
+been drawing it correctly all along; the hand-built deck was a second copy of the
+same building dropped in the bay beside it. The seaward search was not broken, it
+was working its way off the land the building occupies.
 
-**2. Parkland at dusk: fritzing, and colour not reading.** The fritzing is
-z-fighting and `world v129` should fix it — the features sat 3-14 cm above the
-island top and one depth step at the district camera is 5.2 METRES, so they were
-100x below precision. v129 adds polygonOffset to every ground-feature material.
-**If it still fritzes after v129, that diagnosis was wrong** and the next
-suspect is the merged park geometry overlapping itself where OSM rings overlap.
+`world v130` removes the placement. `kit.yasBayPier` stays in the kit, unplaced.
 
-The colour question is separate and may already be fixed by v127, which derives
-each feature's dusk and night values from its per-channel ratio to the island
-ground (0xD8D2C4 day / 0xC6B99E dusk / 0x68737E night) instead of eyeballing them.
+Two things fell out of it:
+  - **The capture scale was 25 per cent over.** The old header claimed 611 m from
+    the centre to Etihad Arena; from the coordinates it is 452 m. Same rotated
+    capture as the 519 m inland error. `city v29` applies 0.74 to x and z, so the
+    span goes 194 x 149 -> 143 x 110 m. Heights untouched — they did not come off
+    that image.
+  - **`preview.mjs` could not bench anything taking `facing`.** The harness
+    injected `x0` and `z0` only, so the `if (facing !== undefined)` guard threw a
+    bare ReferenceError. `node preview.mjs w2h-city.js#yasBayPier` — the command
+    printed in this file — could never have run. Fixed by declaring `facing`
+    undefined, which is the form worth judging anyway.
+
+**2. Parkland colour at dusk — the ratios are exact, so colour is not the fault.**
+Audited all seven ground features against the v127 rule (day colour's per-channel
+ratio to the day ground, applied to the dusk and night ground). Every shipped
+value reproduces to the byte; worst error across the whole set is one unit on
+circuit run-off at night. Nothing to fix in the palette.
+
+What is left is the thing v127's own comment names and does not solve for
+parkland: a horizontal surface at dusk takes grazing light from a sun thirteen
+degrees up, so it goes dim whatever its albedo. `glow()` rescues the circuit kerb
+and run-off with emissive at dusk and night. **Parkland gets no emissive at all**,
+and it sits next to a circuit that does. If it still does not read after v129,
+that is the asymmetry to close — not the colours.
+
+Fritzing after v129 is untested here; polygonOffset is correctly spread onto all
+four materials (base, dayM, duskM, planM), so if it persists the next suspect is
+still the merged park geometry self-overlapping where OSM rings overlap.
+
+## OPEN
+
+**The actual pier.** The jetty with the moorings, immediately alongside the
+promontory. That one IS over water, the footprint pass does clip it, and it is
+the only structure on this waterfront that genuinely needs hand-building. Much
+smaller than `kit.yasBayPier` describes. Needs two coordinates, one per end.
+
+**Pier71 as a landmark, or leave it to the bake.** If it is wanted as authored
+geometry it goes on the promontory centre — bake (18325, -3617) m, island
+(-27.3, 412.9) units — and it goes in KIT_ZONES so the nine footprints under it
+are suppressed. Otherwise `kit.yasBayPier` can be deleted outright.
 
 ## What was built this session
 

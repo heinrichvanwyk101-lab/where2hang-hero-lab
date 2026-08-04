@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v129';
+export const BUILD = 'world v130';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5031,72 +5031,32 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (eaA && kit.etihadArena) built.push(kit.etihadArena(eaA.x, eaA.z));
   else if (!eaA) console.warn('w2h-world: no baked anchor for Etihad Arena — not placed');
 
-  /* THE YAS BAY PIER, AND IT IS THE ONE THING HERE WITH NO SURVEYED SOURCE AT ALL. It stands over
-     water, the footprint pass clips to the coastline, and Overture does not carry it — so unlike
-     every other building on this waterfront it cannot come from the bake.
+  /* THE YAS BAY PIER IS NOT PLACED, AND THE REASON IT WAS EVER PLACED HERE WAS A NAME.
 
-     The anchor is MEASURED rather than chosen: registered off a north-up capture with Etihad
-     Arena as the reference, which fixes the scale, and the pier lands 611 m from it. Written as a
-     literal because there is nothing in the data to derive it from, and a literal that says where
-     it came from is honester than a derivation that pretends to a source it does not have.
+     Every version of this block pushed a hand-built deck SEAWARD from the surveyed root until it
+     cleared the outline, on the premise that the pier stands over water and the footprint pass
+     therefore cannot carry it. Four coordinates across Yas Bay say otherwise. All four are INSIDE
+     the resampled outline: Asia Asia 24.458075/54.600032 sits 26 m from the coast, the Waterfront
+     View Point at the tip 24.456604/54.600592 is 31 m from it, and the Hilton and Etihad Arena are
+     115 to 145 m inside. Pier71 is a reclaimed promontory. The outline already turns south around
+     it and nine baked footprints already stand on it, the largest 71 x 35 m.
 
-     ORIENTATION IS DERIVED. The long axis runs parallel to the shore, so the facing is the
-     bearing to the nearest coastline point turned by a right angle — the same shape of rule the
-     mall uses, and it follows the coast if the outline is ever re-baked. */
-  /* THE YAS BAY PIER. THE COORDINATE IS SURVEYED; ONLY THE SEAWARD OFFSET IS COMPUTED.
+     So the bake has been drawing this waterfront correctly the whole time, and the deck was a
+     second copy of it dropped in the bay alongside. THAT is why nothing read: not the y value, not
+     the kit guard, not the seaward search — the search worked, and it worked its way off the land
+     the building actually occupies.
 
-     24.457964, 54.600196 — Asia Asia, which stands on the pier. Converted through the same
-     projection the bake uses, so no registration step and nothing to get wrong: an earlier
-     version measured this off a Google capture assuming north-up, and Google only draws the
-     compass rosette when the map is ROTATED. It was drawn. The pier landed 519 m inland, buried
-     under the ground mass, and rendered as nothing at all.
+     WHAT IS STILL MISSING is the real pier — the jetty with the moorings, immediately alongside
+     the promontory. That one IS over water and the footprint pass does clip it, so it is the one
+     structure on this waterfront that will need hand-building. It is a different and much smaller
+     thing than kit.yasBayPier describes, and it needs its own two coordinates.
 
-     WHY THE OFFSET IS NOT ZERO. That point is the pier ROOT — 30 m from the shore, and marginally
-     inside the resampled coastline. The deck is 92 m wide, so centring it there buries half of it.
-     Walking seaward until the point is outside the outline AND at least 55 m clear of it puts the
-     centre where a 92 m deck actually fits, and lands about 100 m out.
+     kit.yasBayPier is left in the kit, unplaced. If Pier71 is ever wanted as an authored landmark
+     rather than as footprints, it goes on the promontory centre — bake (18325, -3617) m, island
+     (-27.3, 412.9) units — and it goes in KIT_ZONES so the nine footprints beneath it are
+     suppressed, which is what every other landmark in this function does and what this one never
+     did. Its scale is corrected in w2h-city.js; it was 25 per cent oversized. */
 
-     Derived rather than typed, so a re-baked coastline moves the pier with it instead of leaving
-     it half in the sand. */
-  if (kit.yasBayPier){
-    const ring = outlineClosed(yas.id) || [];
-    if (ring.length > 16){
-      const P = ring.map(p => [p[0] * yas.r, -p[1] * yas.r]);
-      const inIsle = (x, z) => insideIsle(yas.id, x / yas.r, -z / yas.r);
-      const clearOf = (x, z) => { let m = Infinity;
-        for (const q of P){ const dd = (q[0]-x)*(q[0]-x) + (q[1]-z)*(q[1]-z); if (dd < m) m = dd; }
-        return Math.sqrt(m); };
-      const nearest = (x, z) => { let b = P[0], m = Infinity;
-        for (const q of P){ const dd = (q[0]-x)*(q[0]-x) + (q[1]-z)*(q[1]-z); if (dd < m){ m = dd; b = q; } }
-        return b; };
-
-      /* The surveyed root, already in island units — the basemap converts the bake's metres the
-         same way it converts every landmark anchor. */
-      const ROOT = { x: -36.4, z: 406.4 };
-      const s0 = nearest(ROOT.x, ROOT.z);
-      let dx = ROOT.x - s0[0], dz = ROOT.z - s0[1];
-      const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
-      if (inIsle(ROOT.x + dx * 0.5, ROOT.z + dz * 0.5)){ dx = -dx; dz = -dz; }
-
-      let put = null;
-      for (let m = 20; m <= 200; m += 10){
-        const px = ROOT.x + dx * m / M_PER_UNIT, pz = ROOT.z + dz * m / M_PER_UNIT;
-        if (inIsle(px, pz)) continue;
-        if (clearOf(px, pz) * M_PER_UNIT < 55) continue;
-        put = { px, pz }; break;
-      }
-      if (put){
-        const sh = nearest(put.px, put.pz);
-        const bear = Math.atan2(sh[1] - put.pz, sh[0] - put.px);
-        const pier = kit.yasBayPier(put.px, put.pz, bear + Math.PI / 2);
-        pier.position.y = GROUND - 0.45;
-        yas.detail.add(pier);
-        /* NOT in KIT_ZONES: open water, so there is no surveyed footprint under it to exclude. */
-      } else {
-        console.warn('w2h-world: no clear water for the Yas Bay pier — not placed');
-      }
-    }
-  }
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
