@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v27';
+export const BUILD = 'city v28';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -824,8 +824,9 @@ function ferrariWorld(x0, z0, facing){
 
    NIGHT IS HALF THE BUILDING. Warm amber washing up the shingle courses and COOL WHITE strips
    down every corner fold: two opposed colour temperatures, and the thing that makes this
-   recognisable after dark. The strips are nightOnly — in daylight they are shadow grooves, not
-   objects. None of it is verifiable on the bench, which reads colour and ignores emissive. */
+   recognisable after dark. The strips carry a DAY material and merely stop being emissive rather
+   than disappearing: in daylight they are recessed shadow grooves, which is architecture, and a
+   building must not change shape between view modes. None of it is verifiable on the bench, which reads colour and ignores emissive. */
 function etihadArena(x0, z0){
   const g = new THREE.Group();
   const M = 7.8;
@@ -917,9 +918,18 @@ function etihadArena(x0, z0){
      strip of real Yas Bay buildings. Landmarks stop at the building. */
   g.add(ent);
 
+  /* THE STRIPS EXIST IN EVERY VIEW. They were nightOnly, which made them vanish in Day and Check
+     — and that is the one place this building physically CHANGED between modes rather than merely
+     shading differently. In daylight they are recessed shadow grooves in the shingle, which is
+     real architecture; only the glow is nocturnal. So they keep a day material and simply stop
+     being emissive, like everything else in the scene.
+
+     The lamp pools in w2h-props.js are the only legitimate nightOnly meshes: they stand in for
+     628 point lights and have no daytime existence at all. These are not that. */
   const strip = new THREE.MeshStandardMaterial({
     color:0x223046, emissive:0xBFD2FF, emissiveIntensity:1.5, roughness:0.4 });
   strip.userData.duskColor = 0x223046;
+  strip.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x6E5A34, roughness:0.7 });
   for (let k = 0; k < SEG; k++){
     const a = ENT + (k + 0.5) * Math.PI * 2 / SEG;
     const t0 = 0.26, t1 = 0.90, h = bodyH * (t1 - t0);
@@ -927,7 +937,6 @@ function etihadArena(x0, z0){
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.7 / M, h, 0.7 / M), strip);
     m.position.set(Math.sin(a) * r, H_PLIN + bodyH * (t0 + t1) / 2, Math.cos(a) * r);
     m.rotation.y = -a;
-    m.userData.nightOnly = true;
     m.userData.noShadow = true;
     g.add(m);
   }

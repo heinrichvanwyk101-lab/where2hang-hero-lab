@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v126';
+export const BUILD = 'world v127';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5212,9 +5212,22 @@ function ribbon(pts, half, y, set){
    judging exactly this: whether a painted street and the thing standing on it register.
 
    Six views, and a mesh has to answer for all of them. */
-function flatSet(dusk, day, rough){
+/* THREE COLOURS, NOT TWO, AND THEY ARE DERIVED FROM THE GROUND RATHER THAN CHOSEN.
+
+   The first version gave night and dusk one shared value, picked by eye. The island ground under
+   these features is 0xD8D2C4 in Day, 0xC6B99E at dusk and 0x68737E at night — it swings hard — so
+   one value cannot hold a constant relationship to it, and the parkland duly vanished at dusk
+   while reading fine in Day and Check. Measured: the lawn should sit at 0.51/0.67/0.42 of the
+   ground per channel, and it was shipping at 0.23/0.38/0.25. About half as bright as it should be,
+   which at dusk is the difference between grass and a hole in the island.
+
+   So every ground feature now declares its DAY colour, and its dusk and night values are that
+   colour's per-channel ratio to the day ground, applied to the dusk and night ground. The
+   relationship is then identical in all three, which is what makes the greenery read the same
+   everywhere instead of only where it was eyeballed. */
+function flatSet(night, dusk, day, rough){
   const r = rough == null ? 0.9 : rough;
-  const base = new THREE.MeshStandardMaterial({ color:dusk, roughness:r });
+  const base = new THREE.MeshStandardMaterial({ color:night, roughness:r });
   base.userData.duskColor = dusk;
   const duskM = new THREE.MeshStandardMaterial({ color:dusk, roughness:r });
   duskM.userData.duskColor = dusk;
@@ -5245,7 +5258,7 @@ function groundFeaturesFor(d, feats){
   const onIsle = (x, z) => insideIsle(d.id, x / d.r, -z / d.r);
 
   /* ---- the golf course ---- */
-  const fairway = flatSet(0x2C4426, 0x6E8F4E);
+  const fairway = flatSet(0x354E32, 0x657E3F, 0x6E8F4E);
   let golfN = 0;
   for (const ring of (feats.golf || [])){
     if (ring.length < 4) continue;
@@ -5292,9 +5305,9 @@ function groundFeaturesFor(d, feats){
   const TONE = { park:0, garden:0, common:0, recreation_ground:0, village_green:0, pitch:0,
                  grass:1, meadow:1,
                  forest:2, nature_reserve:2 };
-  const greenMat = [ flatSet(0x2E4728, 0x6F8C52),      // mown
-                     flatSet(0x36402A, 0x87895A),      // dry
-                     flatSet(0x1E3221, 0x4A6B3C) ];    // canopy
+  const greenMat = [ flatSet(0x354D35, 0x667B42, 0x6F8C52),   // mown
+                     flatSet(0x414B3A, 0x7C7949, 0x87895A),   // dry
+                     flatSet(0x243B27, 0x445E30, 0x4A6B3C) ]; // canopy
   const gv = [[], [], []], gi = [[], [], []];
   let parkN = 0;
   for (const ring of (feats.parks || [])){
@@ -5336,9 +5349,9 @@ function groundFeaturesFor(d, feats){
      ALTERNATE LAYOUTS ARE DROPPED. Yas returns 13.3 km of raceway, of which only 5.3 km is the
      Grand Prix circuit; 5.0 km of it is the shorter configurations, which run over the SAME
      tarmac. Drawing them lays four circuits on top of each other and the ribbon z-fights itself. */
-  const asphalt = flatSet(0x24262A, 0x3A3D42, 0.95);
-  const kerb    = flatSet(0xC8BFAE, 0xF0EADC, 0.8);
-  const runoff  = flatSet(0x2E6E8E, 0x49A6CB, 0.85);
+  const asphalt = flatSet(0x1C212A, 0x353635, 0x3A3D42, 0.95);
+  const kerb    = flatSet(0x74808D, 0xDCCEB1, 0xF0EADC, 0.8);
+  const runoff  = flatSet(0x235B82, 0x4392A4, 0x49A6CB, 0.85);
   /* WIDER THAN LIFE, DELIBERATELY. Drawn at its true 15 m the circuit was invisible: every gate
      passed, all fourteen ways built, and at district range a 15 m ribbon on a 7.3 km island is a
      hairline that reads as one more dark road among ten thousand. What identifies this circuit
