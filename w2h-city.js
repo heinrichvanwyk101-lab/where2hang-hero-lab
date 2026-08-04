@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v19';
+export const BUILD = 'city v22';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -602,45 +602,65 @@ function ferrariWorld(x0, z0, facing){
   const g = new THREE.Group();
 
   const M = 7.8;                    // must agree with M_PER_UNIT in w2h-world.js
-  const R_OUT = 384 / M, R_IN = 135 / M, PEAK = 48 / M;
-  const EDGE_V = 15 / M, EDGE_T = 5 / M;     // rim height: valleys stay up, tips run out low
-  const FUN_T = 50 / M, FUN_B = 8.5 / M;
+
+  /* THE OUTLINE IS MEASURED, NOT PARAMETERISED. Three attempts to describe this roof with a
+     formula produced three starfish: five equal lobes at 72 degrees, then three, then five swept
+     spikes. Every one of them was symmetrical, and the building is not. Its arms sit at compass
+     60, 91, 188, 219 and 306 - gaps of 30, 97, 30, 87 and 115 degrees - and the longest is twice
+     the shortest. No arrangement of a cosine produces that, because the thing being described
+     was never periodic. That was the real lesson, and it took three goes: the failure was not a
+     wrong constant, it was assuming a symmetry the building does not have.
+
+     So this is the real plan, segmented off an overhead capture and sampled every 5 degrees from
+     the funnel. Two independent checks say the extraction is sound: the funnel measures 106 m
+     across against a published 100, and the same caliper scale that gives 700 m across also puts
+     the Ferrari logo at its surveyed spot on the south flank.
+
+     RADII ARE FROM THE FUNNEL, WHICH IS NOT THE CENTROID - it sits about 48 m north-west of it.
+     Measuring from the funnel carries that offset into the model for free, and the funnel is the
+     group's origin, so no caller has to know about it.
+
+     ORIENTATION IS NOW FIXED TO TRUE BEARINGS and the third argument is IGNORED. It is kept only
+     so the existing call site stays valid. Yas Mall does not need it: a valley faces the mall in
+     reality, and w2h-world.js finds that valley by probing this roof rather than by being told. */
+  const PLAN = [
+      309,   309,   241,   213,   189,   174,
+      165,   159,   157,   155,   152,   152,
+      155,   156,   163,   168,   177,   201,
+      235,   302,   302,   239,   239,   281,
+      313,   223,   191,   170,   157,   148,
+      143,   139,   136,   134,   134,   136,
+      136,   139,   144,   150,   162,   179,
+      202,   242,   242,   221,   221,   230,
+      316,   252,   208,   178,   158,   151,
+      141,   134,   134,   136,   149,   152,
+      152,   102,   102,   106,   158,   175,
+      197,   232,   329,   293,   235,   235,
+  ];
+  const PEAK = 48 / M;
+  const EDGE_V = 14 / M, EDGE_T = 3 / M;
+  const FUN_T = 53 / M, FUN_B = 8.5 / M;      // 106 m across, as measured
   const LOGO_L = 65 / M, LOGO_W = 48.5 / M;
-  const ARMS = 3, LOBE_P = 2.00, SWEEP = 0.16;
-  /* ARM ORIENTATION IS NOT FREE, AND IT IS NOT A NEW NUMBER. Yas Mall is physically attached to
-     this building, and the surveyed footprint proves how: Overture has the two as ONE merged
-     polygon 785 x 679 m, only about 100 m larger than Ferrari World on its own. A mall sitting
-     off an arm TIP would have added four hundred. So Yas Mall tucks into a VALLEY between two
-     arms, and the tri-form has to be turned to present one.
+  const segA = 288, segR = 28, RIM = 2, STRIPE = 1;
 
-     `facing` is the bearing to the attached neighbour, computed by the caller from the two
-     anchors. A valley sits at PHASE + PI/3, so PHASE is that bearing less PI/3. Typing an
-     orientation here instead would be a second place the relationship lives, and it would be
-     wrong the first time either anchor moved — which is the fault that has already cost this
-     repo four separate placement bugs. */
-  const PHASE = (facing === undefined ? -Math.PI / 2 : facing - Math.PI / 3);
-  const AMP = [1.00, 0.95, 0.91];            // near-equal arms, not the old 1.6:1
-  const segA = 216, segR = 26, RIM = 2, STRIPE = 1;
-
-  /* The descent from crown to edge. A double curve, because that is literally the design brief —
+  /* The descent from crown to edge. A double curve, because that is literally the design brief -
      the section is the Ferrari GT side profile. smootherstep is convex then concave and flattens
      at both ends, giving the plateau around the funnel and the long ground-hugging run to the
-     tips. The old power curve could do neither. */
+     tips. A power curve could do neither. */
   const dune = u => { const v = Math.min(1, Math.max(0, Math.pow(u, 0.82)));
                       return 1 - (v * v * v * (v * (v * 6 - 15) + 10)); };
 
-  function amp(th){
-    let num = 0, den = 0;
-    for (let k = 0; k < ARMS; k++){
-      const tk = PHASE + k * Math.PI * 2 / ARMS;
-      const w = Math.pow(0.5 + 0.5 * Math.cos(th - tk), 6);
-      num += AMP[k] * w; den += w;
-    }
-    return den > 1e-9 ? num / den : 1;
-  }
-  const extent = th => R_IN + (R_OUT - R_IN) *
-    Math.pow(0.5 + 0.5 * Math.cos(ARMS * (th - PHASE)), LOBE_P) * amp(th);
-  const edgeAt = E => { const reach = Math.min(1, Math.max(0, (E - R_IN) / (R_OUT - R_IN)));
+  /* Catmull-Rom through the samples, wrapped. Linear interpolation leaves visible facets on the
+     long flanks, where consecutive samples differ by forty metres. */
+  const extent = th => {
+    const n = PLAN.length, f = (th / (Math.PI * 2)) * n;
+    const i1 = ((Math.floor(f) % n) + n) % n, t = f - Math.floor(f);
+    const p0 = PLAN[(i1 - 1 + n) % n], p1 = PLAN[i1], p2 = PLAN[(i1 + 1) % n], p3 = PLAN[(i1 + 2) % n];
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
+                  (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t) / M;
+  };
+  const R_MIN = Math.min.apply(null, PLAN) / M, R_MAX = Math.max.apply(null, PLAN) / M;
+  const edgeAt = E => { const reach = Math.min(1, Math.max(0, (E - R_MIN) / (R_MAX - R_MIN)));
                         return EDGE_V + (EDGE_T - EDGE_V) * reach; };
 
   const pos = [];
@@ -648,8 +668,9 @@ function ferrariWorld(x0, z0, facing){
     const th = (i / segA) * Math.PI * 2;
     for (let j = 0; j <= segR; j++){
       const u = j / segR;
-      const the = th + SWEEP * u;             // the twist is what curves the arms
-      const E = extent(the);
+      /* A slight twist toward the tips only. The measured plan already carries the arms' own
+         curvature, so the old global SWEEP would double it. */
+      const E = extent(th + 0.10 * u * u);
       /* THE INNER BOUNDARY IS A CIRCLE, NOT A SCALED LOBE. The old model shrank the whole star to
          make its hole, so the opening was itself three-pointed and swung between 40 and 115 m of
          radius. The funnel is a circular 100 m opening; against a lobed hole it pokes through the
@@ -725,8 +746,8 @@ function ferrariWorld(x0, z0, facing){
       emissive:0xE8B547, emissiveIntensity:0.55, side:THREE.DoubleSide }));
   sh.rotation.x = -Math.PI / 2;
   {
-    const bear = PHASE + 2 * Math.PI * 2 / ARMS;
-    const uL = 0.42, E = extent(bear + SWEEP * uL);
+    const bear = 106 * Math.PI / 180;         // measured: the logo's own hole in the capture
+    const E = extent(bear), uL = Math.min(0.95, Math.max(0.05, (145 / M - FUN_T) / (E - FUN_T)));
     const rL = FUN_T + (E - FUN_T) * uL, edge = edgeAt(E);
     sh.position.set(Math.cos(bear) * rL, edge + (PEAK - edge) * dune(uL) + 0.06,
                     Math.sin(bear) * rL);
@@ -761,14 +782,28 @@ function ferrariWorld(x0, z0, facing){
 
    ORIENTED EAST-WEST, long axis toward the roof, because that is how it meets it. */
 function yasMall(x0, z0, facing){
-  /* PLAN SCALE, NOT HEIGHT. The box table was authored against a Ferrari World that was three and
-     a half times too small, so the mall was drawn to match it: 187 x 125 m, about 23,000 m2. Yas
-     Mall carries roughly 235,000 m2 of retail over two levels, so the footprint is on the order
-     of 110,000 m2 — call it 400 x 280. S corrects the plan only; the 12-25 m heights were always
-     right for a mall and scaling those would turn it into a stack of offices. */
+  /* YAS MALL. AUTHORED FROM PHOTOGRAPHS, NOT MEASURED - and that distinction is the point.
+     Ferrari World's outline was segmented straight off an overhead capture because the map drew
+     it in a flat highlight colour. Yas Mall has no such highlight: in satellite imagery its roof
+     tones run into the parking aprons and the roads, and every threshold that catches the mall
+     also catches half the island. So this is built to the photographs by eye, and it should be
+     treated as provisional in a way the Ferrari World table is not.
+
+     WHAT THE PHOTOGRAPHS ACTUALLY SHOW, and what the old model got wrong: a long low irregular
+     sprawl, not a symmetrical cluster; big flat multi-storey car decks flanking it; flush
+     circular skylights, NOT the single raised dome that made it read as a temple; and roughly
+     380 x 215 m of it.
+
+     THE LONG AXIS RUNS ACROSS THE APPROACH, ALONG Z. Ferrari World lies off the mall's long
+     FLANK, not off its end - so with the caller pointing local +x at the roof, the mall
+     correctly presents its side. Authoring the table along x instead would turn it end-on, which
+     is what the previous scaled version did.
+
+     Sizes are metres, converted once. The old table was in raw units with a scale factor bolted
+     on top, which is how it ended up authored against a Ferrari World that was itself a third of
+     the right size. */
   const g = new THREE.Group();
-  const S = 2.15;
-  const HALF = 8 * S;
+  const M = 7.8;
 
   const body = new THREE.MeshStandardMaterial({
     color:0x181C20, roughness:0.85, emissive:0xE8B547, emissiveIntensity:0.06 });
@@ -782,48 +817,48 @@ function yasMall(x0, z0, facing){
   glass.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0xD6EAF0, roughness:0.35, metalness:0.2 });
 
-  /* Eleven boxes rather than one. Heights step between 1.6 and 3.2 units — 12 to 25 m — which is
-     the range a mall of this size actually occupies, and the variation is what stops the roofline
-     reading as a single extruded outline. */
+  const deckMat = new THREE.MeshStandardMaterial({ color:0x14181C, roughness:0.95 });
+  deckMat.userData.duskColor = 0x9A968C;
+  deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x9A968C, roughness:0.95 });
+
+  /* dx, dz, width, height, depth - all metres. Deliberately irregular: no two blocks share a
+     face line, because a mall that lines up reads as a warehouse estate. */
   const boxes = [
-    [ -1.0,  0.0, 11.0, 2.6,  9.0], [  5.2, -3.4,  5.0, 2.2,  4.6],
-    [  5.6,  3.2,  4.4, 2.0,  4.2], [ -6.4, -3.0,  4.6, 3.2,  4.0],
-    [ -6.0,  3.4,  4.2, 2.4,  4.4], [  0.4, -6.2,  7.0, 1.8,  3.0],
-    [  0.0,  6.4,  6.4, 2.0,  3.0], [ -9.0,  0.2,  3.0, 1.6,  6.0],
-    [  8.0,  0.0,  3.2, 2.8,  5.0], [  2.6,  4.8,  3.0, 3.0,  2.6],
-    [  2.2, -4.6,  2.8, 2.6,  2.4],
+    [   0,    0, 130, 26, 190], [  55,  -75,  55, 23, 100],
+    [ -60,  -80,  60, 20, 110], [  10,   78,  55, 21, 150],
+    [  15,  120, 100, 25,  90], [ -10, -125,  95, 17,  80],
+    [  80,   95,  45, 15,  60], [ -85,  -60,  50, 14,  55],
+    [ -70,   55,  45, 18,  70], [  70,  -20,  40, 22,  65],
   ];
   for (const [dx, dz, w, h, dp] of boxes){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, h, dp * S), body);
-    m.position.set(dx * S, h / 2, dz * S);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, dp / M), body);
+    m.position.set(dx / M, h / M / 2, dz / M);
     m.castShadow = true; m.receiveShadow = true;
     g.add(m);
   }
 
-  /* The skylight ridge. Pale and slightly raised, running the long axis — the one feature that
-     identifies this as a mall rather than a warehouse. */
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(10.0 * S, 0.7, 1.8 * S), glass);
-  ridge.position.set(-1.0 * S, 2.95, 0);
-  g.add(ridge);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9 * S, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass);
-  dome.position.set(-1.0 * S, 2.6, 0);
-  g.add(dome);
-
-  /* Car decks west, flat and low. Reference has these as a large pale apron, and without them the
-     mall floats in sand. */
-  const deckMat = new THREE.MeshStandardMaterial({ color:0x14181C, roughness:0.95 });
-  deckMat.userData.duskColor = 0x9A968C;
-  deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x9A968C, roughness:0.95 });
-  for (const [dx, dz, w, dp] of [[-11.5, -4.0, 5.0, 6.0], [-11.5, 3.6, 5.0, 5.6]]){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, 1.1, dp * S), deckMat);
-    m.position.set(dx * S, 0.55, dz * S);
+  /* Car decks. Low, flat and large - in the photographs they take up as much ground as the
+     retail does, and without them the mall reads as a single block dropped in sand. */
+  for (const [dx, dz, w, dp] of [[-55, -160, 80, 90], [60, 150, 75, 85], [-75, 130, 60, 70]]){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, 11 / M, dp / M), deckMat);
+    m.position.set(dx / M, 11 / M / 2, dz / M);
     m.receiveShadow = true;
     g.add(m);
   }
 
-  g.userData.half = HALF;
-  /* The mall's long axis runs INTO the valley, so its short end meets the roof. `facing` is the
-     bearing back to Ferrari World; the box table's long axis is x, hence the negation. */
+  /* Skylights, FLUSH. Three shallow discs and a ridge along the spine. The old model had a 30 m
+     hemisphere here, which at this footprint read as a mosque. */
+  for (const [dx, dz, r] of [[-5, -25, 26], [20, 40, 20], [-20, 95, 16]]){
+    const d = new THREE.Mesh(new THREE.CylinderGeometry(r / M, r / M, 3 / M, 20), glass);
+    d.position.set(dx / M, 26.5 / M, dz / M);
+    g.add(d);
+  }
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(22 / M, 4 / M, 150 / M), glass);
+  ridge.position.set(-40 / M, 26.5 / M, 10 / M);
+  g.add(ridge);
+
+  g.userData.half = 190 / M;
+  /* `facing` is the bearing back to Ferrari World; local +x is turned to face it. */
   if (facing !== undefined) g.rotation.y = -facing;
   g.position.set(x0, 0, z0);
   return g;
