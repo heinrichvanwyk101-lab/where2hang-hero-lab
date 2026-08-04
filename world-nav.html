@@ -3255,7 +3255,11 @@ function frame(){
         const st = gfState.get(x.id), t = x.id.slice(0, 2);
         return st === 'on'
           ? t + (x.trackN ? ' t' + x.trackN : '') + (x.golfN ? ' g' + x.golfN : '') +
-                (x.parkRealN ? ' p' + x.parkRealN : '')
+                (x.parkRealN ? ' p' + x.parkRealN : '') +
+                /* Yas Bay land-use cells. On the gf row because that is where they are built and
+                   where they would go missing — a `b` that never appears means the block did not
+                   run, which is exactly the failure the first version had and nothing reported. */
+                (x.baySurf ? ' b' + x.baySurf : '')
           : t + ' ' + (st || '-');
       }).join('  ') + '\n' +
       /* PROGRAMS, because compile came back at 23,681 ms and nothing on this overlay said why.

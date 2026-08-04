@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v136';
+export const BUILD = 'world v137';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5050,119 +5050,6 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      the one landmark on Yas that genuinely needs one: the footprint underneath is 270 x 136 m of
      conflated plot at a flat 40 m, and without the zone the authored hotel would stand inside a
      slab of its own forecourt. The pier never did this, and the pier was never right. */
-  /* YAS BAY GROUND, AND THE BANDS ARE MEASURED RATHER THAN CHOSEN.
-
-     Fifty-nine surveyed pins across this waterfront, sorted by distance to the baked coastline,
-     fall into groups with EMPTY GAPS between them. Nothing sits between 40 and 46 m, and nothing
-     between 79 and 88 m. So the two thresholds land in space the data does not occupy, which is
-     the only kind of threshold worth writing down:
-
-       BEACH        outer 22 m of the shore band
-       PROMENADE    22 to 43 m — paved walkway
-       DECK/GARDEN  43 to 83 m — pool terraces and planting
-       BUILT        beyond 83 m
-
-     THE ONE EXCEPTION IS THE CHANNEL between the pier and the shore. That edge is quay wall,
-     paved to the waterline, which is why Asia Asia stands 25 m out on hard standing rather than
-     on sand. Without the exception the whole marina edge came back as beach, which it plainly is
-     not — and that was visible the moment it was drawn.
-
-     WHY THIS IS GROUND AND NOT BUILDINGS. The bands say what the SURFACE is. They do not place a
-     single wall, and the built band is deliberately left as paving here rather than extruded: the
-     bake's own footprints and the Hilton landmark stand on it. Painting ground is reversible and
-     cannot hide anything; extruding 8.7 ha on a threshold would be the pier mistake again. */
-  if (SITE_YASBAY && outlineClosed(yas.id)){
-    const ring = outlineClosed(yas.id).map(p => [p[0] * yas.r, -p[1] * yas.r]);
-    const CO = [];
-    for (let i = 0; i < ring.length; i++){
-      const a = ring[i], b = ring[(i + 1) % ring.length];
-      const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * M_PER_UNIT / 8));
-      for (let t = 0; t < n; t++) CO.push([a[0] + (b[0] - a[0]) * t / n, a[1] + (b[1] - a[1]) * t / n]);
-    }
-    const nearM = (x, z) => { let m = Infinity;
-      for (const q of CO){ const dx = q[0] - x, dz = q[1] - z, dd = dx * dx + dz * dz; if (dd < m) m = dd; }
-      return Math.sqrt(m) * M_PER_UNIT; };
-    const inPoly = (P, x, z) => { let c = false;
-      for (let i = 0, j = P.length - 1; i < P.length; j = i++){
-        const xi = P[i][0], zi = P[i][1], xj = P[j][0], zj = P[j][1];
-        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) c = !c; }
-      return c; };
-
-    /* 5 m cells, merged per band into one geometry each — four draw calls, not seven thousand. */
-    const CELL = 5 / M_PER_UNIT;
-    const bands = [[], [], [], []];
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (const p of SITE_YASBAY){ x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
-                                  z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
-    for (let x = x0; x < x1; x += CELL) for (let z = z0; z < z1; z += CELL){
-      const mx = x + CELL / 2, mz = z + CELL / 2;
-      if (!inPoly(SITE_YASBAY, mx, mz)) continue;
-      if (!insideIsle(yas.id, mx / yas.r, -mz / yas.r)) continue;
-      const dd = nearM(mx, mz);
-      let b;
-      if (dd < 43){
-        const chan = mx > -53.6 && mx < -22.8 && mz > 397.4 && mz < 420.5;
-        b = (dd < 22 && !chan) ? 0 : 1;
-      } else b = dd < 83 ? 2 : 3;
-      bands[b].push([x, z]);
-    }
-    /* sand, paving, planted deck, built ground — all keyed off the island's own day/dusk/night
-       ramp so they move with it rather than being three colours picked once. */
-    const SET = [flatSet(0x6E6552, 0xC6B393, 0xE4D2A8, 0.95, 6),
-                 flatSet(0x5F6670, 0xB6AE9E, 0xD8D2C4, 0.92, 6),
-                 flatSet(0x3E4C3A, 0x6F7A54, 0x7A8A62, 0.9,  6),
-                 flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.9,  6)];
-    let laid = 0;
-    bands.forEach((cells, i) => {
-      if (!cells.length) return;
-      const pos = new Float32Array(cells.length * 18), nor = new Float32Array(cells.length * 18);
-      cells.forEach(([x, z], j) => {
-        const o = j * 18, X = x + CELL, Z = z + CELL;
-        const q = [x,0,z, X,0,z, X,0,Z, x,0,z, X,0,Z, x,0,Z];
-        for (let t = 0; t < 18; t++){ pos[o + t] = q[t]; nor[o + t] = t % 3 === 1 ? 1 : 0; }
-      });
-      const g2 = new THREE.BufferGeometry();
-      g2.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      g2.setAttribute('normal',   new THREE.BufferAttribute(nor, 3));
-      const m = new THREE.Mesh(g2, SET[i].base);
-      m.position.y = GROUND + 0.004;
-      m.userData.dayMats = SET[i].dayM;
-      m.userData.duskMats = SET[i].duskM;
-      m.userData.planMats = SET[i].planM;
-      m.userData.ground = true;
-      m.receiveShadow = true;
-      yas.detail.add(m);
-      laid += cells.length;
-    });
-    yas.baySurf = laid;
-
-    /* THE CAR PARK, FOUR SURVEYED CORNERS. 99 x 227 m, diagonals 246 and 248 against a predicted
-       248 — it closes as a true rectangle, so this is a measurement and not a trace. Tarmac with
-       bay markings, flat, and OUTSIDE the site hull above because it is a separate plot with its
-       own edge rather than part of the waterfront's band structure. */
-    const CPk = [[-45.90,392.10],[-43.05,404.42],[-71.57,410.41],[-74.42,399.00]];
-    const cpc = CPk.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]);
-    const cpTh = Math.atan2(CPk[3][1] - CPk[0][1], CPk[3][0] - CPk[0][0]);
-    const tar = flatSet(0x22262B, 0x44484D, 0x4B5056, 0.95, 6);
-    const cp = new THREE.Mesh(new THREE.PlaneGeometry(227 / M_PER_UNIT, 99 / M_PER_UNIT), tar.base);
-    cp.rotation.x = -Math.PI / 2; cp.rotation.z = -cpTh;
-    cp.position.set(cpc[0], GROUND + 0.006, cpc[1]);
-    cp.userData.dayMats = tar.dayM; cp.userData.duskMats = tar.duskM;
-    cp.userData.planMats = tar.planM; cp.userData.ground = true;
-    cp.receiveShadow = true;
-    yas.detail.add(cp);
-    /* Six aisle stripes. Enough to read as parking from the district camera and no more. */
-    const line = flatSet(0x6A6E72, 0xB8BCC0, 0xD2D6DA, 0.9, 7);
-    for (let i = -2.5; i <= 2.5; i++){
-      const st = new THREE.Mesh(new THREE.PlaneGeometry(219 / M_PER_UNIT, 0.9 / M_PER_UNIT), line.base);
-      st.rotation.x = -Math.PI / 2; st.rotation.z = -cpTh;
-      const c = Math.cos(cpTh), s2 = Math.sin(cpTh), off = i * 15.5 / M_PER_UNIT;
-      st.position.set(cpc[0] - off * s2, GROUND + 0.008, cpc[1] + off * c);
-      st.userData.dayMats = line.dayM; st.userData.duskMats = line.duskM;
-      st.userData.planMats = line.planM; st.userData.ground = true;
-      yas.detail.add(st);
-    }
-  }
   if (kit.hiltonYasBay) built.push(kit.hiltonYasBay(-23.7, 388.7, -0.2057));
 
   /* THE JETTY, AND IT DELIBERATELY DOES NOT GO THROUGH `built`.
@@ -5518,7 +5405,124 @@ function groundFeaturesFor(d, feats){
   }
 
   d.golfN = golfN; d.trackN = trackN; d.parkRealN = parkN;
-  return (golfN || trackN || parkN) ? g : null;
+  /* ---- YAS BAY: LAND USE, AND IT LIVES HERE BECAUSE IT IS A GROUND FEATURE ----
+
+     THE FIRST VERSION OF THIS WAS ATTACHED IN THE LANDMARK PASS AND DREW NOTHING. Not broken —
+     UNREGISTERED. Every ground feature in this file is added to a group that world-nav then puts
+     through `snapshotMats(g); registerLift(g); applyView(view)`, and meshes that skip those three
+     calls get swept by applyView into a state that never renders. Nothing throws, nothing warns,
+     and the counters all look healthy. Building it in the right place is the fix; there was never
+     anything wrong with the geometry.
+
+     THE BANDS ARE MEASURED. Fifty-nine surveyed pins across this waterfront, sorted by distance
+     to the baked coastline, fall into groups with EMPTY GAPS between them — nothing between 40
+     and 46 m, nothing between 79 and 88 m. So the thresholds sit in space the data does not
+     occupy, which is the only kind of threshold worth writing down:
+
+       BEACH        outer 22 m of the shore band
+       PROMENADE    22 to 43 m, paved
+       DECK/GARDEN  43 to 83 m, pool terraces and planting
+       BUILT        beyond 83 m, painted not extruded
+
+     THE CHANNEL IS THE EXCEPTION. Between the pier and the shore the edge is quay wall, paved to
+     the waterline, which is why Asia Asia stands 25 m out on hard standing rather than on sand.
+     Without it the whole marina edge came back as beach, which it plainly is not. */
+  if (d.id === 'yas' && SITE_YASBAY && outlineClosed(d.id)){
+    const ring = outlineClosed(d.id).map(p => [p[0] * d.r, -p[1] * d.r]);
+    const CO = [];
+    for (let i = 0; i < ring.length; i++){
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * M_PER_UNIT / 8));
+      for (let t = 0; t < n; t++) CO.push([a[0] + (b[0] - a[0]) * t / n, a[1] + (b[1] - a[1]) * t / n]);
+    }
+    const nearM = (x, z) => { let m = Infinity;
+      for (const q of CO){ const dx = q[0] - x, dz = q[1] - z, dd = dx * dx + dz * dz; if (dd < m) m = dd; }
+      return Math.sqrt(m) * M_PER_UNIT; };
+    const inPoly = (P, x, z) => { let c = false;
+      for (let i = 0, j = P.length - 1; i < P.length; j = i++){
+        const xi = P[i][0], zi = P[i][1], xj = P[j][0], zj = P[j][1];
+        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) c = !c; }
+      return c; };
+
+    const CELL = 5 / M_PER_UNIT;
+    const cells = [[], [], [], []];
+    let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
+    for (const p of SITE_YASBAY){ bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]);
+                                  bz0 = Math.min(bz0, p[1]); bz1 = Math.max(bz1, p[1]); }
+    for (let x = bx0; x < bx1; x += CELL) for (let z = bz0; z < bz1; z += CELL){
+      const mx = x + CELL / 2, mz = z + CELL / 2;
+      if (!inPoly(SITE_YASBAY, mx, mz)) continue;
+      if (!onIsle(mx, mz)) continue;
+      const dd = nearM(mx, mz);
+      let b;
+      if (dd < 43){
+        const chan = mx > -53.6 && mx < -22.8 && mz > 397.4 && mz < 420.5;
+        b = (dd < 22 && !chan) ? 0 : 1;
+      } else b = dd < 83 ? 2 : 3;
+      cells[b].push([x, z]);
+    }
+    /* Sand, paving, planted deck, built ground. Keyed off the island's own day/dusk/night ramp
+       through flatSet, so they move with it instead of being three colours picked once. */
+    const BAY = [flatSet(0x6E6552, 0xC6B393, 0xE4D2A8, 0.95, 6),
+                 flatSet(0x5F6670, 0xB6AE9E, 0xD8D2C4, 0.92, 6),
+                 flatSet(0x3E4C3A, 0x6F7A54, 0x7A8A62, 0.90, 6),
+                 flatSet(0x596069, 0xADA694, 0xC8C2B2, 0.90, 6)];
+    let bayN = 0;
+    cells.forEach((cs, i) => {
+      if (!cs.length) return;
+      const pos = new Float32Array(cs.length * 18), nor = new Float32Array(cs.length * 18);
+      cs.forEach(([x, z], j) => {
+        const o = j * 18, X = x + CELL, Z = z + CELL;
+        const q = [x,0,z, X,0,z, X,0,Z, x,0,z, X,0,Z, x,0,Z];
+        for (let t = 0; t < 18; t++){ pos[o + t] = q[t]; nor[o + t] = t % 3 === 1 ? 1 : 0; }
+      });
+      const bg = new THREE.BufferGeometry();
+      bg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      bg.setAttribute('normal',   new THREE.BufferAttribute(nor, 3));
+      const m = new THREE.Mesh(bg, BAY[i].base);
+      m.position.y = GROUND + 0.004;
+      m.receiveShadow = true;
+      g.add(tagGround(m, BAY[i])); bayN += cs.length;
+    });
+
+    /* THE CAR PARK. Four surveyed corners: 99 x 227 m, diagonals 246 and 248 against a predicted
+       248, so it closes as a true rectangle. Its own plot, outside the band structure. */
+    const CPk = [[-45.90,392.10],[-43.05,404.42],[-71.57,410.41],[-74.42,399.00]];
+    const cpc = CPk.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]);
+    const cpTh = Math.atan2(CPk[3][1] - CPk[0][1], CPk[3][0] - CPk[0][0]);
+    const tar = flatSet(0x22262B, 0x44484D, 0x4B5056, 0.95, 6);
+    const cp = new THREE.Mesh(new THREE.PlaneGeometry(227 / M_PER_UNIT, 99 / M_PER_UNIT), tar.base);
+    cp.rotation.x = -Math.PI / 2; cp.rotation.z = -cpTh;
+    cp.position.set(cpc[0], GROUND + 0.006, cpc[1]);
+    cp.receiveShadow = true;
+    g.add(tagGround(cp, tar));
+    const line = flatSet(0x6A6E72, 0xB8BCC0, 0xD2D6DA, 0.9, 7);
+    for (let i = -2.5; i <= 2.5; i++){
+      const st = new THREE.Mesh(new THREE.PlaneGeometry(219 / M_PER_UNIT, 0.9 / M_PER_UNIT), line.base);
+      st.rotation.x = -Math.PI / 2; st.rotation.z = -cpTh;
+      const c2 = Math.cos(cpTh), s2 = Math.sin(cpTh), off = i * 15.5 / M_PER_UNIT;
+      st.position.set(cpc[0] - off * s2, GROUND + 0.008, cpc[1] + off * c2);
+      g.add(tagGround(st, line));
+    }
+
+    /* THE POOLS, WHICH WERE DRAWN ON THE PLAN AND NEVER BUILT. Three of them: the two Hilton
+       courtyards between the arms of the E, and the sea-edge pool at the headland — the one that
+       reads as an infinity edge in every photograph of this hotel. Water, so they get their own
+       ramp rather than the ground's: bright in Day, dark and reflective at night. */
+    const wat = flatSet(0x14313B, 0x2E7E92, 0x37A6C0, 0.25, 8);
+    const HC = (u, v) => { const c2 = Math.cos(0.2057), s2 = Math.sin(0.2057);
+      return [-23.7 + (u * c2 - v * s2) / M_PER_UNIT, 388.7 + (u * s2 + v * c2) / M_PER_UNIT]; };
+    for (const [u, v, w, h] of [[30, 14, 92, 30], [-45, 12, 80, 26], [-96, 52, 74, 26]]){
+      const c3 = HC(u, v);
+      const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
+      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -0.2057;
+      pm.position.set(c3[0], GROUND + 0.010, c3[1]);
+      g.add(tagGround(pm, wat));
+    }
+    d.baySurf = bayN;
+  }
+
+  return (golfN || trackN || parkN || d.baySurf) ? g : null;
 }
 
 function footprintsFor(d, list){
