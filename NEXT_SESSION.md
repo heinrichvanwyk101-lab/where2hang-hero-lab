@@ -75,7 +75,40 @@ Fritzing after v129 is untested here; polygonOffset is correctly spread onto all
 four materials (base, dayM, duskM, planM), so if it persists the next suspect is
 still the merged park geometry self-overlapping where OSM rings overlap.
 
-## OPEN
+
+**3. The Hilton coordinate found a systemic facade fault.** 24.459403/54.600993
+lands on a baked footprint: 270 x 136 m, rot 13.6 deg, h 40 m, `vk:"dine"`. Ten
+venues join to it — seven restaurants, two bars, a lounge — because the venue
+dataset carries no lodging class anywhere on this waterfront. So the join had no
+way to know it is a hotel, and a 40 m Hilton has been drawing as white render
+with restaurant window spacing.
+
+Not one building: **117 footprints over 6,000 m2 wear a restaurant facade**, the
+worst 785 x 679 m with 143 venues joined — half a million square metres of mall
+rendered as a diner. `world v131` guards it — above 2,500 m2 OR four joined
+venues the vk is dropped and `typeOf(h)` reads the building's own mass instead.
+2,500 m2 is about the 85th percentile of joined footprints, so roughly a fifth
+change and the small ones keep the mechanism untouched.
+
+## OPEN — the Hilton, and what one coordinate cannot buy
+
+The coordinate anchors it and it fixed the facade. It does not give the FORM, and
+the form is where this one is currently wrong: the bake has it as a single flat
+slab 270 x 136 m at a uniform 40 m. The real hotel is not flat — it is towers over
+a podium, and 40 m is the podium.
+
+Also worth knowing: **only 32 of Yas's 3,938 footprints carry any height at all**,
+and two of those "buildings" are 785 x 679 m and 713 x 694 m — Overture conflation
+merges, not buildings. Large complexes on this island are not reliable geometry.
+
+To build it properly, per the rule that a clean plan beats a formula:
+  - a coordinate on each tower, so the towers can be placed inside the envelope
+  - storey count per tower — height falls out at about 3.2 m a storey, and that is
+    the number that stops it being a slab
+Photographs of the finished building for the facade, not renders. That rule has
+already been paid for twice on this waterfront.
+
+## OPEN — the pier
 
 **The actual pier.** The jetty with the moorings, immediately alongside the
 promontory. That one IS over water, the footprint pass does clip it, and it is

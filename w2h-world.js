@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v130';
+export const BUILD = 'world v131';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5571,8 +5571,27 @@ function footprintsFor(d, list){
   const VK_MAT = { dine:'white', culture:'stone', worship:'stone',
                    sport:'clad', leisure:'rend', other:null };
   const typeOf = h => h > tallest * 0.62 ? 'glass' : h > tallest * 0.3 ? 'clad' : 'rend';
-  const matOf  = sp => (sp.vk && VK_MAT[sp.vk]) || typeOf(sp.h);
-  const winOf  = sp => sp.vk === 'dine'
+  /* THE VENUE TELLS YOU WHAT IS INSIDE, NOT WHAT THE BUILDING IS, AND ABOVE A CERTAIN SIZE THOSE
+     ARE DIFFERENT QUESTIONS. The join is by coordinate, so whichever venue lands in a footprint
+     wins it. That is right for a 550 m2 building — the median vk footprint, and at that size the
+     restaurant IS the building. It is wrong for the Hilton at Yas Bay: 270 x 136 m, ten venues
+     inside it, every one of them a restaurant, bar or lounge because the dataset carries no
+     lodging class. So a 40 m hotel was drawing as white render with restaurant window spacing.
+
+     It is not one building. 117 footprints over 6,000 m2 wear a restaurant facade, and the worst
+     is 785 x 679 m with 143 venues joined to it — half a million square metres of mall, rendered
+     as a diner.
+
+     TWO SIGNALS, EITHER SUFFICIENT. Too big to be one venue, or too many venues to be one venue.
+     Above either, fall back to typeOf(h), which reads the building's own mass. 2,500 m2 sits near
+     the 85th percentile of vk footprints, so the ones this takes away are the ones that were
+     never a single tenancy. About a fifth of joined footprints change; the other four fifths keep
+     the mechanism exactly as it was. */
+  const VK_MAX_M2 = 2500, VK_MAX_V = 4;
+  const vkOf   = sp => (sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT > VK_MAX_M2 || sp.v >= VK_MAX_V)
+                     ? null : sp.vk;
+  const matOf  = sp => (vkOf(sp) && VK_MAT[vkOf(sp)]) || typeOf(sp.h);
+  const winOf  = sp => vkOf(sp) === 'dine'
                      ? Math.min(WCLASS.length - 1, wClass(sp.h) + 1)
                      : wClass(sp.h);
   const need = new Map();
