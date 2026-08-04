@@ -426,14 +426,22 @@ const VENUE_BUCKET = (k) => {
 };
 
 let VENUES = null;
-function venuesLoad(){
+/* ASYNC, AND THE FS IMPORT IS LOCAL. This file has no top-level `fs` — every consumer does its own
+   `await import('node:fs/promises')` inside the function that needs it. A first version used bare
+   fs.existsSync and fs.readFileSync and died with "fs is not defined" after Corniche had already
+   spent four minutes on Overpass. Missing existence is handled by catching the read rather than by
+   a separate stat, which is also how the Overture loader checks for its extract. */
+async function venuesLoad(){
   if (VENUES !== null) return VENUES;
-  if (!fs.existsSync(VENUES_NDJSON)){
+  const fs = await import('node:fs/promises');
+  let raw;
+  try { raw = await fs.readFile(VENUES_NDJSON, 'utf8'); }
+  catch {
     process.stderr.write(`  venues: ${VENUES_NDJSON} absent — buildings get no venue attributes\n`);
     return (VENUES = []);
   }
   const out = [];
-  for (const line of fs.readFileSync(VENUES_NDJSON, 'utf8').split('\n')){
+  for (const line of raw.split('\n')){
     if (!line.trim()) continue;
     try {
       const v = JSON.parse(line);
@@ -447,8 +455,8 @@ function venuesLoad(){
 
 /* Point in oriented box, gridded. 10,420 points against 20,262 boxes on Corniche is 200 million
    naive tests; a 120 m grid makes it a few hundred thousand. Same argument as roadGrid. */
-function attachVenues(buildings, proj, id){
-  const V = venuesLoad();
+async function attachVenues(buildings, proj, id){
+  const V = await venuesLoad();
   if (!V.length || !buildings.length) return 0;
   const CELL = 120;
   const grid = new Map();
@@ -1069,7 +1077,7 @@ async function bakeIsland(isle, proj){
      the index writer and never written into an island file. */
   /* AFTER the coastline clip and the area filter, so the join runs against exactly the buildings
      that ship rather than against everything the box returned. */
-  attachVenues(buildings, proj, isle.id);
+  await attachVenues(buildings, proj, isle.id);
 
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
            golf, raceway,
