@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v118';
+export const BUILD = 'world v119';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5149,25 +5149,38 @@ function groundFeaturesFor(d, feats){
   }
 
   /* ---- real parkland ----
-     TWO FILTERS, AND BOTH ARE LOAD-BEARING. Corniche returns 1,321 polygons totalling 3,380
-     hectares, a third of the island, because `landuse=grass` and `forest` are draped over desert
-     scrub in blankets up to 986 ha. Greening that is the lawn flood.
+     TINTED BY KIND, NOT FILTERED BY SIZE, and the measurement is why. Corniche carries 2,227 ha
+     of green against 9,163 ha of land - 24 per cent - and Yas 22 per cent. For a city irrigated
+     as heavily as this one that is roughly right, so a size cap was solving the wrong problem: an
+     earlier version dropped anything over 12 ha and still kept 1,319 of 1,321 rings, because the
+     blankets are individually small and collectively large.
 
-       KIND — genuine amenity greenery is drawn at any size. Landuse blankets are drawn only if
-       they are small enough to be a real field rather than a survey of the scrub.
-       SIZE — the cap is in hectares because that is the unit the fault appears in.
+     WHAT WOULD ACTUALLY HAVE LOOKED WRONG is the composition. Corniche's single biggest polygon
+     is a 986 ha `nature_reserve` - the mangroves - and Yas's is 194 ha of `meadow`. Painting
+     either the same mown green as a city park is the fault. Three tones instead:
 
-     ONE MERGED GEOMETRY, NOT ONE MESH PER RING. 1,321 meshes is 1,321 draw calls on the island
-     that is already the heaviest in the scene. */
-  const AMENITY = { park:1, garden:1, common:1, recreation_ground:1, pitch:1, village_green:1,
-                    nature_reserve:1 };
-  const BLANKET_CAP = 12e4;                 // 12 ha; above this a landuse ring is scrub, not lawn
-  const lawn = flatMat(0x2E4728, 0x6F8C52);
-  const pv = [], pi = [];
+       lawn    park, garden, common, recreation_ground, village_green, pitch
+       dry     grass, meadow          - irrigated verge and dry ground, yellower
+       canopy  forest, nature_reserve - mangrove and plantation, darker
+
+     UNKNOWN KINDS ARE DROPPED, and that is a real filter rather than a defensive one: the bake's
+     branch ends in a `|| t.landuse` catch-all, which let `landuse=commercial` and
+     `outdoor_seating` through. Neither is green. An explicit map means a surprise tag is invisible
+     rather than bright green, and it costs no re-bake to change.
+
+     THREE MERGED GEOMETRIES, NOT 1,321 MESHES. That many draw calls on the heaviest island in the
+     scene is not a trade worth discussing. */
+  const TONE = { park:0, garden:0, common:0, recreation_ground:0, village_green:0, pitch:0,
+                 grass:1, meadow:1,
+                 forest:2, nature_reserve:2 };
+  const greenMat = [ flatMat(0x2E4728, 0x6F8C52),      // mown
+                     flatMat(0x36402A, 0x87895A),      // dry
+                     flatMat(0x1E3221, 0x4A6B3C) ];    // canopy
+  const gv = [[], [], []], gi = [[], [], []];
   let parkN = 0;
   for (const ring of (feats.parks || [])){
-    if (ring.length < 4) continue;
-    if (!AMENITY[ring.kind] && ring.areaM2 > BLANKET_CAP) continue;
+    const t = TONE[ring.kind];
+    if (t === undefined || ring.length < 4) continue;
     let inside = 0;
     for (const p of ring) if (onIsle(p[0], p[1])) inside++;
     if (inside < ring.length * 0.5) continue;
@@ -5178,20 +5191,24 @@ function groundFeaturesFor(d, feats){
     let geo;
     try { geo = new THREE.ShapeGeometry(shape); } catch (e){ continue; }
     const pos = geo.attributes.position, ix = geo.index;
-    if (!pos || !ix) continue;
-    const base = pv.length / 3;
+    if (!pos || !ix){ geo.dispose(); continue; }
+    const base = gv[t].length / 3;
+    /* ShapeGeometry lays out in XY; this reads it straight into world XZ, so shape-y becomes -z.
+       Getting that sign wrong mirrors the parkland north to south, which still looks plausible
+       and is therefore the failure worth naming. */
     for (let i = 0; i < pos.count; i++)
-      pv.push(pos.getX(i), GROUND + 0.006, -pos.getY(i));   // ShapeGeometry is XY; y -> -z
-    for (let i = 0; i < ix.count; i++) pi.push(base + ix.getX(i));
+      gv[t].push(pos.getX(i), GROUND + 0.006 - t * 0.001, -pos.getY(i));
+    for (let i = 0; i < ix.count; i++) gi[t].push(base + ix.getX(i));
     geo.dispose();
     parkN++;
   }
-  if (pv.length){
+  for (let t = 0; t < 3; t++){
+    if (!gv[t].length) continue;
     const pg = new THREE.BufferGeometry();
-    pg.setAttribute('position', new THREE.Float32BufferAttribute(pv, 3));
-    pg.setIndex(pi);
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(gv[t], 3));
+    pg.setIndex(gi[t]);
     pg.computeVertexNormals();
-    const pm = new THREE.Mesh(pg, lawn);
+    const pm = new THREE.Mesh(pg, greenMat[t]);
     pm.receiveShadow = true;
     g.add(pm);
   }
