@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v24';
+export const BUILD = 'city v25';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -803,6 +803,139 @@ function ferrariWorld(x0, z0, facing){
    this is the largest roof on the island after Ferrari World.
 
    ORIENTED EAST-WEST, long axis toward the roof, because that is how it meets it. */
+/* ETIHAD ARENA, Yas Bay. HOK, 2021.
+
+   MEASURED FOOTPRINT, INFERRED HEIGHT. The bake carries 158 x 151 m at rot 0.49, four metres from
+   the landmark anchor, and that is what the plan is built to. It also carries h 25, which is not
+   used: an 18,000-seat bowl needs more than 25 m of clear height before any roof structure, and
+   the elevations show a wall, a deep fascia and a shallow hat above it. 42 m to the crown is the
+   one number here that is not surveyed.
+
+   THE MASSING TOOK SIX GOES AND THE FAULT WAS ALWAYS THE SAME. Early versions tapered from 0.58
+   of the radius at the base to 1.00 at the eave, which is a BOWL — and no amount of recolouring
+   stops a bowl reading as a coin. The elevations show a slab: base very nearly as wide as eave,
+   leaning out about ten per cent over the whole height, with a shallow hipped hat that is roughly
+   a third of the total. Massing first, materials second; done the other way round it cost hours.
+
+   GOLD SHELL, DARK GROUND FLOOR. One elevation sheet shows a charcoal roof with a gold fascia
+   band and I rebuilt to it; a second sheet and every photograph show the whole shell in the same
+   bronze shingle, roof included, with dark only at ground level and in the entrance recess. The
+   photographs win — the same rule Ferrari World taught, which I failed to apply to a drawing.
+
+   NIGHT IS HALF THE BUILDING. Warm amber washing up the shingle courses and COOL WHITE strips
+   down every corner fold: two opposed colour temperatures, and the thing that makes this
+   recognisable after dark. The strips are nightOnly — in daylight they are shadow grooves, not
+   objects. None of it is verifiable on the bench, which reads colour and ignores emissive. */
+function etihadArena(x0, z0){
+  const g = new THREE.Group();
+  const M = 7.8;
+  const R = 79 / M, H_MAIN = 27 / M, H_PLIN = 3 / M, CHAMF = 15 / M, ROOF_R = 0.50, SEG = 8;
+  /* Near vertical. The lean is ten per cent over the whole height, not forty-two. */
+  const PROFILE = [[0.00, 0.90], [0.35, 0.96], [0.70, 1.00], [1.00, 1.00]];
+  const rAt = t => {
+    for (let i = 1; i < PROFILE.length; i++){
+      if (t <= PROFILE[i][0]){
+        const [t0, r0] = PROFILE[i - 1], [t1, r1] = PROFILE[i];
+        return R * (r0 + (r1 - r0) * (t - t0) / (t1 - t0));
+      }
+    }
+    return R;
+  };
+
+  /* duskColor and dayMats on the MATERIAL, which is the kit's convention; world-nav.html's
+     snapshotMats promotes it onto the mesh, because applyView reads it from there. */
+  const mk = (dusk, day, rough, metal, emis, ei) => {
+    const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough, metalness:metal || 0 });
+    if (emis !== undefined){ m.emissive = new THREE.Color(emis); m.emissiveIntensity = ei; }
+    m.userData.duskColor = dusk;
+    m.userData.dayMats = new THREE.MeshStandardMaterial({
+      color:day, roughness:rough, metalness:metal || 0 });
+    return m;
+  };
+  const wallG  = mk(0x1B2126, 0x2B3238, 0.35, 0.25);
+  const gold   = mk(0x6B5127, 0xB08A45, 0.50, 0.35, 0xC96A1E, 0.42);
+  const goldL  = mk(0x7C6033, 0xC2A05A, 0.45, 0.35, 0xE0842C, 0.50);
+  const roofL  = mk(0x74582A, 0xBD9A50, 0.60, 0.25, 0xB55E1A, 0.30);
+  const panel  = mk(0x7D6234, 0xC8A961, 0.60, 0.20, 0xA85416, 0.22);
+  const podium = mk(0x5E5B54, 0x9C988F, 0.95, 0);
+  const wallD  = mk(0x664D25, 0xA8843F, 0.55, 0.35);
+  const screen = mk(0x141A20, 0x1D242B, 0.20, 0.45, 0xBFD8EA, 0.85);
+
+  const ring = (rB, rT, h, y, mat) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rT, rB, h, SEG, 1, true), mat);
+    m.position.y = y; m.rotation.y = Math.PI / SEG;
+    m.castShadow = true; m.receiveShadow = true;
+    g.add(m); return m;
+  };
+
+  const plinth = new THREE.Mesh(
+    new THREE.CylinderGeometry(rAt(0) * 1.14, rAt(0) * 1.16, H_PLIN, SEG), podium);
+  plinth.position.y = H_PLIN / 2; plinth.rotation.y = Math.PI / SEG;
+  plinth.receiveShadow = true;
+  g.add(plinth);
+
+  const N = 10, bodyH = H_MAIN - H_PLIN;
+  for (let i = 0; i < N; i++){
+    const t0 = i / N, t1 = (i + 1) / N;
+    ring(rAt(t0), rAt(t1), bodyH / N, H_PLIN + bodyH * (t0 + t1) / 2,
+         i <= 2 ? wallG : i % 2 ? gold : goldL);
+  }
+
+  ring(R, R * ROOF_R, CHAMF, H_MAIN + CHAMF / 2, roofL);
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(R * ROOF_R, R * ROOF_R, 0.6 / M, SEG), panel);
+  cap.position.y = H_MAIN + CHAMF; cap.rotation.y = Math.PI / SEG;
+  cap.receiveShadow = true;
+  g.add(cap);
+
+  /* THE ENTRANCE, ON A FACET CENTRE AND NOT AT A ROUND AZIMUTH. The courses are octagons turned
+     by PI/8; a round number of degrees lands on an EDGE and folds the screen round a corner. */
+  const ENT = Math.PI / SEG;
+  const face  = t => rAt(t) * Math.cos(Math.PI / SEG);
+  const halfW = t => rAt(t) * Math.sin(Math.PI / SEG);
+  const ent = new THREE.Group();
+  ent.rotation.y = ENT;
+  const recessT = 0.62, rH = bodyH * recessT, rW = halfW(recessT * 0.5) * 1.86;
+
+  const recess = new THREE.Mesh(new THREE.BoxGeometry(rW, rH, 1.0 / M), wallG);
+  recess.position.set(0, H_PLIN + rH / 2, face(recessT * 0.5) - 3.2 / M);
+  ent.add(recess);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(40 / M, 11 / M), screen);
+  scr.position.set(0, H_PLIN + rH * 0.62, face(recessT * 0.5) - 3.0 / M);
+  ent.add(scr);
+  const colH = rH * 0.46;
+  for (let i = -3; i <= 3; i++){
+    const c = new THREE.Mesh(new THREE.BoxGeometry(1.6 / M, colH, 1.6 / M), wallG);
+    c.position.set(i * rW / 7.4, H_PLIN + colH / 2, face(0.1) - 1.0 / M);
+    ent.add(c);
+  }
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(rW * 1.06, 1.8 / M, 16 / M), wallD);
+  canopy.position.set(0, H_PLIN + colH, face(0.1) + 5.5 / M);
+  ent.add(canopy);
+  /* NO FORECOURT SLAB. A 34 m apron took the footprint from 152 to 182 m, and the footprint sizes
+     the KIT_ZONES exclusion — so paving the ground painter already draws would have deleted a
+     strip of real Yas Bay buildings. Landmarks stop at the building. */
+  g.add(ent);
+
+  const strip = new THREE.MeshStandardMaterial({
+    color:0x223046, emissive:0xBFD2FF, emissiveIntensity:1.5, roughness:0.4 });
+  strip.userData.duskColor = 0x223046;
+  for (let k = 0; k < SEG; k++){
+    const a = ENT + (k + 0.5) * Math.PI * 2 / SEG;
+    const t0 = 0.26, t1 = 0.90, h = bodyH * (t1 - t0);
+    const r = rAt((t0 + t1) / 2) * 1.004;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.7 / M, h, 0.7 / M), strip);
+    m.position.set(Math.sin(a) * r, H_PLIN + bodyH * (t0 + t1) / 2, Math.cos(a) * r);
+    m.rotation.y = -a;
+    m.userData.nightOnly = true;
+    m.userData.noShadow = true;
+    g.add(m);
+  }
+
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
 function yasMall(x0, z0, facing){
   /* YAS MALL, built form - not the competition render.
 
@@ -1023,6 +1156,6 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall,
+         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena,
          boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }

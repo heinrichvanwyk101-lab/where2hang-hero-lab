@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v121';
+export const BUILD = 'world v122';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5020,6 +5020,16 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   } else if (fwA){
     built.push(kit.ferrariWorld(fwA.x, fwA.z));
   }
+
+  /* ETIHAD ARENA, PLACED FROM THE BAKE AND NOT FROM THE PLACE TABLE. It has no `places` entry on
+     purpose — the table is held at five so the labels do not collide — but the bake carries its
+     anchor, and Corniche already reads its landmarks that way for Emirates Palace, Etihad Towers
+     and ADNOC. No new coordinate is invented; if the anchor is missing the arena simply does not
+     appear, which is the right failure for a building nobody has asked to see yet. */
+  const eaA = BASE && BASE[yas.id] && BASE[yas.id].landmarks
+            ? BASE[yas.id].landmarks['Etihad Arena'] : null;
+  if (eaA && kit.etihadArena) built.push(kit.etihadArena(eaA.x, eaA.z));
+  else if (!eaA) console.warn('w2h-world: no baked anchor for Etihad Arena — not placed');
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
