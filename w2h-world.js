@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v123';
+export const BUILD = 'world v124';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5496,16 +5496,44 @@ function footprintsFor(d, list){
         h = Math.max(0.4, cap * (0.55 + rnd() * 0.55));
       }
     }
-    specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h });
+    specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h,
+                 v:b.v || 0, vk:b.vk || null });
   }
 
   /* Bucketed by material and window class exactly as the fabric is, so a footprint and a
      generated block standing next to each other are lit by the same shader and the Day/Dusk
      switcher finds dayMats where it expects to. Type is picked from height: tall is glass, mid
      is clad, low is render, which is the same reading the fabric applies. */
+  /* FACADE FROM WHAT THE BUILDING IS FOR, FALLING BACK TO HEIGHT.
+
+     Height alone was the whole rule: tall is glass, mid is cladding, low is render. It is a fair
+     reading of a skyline and it cannot tell a beachfront hotel from a warehouse of the same
+     height, which is why Yas Bay rendered the same grey as an industrial estate and why the one
+     district this product exists to show looked like nowhere in particular.
+
+     The bake now joins 10,420 venues to the footprints by coordinate. 2,063 buildings come back
+     carrying at least one, and the identifications are right without a name lookup anywhere: Yas
+     Mall is the 713 m box holding 143 venues of which 130 are dining, the Galleria is 63 dining
+     on Al Maryah, Corniche has 1,320 dining buildings, 212 places of worship and 182 sports
+     venues. Overture describes where people SLEEP; this describes where people GO.
+
+     ONLY 8 PER CENT OF BUILDINGS CARRY ONE, AND THAT IS THE POINT. The other 92 per cent stay on
+     the height rule and read as quiet residential mass — which is exactly what they are — so the
+     places you can actually go to stand out against them instead of competing with them.
+
+     dine also gets a brighter window class than its height would earn. A restaurant floor is lit
+     when the offices above it are dark, and at dusk that is the single strongest signal that a
+     building is somewhere rather than something. Clamped to the top class so a tall one cannot
+     run off the end of the table. */
+  const VK_MAT = { dine:'white', culture:'stone', worship:'stone',
+                   sport:'clad', leisure:'rend', other:null };
   const typeOf = h => h > tallest * 0.62 ? 'glass' : h > tallest * 0.3 ? 'clad' : 'rend';
+  const matOf  = sp => (sp.vk && VK_MAT[sp.vk]) || typeOf(sp.h);
+  const winOf  = sp => sp.vk === 'dine'
+                     ? Math.min(WCLASS.length - 1, wClass(sp.h) + 1)
+                     : wClass(sp.h);
   const need = new Map();
-  for (const sp of specs){ const k = typeOf(sp.h) + '#' + wClass(sp.h);
+  for (const sp of specs){ const k = matOf(sp) + '#' + winOf(sp);
     need.set(k, (need.get(k) || 0) + 1); }
 
   const meshes = new Map();
@@ -5535,7 +5563,10 @@ function footprintsFor(d, list){
     M.rotation.set(0, -sp.rot, 0);
     M.scale.set(sp.w, sp.h, sp.dp);
     M.updateMatrix();
-    const k = typeOf(sp.h) + '#' + wClass(sp.h), m = meshes.get(k), i = idx.get(k) || 0;
+    /* THE SAME KEY THE BUCKETS WERE SIZED WITH. Two call sites, and they must agree exactly — an
+       InstancedMesh is allocated from the first count, so a key computed differently here writes
+       into a bucket that was never created. */
+    const k = matOf(sp) + '#' + winOf(sp), m = meshes.get(k), i = idx.get(k) || 0;
     idx.set(k, i + 1);
     m.setMatrixAt(i, M.matrix);
     /* NO PER-INSTANCE COLOUR, DELIBERATELY, AFTER GETTING IT WRONG.

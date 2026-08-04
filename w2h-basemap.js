@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v8';
+export const BUILD = 'basemap v9';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -296,6 +296,17 @@ export function buildingsUnits(island, origin){
     w: m2u(b.w), dp: m2u(b.d),
     rot: -b.rot,
     h: b.h == null ? null : m2u(b.h),
+    /* WHAT THE BUILDING IS FOR, WHICH IS THE ONLY SOURCE THAT KNOWS. The renderer chose a facade
+       from HEIGHT alone — tall is glass, mid is cladding, low is render — so a beachfront hotel
+       and a warehouse of the same height were indistinguishable, and Yas Bay came out the same
+       grey as an industrial estate.
+
+       The bake now joins 10,420 venues to the footprints by coordinate and 2,063 buildings come
+       back carrying one. Overture describes where people sleep; this describes where people GO,
+       and it is dense exactly where Overture is empty. Null on the other 92 per cent, which then
+       fall through to the height rule unchanged. */
+    v:  b.v || 0,
+    vk: b.vk || null,
   }));
 }
 
