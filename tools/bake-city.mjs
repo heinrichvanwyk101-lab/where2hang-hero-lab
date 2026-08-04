@@ -393,6 +393,103 @@ async function loadOverture(proj){
 /* Everything whose centre falls in this island's fetch box. The same box Overpass was given, so
    the two sources see the same ground and the coastline clip downstream behaves identically —
    which is the point: this change must move which buildings exist, not which ones survive. */
+/* ---------- VENUES ---------------------------------------------------------------------------
+
+   THE ONE SOURCE THAT KNOWS WHAT A BUILDING IS FOR.
+
+   Overture tags 24 per cent of Abu Dhabi's buildings and almost all of it is housing: 2,915
+   houses, 1,337 apartments, and across five islands eighteen hotels and fifty-seven commercial.
+   It describes where people sleep. This file describes where people GO — 10,420 venues with real
+   categories, and it is dense exactly where Overture is empty.
+
+   Joined by coordinate against the oriented boxes, 1,997 buildings come back carrying at least
+   one venue. That is 7.6 per cent of the stock, and it is the 7.6 per cent the product exists to
+   show: on Yas the busiest building holds 143 venues of which 130 are dining, which is Yas Mall
+   identified without a name lookup or a line of hand-authoring.
+
+   THE BUCKETS ARE COARSE ON PURPOSE. Fifty-three categories is a taxonomy for search, not for
+   rendering — nothing downstream can do anything different for a Tiki Bar than for a Wine Bar.
+   Six buckets is what a facade can actually express.
+
+   RAW CATEGORY IS WHAT THE FILE STORES, and the bucketing happens here, so the mapping can change
+   without re-exporting from Supabase. */
+const VENUES_NDJSON = process.env.W2H_VENUES || 'data/venues.ndjson';
+
+const VENUE_BUCKET = (k) => {
+  const s = String(k || '').toLowerCase();
+  if (/restaurant|cafe|caf\u00e9|bar|lounge|pub|nightclub|bakery|takeaway|dessert|food|shisha|dining|bistro/.test(s)) return 'dine';
+  if (/mosque|church|temple/.test(s))                                    return 'worship';
+  if (/sport|fitness|stadium|golf|pool|billiards|bowling|skating|karting/.test(s)) return 'sport';
+  if (/museum|gallery|performing_arts|landmark|cinema|theatre|library|cultural/.test(s)) return 'culture';
+  if (/park|beach|nature|arcade|recreation|theme_park|waterpark|zoo|aquarium|club/.test(s)) return 'leisure';
+  return 'other';
+};
+
+let VENUES = null;
+function venuesLoad(){
+  if (VENUES !== null) return VENUES;
+  if (!fs.existsSync(VENUES_NDJSON)){
+    process.stderr.write(`  venues: ${VENUES_NDJSON} absent — buildings get no venue attributes\n`);
+    return (VENUES = []);
+  }
+  const out = [];
+  for (const line of fs.readFileSync(VENUES_NDJSON, 'utf8').split('\n')){
+    if (!line.trim()) continue;
+    try {
+      const v = JSON.parse(line);
+      if (typeof v.lat === 'number' && typeof v.lon === 'number')
+        out.push({ lat:v.lat, lon:v.lon, b:VENUE_BUCKET(v.k) });
+    } catch { /* one bad line is not a reason to lose the file */ }
+  }
+  process.stderr.write(`  venues: ${out.length} loaded from ${VENUES_NDJSON}\n`);
+  return (VENUES = out);
+}
+
+/* Point in oriented box, gridded. 10,420 points against 20,262 boxes on Corniche is 200 million
+   naive tests; a 120 m grid makes it a few hundred thousand. Same argument as roadGrid. */
+function attachVenues(buildings, proj, id){
+  const V = venuesLoad();
+  if (!V.length || !buildings.length) return 0;
+  const CELL = 120;
+  const grid = new Map();
+  buildings.forEach((b, i) => {
+    const gx = Math.floor(b.x / CELL), gy = Math.floor(b.y / CELL);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++){
+      const k = (gx + dx) + ',' + (gy + dy);
+      let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+    }
+  });
+  const tally = new Map();
+  for (const v of V){
+    const [px, py] = proj.fwd(v.lat, v.lon);
+    const cand = grid.get(Math.floor(px / CELL) + ',' + Math.floor(py / CELL));
+    if (!cand) continue;
+    for (const i of cand){
+      const b = buildings[i];
+      const dx = px - b.x, dy = py - b.y;
+      const c = Math.cos(-b.rot), sn = Math.sin(-b.rot);
+      const u = dx * c - dy * sn, w = dx * sn + dy * c;
+      if (Math.abs(u) <= b.w / 2 && Math.abs(w) <= b.d / 2){
+        let t = tally.get(i); if (!t) tally.set(i, t = {});
+        t[v.b] = (t[v.b] || 0) + 1;
+        break;                       /* first containing box wins; boxes do not overlap much */
+      }
+    }
+  }
+  let n = 0;
+  for (const [i, t] of tally){
+    const b = buildings[i];
+    let best = null, bn = 0, total = 0;
+    for (const k in t){ total += t[k]; if (t[k] > bn){ bn = t[k]; best = k; } }
+    b.v = total; b.vk = best; n++;
+  }
+  const kinds = {};
+  for (const [i] of tally){ const k = buildings[i].vk; kinds[k] = (kinds[k] || 0) + 1; }
+  process.stderr.write(`  ${id}: venues in ${n} buildings ` +
+    Object.entries(kinds).sort((a, c) => c[1] - a[1]).map(([k, c]) => `${k} ${c}`).join(', ') + `\n`);
+  return n;
+}
+
 function overtureFor(isle){
   if (!OVERTURE || !OVERTURE.rows) return null;
   const [s, w, n, e] = isle.bbox;
@@ -970,6 +1067,10 @@ async function bakeIsland(isle, proj){
   /* inBox rides on the returned object rather than on the island definition, so a re-bake of the
      same island in one process cannot read a stale value from the previous pass. It is consumed by
      the index writer and never written into an island file. */
+  /* AFTER the coastline clip and the area filter, so the join runs against exactly the buildings
+     that ship rather than against everything the box returned. */
+  attachVenues(buildings, proj, isle.id);
+
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
            golf, raceway,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
@@ -1238,7 +1339,8 @@ async function main(){
                                   withHeight:baked.buildings.filter(b => b.h).length,
                                   parks:baked.parks.length,
                                   golf:baked.golf.length,
-                                  raceway:baked.raceway.length } });
+                                  raceway:baked.raceway.length,
+                                  withVenues:baked.buildings.filter(b => b.v).length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
 
     /* A WARNING AND NOT A FAILURE, deliberately. A count that drops can be legitimate — a source
