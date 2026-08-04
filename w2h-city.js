@@ -976,10 +976,6 @@ function etihadArena(x0, z0){
    waterfront correctly on its own. It is kept because Pier71 is a fair landmark candidate, and if
    it is ever wanted as one it goes on the promontory centre with a KIT_ZONE to suppress the nine
    footprints underneath, NOT seaward into open water. */
-
-   WHAT MAKES IT LEGIBLE is not the deck, it is the ROW OF COLOURED AWNINGS down one side. In
-   every capture that stripe of red, ochre, teal and orange is the first thing you see, and it is
-   the only strong colour anywhere on this waterfront. */
 function yasBayPier(x0, z0, facing){
   /* WHITE AND CREAM, NOT RAINBOW. The first version gave this a row of red, ochre and teal
      awnings, which comes from Aldar's early marketing render — a scheme that was never built. The
