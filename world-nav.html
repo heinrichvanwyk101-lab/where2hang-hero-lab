@@ -200,6 +200,10 @@ try {
    confident guess about paintGround that was wrong.
 
    Same discipline one level up: mark the phases, put them on screen, then decide. */
+/* ?vac — mirrored from w2h-world.js so the overlay knows whether the two counters below mean
+   anything. The world module owns the behaviour; this is read-only. */
+const VAC_ON = location.search.includes('vac');
+
 const PH = {}; let _phT = performance.now();
 const phase = name => { PH[name] = performance.now() - _phT; _phT = performance.now(); };
 const PAGE_T0 = performance.now();
@@ -209,6 +213,10 @@ const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
 const PROPS = await import('./w2h-props.js' + V);
 const BMAP  = await import('./w2h-basemap.js' + V);
+/* Per-district block sizes, height ceilings and the vacancy mask. Imported here with the same V
+   as every other module, because w2h-world.js deliberately imports nothing local — a static
+   specifier cannot carry ?v= and would be served from cache forever. */
+const DIST  = await import('./w2h-districts.js' + V);
 phase('import');
 
 /* THE BASEMAP, FETCHED BEFORE THE WORLD IS BUILT.
@@ -317,27 +325,6 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
-
-/* SHADER ERROR CHECKING OFF FROM CONSTRUCTION, NOT AFTER THE FIRST FRAME.
-
-   It was set false in the first-frame block, on the reasoning that every program built during
-   startup should still be validated and only later material variants would go unchecked. That
-   reasoning had the timing exactly backwards: the flag is read when a program is linked, and every
-   program that matters is linked during startup. Setting it false afterwards protected nothing and
-   saved nothing.
-
-   A trace says so directly. getProgramInfoLog costs 1,637 ms of a 5,618 ms first frame, and 1,484
-   of that sits under fromEquirectangularTexture — the PMREM environment build. It is still being
-   called from onFirstUse, so the flag was true at the only moment it counted.
-
-   WHY IT IS EXPENSIVE AND NOT MERELY WASTEFUL: getProgramInfoLog forces the driver to finish
-   linking before it can answer. On a driver with no KHR_parallel_shader_compile — which is what
-   the Adreno 830 reports — that is a synchronous stall per program, and three.js issues one per
-   program by default.
-
-   ?shadercheck restores it. Worth using whenever a shader is edited: with this off, a compile
-   failure is a black object rather than a console error with a source dump. */
-renderer.debug.checkShaderErrors = location.search.includes('shadercheck');
 /* ?noshadow and ?noenv — THE TWO THINGS THE FIRST REAL DRAW DOES THAT NOTHING HAS TESTED.
 
    The per-mesh probe charged 19,857 ms to a 22-vertex unlit mesh with no textures, and every mesh
@@ -715,6 +702,7 @@ phase('propKit');
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, PERF, buildIsland, buildCornicheRest, footprintsFor } =
   buildWorld(scene, kit, {
+    districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
     C, rnd,
@@ -3083,6 +3071,7 @@ function frame(){
        source dump. What is given up is diagnosis of a shader that fails later — and a material
        created after this point is a variant of a family that already compiled, so the realistic
        failure mode is a black object rather than a silent one. ?shadercheck keeps it on. */
+    if (!location.search.includes('shadercheck')) renderer.debug.checkShaderErrors = false;
     /* THE ATTRACT CLOCK STARTS HERE, NOT WHERE IT IS DECLARED.
 
        attract.until was set at module top-level to now + 9000, and the first frame then blocked for
@@ -3217,7 +3206,22 @@ function frame(){
         return head + (d.fpRaw || 0) + '>' + (d.fpCount || 0) + '/' + (d.fpReal || 0) + 'r' +
           (d.fpZoned ? ' z' + d.fpZoned : '') +
           ' fab' + (d.fpFab || 0) +
-          '  hid' + (d.fpHid || 0) + '/' + fabricVisible(d) + 'v';
+          '  hid' + (d.fpHid || 0) + '/' + fabricVisible(d) + 'v' +
+          /* THE TWO NUMBERS THE VACANCY MASK IS JUDGED ON, and the reason it can ship behind a
+             flag rather than behind a day of bisecting.
+
+               park   lawn blobs groundPlan emitted. The mask removes cells, and cell-free ground
+                      is exactly what the park filler claims, so a jump here means the suppression
+                      in groundPlan is not biting and the island is going green.
+               clash  real buildings standing on ground the mask cleared. The zones are hand-placed
+                      guesses; a large number means one is in the wrong place, and which island it
+                      is on is on the same line.
+
+             Zero clash is ideal, small is cosmetic, large is a zone to move. Neither number
+             decides anything on its own — they exist so the decision is made against a figure
+             instead of against an impression of a screenshot. */
+          (VAC_ON ? '  park' + ((d.plan && d.plan.parkN) || 0) +
+                    ' clash' + (d.fpClash || 0) : '');
       }).join('\n') + '\n' : '') +
       'marks  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
         (d.marksHit == null ? '?' : d.marksHit + '/' + d.marksOf) +
