@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v22';
+export const BUILD = 'city v24';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -603,39 +603,61 @@ function ferrariWorld(x0, z0, facing){
 
   const M = 7.8;                    // must agree with M_PER_UNIT in w2h-world.js
 
-  /* THE OUTLINE IS MEASURED, NOT PARAMETERISED. Three attempts to describe this roof with a
-     formula produced three starfish: five equal lobes at 72 degrees, then three, then five swept
-     spikes. Every one of them was symmetrical, and the building is not. Its arms sit at compass
-     60, 91, 188, 219 and 306 - gaps of 30, 97, 30, 87 and 115 degrees - and the longest is twice
-     the shortest. No arrangement of a cosine produces that, because the thing being described
-     was never periodic. That was the real lesson, and it took three goes: the failure was not a
-     wrong constant, it was assuming a symmetry the building does not have.
+  /* THE OUTLINE IS MEASURED, NOT PARAMETERISED, AND IT IS A TRI-FORM WHOSE ARM TIPS FORK.
 
-     So this is the real plan, segmented off an overhead capture and sampled every 5 degrees from
-     the funnel. Two independent checks say the extraction is sound: the funnel measures 106 m
-     across against a published 100, and the same caliper scale that gives 700 m across also puts
-     the Ferrari logo at its surveyed spot on the south flank.
+     That last clause is the whole story. Benoy publish "three tri-form arms at 120 degrees".
+     Overhead captures plainly show five or six sharp points. Both are true: there are THREE arms
+     at 120 degrees, and each arm tip splits into two thin horns. Every previous attempt here
+     picked one half of that and built it - five equal lobes, then three fat blobs, then five
+     swept spikes - and all three were starfish, because all three were symmetrical and this
+     building is not.
 
-     RADII ARE FROM THE FUNNEL, WHICH IS NOT THE CENTROID - it sits about 48 m north-west of it.
-     Measuring from the funnel carries that offset into the model for free, and the funnel is the
-     group's origin, so no caller has to know about it.
+     SOURCE. Segmented off the yasisland.com island plan, where the building is drawn in a flat
+     highlight over itself alone. An earlier table came from a Google Maps capture and was
+     quietly corrupted: the label text sat on the west arm and the closing needed to bridge it
+     also swallowed nearby red rollercoaster track, inventing arms.
 
-     ORIENTATION IS NOW FIXED TO TRUE BEARINGS and the third argument is IGNORED. It is kept only
-     so the existing call site stays valid. Yas Mall does not need it: a valley faces the mall in
-     reality, and w2h-world.js finds that valley by probing this roof rather than by being told. */
+     CROSS-VALIDATED, which is why this one can be trusted. Circular cross-correlation against
+     the independent Google Maps profile peaks at 0.922, and the two agree to a mean of 17 m once
+     the map's 265-degree rotation is removed. The correlation also has secondary peaks at
+     exactly 120-degree intervals - a shape only correlates with itself like that if it really is
+     three-fold. Arms land at compass 70, 190 and 310 with radii 341, 369 and 347 m.
+
+     Sampled every 5 degrees FROM THE FUNNEL, which is not the centroid. Measuring from the
+     funnel carries that offset into the model for free, and the funnel is the group's origin, so
+     no caller has to know. Funnel measures 96 m across here against a published 100.
+
+     ORIENTATION IS FIXED TO TRUE BEARINGS; the third argument is IGNORED, kept only so the
+     existing call site stays valid. Yas Mall does not need it - a valley faces the mall in
+     reality, and w2h-world.js finds it by probing this roof rather than by being told. */
+  /* ORIENTATION IS REGISTERED ON THE COASTLINE, NOT ON CORRELATION.
+
+     An earlier version of this table was rotated by a figure taken from cross-correlating two
+     capture sources, reported at 0.922 and treated as proof. It was not proof. A three-fold
+     shape self-correlates almost equally at 0, 120 and 240 degrees - the three candidate shifts
+     scored 0.895, 0.868 and 0.922, which is noise. Correlation can establish that the arm count
+     is three. It can never establish which way round the building sits.
+
+     The rotation is fixed instead from the island's northern BAY, a deep asymmetric notch with
+     no rotational symmetry to hide in, by a two-point similarity fit against the bake's own
+     coordinates. That gives 287 degrees where 265 was shipped, and agrees independently on
+     scale to within 4 per cent. Arms land near compass 95, 210 and 355.
+
+     GENERAL RULE: never accept a symmetry-blind statistic as evidence about the orientation of
+     a symmetric object. Register on something asymmetric. */
   const PLAN = [
-      309,   309,   241,   213,   189,   174,
-      165,   159,   157,   155,   152,   152,
-      155,   156,   163,   168,   177,   201,
-      235,   302,   302,   239,   239,   281,
-      313,   223,   191,   170,   157,   148,
-      143,   139,   136,   134,   134,   136,
-      136,   139,   144,   150,   162,   179,
-      202,   242,   242,   221,   221,   230,
-      316,   252,   208,   178,   158,   151,
-      141,   134,   134,   136,   149,   152,
-      152,   102,   102,   106,   158,   175,
-      197,   232,   329,   293,   235,   235,
+      281,   405,   251,   233,   264,   388,
+      262,   217,   186,   171,   161,   155,
+      149,   147,   144,   145,   144,   148,
+      153,   156,   168,   185,   204,   239,
+      356,   274,   227,   234,   289,   339,
+      225,   196,   176,   160,   153,   149,
+      144,   143,   141,   142,   142,   145,
+      147,   153,   159,   173,   193,   221,
+      312,   318,   236,   225,   262,   373,
+      250,   210,   186,   167,   159,   151,
+      147,   145,   143,   142,   144,   146,
+      151,   156,   163,   174,   194,   220,
   ];
   const PEAK = 48 / M;
   const EDGE_V = 14 / M, EDGE_T = 3 / M;
@@ -782,26 +804,25 @@ function ferrariWorld(x0, z0, facing){
 
    ORIENTED EAST-WEST, long axis toward the roof, because that is how it meets it. */
 function yasMall(x0, z0, facing){
-  /* YAS MALL. AUTHORED FROM PHOTOGRAPHS, NOT MEASURED - and that distinction is the point.
-     Ferrari World's outline was segmented straight off an overhead capture because the map drew
-     it in a flat highlight colour. Yas Mall has no such highlight: in satellite imagery its roof
-     tones run into the parking aprons and the roads, and every threshold that catches the mall
-     also catches half the island. So this is built to the photographs by eye, and it should be
-     treated as provisional in a way the Ferrari World table is not.
+  /* YAS MALL, built form - not the competition render.
 
-     WHAT THE PHOTOGRAPHS ACTUALLY SHOW, and what the old model got wrong: a long low irregular
-     sprawl, not a symmetrical cluster; big flat multi-storey car decks flanking it; flush
-     circular skylights, NOT the single raised dome that made it read as a temple; and roughly
-     380 x 215 m of it.
+     WORTH NAMING: the widely-circulated night render of this mall shows a huge circular roof with
+     radial fins. That was never built. The aerials of the finished building show something quite
+     different, and this is built to those: a broadly SYMMETRIC complex on a north-south axis,
+     with a glazed pyramid over the central atrium, retail wings radiating from it, and very large
+     flat multi-storey car decks filling the ground around the whole thing. The decks are not
+     scenery - in the photographs they take up more ground than the retail does, and a model
+     without them reads as a single block dropped in sand.
 
-     THE LONG AXIS RUNS ACROSS THE APPROACH, ALONG Z. Ferrari World lies off the mall's long
-     FLANK, not off its end - so with the caller pointing local +x at the roof, the mall
-     correctly presents its side. Authoring the table along x instead would turn it end-on, which
-     is what the previous scaled version did.
+     THE PREVIOUS MODEL WAS AN IRREGULAR SPRAWL. That was authored from obliques, on the reasoning
+     that a real mall would not be symmetrical. This one plainly is: the entrance court, the
+     atrium, the wings and the decks are all arranged about one axis.
 
-     Sizes are metres, converted once. The old table was in raw units with a scale factor bolted
-     on top, which is how it ended up authored against a Ferrari World that was itself a third of
-     the right size. */
+     ORIENTATION. Local +x points at Ferrari World, which stands off the mall's NORTH face, so the
+     axis of symmetry IS local x and the grand entrance court sits at -x, furthest from the roof.
+
+     Metres throughout, converted once. Provisional in a way ferrariWorld is not: it has no flat
+     map highlight to segment, so this is proportioned from photographs rather than measured. */
   const g = new THREE.Group();
   const M = 7.8;
 
@@ -821,43 +842,61 @@ function yasMall(x0, z0, facing){
   deckMat.userData.duskColor = 0x9A968C;
   deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x9A968C, roughness:0.95 });
 
-  /* dx, dz, width, height, depth - all metres. Deliberately irregular: no two blocks share a
-     face line, because a mall that lines up reads as a warehouse estate. */
-  const boxes = [
-    [   0,    0, 130, 26, 190], [  55,  -75,  55, 23, 100],
-    [ -60,  -80,  60, 20, 110], [  10,   78,  55, 21, 150],
-    [  15,  120, 100, 25,  90], [ -10, -125,  95, 17,  80],
-    [  80,   95,  45, 15,  60], [ -85,  -60,  50, 14,  55],
-    [ -70,   55,  45, 18,  70], [  70,  -20,  40, 22,  65],
-  ];
-  for (const [dx, dz, w, h, dp] of boxes){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, dp / M), body);
+  const dark = new THREE.MeshStandardMaterial({ color:0x101317, roughness:0.9 });
+  dark.userData.duskColor = 0x6E6A64;
+  dark.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x6E6A64, roughness:0.9 });
+
+  const box = (mat, dx, dz, w, h, dp) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, dp / M), mat);
     m.position.set(dx / M, h / M / 2, dz / M);
     m.castShadow = true; m.receiveShadow = true;
-    g.add(m);
-  }
+    g.add(m); return m;
+  };
 
-  /* Car decks. Low, flat and large - in the photographs they take up as much ground as the
-     retail does, and without them the mall reads as a single block dropped in sand. */
-  for (const [dx, dz, w, dp] of [[-55, -160, 80, 90], [60, 150, 75, 85], [-75, 130, 60, 70]]){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, 11 / M, dp / M), deckMat);
-    m.position.set(dx / M, 11 / M / 2, dz / M);
+  /* Retail core: the atrium, four wings on the axes, four blocks on the diagonals. */
+  box(body,    0,    0, 150, 28, 150);
+  box(body,  135,    0, 120, 24, 120);   box(body, -135,   0, 120, 24, 120);
+  box(body,    0,  140, 115, 24, 125);   box(body,    0,-140, 115, 24, 125);
+  box(body,  115,  120, 110, 20, 110);   box(body, -115, 120, 110, 20, 110);
+  box(body,  115, -120, 110, 20, 110);   box(body, -115,-120, 110, 20, 110);
+
+  /* The pyramid over the atrium. Four radial segments IS a pyramid, and turning it 45 degrees
+     squares it to the block beneath. */
+  const pyr = new THREE.Mesh(new THREE.ConeGeometry(72 / M, 16 / M, 4), glass);
+  pyr.position.set(0, (28 + 8) / M, 0);
+  pyr.rotation.y = Math.PI / 4;
+  g.add(pyr);
+
+  /* Car decks. Low, flat, and larger than anything else on the site. */
+  for (const [dx, dz, w, dp] of [
+      [ 255,  245, 210, 190], [-255,  245, 210, 190],
+      [ 255, -245, 210, 190], [-255, -245, 210, 190],
+      [   0,  300, 180, 140], [   0, -300, 180, 140]]){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, 13 / M, dp / M), deckMat);
+    m.position.set(dx / M, 13 / M / 2, dz / M);
     m.receiveShadow = true;
     g.add(m);
   }
 
-  /* Skylights, FLUSH. Three shallow discs and a ridge along the spine. The old model had a 30 m
-     hemisphere here, which at this footprint read as a mosque. */
-  for (const [dx, dz, r] of [[-5, -25, 26], [20, 40, 20], [-20, 95, 16]]){
-    const d = new THREE.Mesh(new THREE.CylinderGeometry(r / M, r / M, 3 / M, 20), glass);
-    d.position.set(dx / M, 26.5 / M, dz / M);
-    g.add(d);
-  }
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(22 / M, 4 / M, 150 / M), glass);
-  ridge.position.set(-40 / M, 26.5 / M, 10 / M);
-  g.add(ridge);
+  /* The big dark-roofed box on the east flank - the cinema-and-warehouse end, and the one thing
+     on the site that breaks the symmetry in the photographs. */
+  box(dark, -70, 250, 190, 27, 160);
 
-  g.userData.half = 190 / M;
+  /* The entrance pavilion and its court, at the far end from Ferrari World. */
+  const oval = new THREE.Mesh(new THREE.CylinderGeometry(58 / M, 62 / M, 17 / M, 28), body);
+  oval.position.set(-250 / M, 17 / M / 2, 0);
+  oval.scale.z = 0.62;
+  g.add(oval);
+  const canopy = new THREE.Mesh(new THREE.CylinderGeometry(46 / M, 46 / M, 3 / M, 28), glass);
+  canopy.position.set(-250 / M, 18.5 / M, 0);
+  canopy.scale.z = 0.62;
+  g.add(canopy);
+
+  /* The link to Ferrari World. The two buildings are physically connected, and without this the
+     mall reads as merely near the roof rather than joined to it. */
+  box(body, 225, 0, 90, 22, 80);
+
+  g.userData.half = 330 / M;
   /* `facing` is the bearing back to Ferrari World; local +x is turned to face it. */
   if (facing !== undefined) g.rotation.y = -facing;
   g.position.set(x0, 0, z0);

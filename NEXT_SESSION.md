@@ -19,38 +19,55 @@ geometry never exists in two places.
 
 ## Live
 
-`nav v89 / city v22 / world v116`, plus `w2h-districts.js`,
+`nav v89 / city v24 / world v116`, plus `w2h-districts.js`,
 `data/city-reference.js`, `data/city-geography.js`.
 
 ## Done
 
-**Ferrari World** — rebuilt three times before it was right, and the third
-rebuild is the one worth reading. It is now a MEASURED PLAN table, segmented off
-an overhead capture and sampled every 5 degrees from the funnel, not a formula.
-700 m across at 48 m. Validated two ways: the funnel measures 106 m against a
-published 100, and the same scale puts the Ferrari logo on its surveyed spot.
+**Ferrari World** — rebuilt four times. The answer: it is a TRI-FORM with three
+arms at 120 degrees, and EACH ARM TIP FORKS into two thin horns. Benoy's "three
+tri-form arms" and the five-or-six points visible in obliques are both true, and
+every earlier attempt built one half of that. It now carries a measured PLAN
+table segmented off the yasisland.com island plan.
 
-**Yas Mall** — rebuilt as a long irregular sprawl in real metres, ~380 x 215 m,
-flush skylights, flanking car decks. PROVISIONAL: authored from photographs, not
-measured. It has no map highlight to segment, and satellite tones run its roof
-into the parking aprons.
+Correlation proved the arm COUNT — secondary peaks at exactly 120-degree
+intervals, which only a genuinely three-fold shape produces. It could not prove
+the ORIENTATION, and for one revision it was wrongly treated as if it had: a
+three-fold shape self-correlates almost equally at 0/120/240 (0.895, 0.868,
+0.922 — noise), and the best was reported as validation. The building sat ~30
+degrees out of true.
 
-**The attachment** — Overture returns the two as ONE merged polygon of
-785 x 679 m. The mall tucks into a valley and presents its long flank. Its own
-anchor is untrustworthy for distance (184 m — a label node inside the merged
-complex), so `w2h-world.js` uses it for DIRECTION only and probes the built roof
-for the distance. Pair now bounds 734 x 753 m.
+Orientation is now registered on the island's northern BAY, a deep asymmetric
+notch, by a two-point similarity fit against the bake's own coordinates, which
+agrees independently on scale to 4%. Arms land near compass 95, 210, 355.
+
+**Yas Mall** — rebuilt to the BUILT form: symmetric about a north-south axis,
+glazed pyramid over the central atrium, wings on axes and diagonals, six large
+flat car decks. The widely-circulated night render with the huge circular finned
+roof was never built; don't build to it. PROVISIONAL — proportioned from
+photographs, not measured.
+
+**The attachment** — the mall's north face meets the roof. Its own anchor gives
+DIRECTION only; the distance is probed off the built roof. The 785 x 679 merged
+Overture polygon covers Ferrari World plus attached retail, not the car parks,
+so it is no longer the acceptance test — the full complex really is ~700 m and
+the pair legitimately bounds ~1,200 m.
 
 ## The rule that came out of it
 
-**Do not parameterise a real building.** Three formulas produced three
-starfish, each more confidently wrong than the last, because all three assumed a
-symmetry Ferrari World does not have — its arms sit at 30, 97, 30, 87 and 115
-degree spacings with a 2:1 length spread. Segment the plan and ship the table.
+**Do not parameterise a real building.** Four attempts, four starfish, each
+more confidently wrong than the last, because every one assumed a symmetry the
+building does not have. Segment a clean plan and ship the table.
 
-And: **prose loses to photographs.** The three-armed version came from Benoy's
-published "three tri-form arms", which describes the enclosed arms, not the roof.
-That cost a whole revision in a workflow built specifically to prevent it.
+**Validate the segmentation against a second source.** The first table came from
+a Google Maps capture and was silently corrupted — label text across the west
+arm, and the closing that bridged it also swallowed red rollercoaster track,
+inventing arms. Nothing in the render revealed that. Only a second independent
+profile did.
+
+**When prose and photographs disagree, suspect BOTH are partly right.** Benoy's
+"three arms" and the obvious five-plus points were not in conflict; the arms
+fork. Two revisions were lost to treating it as an either/or.
 
 ## Next, in order
 
@@ -63,6 +80,23 @@ That cost a whole revision in a workflow built specifically to prevent it.
 5. **The landmark registry** in `w2h-world.js` — a table row per landmark
    instead of hardcoded calls. Import path needs the `+ V` treatment through
    `opts`, same as `w2h-districts.js`.
+
+## In flight — bake extended, not yet consumed
+
+`tools/bake-city.mjs` now fetches `leisure=golf_course`, `highway=raceway`, and
+parks as RELATIONS (the old query asked only for ways and the branch gated on
+`el.geometry`, so every multipolygon park was dropped twice over — the largest
+green area on Yas was 29 ha as a result).
+
+Run the workflow and read the log line: `parks N (max NNha), golf N, raceway N`.
+If Yas still tops out near 29 ha the parks are missing for another reason and
+that must be found before writing the painter.
+
+Then, in order: ground painting for the golf course and the circuit ribbon
+(`w2h-world.js`), then Etihad Arena and Yas Bay as kit buildings. Etihad Arena
+is buildable from a clean top-down: irregular octagon in plan, faceted sides
+flaring outward to an overhanging roof, bronze-gold, big screen on the entrance
+face.
 
 ## Not yet tried
 
