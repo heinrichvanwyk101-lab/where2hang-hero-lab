@@ -289,55 +289,73 @@ export const LANDMARKS = {
      The only strong colour accent in the city silhouette.
   ------------------------------------------------------------------------- */
   ferrariWorld: {
-    /* CORRECTED. This entry previously said "five-point star" with pointCount 5 and a 9.5:1
-       span, and the model was faithfully built to it and came out a starfish. All three numbers
-       were wrong. Benoy's published description is a THREE-pointed star — an enclosed core with
-       three "tri-form" arms at 120 degrees. Everything below is now from the factsheets
-       (Benoy / ArcelorMittal / e-architect), not inferred from captures.
+    /* DO NOT PARAMETERISE THIS ROOF. Three attempts were made to describe it with a formula -
+       five equal lobes at 72 degrees, then three "tri-form" arms at 120, then five swept spikes -
+       and all three produced a starfish. Every one of them assumed a symmetry the building does
+       not have. The arms sit at compass 60, 91, 188, 219 and 306, which is gaps of 30, 97, 30, 87
+       and 115 degrees, and the longest is twice the shortest. Nothing periodic can express that.
 
-       THE LESSON, KEPT HERE ON PURPOSE: this entry was authored confidently, written down, and
-       then believed for a whole session because it was written down. Nothing in the numeric
-       checks could catch it, because the numbers were self-consistent — they just described a
-       different building. Anything in this file not traceable to a published source or a
-       measurement should be treated as a guess until something looks at it. */
+       The geometry now carries a measured PLAN table instead, segmented off an overhead capture
+       and sampled every 5 degrees from the funnel. See ferrariWorld in w2h-city.js. The numbers
+       below are for reading, not for building to.
+
+       THE LESSON, KEPT ON PURPOSE. This entry was wrong, then "corrected" to something wronger on
+       the strength of Benoy's published wording, because prose beat a photograph in a workflow
+       built specifically to stop that. Benoy's "three tri-form arms" describes the three ENCLOSED
+       arms cradling the outdoor attractions; it is not the roof silhouette. Anything in this file
+       not traceable to a measurement should be treated as a guess until something looks at it. */
     unit: 'peakHeight',         // 48 m at the crown; 45 m quoted as building height
-    plan: 'three-point star — tri-form arms at 120 degrees, broad and rounded, not spiky',
-    proportions: {
-      peakHeight:      1.00,
-      spanAcross:     14.20,    // ~681 m across, 665 m tip to tip
-      pointCount:      3,
-      pointSweep:      0.16,    // arms curve gently; 0.35 made propeller blades
-      innerRadius:     2.81,    // 135 m — fitted to the published perimeter and roof area
-      lobeExponent:    2.00,    // fitted with the above; together they set arm breadth
-      centralFunnel:   2.08,    // 100 m dia at the roof, tapering to 17 m at its base
-      rimHeightValley: 0.31,    // 15 m
-      rimHeightTip:    0.10,    //  5 m — the tips run out almost to the ground
-      logo:            [1.35, 1.01],   // 65 x 48.5 m
+    plan: 'five-point swept star, ASYMMETRIC - unequal arms at unequal spacing',
+    measured: {
+      armBearings:   [60, 91, 188, 219, 306],   // compass
+      armRadiiM:     [228, 437, 437, 219, 295], // from the funnel, same order
+      bodyRadiusM:   102,
+      funnelOffsetM: 48,        // funnel sits NW of the centroid; it is the model's origin
+      funnelDiaM:    106,       // measured; published figure is 100, which validates the scale
+      logo:          { bearing: 106, radiusM: 145, sizeM: [65, 48.5] },
     },
     published: {
       spanM: 700, peakM: 48, buildingHeightM: 45,
-      roofPerimeterM: 2200, roofSurfaceM2: 200000, netRoofM2: 153000,
-      funnelTopM: 100, funnelBaseM: 17, logoM: [65, 48.5],
+      roofSurfaceM2: 200000, netRoofM2: 153000, funnelTopM: 100, funnelBaseM: 17,
+      roofPerimeterM: 2200,   // DO NOT FIT TO THIS. It is about the perimeter of a 700 m CIRCLE,
+                              // which a deeply scalloped star cannot have. It fought the
+                              // photograph and the photograph was right.
     },
     profile:
       'A ground-hugging form peeling up from the landscape like a red sand dune (Benoy). From ' +
       'the horizon it is a long low red wedge, highest at the centre, tapering to near-ground ' +
-      'at the tips, with a dark notch at the crown where the funnel opens. From above, three ' +
-      'broad rounded arms at 120 degrees around a circular opening. Both reads must work.',
+      'at the tips, with a dark notch at the crown where the funnel opens.',
     section:
-      'The crown-to-edge descent is a DOUBLE CURVE — convex then concave — because the section ' +
-      'is literally the Ferrari GT side profile applied in elevation. A power curve cannot ' +
-      'produce it; smootherstep can, and also flattens at both ends, which gives the plateau ' +
-      'around the funnel and the long run out to the tips.',
-    colours: {
-      roof: PALETTE.ferrariRed,
-      rim:  '#1A1A1A',          // black edge banding, essential to the read
-      funnel: '#9FB0BC',
-    },
+      'The crown-to-edge descent is a DOUBLE CURVE - convex then concave - because the section ' +
+      'is literally the Ferrari GT side profile applied in elevation. smootherstep produces it ' +
+      'and also flattens at both ends, giving the plateau at the funnel and the long run out.',
+    colours: { roof: PALETTE.ferrariRed, rim: '#1A1A1A', funnel: '#9FB0BC' },
     silhouetteRule:
-      'The black rim against the red is what makes it legible at distance. Solid red alone ' +
-      'reads as an amorphous blob. And it must stay LOW: at 14:1 it is a dune, at 5:1 it is a ' +
-      'circus tent, and there is no value in between.',
+      'The black rim against the red is what makes it legible at distance. And it must stay ' +
+      'LOW: at 12:1 it is a dune, at 5:1 it is a circus tent, and there is nothing in between.',
+  },
+
+  /* -------------------------------------------------------------------------
+     YAS MALL
+     PROVISIONAL - authored from photographs, not measured. Ferrari World could be
+     segmented because the map draws it in a flat highlight colour; Yas Mall has no
+     such highlight, and in satellite imagery its roof tones run into the parking
+     aprons and roads. Every threshold that catches the mall catches half the island.
+  ------------------------------------------------------------------------- */
+  yasMall: {
+    unit: 'metres',
+    plan: 'long irregular sprawl, roughly 380 x 215 m, plus flanking car decks',
+    proportions: { lengthM: 380, depthM: 215, retailHeightM: [14, 26], deckHeightM: 11 },
+    attachment:
+      'PHYSICALLY ATTACHED to Ferrari World, and the bake proves it: Overture returns the two ' +
+      'as ONE merged polygon of 785 x 679 m, barely larger than Ferrari World alone. The mall ' +
+      'therefore tucks into a VALLEY between two arms and presents its LONG FLANK, not its end. ' +
+      'Its own baked anchor is only 184 m from Ferrari World\'s and cannot be trusted for ' +
+      'distance - that point is a label node inside the merged complex. Direction only; the ' +
+      'distance is probed off the built roof in w2h-world.js.',
+    silhouetteRule:
+      'Long, low and irregular, with car decks taking as much ground as the retail. Skylights ' +
+      'are FLUSH discs. The previous model had a single raised 30 m dome and read as a mosque.',
   },
 
   /* -------------------------------------------------------------------------
