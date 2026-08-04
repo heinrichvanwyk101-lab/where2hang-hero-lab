@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v138';
+export const BUILD = 'world v139';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5490,7 +5490,14 @@ function groundFeaturesFor(d, feats){
       const pos = new Float32Array(cs.length * 18), nor = new Float32Array(cs.length * 18);
       cs.forEach(([x, z], j) => {
         const o = j * 18, X = x + CELL, Z = z + CELL;
-        const q = [x,0,z, X,0,z, X,0,Z, x,0,z, X,0,Z, x,0,Z];
+        /* WINDING, AND IT IS THE WHOLE FAULT. The first version wound both triangles
+           (x,z)-(X,z)-(X,Z), whose cross product is -Y: every quad faced DOWNWARD while its
+           written vertex normal said up. flatSet materials are MeshStandardMaterial with no
+           `side`, so they are FrontSide, and the GPU culled all 6,934 cells from any camera
+           above the ground. Nothing threw, the counter was correct, the clip was correct, and
+           the surfaces were built exactly where they belong — facing the seabed. The pools
+           survived because PlaneGeometry winds itself. */
+        const q = [x,0,z, x,0,Z, X,0,Z, x,0,z, X,0,Z, X,0,z];
         for (let t = 0; t < 18; t++){ pos[o + t] = q[t]; nor[o + t] = t % 3 === 1 ? 1 : 0; }
       });
       const bg = new THREE.BufferGeometry();
