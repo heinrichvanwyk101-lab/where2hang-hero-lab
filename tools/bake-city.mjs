@@ -454,8 +454,13 @@ function query(bbox){
   way["highway"](${b});
   way["building"](${b});
   relation["building"](${b});
-  way["leisure"="park"](${b});
-  way["landuse"~"grass|recreation_ground|village_green"](${b});
+  way["leisure"~"^(park|garden|nature_reserve|common|pitch|recreation_ground)$"](${b});
+  relation["leisure"~"^(park|garden|nature_reserve|common|recreation_ground)$"](${b});
+  way["landuse"~"^(grass|recreation_ground|village_green|meadow|forest)$"](${b});
+  relation["landuse"~"^(grass|recreation_ground|village_green|meadow|forest)$"](${b});
+  way["leisure"="golf_course"](${b});
+  relation["leisure"="golf_course"](${b});
+  way["highway"="raceway"](${b});
 );
 out geom;`;
 }
@@ -753,12 +758,37 @@ async function bakeIsland(isle, proj){
 
   /* osmBuildings, not buildings. It is now the FALLBACK — used only when the Overture extract is
      absent — and naming it for what it is stops the two paths reading as one. */
-  const coastWays = [], roads = [], osmBuildings = [], parks = [];
+  const coastWays = [], roads = [], osmBuildings = [], parks = [], golf = [], raceway = [];
   for (const el of els){
     const t = el.tags || {};
     if (!el.geometry && !el.members) continue;
 
     if (t.natural === 'coastline' && el.geometry){ coastWays.push(toXY(el.geometry)); continue; }
+
+    /* RACEWAY IS TESTED BEFORE THE ROAD BRANCH, and it has to be. `highway=raceway` is not in
+       ROAD_CLASS, so the road branch would `continue` past it and the circuit would silently not
+       exist - which is exactly what it did: a search near the Yas Marina Circuit anchor returned
+       29 km of ordinary local streets and nothing that could be told apart from them. */
+    if (t.highway === 'raceway' && el.geometry){
+      const pts = simplify(toXY(el.geometry), SIMPLIFY_M);
+      if (pts.length >= 2) raceway.push({ pts: pts.map(rd2),
+                                          name: t.name || null,
+                                          pit: t.raceway === 'pitlane' ? 1 : 0 });
+      continue;
+    }
+
+    /* GOLF BEFORE PARKS, for the mirror-image reason. `leisure=golf_course` is not `park`, and a
+       course that also carries a landuse tag would otherwise be filed as a lawn and lose the fact
+       that it is a course. Relations are multipolygons; outer ring only, as with buildings. */
+    if (t.leisure === 'golf_course'){
+      const geom = el.geometry ||
+        (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
+      if (geom && geom.length >= 4){
+        const ring = toXY(geom);
+        if (area(ring) > 20000) golf.push(simplify(ring, SIMPLIFY_M * 2).map(rd1));
+      }
+      continue;
+    }
 
     if (t.highway && el.geometry){
       const cls = ROAD_CLASS[t.highway];
@@ -769,9 +799,23 @@ async function bakeIsland(isle, proj){
       continue;
     }
 
-    if ((t.leisure === 'park' || t.landuse) && el.geometry){
-      const ring = toXY(el.geometry);
-      if (area(ring) > 800) parks.push(simplify(ring, SIMPLIFY_M * 2).map(rd1));
+    /* PARKS NOW ACCEPT RELATIONS, AND THAT WAS THE BUG. The query asked only for ways and this
+       branch additionally gated on `el.geometry`, which a relation does not carry - so every park
+       mapped as a multipolygon was dropped twice over. On Yas that left 29 hectares as the largest
+       green area on an island that plainly has far bigger ones. Outer ring only, as with buildings.
+
+       GREEN THINGS ONLY. `natural=sand` and `natural=scrub` would add most of the island's dune
+       ground and the painter would lay lawn over all of it - the lawn-flood failure mode. Sand is
+       the ground's default and does not need a polygon to say so. */
+    if (t.leisure === 'park' || t.leisure === 'garden' || t.leisure === 'nature_reserve' ||
+        t.leisure === 'common' || t.leisure === 'pitch' || t.leisure === 'recreation_ground' ||
+        t.landuse){
+      const geom = el.geometry ||
+        (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
+      if (geom && geom.length >= 4){
+        const ring = toXY(geom);
+        if (area(ring) > 800) parks.push(simplify(ring, SIMPLIFY_M * 2).map(rd1));
+      }
       continue;
     }
 
@@ -889,7 +933,8 @@ async function bakeIsland(isle, proj){
 
   process.stderr.write(`  ${isle.id}: outline ${outline.length}pt, roads ${roads.length}, ` +
                        `buildings ${buildings.length} (${buildings.filter(b => b.h).length} with height), ` +
-                       `parks ${parks.length}` +
+                       `parks ${parks.length} (max ${Math.round(Math.max(0, ...parks.map(area))/1e4)}ha), ` +
+                       `golf ${golf.length}, raceway ${raceway.length}` +
                        (extent ? `, extent ${(extent.w/1000).toFixed(2)} x ${(extent.d/1000).toFixed(2)} km` : '') +
                        `\n`);
 
@@ -897,6 +942,7 @@ async function bakeIsland(isle, proj){
      same island in one process cannot read a stale value from the previous pass. It is consumed by
      the index writer and never written into an island file. */
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
+           golf, raceway,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
@@ -1161,7 +1207,9 @@ async function main(){
                                   buildings:baked.buildings.length,
                                   inBox:baked.inBox,
                                   withHeight:baked.buildings.filter(b => b.h).length,
-                                  parks:baked.parks.length } });
+                                  parks:baked.parks.length,
+                                  golf:baked.golf.length,
+                                  raceway:baked.raceway.length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
 
     /* A WARNING AND NOT A FAILURE, deliberately. A count that drops can be legitimate — a source
