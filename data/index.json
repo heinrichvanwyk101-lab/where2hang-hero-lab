@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-04T06:59:30.844Z",
+ "generated": "2026-08-04T07:37:57.533Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -7667,10 +7667,10 @@
      "y": -3491
     }
    },
-   "bytes": 3813818,
+   "bytes": 3854004,
    "counts": {
     "outline": 1905,
-    "roads": 10608,
+    "roads": 10664,
     "buildings": 20262,
     "inBox": 32589,
     "withHeight": 3468,
@@ -7883,21 +7883,8 @@
      1748.7
     ]
    ],
-   "landmarks": {
-    "Abu Dhabi Global Market": {
-     "x": -3188,
-     "y": 1252.5
-    },
-    "Cleveland Clinic Abu Dhabi": {
-     "x": -3248.1,
-     "y": 774.6
-    },
-    "The Galleria Al Maryah Island": {
-     "x": -3183.8,
-     "y": 1272.9
-    }
-   },
-   "bytes": 83135,
+   "landmarks": {},
+   "bytes": 83250,
    "counts": {
     "outline": 47,
     "roads": 661,
@@ -9115,7 +9102,7 @@
      "y": 689.5
     }
    },
-   "bytes": 126361,
+   "bytes": 127398,
    "counts": {
     "outline": 296,
     "roads": 884,
@@ -10789,7 +10776,7 @@
      "y": 4815.5
     }
    },
-   "bytes": 426586,
+   "bytes": 429159,
    "counts": {
     "outline": 408,
     "roads": 1550,
@@ -12691,7 +12678,7 @@
      "y": -3306.2
     }
    },
-   "bytes": 817396,
+   "bytes": 826961,
    "counts": {
     "outline": 462,
     "roads": 2528,
