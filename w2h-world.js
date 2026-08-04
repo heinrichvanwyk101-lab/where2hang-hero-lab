@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v124';
+export const BUILD = 'world v126';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5043,25 +5043,59 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      ORIENTATION IS DERIVED. The long axis runs parallel to the shore, so the facing is the
      bearing to the nearest coastline point turned by a right angle — the same shape of rule the
      mall uses, and it follows the coast if the outline is ever re-baked. */
+  /* THE YAS BAY PIER. THE COORDINATE IS SURVEYED; ONLY THE SEAWARD OFFSET IS COMPUTED.
+
+     24.457964, 54.600196 — Asia Asia, which stands on the pier. Converted through the same
+     projection the bake uses, so no registration step and nothing to get wrong: an earlier
+     version measured this off a Google capture assuming north-up, and Google only draws the
+     compass rosette when the map is ROTATED. It was drawn. The pier landed 519 m inland, buried
+     under the ground mass, and rendered as nothing at all.
+
+     WHY THE OFFSET IS NOT ZERO. That point is the pier ROOT — 30 m from the shore, and marginally
+     inside the resampled coastline. The deck is 92 m wide, so centring it there buries half of it.
+     Walking seaward until the point is outside the outline AND at least 55 m clear of it puts the
+     centre where a 92 m deck actually fits, and lands about 100 m out.
+
+     Derived rather than typed, so a re-baked coastline moves the pier with it instead of leaving
+     it half in the sand. */
   if (kit.yasBayPier){
-    const PIER = { x:-29.5, z:309.1 };
-    let bs = null, bd = Infinity;
-    /* outlineClosed, NOT ISLE_SHAPES. The latter is the hand-drawn fallback and is replaced by the
-       baked coastline whenever the basemap is present — reading it directly would orient the pier
-       against an outline the scene is not using. This is the same resolved ring insideIsle tests. */
     const ring = outlineClosed(yas.id) || [];
-    for (const p of ring){
-      const px = p[0] * yas.r, pz = -p[1] * yas.r;
-      const dd = (px - PIER.x) * (px - PIER.x) + (pz - PIER.z) * (pz - PIER.z);
-      if (dd < bd){ bd = dd; bs = [px, pz]; }
+    if (ring.length > 16){
+      const P = ring.map(p => [p[0] * yas.r, -p[1] * yas.r]);
+      const inIsle = (x, z) => insideIsle(yas.id, x / yas.r, -z / yas.r);
+      const clearOf = (x, z) => { let m = Infinity;
+        for (const q of P){ const dd = (q[0]-x)*(q[0]-x) + (q[1]-z)*(q[1]-z); if (dd < m) m = dd; }
+        return Math.sqrt(m); };
+      const nearest = (x, z) => { let b = P[0], m = Infinity;
+        for (const q of P){ const dd = (q[0]-x)*(q[0]-x) + (q[1]-z)*(q[1]-z); if (dd < m){ m = dd; b = q; } }
+        return b; };
+
+      /* The surveyed root, already in island units — the basemap converts the bake's metres the
+         same way it converts every landmark anchor. */
+      const ROOT = { x: -36.4, z: 406.4 };
+      const s0 = nearest(ROOT.x, ROOT.z);
+      let dx = ROOT.x - s0[0], dz = ROOT.z - s0[1];
+      const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      if (inIsle(ROOT.x + dx * 0.5, ROOT.z + dz * 0.5)){ dx = -dx; dz = -dz; }
+
+      let put = null;
+      for (let m = 20; m <= 200; m += 10){
+        const px = ROOT.x + dx * m / M_PER_UNIT, pz = ROOT.z + dz * m / M_PER_UNIT;
+        if (inIsle(px, pz)) continue;
+        if (clearOf(px, pz) * M_PER_UNIT < 55) continue;
+        put = { px, pz }; break;
+      }
+      if (put){
+        const sh = nearest(put.px, put.pz);
+        const bear = Math.atan2(sh[1] - put.pz, sh[0] - put.px);
+        const pier = kit.yasBayPier(put.px, put.pz, bear + Math.PI / 2);
+        pier.position.y = GROUND - 0.45;
+        yas.detail.add(pier);
+        /* NOT in KIT_ZONES: open water, so there is no surveyed footprint under it to exclude. */
+      } else {
+        console.warn('w2h-world: no clear water for the Yas Bay pier — not placed');
+      }
     }
-    const bear = bs ? Math.atan2(bs[1] - PIER.z, bs[0] - PIER.x) : 0;
-    const pier = kit.yasBayPier(PIER.x, PIER.z, bear + Math.PI / 2);
-    /* Slightly below the promenade, because it is a pier and the island top is the quay. It is
-       NOT added to KIT_ZONES: it stands on open water, so there is no surveyed footprint beneath
-       it to exclude, and a zone out there would only clip things that are already clipped. */
-    pier.position.y = GROUND - 0.45;
-    yas.detail.add(pier);
   }
   for (const o of built){
     o.position.y = GROUND;
