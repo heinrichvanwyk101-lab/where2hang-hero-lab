@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v140';
+export const BUILD = 'world v141';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5557,12 +5557,23 @@ function groundFeaturesFor(d, feats){
        reads as an infinity edge in every photograph of this hotel. Water, so they get their own
        ramp rather than the ground's: bright in Day, dark and reflective at night. */
     const wat = flatSet(0x14313B, 0x2E7E92, 0x37A6C0, 0.25, 8);
-    const HC = (u, v) => { const c2 = Math.cos(0.2057), s2 = Math.sin(0.2057);
-      return [-23.7 + (u * c2 - v * s2) / M_PER_UNIT, 388.7 + (u * s2 + v * c2) / M_PER_UNIT]; };
-    for (const [u, v, w, h] of [[30, 14, 92, 30], [-45, 12, 80, 26], [-96, 52, 74, 26]]){
+    /* THE HOTEL'S OWN BEARING, READ OFF THE BAKE RATHER THAN EYEBALLED. The anchor was
+       (-23.7, 388.7) at +0.2057 rad, which is +11.8 degrees. The building sitting there is
+       270 x 136 m at -13.6 degrees — the largest footprint in the site and the only one tagged
+       `dine`. So the water was set 25 degrees off its own hotel, which is exactly the diagonal
+       that showed. Anchor and angle now both come from that footprint.
+
+       THE INFINITY POOL WAS NEVER AT THE SEA. Its offset put it 110 m inland. Walking outward
+       along +v from the hotel centre, the water is reached at 118 m on the headland side and
+       186 m dead ahead, so the third pool moves to u -100, v 103 — its seaward edge lands about
+       5 m off the coastline, which is what an infinity edge is. */
+    const HOTEL = [-19.5, 386.8], HOTEL_TH = -0.2374;
+    const HC = (u, v) => { const c2 = Math.cos(HOTEL_TH), s2 = Math.sin(HOTEL_TH);
+      return [HOTEL[0] + (u * c2 - v * s2) / M_PER_UNIT, HOTEL[1] + (u * s2 + v * c2) / M_PER_UNIT]; };
+    for (const [u, v, w, h] of [[30, 14, 92, 30], [-45, 12, 80, 26], [-100, 103, 74, 26]]){
       const c3 = HC(u, v);
       const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
-      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -0.2057;
+      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -HOTEL_TH;
       pm.position.set(c3[0], GROUND + 0.010, c3[1]);
       g.add(tagGround(pm, wat));
     }
