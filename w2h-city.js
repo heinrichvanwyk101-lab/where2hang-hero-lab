@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v17';
+export const BUILD = 'city v19';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -575,41 +575,91 @@ function emiratesPalace(x0, z0){
    THREE TONES AT THE EDGE. Red top, a thin pale stripe, black underside. The dark edge is what
    gives the star an outline at distance; the pale stripe between is what stops the dark reading
    as shadow. Two material groups plus the rim ring, all on one geometry so they cannot drift. */
-function ferrariWorld(x0, z0){
+function ferrariWorld(x0, z0, facing){
+  /* FERRARI WORLD ABU DHABI — Benoy, 2010. Rebuilt from published dimensions after the previous
+     model passed every numeric check written for it and came out a starfish.
+
+     IT HAS THREE POINTS, NOT FIVE. data/city-reference.js said five and that is simply wrong.
+     Benoy's own description is a three-pointed star: an enclosed core with three "tri-form" arms
+     at 120 degrees. Five points is not a stylisation of three, it is a different building. The
+     reference has been corrected; this is the note that says why, because the wrong number was
+     believed for a whole session on the strength of being written down.
+
+     PUBLISHED, ALL OF IT:
+       ~700 m across / 665 m tip to tip     2,200 m roof edge perimeter
+       45 m building height, 48 m at peak   200,000 m2 roof surface
+       funnel 100 m dia top, 17 m at base   logo 65 x 48.5 m
+
+     THAT IS 13.4:1. The old model was 26 u across and 4.1 u tall — 5.6:1, three and a half times
+     too small and two and a half times too tall for its own span, which is why it read as a
+     circus tent. Benoy describe it as "ground hugging, peeling up from the landscape in flowing
+     lines like a red sand dune"; at 5.6:1 nothing hugs anything.
+
+     R_IN AND LOBE_P ARE THE ONLY TWO CONSTANTS NOT ON A FACTSHEET, and they are the two that
+     decide broad arms versus spikes — the exact thing that went wrong. They were fitted by sweep
+     against the published perimeter and roof area rather than chosen: the solution lands at
+     681 m across, 2,193 m perimeter, 189,700 m2 plan area, against 700 / 2,200 / ~190,000. */
   const g = new THREE.Group();
 
-  const R_OUT = 13, R_IN = 4.6, PEAK = 3.4;
-  const T0 = 0.14, SWEEP = 0.30, LOBE_P = 2.1;
-  const RIM = 2, STRIPE = 1;
-  const segA = 180, segR = 20;
-  /* One long point west, the rest unequal. Measured off the reference obliques rather than
-     chosen: the longest is roughly 1.6x the shortest, which is far more asymmetry than looks
-     right written down and exactly what the building has. */
-  const AMP = [1.00, 0.55, 0.80, 0.44, 0.86];
-  const PHASE = 0.55;
+  const M = 7.8;                    // must agree with M_PER_UNIT in w2h-world.js
+  const R_OUT = 384 / M, R_IN = 135 / M, PEAK = 48 / M;
+  const EDGE_V = 15 / M, EDGE_T = 5 / M;     // rim height: valleys stay up, tips run out low
+  const FUN_T = 50 / M, FUN_B = 8.5 / M;
+  const LOGO_L = 65 / M, LOGO_W = 48.5 / M;
+  const ARMS = 3, LOBE_P = 2.00, SWEEP = 0.16;
+  /* ARM ORIENTATION IS NOT FREE, AND IT IS NOT A NEW NUMBER. Yas Mall is physically attached to
+     this building, and the surveyed footprint proves how: Overture has the two as ONE merged
+     polygon 785 x 679 m, only about 100 m larger than Ferrari World on its own. A mall sitting
+     off an arm TIP would have added four hundred. So Yas Mall tucks into a VALLEY between two
+     arms, and the tri-form has to be turned to present one.
+
+     `facing` is the bearing to the attached neighbour, computed by the caller from the two
+     anchors. A valley sits at PHASE + PI/3, so PHASE is that bearing less PI/3. Typing an
+     orientation here instead would be a second place the relationship lives, and it would be
+     wrong the first time either anchor moved — which is the fault that has already cost this
+     repo four separate placement bugs. */
+  const PHASE = (facing === undefined ? -Math.PI / 2 : facing - Math.PI / 3);
+  const AMP = [1.00, 0.95, 0.91];            // near-equal arms, not the old 1.6:1
+  const segA = 216, segR = 26, RIM = 2, STRIPE = 1;
+
+  /* The descent from crown to edge. A double curve, because that is literally the design brief —
+     the section is the Ferrari GT side profile. smootherstep is convex then concave and flattens
+     at both ends, giving the plateau around the funnel and the long ground-hugging run to the
+     tips. The old power curve could do neither. */
+  const dune = u => { const v = Math.min(1, Math.max(0, Math.pow(u, 0.82)));
+                      return 1 - (v * v * v * (v * (v * 6 - 15) + 10)); };
 
   function amp(th){
     let num = 0, den = 0;
-    for (let k = 0; k < 5; k++){
-      const tk = PHASE + k * Math.PI * 2 / 5;
-      const w = Math.pow(0.5 + 0.5 * Math.cos(th - tk), 9);
+    for (let k = 0; k < ARMS; k++){
+      const tk = PHASE + k * Math.PI * 2 / ARMS;
+      const w = Math.pow(0.5 + 0.5 * Math.cos(th - tk), 6);
       num += AMP[k] * w; den += w;
     }
     return den > 1e-9 ? num / den : 1;
   }
+  const extent = th => R_IN + (R_OUT - R_IN) *
+    Math.pow(0.5 + 0.5 * Math.cos(ARMS * (th - PHASE)), LOBE_P) * amp(th);
+  const edgeAt = E => { const reach = Math.min(1, Math.max(0, (E - R_IN) / (R_OUT - R_IN)));
+                        return EDGE_V + (EDGE_T - EDGE_V) * reach; };
 
   const pos = [];
   for (let i = 0; i <= segA; i++){
     const th = (i / segA) * Math.PI * 2;
     for (let j = 0; j <= segR; j++){
-      const t = T0 + (1 - T0) * (j / segR);
-      const u = (t - T0) / (1 - T0);
-      const the = th + SWEEP * u;          // the twist is what curves the points
-      const lobe = Math.pow(0.5 + 0.5 * Math.cos(5 * (the - PHASE)), LOBE_P);
-      const r = (R_IN + (R_OUT - R_IN) * lobe * amp(the)) * t;
-      pos.push(Math.cos(th) * r, PEAK * Math.pow(1 - u, 1.30), Math.sin(th) * r);
+      const u = j / segR;
+      const the = th + SWEEP * u;             // the twist is what curves the arms
+      const E = extent(the);
+      /* THE INNER BOUNDARY IS A CIRCLE, NOT A SCALED LOBE. The old model shrank the whole star to
+         make its hole, so the opening was itself three-pointed and swung between 40 and 115 m of
+         radius. The funnel is a circular 100 m opening; against a lobed hole it pokes through the
+         roof in the valleys. */
+      const r = FUN_T + (E - FUN_T) * u;
+      const edge = edgeAt(E);
+      pos.push(Math.cos(th) * r, edge + (PEAK - edge) * dune(u), Math.sin(th) * r);
     }
   }
+
   const row = segR + 1, red = [], pale = [], dark = [];
   for (let i = 0; i < segA; i++){
     for (let j = 0; j < segR; j++){
@@ -620,6 +670,7 @@ function ferrariWorld(x0, z0){
       else red.push(...q);
     }
   }
+
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex([...red, ...pale, ...dark]);
@@ -653,34 +704,47 @@ function ferrariWorld(x0, z0){
   roof.castShadow = true; roof.receiveShadow = true;
   g.add(roof);
 
-  /* THE OCULUS. A funnel, not a hole — without a wall in it you see the sea through the middle
-     of the building. */
-  const oR = R_IN * T0 * 1.6;
-  const ring = new THREE.Mesh(
-    new THREE.CylinderGeometry(oR * 1.5, oR, PEAK * 0.5, 24, 1, true),
-    new THREE.MeshStandardMaterial({ color:0x9FB0BC, roughness:0.4, metalness:0.3,
+  /* THE FUNNEL. 100 m across at the roof, 17 m at its base — a wide glazed cone driven down into
+     the building, not the small collar the old model had. At this span it is the second-largest
+     thing in the silhouette and it is what stops the crown reading as a solid dome. Sunk very
+     slightly so its rim is not coincident with the roof's inner edge, which z-fights. */
+  const fun = new THREE.Mesh(
+    new THREE.CylinderGeometry(FUN_T * 0.985, FUN_B, PEAK * 0.86, 40, 1, true),
+    new THREE.MeshStandardMaterial({ color:0x9FB0BC, roughness:0.35, metalness:0.35,
                                      side:THREE.DoubleSide }));
-  ring.position.y = PEAK * 0.95;
-  g.add(ring);
+  fun.position.y = PEAK - PEAK * 0.43 - 0.04;
+  g.add(fun);
 
-  /* THE SHIELD. Not decoration at this scale — it is a large gold mark on a red field and it is
-     legible from further away than the point geometry is. Laid flat just above the roof surface
-     on the long western flank, where the reference has it. */
+  /* THE LOGO. 65 x 48.5 m of gold on a red field, legible from a great deal further out than any
+     of the geometry — which is exactly why Benoy put it there, for aircraft on approach. Placed
+     ON an arm at a height read off the roof's own surface functions; the old one used a typed y
+     and a typed radius and hung half off the edge. */
   const sh = new THREE.Mesh(
-    new THREE.PlaneGeometry(R_OUT * 0.20, R_OUT * 0.26),
+    new THREE.PlaneGeometry(LOGO_L, LOGO_W),
     new THREE.MeshStandardMaterial({ color:0x3A2E08, roughness:0.5,
       emissive:0xE8B547, emissiveIntensity:0.55, side:THREE.DoubleSide }));
   sh.rotation.x = -Math.PI / 2;
-  sh.position.set(-R_OUT * 0.30, PEAK * 0.58, R_OUT * 0.14);
+  {
+    const bear = PHASE + 2 * Math.PI * 2 / ARMS;
+    const uL = 0.42, E = extent(bear + SWEEP * uL);
+    const rL = FUN_T + (E - FUN_T) * uL, edge = edgeAt(E);
+    sh.position.set(Math.cos(bear) * rL, edge + (PEAK - edge) * dune(uL) + 0.06,
+                    Math.sin(bear) * rL);
+    sh.rotation.z = -bear;
+  }
   sh.material.userData = { duskColor:0xE8B547,
     dayMats:new THREE.MeshStandardMaterial({ color:0xE8B547, roughness:0.5,
                                              side:THREE.DoubleSide }) };
   g.add(sh);
 
+  /* The enclosed core under the crown, so the funnel lands on a building rather than on sea.
+     RADIUS IS BOUNDED BY THE VALLEY, NOT BY R_IN. R_IN is the roof's radius in the valleys, so a
+     deck at R_IN * 1.05 is wider than the roof at its narrowest and pushes out through it — which
+     is what the black streaks radiating from the crown were. */
   const deck = new THREE.Mesh(
-    new THREE.CylinderGeometry(R_IN * 0.9, R_IN * 0.9, 1.2, 28),
+    new THREE.CylinderGeometry(FUN_T * 1.55, FUN_T * 1.55, EDGE_V * 1.3, 32),
     new THREE.MeshStandardMaterial({ color:0x1B1E22, roughness:0.9 }));
-  deck.position.y = 0.6;
+  deck.position.y = EDGE_V * 0.65;
   deck.receiveShadow = true;
   g.add(deck);
 
@@ -696,9 +760,15 @@ function ferrariWorld(x0, z0){
    this is the largest roof on the island after Ferrari World.
 
    ORIENTED EAST-WEST, long axis toward the roof, because that is how it meets it. */
-function yasMall(x0, z0){
+function yasMall(x0, z0, facing){
+  /* PLAN SCALE, NOT HEIGHT. The box table was authored against a Ferrari World that was three and
+     a half times too small, so the mall was drawn to match it: 187 x 125 m, about 23,000 m2. Yas
+     Mall carries roughly 235,000 m2 of retail over two levels, so the footprint is on the order
+     of 110,000 m2 — call it 400 x 280. S corrects the plan only; the 12-25 m heights were always
+     right for a mall and scaling those would turn it into a stack of offices. */
   const g = new THREE.Group();
-  const HALF = 8;
+  const S = 2.15;
+  const HALF = 8 * S;
 
   const body = new THREE.MeshStandardMaterial({
     color:0x181C20, roughness:0.85, emissive:0xE8B547, emissiveIntensity:0.06 });
@@ -724,19 +794,19 @@ function yasMall(x0, z0){
     [  2.2, -4.6,  2.8, 2.6,  2.4],
   ];
   for (const [dx, dz, w, h, dp] of boxes){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), body);
-    m.position.set(dx, h / 2, dz);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, h, dp * S), body);
+    m.position.set(dx * S, h / 2, dz * S);
     m.castShadow = true; m.receiveShadow = true;
     g.add(m);
   }
 
   /* The skylight ridge. Pale and slightly raised, running the long axis — the one feature that
      identifies this as a mall rather than a warehouse. */
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(10.0, 0.7, 1.8), glass);
-  ridge.position.set(-1.0, 2.95, 0);
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(10.0 * S, 0.7, 1.8 * S), glass);
+  ridge.position.set(-1.0 * S, 2.95, 0);
   g.add(ridge);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass);
-  dome.position.set(-1.0, 2.6, 0);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9 * S, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass);
+  dome.position.set(-1.0 * S, 2.6, 0);
   g.add(dome);
 
   /* Car decks west, flat and low. Reference has these as a large pale apron, and without them the
@@ -745,13 +815,16 @@ function yasMall(x0, z0){
   deckMat.userData.duskColor = 0x9A968C;
   deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x9A968C, roughness:0.95 });
   for (const [dx, dz, w, dp] of [[-11.5, -4.0, 5.0, 6.0], [-11.5, 3.6, 5.0, 5.6]]){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.1, dp), deckMat);
-    m.position.set(dx, 0.55, dz);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, 1.1, dp * S), deckMat);
+    m.position.set(dx * S, 0.55, dz * S);
     m.receiveShadow = true;
     g.add(m);
   }
 
   g.userData.half = HALF;
+  /* The mall's long axis runs INTO the valley, so its short end meets the roof. `facing` is the
+     bearing back to Ferrari World; the box table's long axis is x, hence the negation. */
+  if (facing !== undefined) g.rotation.y = -facing;
   g.position.set(x0, 0, z0);
   return g;
 }

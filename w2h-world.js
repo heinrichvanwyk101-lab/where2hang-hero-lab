@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v115';
+export const BUILD = 'world v116';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4964,8 +4964,51 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   const at = nm => (yas.places || []).find(pl => pl.label === nm);
   const built = [];
   const fwA = at('Ferrari World'), ymA = at('Yas Mall');
-  if (fwA) built.push(kit.ferrariWorld(fwA.x, fwA.z));
-  if (ymA) built.push(kit.yasMall(ymA.x, ymA.z));
+  if (fwA && ymA){
+    /* FERRARI WORLD AND YAS MALL ARE ONE STRUCTURE, AND THE BAKE PROVES IT. Overture returns them
+       as a SINGLE merged polygon, 785 x 679 m — only about a hundred metres larger than Ferrari
+       World on its own. A mall hanging off an arm tip would have added four hundred. So the mall
+       tucks into a VALLEY between two arms, and both the roof's orientation and the mall's
+       position follow from that rather than from two independent anchors.
+
+       WHY THE MALL IS NOT PLACED ON ITS OWN ANCHOR. Its baked point is 184 m from Ferrari World's,
+       and the mall is about 400 m long — so a mall centred there has half of itself inside the
+       roof, which is exactly what happened. That point is a label node somewhere in the merged
+       complex, not the mall's centroid. Placing the model on it put the car decks through the
+       middle of Ferrari World. The anchor still sets the DIRECTION, which is all it can be
+       trusted for; the distance is measured off the roof.
+
+       MEASURED FROM THE OBJECT, NOT WRITTEN DOWN — same rule as the zones below. The valley edge
+       is found by probing the built roof along the bearing, so if the tri-form's constants ever
+       change the mall follows it instead of drifting. */
+    const bear = Math.atan2(ymA.z - fwA.z, ymA.x - fwA.x);
+    const fwG = kit.ferrariWorld(fwA.x, fwA.z, bear);
+    built.push(fwG);
+
+    fwG.updateMatrixWorld(true);
+    let edge = 0;
+    fwG.traverse(o => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      const pa = o.geometry.attributes.position, v = new THREE.Vector3();
+      for (let i = 0; i < pa.count; i++){
+        v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld);
+        const dx = v.x - fwA.x, dz = v.z - fwA.z;
+        const dth = Math.atan2(Math.sin(Math.atan2(dz, dx) - bear),
+                               Math.cos(Math.atan2(dz, dx) - bear));
+        if (Math.abs(dth) < 0.04) edge = Math.max(edge, Math.hypot(dx, dz));
+      }
+    });
+
+    /* The retail end meets the roof; the car decks face away, which is the way round they are. */
+    const probe = kit.yasMall(0, 0, 0);
+    probe.updateMatrixWorld(true);
+    const near = new THREE.Box3().setFromObject(probe).max.x;
+    const R = (edge || 17.3) + near;
+    built.push(kit.yasMall(fwA.x + Math.cos(bear) * R, fwA.z + Math.sin(bear) * R,
+                           bear + Math.PI));
+  } else if (fwA){
+    built.push(kit.ferrariWorld(fwA.x, fwA.z));
+  }
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

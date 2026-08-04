@@ -1,14 +1,24 @@
-/* PASTE TARGET: where2hang-hero-lab/bench/preview.mjs
+/* PASTE TARGET: where2hang-hero-lab/preview.mjs
  *
  * Renders one landmark from three angles so its shape can be JUDGED rather than inferred.
  *
- *   cd bench && npm i three && node preview.mjs ../landmarks/lm-ferrari-world.js
+ *   npm i three
+ *   node preview.mjs w2h-city.js#ferrariWorld        <- render what actually ships
+ *   node preview.mjs landmarks/lm-emirates-palace.js <- render a standalone landmark file
  *
- * WHY THIS EXISTS. Ferrari World passed every numeric check that was written for it — span 202 m,
- * peak 27 m, 7.6:1, five points, longest 1.53x the shortest, no NaN vertices — and still came out
- * a starfish. Span, ratio and point count do not describe a shape. Only looking at it does.
+ * WHY THIS EXISTS. Ferrari World passed every numeric check that was written for it — span,
+ * peak, ratio, point count, longest-to-shortest, no NaN vertices — and still came out a
+ * starfish. Then it turned out the reference it was built to said "five-point star" and the real
+ * building has three. Neither fault was reachable by arithmetic. Span, ratio and point count do
+ * not describe a shape; only looking at it does.
  *
- * The landmark file must export `build(THREE)` returning a Group with its base at y = 0.
+ * THE `file#fn` FORM IS THE IMPORTANT ONE. It lifts a named builder out of w2h-city.js and
+ * renders it directly, so the bench tests the code that ships instead of a copy of it. A
+ * standalone landmarks/ file is a second place the dimensions live, and this repo has been bitten
+ * by that four times — anchors, GROUND, road widths, KIT_ZONES. Until the landmark registry
+ * lands, prefer the `#` form and keep one copy.
+ *
+ * A standalone file must export `build(THREE)` returning a Group with its base at y = 0.
  */
 import * as THREE from 'three';
 import fs from 'node:fs';
@@ -16,14 +26,35 @@ import path from 'node:path';
 import { render } from './render.mjs';
 
 const target = process.argv[2];
-if (!target){ console.error('usage: node preview.mjs <landmark-file.js>'); process.exit(1); }
+if (!target){
+  console.error('usage: node preview.mjs <file.js|file.js#functionName>');
+  process.exit(1);
+}
 
-const mod = await import(path.resolve(target));
-const build = mod.build || mod.default;
-if (typeof build !== 'function'){ console.error('file must export build(THREE)'); process.exit(1); }
+let build, name;
+
+if (target.includes('#')){
+  /* Lift `function NAME(x0, z0){ ... }` out of a module that is not importable on its own —
+     w2h-city.js expects a THREE it is given, and pulls in browser-only things at module scope. */
+  const [file, fn] = target.split('#');
+  const src = fs.readFileSync(path.resolve(file), 'utf8');
+  const open = `function ${fn}(`;
+  const i = src.indexOf(open);
+  if (i < 0){ console.error(`no function ${fn} in ${file}`); process.exit(1); }
+  const argEnd = src.indexOf('{', i);
+  const end = src.indexOf('\n}\n', argEnd);
+  if (end < 0){ console.error(`could not find the end of ${fn} — is it at top level?`); process.exit(1); }
+  const body = src.slice(argEnd + 1, end);
+  build = new Function('THREE', `const x0 = 0, z0 = 0;\n${body}\n`);
+  name = fn;
+} else {
+  const mod = await import(path.resolve(target));
+  build = mod.build || mod.default;
+  if (typeof build !== 'function'){ console.error('file must export build(THREE)'); process.exit(1); }
+  name = path.basename(target).replace(/\.m?js$/, '');
+}
 
 const g = build(THREE);
-const name = path.basename(target).replace(/\.m?js$/, '');
 
 /* Three angles, and each answers a different question.
      plan     is the shape right?
