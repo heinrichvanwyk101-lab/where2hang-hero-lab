@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v149';
+export const BUILD = 'world v150';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -258,7 +258,9 @@ scene.add(world);
 function makeWaterNormal(N = 512){
   const cv = document.createElement('canvas');
   cv.width = cv.height = N;
-  const g = cv.getContext('2d');
+  /* Same argument as paintGround below, and this one never wanted a GPU surface either: its
+     pixels are assembled with createImageData and putImageData, both of which are CPU work. */
+  const g = cv.getContext('2d', { willReadFrequently: true });
   const img = g.createImageData(N, N);
 
   /* A SPECTRUM, NOT SIX WAVES, and the corduroy is why.
@@ -1844,7 +1846,22 @@ function paintGround(d, plan){
   const H  = Math.max(64, Math.round(W * h.y / h.x));
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
-  const g = cv.getContext('2d');
+  /* CPU-BACKED, AND THIS IS WHERE THE TWENTY-ONE SECONDS WAS.
+
+     fl_world0 — a render with world hidden AND the sky dome hidden, drawing literally nothing —
+     cost 21,041 ms, while the very next render with the dome in it cost 1 ms. So the cost is not a
+     draw, not geometry, not a texture any draw samples. It is a GPU synchronisation that the first
+     render call after buildWorld forces, paying for something allocated outside the scene graph.
+
+     A 2D canvas is GPU-backed by default. buildWorld makes about 8 Mpx of them, the GPU process
+     queues a surface for each, and the next WebGL sync drains the lot. That fits every reading:
+     independent of what is drawn, independent of visibility, and it explains the old result that
+     cutting ground texture from 9 Mpx to 2 moved firstFrame by three seconds.
+
+     willReadFrequently backs the canvas in system memory instead. These are written once and read
+     once, as a texture source, and are never composited — so there was never anything for a GPU
+     surface to do. */
+  const g = cv.getContext('2d', { willReadFrequently: true });
   console.info('ground ' + d.id + ': ' + W + 'x' + H + ' px, ' +
                (spanM / W).toFixed(1) + ' m/px  (gpx target ' + TARGET_M_PER_PX + ')');
 
