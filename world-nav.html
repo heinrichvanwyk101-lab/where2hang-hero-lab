@@ -202,6 +202,18 @@ try {
    Same discipline one level up: mark the phases, put them on screen, then decide. */
 /* ?vac — mirrored from w2h-world.js so the overlay knows whether the two counters below mean
    anything. The world module owns the behaviour; this is read-only. */
+/* ?prog — THE PROGRESSIVE REVEAL, and it is a flag because it changes what the opening shot does
+   rather than only how fast it does it.
+
+   The first draw after buildWorld pays for everything buildWorld allocated, in one block, because
+   there is no seam inside it to paint through. This cuts the one seam that can be cut without
+   moving anything else: corniche's world-zoom building layer. Its urbanFabric call returns nothing
+   anyone reads, unlike the detail call beside it whose cells and blocks ARE corniche.fabric and
+   are what groundPlan paints the ground from — defer that one and the ground goes with it.
+
+   So the sequence becomes sky, then the island with its ground and roads and its close-in
+   buildings, then the world-zoom stock filling in behind. Three steps instead of one wait. */
+const PROG = typeof location !== 'undefined' && location.search.includes('prog');
 const VAC_ON = location.search.includes('vac');
 
 const PH = {}; let _phT = performance.now();
@@ -298,7 +310,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v107', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v108', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -794,7 +806,8 @@ phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, footprintsFor,
+        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
+        footprintsFor,
         groundFeaturesFor } =
   buildWorld(scene, kit, {
     districts: DIST,
@@ -803,6 +816,9 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     C, rnd,
     basemap,
     PALACE_FOOT: CITY.PALACE_FOOT,
+    /* ?prog — the progressive reveal. Off by default: this reorders when the world-zoom buildings
+       appear, and that is a visible change to the opening shot, not a silent optimisation. */
+    deferCornicheMass: PROG,
   });
 phase('buildWorld');
 
@@ -841,6 +857,18 @@ const flushPaint = async tag => {
   _phT = performance.now();
 };
 await flushPaint('world');
+/* THE DEFERRED LAYER, AFTER THE ISLAND IS ON SCREEN AND NOT BEFORE.
+
+   flushPaint above has drained everything buildWorld allocated and, crucially, presented it — so
+   by the time this runs the user is looking at the island rather than at a gradient. Building the
+   world-zoom stock now costs its own JS time and its own upload, and fl_mass reports both.
+
+   Guarded on PROG rather than on the function existing, so a build with the flag off never calls
+   it twice: with deferCornicheMass unset the world module already ran it inline. */
+if (PROG && buildCornicheMass){
+  buildCornicheMass();
+  await flushPaint('mass');
+}
 
 /* ===========================================================================
    CAMERA STATE MACHINE

@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v148';
+export const BUILD = 'world v149';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6179,19 +6179,38 @@ const cornicheFabric = urbanFabric(corniche, corniche.detail,
      trims the tallest few rather than levelling the lot. */
   { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true, cap:26,
     region:CORNICHE_REGION });
-urbanFabric(corniche, corniche.mass,
-  /* Same density and the same seed as the detail call above, so this is the SAME CITY. The two
-     layers differ only by minH: the world view keeps the tall ones and tapping in adds the short
-     ones between them without moving anything.
-
-     minH IS A FIXED 5.4 UNITS and that is deliberate — it is a real height, about 42 metres,
-     below which a building is not worth drawing at world zoom. It is NOT a fraction of `tallest`,
-     so raising the height model changes which share of the stock survives rather than changing the
-     threshold, which is the correct behaviour: a 42-metre building is equally invisible from
-     orbit whatever the tallest tower on the island happens to be. */
-  { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
-    cap:26, minH:5.4, region:CORNICHE_REGION });
 corniche.fabric = cornicheFabric;
+
+/* THE WORLD-VIEW BUILDING LAYER, SEPARABLE FROM THE REST OF THE BUILD.
+
+   The first draw after buildWorld pays for everything buildWorld allocated — 18 seconds of it —
+   and there is no seam inside buildWorld to paint through. This is the one seam that can be cut
+   without moving anything else: the mass call's return value is unused, unlike the detail call
+   above, whose cells and blocks are corniche.fabric and are what groundPlan paints the ground
+   from. Defer the detail call and the ground goes with it; defer this one and only the world-zoom
+   buildings move.
+
+   Not a behaviour change unless the caller asks: with deferCornicheMass unset this runs exactly
+   where it always did, in the same order, with the same arguments. */
+function buildCornicheMass(){
+  if (cornicheMassDone) return false;
+  cornicheMassDone = true;
+  urbanFabric(corniche, corniche.mass,
+    /* Same density and the same seed as the detail call above, so this is the SAME CITY. The two
+       layers differ only by minH: the world view keeps the tall ones and tapping in adds the short
+       ones between them without moving anything.
+
+       minH IS A FIXED 5.4 UNITS and that is deliberate — it is a real height, about 42 metres,
+       below which a building is not worth drawing at world zoom. It is NOT a fraction of `tallest`,
+       so raising the height model changes which share of the stock survives rather than changing
+       the threshold, which is the correct behaviour: a 42-metre building is equally invisible from
+       orbit whatever the tallest tower on the island happens to be. */
+    { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true,
+      cap:26, minH:5.4, region:CORNICHE_REGION });
+  return true;
+}
+let cornicheMassDone = false;
+if (!opts.deferCornicheMass) buildCornicheMass();
 
 // Corniche gets its glow too, so all five behave identically to the state machine.
 /* CORNICHE'S GLOW IS THE ONE EVERY ISLAND ALREADY HAS, RECONFIGURED — not a second light.
@@ -6374,7 +6393,7 @@ function buildIsland(id){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
-         buildIsland, buildCornicheRest, footprintsFor, groundFeaturesFor,
+         buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,
          corniche, GROUND, propCount,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
