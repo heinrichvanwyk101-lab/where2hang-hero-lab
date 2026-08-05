@@ -206,6 +206,10 @@ const VAC_ON = location.search.includes('vac');
 
 const PH = {}; let _phT = performance.now();
 const phase = name => { PH[name] = performance.now() - _phT; _phT = performance.now(); };
+/* phase() charges everything since the previous marker, which is right for a sequence and wrong
+   for a span you want isolated inside one. phaseAt takes its own start and still moves the marker,
+   so the next phase() is not handed the span that was just accounted for. */
+const phaseAt = (name, t0) => { PH[name] = performance.now() - t0; _phT = performance.now(); };
 const PAGE_T0 = performance.now();
 
 const V = '?v=' + Date.now();
@@ -285,7 +289,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v104', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v106', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -457,6 +461,43 @@ skyDome.renderOrder = -1000;
 skyDome.frustumCulled = false;
 skyDome.userData.helper = true;   // belt and braces if it is ever reparented under world
 scene.add(skyDome);
+
+/* THE FIRST PIXEL, PAID HERE, WHERE IT COSTS NOTHING.
+
+   Twenty-one seconds of black is the defect. The total is not, and chasing the total was the wrong
+   conversation: warm already reveals the city incrementally over frames, which is exactly the
+   behaviour wanted, and it is stranded on the far side of one blocking call that nothing can
+   appear before.
+
+   Whatever the driver charges for its first real render — a deferred-resource flush, the first
+   framebuffer bind, program links, buffer allocation — it charges against everything resident at
+   the moment it is charged. So charge it now. At this line the scene holds a light rig and a
+   sphere. Three hundred meshes and 2.6 million triangles do not exist yet and cannot be in the
+   backlog. The same work, against an empty scene, and the sky lands on screen in the process.
+
+   Both halves, because they are different events and only one of them is an FBO bind:
+
+     f1rt      a render to an offscreen target. This is the framebuffer switch, and under the
+               residency model it is the switch that drains the backlog, not the draw.
+     f1canvas  a render to the canvas. This is the first pixel the user sees.
+
+   The target is 8x8 and thrown away; nothing reads it. Its only job is to be a different
+   framebuffer. If either number comes back large HERE, with nothing built, then the cost is a
+   fixed first-render price and the scene was never the variable. If both are small now and the
+   first real frame is still slow, the cost scales with residency and the answer is disposal. */
+{
+  const _t0 = performance.now();
+  const rt = new THREE.WebGLRenderTarget(8, 8);
+  renderer.setRenderTarget(rt);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  rt.dispose();
+  phaseAt('f1rt', _t0);
+
+  const _t1 = performance.now();
+  renderer.render(scene, camera);
+  phaseAt('f1canvas', _t1);
+}
 
 /* ---------- lighting ---------- */
 /* NIGHT WAS DARK BECAUSE OF THE ALBEDOS, AND THE FOG WAS FINISHING THE JOB.
@@ -750,6 +791,43 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     basemap,
     PALACE_FOOT: CITY.PALACE_FOOT,
   });
+phase('buildWorld');
+
+/* DRAIN THE DRIVER'S BACKLOG IN PIECES, INSTEAD OF ALL AT ONCE IN THE FRAME THE USER IS WAITING ON.
+
+   f0each settled what the twenty-two seconds is. It is not the sky, not the environment, not
+   geometry, not linking and not the composer: with the dome given renderOrder -1000 so that it
+   draws first, the dome's own line read 22,141 ms for 1,472 triangles and a 32x256 gradient, while
+   a clear with no meshes at all read 1 ms. The cost attaches to the FIRST DRAW CALL of the session
+   and to nothing else.
+
+   What it is paying for is visible in the same dump: 160 textures resident at frame 0 against 6
+   geometries. initTexture returns in 4 ms for all 156 of them because the driver defers every one,
+   and then drains the lot on the first draw. Which is also why cutting ground texture from 9 Mpx
+   to 2 once moved firstFrame by three seconds — texture volume is exactly what is in the queue.
+
+   The useful part: the dome flushed 160 textures while drawing one. The backlog is GLOBAL and a
+   draw drains all of it, so a draw does not have to draw the city to pay for the city. That makes
+   this safe — world is switched off across the call, nothing half-built is ever submitted, and the
+   flush happens anyway.
+
+   await rAF before each one so the browser can actually paint the sky between stages. Without the
+   yield this is the same unbroken block with more markers in it. */
+const flushPaint = async tag => {
+  await new Promise(r => requestAnimationFrame(r));
+  const wv = world.visible;
+  world.visible = false;
+  /* The dome is 5 units across and the camera has not been placed yet at the first of these. If it
+     sits behind the camera the draw submits nothing and flushes nothing, which would make this an
+     expensive no-op that looks like it worked. */
+  skyDome.position.copy(camera.position);
+  const t = performance.now();
+  renderer.render(scene, camera);
+  world.visible = wv;
+  PH['fl_' + tag] = performance.now() - t;
+  _phT = performance.now();
+};
+await flushPaint('world');
 
 /* ===========================================================================
    CAMERA STATE MACHINE
@@ -760,7 +838,6 @@ const STATE = { WORLD:'world', DISTRICT:'district', PLACE:'place' };
 let state = STATE.WORLD;
 let activeDistrict = null, activePlace = null;
 
-phase('buildWorld');
 fitClip();
 
 /* SPLIT THE FIRST FRAME, because 9,913 ms of it is two thirds of the load and I do not know which
@@ -2501,6 +2578,11 @@ else setTimeout(fillCorniche, 800);
 cur.target.copy(goal.target);
 cur.dist = goal.dist; cur.elev = goal.elev; cur.angle = goal.angle; cur.fov = goal.fov;
 phase('setWorld');
+
+/* The second drain. Everything setWorld, applyView and the material snapshot created since the
+   first one — the six-view material sets above all — is queued behind this. Placed after the
+   camera has its real position, so the dome is in frustum and the draw is real. */
+await flushPaint('setworld');
 
 /* ---------- frame ---------- */
 const clock = new THREE.Clock();
