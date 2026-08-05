@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v147';
+export const BUILD = 'world v148';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3628,9 +3628,30 @@ DISTRICTS.forEach(d => {
 
      Intensity 0 until applyLOD wants it, exactly as before: this changes when the light EXISTS,
      not when it shines. */
-  const glow = new THREE.PointLight(d.tint, 0, 150, 2);
-  glow.position.set(0, GROUND + 20, 0);
-  g.add(glow);
+  /* THE LIGHT LIVES IN `world`, NOT IN THE ISLAND GROUP, AND THAT IS THE THIRD ATTEMPT AT THIS.
+
+     First it was created inside the deferred build, so each island added a PointLight as it was
+     built and NUM_POINT_LIGHTS climbed 0,1,2,3,4 — five full recompiles of every material.
+
+     Then it moved here, into d.group, created for all five islands up front. Better, but the shell
+     hides a pending island with `group.visible = false`, and three.js returns early from
+     projectObject on an invisible object — so the light went with it and the count still climbed.
+     Hiding mass and detail instead kept the count constant and took the program set from 74 to 32,
+     but it broke the islands: the prefetch path hid the contents and only the attract reveal put
+     them back, so any island built ahead of the camera stayed empty.
+
+     A light that must never be hidden does not belong inside the thing that gets hidden. In
+     `world` it is outside every visibility rule in the shell — group hide, LOD swap, view switch —
+     and NUM_POINT_LIGHTS is five from the first frame to the last with no cooperation required
+     from anyone.
+
+     Positioned in world space rather than group space, which is the same point: the group carries
+     a Y rotation and a point on the Y axis is invariant under it, so only the offset and the
+     display scale matter. Range scales with the island for the same reason. */
+  const gscale = d.dispScale || 1;
+  const glow = new THREE.PointLight(d.tint, 0, 150 * gscale, 2);
+  glow.position.set(d.x, (GROUND + 20) * gscale, d.z);
+  world.add(glow);
   d.glow = glow;
 
   d.group = g; d.mass = mass; d.detail = detail;

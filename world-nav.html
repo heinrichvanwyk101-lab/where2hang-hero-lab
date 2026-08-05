@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v98', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v99', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1026,25 +1026,9 @@ function setDistrict(d){
   /* Hidden the instant it acquires geometry, revealed by attractTick once it has settled. Set here
      rather than inside buildIsland because visibility is a shell concern: the world module builds
      islands, the nav decides when a visitor is allowed to see one. */
-  /* HIDE THE CONTENTS, NOT THE GROUP, BECAUSE THE GROUP CARRIES A LIGHT.
-
-     Each island's glow PointLight lives in d.group — deliberately, so that applyLOD toggling
-     `detail` can never change the light count mid-flight. But three.js gathers lights by walking
-     VISIBLE objects and returns early from projectObject on `visible === false`, so hiding the
-     group hid its light too, and NUM_POINT_LIGHTS climbed by one every time an island was revealed.
-
-     The program cache is keyed on that number, so each reveal invalidated every material already
-     linked. A dump of 74 programs splits the 48 scene programs exactly two ways on that one field:
-     33 at five point lights and 12 at four — the same materials linked twice. On this device
-     parallel shader compile is unavailable and linking is serial on the main thread, which is what
-     the first frame is actually spending its time on.
-
-     Hiding mass and detail instead leaves the group — and therefore the light — visible from the
-     first frame to the last, so the count is a constant and the cache holds. */
-  if (buildIsland && d && d !== corniche && d.pending){
-    if (d.mass)   d.mass.visible   = false;
-    if (d.detail) d.detail.visible = false;
-  }
+  /* The island's glow light now lives in `world`, outside every visibility rule here, so this
+     can go back to hiding the whole group and the light count is unaffected — see w2h-world.js. */
+  if (buildIsland && d && d !== corniche && d.pending) d.group.visible = false;
   if (buildIsland && d && buildIsland(d.id)){
     snapshotMats(d.group);
     registerLift(d.group);
@@ -2737,16 +2721,8 @@ function buildAndRegister(d){
   /* Same rule as the setDistrict path, and this is the case it matters for: the prefetch builds an
      island a whole leg before the camera arrives.
 
-     CONTENTS, NOT THE GROUP — see the long note at the setDistrict site. The group carries the
-     island's glow PointLight, three.js gathers lights only from visible objects, and the program
-     cache is keyed on the count. Patching one of these two sites and not the other left the split
-     exactly where it was: 74 programs became 70 and the twelve duplicates at four point lights
-     survived untouched, because the prefetch path was still hiding whole groups. Both sites or
-     neither. */
-  if (d !== corniche && d.pending){
-    if (d.mass)   d.mass.visible   = false;
-    if (d.detail) d.detail.visible = false;
-  }
+     The light is in `world` now, so hiding the group costs nothing. */
+  if (d !== corniche && d.pending) d.group.visible = false;
   if (!buildIsland(d.id)) return;
   snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   addFootprints(d);
@@ -2843,7 +2819,7 @@ function attractTick(now){
     if (d === corniche || !d.built || d._shown) continue;
     /* The counterpart to the hide above: mass comes back, detail stays under applyLOD's control
        exactly as it was, and the group was never hidden so its light never left the count. */
-    if (isleReady(d)){ if (d.mass) d.mass.visible = true; d.group.visible = true; d._shown = true; }
+    if (isleReady(d)){ d.group.visible = true; d._shown = true; }
   }
   if (attract.on){
     /* The hold waits for the island rather than for the clock, up to its ceiling. */
