@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v97', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v98', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -818,6 +818,9 @@ const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
    which is roughly a whole island in frame — fine for composition and useless for showing anyone
    a 5 m paving cell. 0.08 reaches about 270 units. The near clip is 1 unit, so there is a long
    way to go before anything intersects it. */
+/* ?f0split — the first-frame bisection. Long name on purpose: `fp` already proved that a short
+   flag becomes a substring of another query string sooner or later. */
+const F0SPLIT = typeof location !== 'undefined' && location.search.includes('f0split');
 const ZOOM_MIN = 0.08;
 const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
 function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0; }
@@ -3172,6 +3175,48 @@ function frame(){
 
        upload, shadowPass and postFX disappear from the phase list with them. frames[0] is the
        number that replaced them and it needs no extra render at all. */
+
+    /* AND NOW THEY ARE BACK, BEHIND A FLAG, BECAUSE THE REASON FOR CUTTING THEM HAS EXPIRED.
+
+       They were removed because they linked a full duplicate program set — renderer.render draws
+       to the canvas and composer.render draws to a target, and three.js links a separate program
+       per output colour space — on the one frame where linking was believed to cost twenty
+       seconds. That belief has now been tested and it is false. Removing the light-count
+       duplication took the program count from 74 to 32 and the physical set from 36 to 11, and
+       render0 did not move: 19,218 before, 19,561 after. Two thirds of the linking went away for
+       nothing. Whatever the nineteen seconds is, it is not programs.
+
+       So the ordered bisection is affordable again, and it is the only thing that separates the
+       three candidates left inside one composer.render(): geometry and texture upload, the first
+       shadow pass, and the composer's own target allocation. Each step adds exactly one thing to
+       the one before it, so the DIFFERENCES are the costs:
+
+         f0plain   shadows off, straight to canvas  -> geometry + texture upload
+         f0shadow  shadows on, straight to canvas   -> adds the shadow map
+         f0post    composer.render()                -> adds the post chain's targets
+
+       Behind ?f0split so a normal load pays nothing: these are three extra full renders and on
+       this device that is not free. Read them as a ladder, not as absolutes — the duplicate
+       program set is still linked and still lands in f0plain, which is exactly why this is a flag
+       and not the default. */
+    if (F0SPLIT){
+      const _sm = renderer.shadowMap.enabled;
+      let _t = performance.now();
+      renderer.shadowMap.enabled = false;
+      renderer.render(scene, camera);
+      PH.f0plain = Math.round(performance.now() - _t);
+
+      _t = performance.now();
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.needsUpdate = true;
+      renderer.render(scene, camera);
+      PH.f0shadow = Math.round(performance.now() - _t);
+
+      renderer.shadowMap.enabled = _sm;
+      _t = performance.now();
+      composer.render();
+      PH.f0post = Math.round(performance.now() - _t);
+    }
   }
   composer.render();
   /* ONE BLOCK, ONE GUARD, and the guard is _frame0 rather than a second test on PH.firstFrame.
