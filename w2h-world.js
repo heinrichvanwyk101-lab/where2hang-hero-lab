@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v141';
+export const BUILD = 'world v142';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5463,6 +5463,12 @@ function groundFeaturesFor(d, feats){
     for (let x = bx0; x < bx1; x += CELL) for (let z = bz0; z < bz1; z += CELL){
       const mx = x + CELL / 2, mz = z + CELL / 2;
       if (!inPoly(SITE_YASBAY, mx, mz)) continue;
+      /* THE PIER IS NOT GROUND. The baked coastline carries the Yas Bay Waterfront deck as part of
+         the island, so the shoreline bulges 17 units south between x -38 and -24 where the real
+         thing is a structure standing on piles over open water. The outline itself is not mine to
+         rewrite here, but paving it made it read as reclaimed land, which is what showed. The
+         cells are withheld so the deck sits on its own footprint instead. */
+      if (mx > -38 && mx < -24 && mz > 412) continue;
       siteN++;
       if (!BAY_ALL && !onIsle(mx, mz)) continue;
       const dd = nearM(mx, mz);
@@ -5567,14 +5573,23 @@ function groundFeaturesFor(d, feats){
        along +v from the hotel centre, the water is reached at 118 m on the headland side and
        186 m dead ahead, so the third pool moves to u -100, v 103 — its seaward edge lands about
        5 m off the coastline, which is what an infinity edge is. */
-    const HOTEL = [-19.5, 386.8], HOTEL_TH = -0.2374;
-    const HC = (u, v) => { const c2 = Math.cos(HOTEL_TH), s2 = Math.sin(HOTEL_TH);
-      return [HOTEL[0] + (u * c2 - v * s2) / M_PER_UNIT, HOTEL[1] + (u * s2 + v * c2) / M_PER_UNIT]; };
-    for (const [u, v, w, h] of [[30, 14, 92, 30], [-45, 12, 80, 26], [-100, 103, 74, 26]]){
-      const c3 = HC(u, v);
+    /* TWO COURTYARD POOLS WERE INSIDE A SOLID BUILDING, WHICH IS WHY THEY WENT DARK.
+
+       The real hotel is an E on plan with water in the gaps. The BAKE does not know that: it
+       carries one oriented box, 270 x 136 m, and an OBB has no courtyards. So both pools were
+       placed inside forty metres of extruded hotel and could only be glimpsed under its edges —
+       the dark squares. There is no courtyard to put them in until the building is modelled as
+       an E, and that is a landmark job, not a ground-feature one.
+
+       Which is no loss, because the pools that read in every photograph of this place are not the
+       courtyards at all. They are on the waterfront between the pier and the arena, at the water's
+       edge. Placed in island coordinates directly, on the shore bearing of -17 degrees measured
+       off the baked coastline through this stretch, rather than on the hotel's. */
+    const SHORE_TH = -0.2967;
+    for (const [px, pz, w, h] of [[-18, 406.5, 90, 34], [-6, 404, 54, 26]]){
       const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
-      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -HOTEL_TH;
-      pm.position.set(c3[0], GROUND + 0.010, c3[1]);
+      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -SHORE_TH;
+      pm.position.set(px, GROUND + 0.010, pz);
       g.add(tagGround(pm, wat));
     }
     /* A STRING, AND THAT IS THE POINT. The overlay prints `' b' + x.baySurf` behind a truthiness
