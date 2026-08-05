@@ -212,6 +212,30 @@ const AREA_FLOOR = 20;
    anything visible at this scale and removes most of OSM's surveyed detail. */
 const SIMPLIFY_M = 2.0;
 
+/* THE POLYGON THRESHOLD, AND WHY THE OBB IS NO LONGER ENOUGH ON ITS OWN.
+
+   The note at the top of this file argues that buildings are oriented boxes because the fabric
+   extruder consumes { x, z, rot, w, dp } and a 40-vertex footprint would be reduced to exactly
+   that on arrival. That was true, and for thirty thousand background buildings it still is: at
+   diorama scale a plot's proportion and its angle to the street are the whole of what reads.
+
+   It stopped being true for the handful you can now walk up to. The nav camera reaches about 270
+   units, which is close enough to count 5 m paving cells, and at that range a hotel is not fabric
+   — it is a building with a courtyard, and an OBB has no courtyard. The Hilton on Yas is 270 x 136
+   m and arrives as one solid slab, so its pool sits inside forty metres of extruded hotel and can
+   only be glimpsed under the edges. No consumer can carve a hole in a box it was handed.
+
+   So the box stays, for everything, and the RING is carried as well above an area threshold. At
+   8,000 m² that is 266 buildings across all five islands — 186 Corniche, 28 Saadiyat, 28 Yas, 18
+   Reem, 6 Al Maryah — against 26,325 in total. Tens of kilobytes to fix the only ones anybody will
+   ever look at closely. Stored as offsets from the box centre and rounded to 0.1 m, because an
+   absolute coordinate in the emirate frame is five digits before the point and the delta is three.
+
+   Consumers must treat `p` as optional and fall back to the box: it is absent on 99 per cent of
+   the stock by design, and absent on ALL of it until the bake has been re-run. */
+const POLY_AREA = Number(process.env.W2H_POLY_AREA) || 8000;
+const POLY_MAX_PTS = 160;
+
 /* ---------- OVERTURE BUILDINGS ---------------------------------------------------------------
 
    WHY THE BUILDINGS MOVED SOURCE AND THE REST DID NOT.
@@ -381,8 +405,24 @@ async function loadOverture(proj){
         fc:  rec.facade_color || null,
       },
     });
+
+    /* The ring, for the large ones only. Simplified at the same 2 m the coastline uses, and
+       simplified harder rather than truncated if a footprint is pathological — a clipped ring is a
+       lie about the shape, whereas a coarser one is merely a coarser truth. The closing duplicate
+       vertex is dropped; consumers close their own rings. */
+    if (a >= POLY_AREA){
+      let ring2 = simplify(xy, SIMPLIFY_M);
+      for (let t = SIMPLIFY_M * 2; ring2.length > POLY_MAX_PTS && t < 64; t *= 2) ring2 = simplify(xy, t);
+      const last = ring2.length - 1;
+      if (last > 2 && ring2[0][0] === ring2[last][0] && ring2[0][1] === ring2[last][1]) ring2 = ring2.slice(0, last);
+      if (ring2.length >= 3 && ring2.length <= POLY_MAX_PTS){
+        rows[rows.length - 1].rec.p = ring2.map(q => [rd1(q[0] - b.x), rd1(q[1] - b.y)]);
+      }
+    }
   }
 
+  process.stderr.write(`  Overture: ${rows.filter(r => r.rec.p).length} carry a ring ` +
+    `(at or above ${POLY_AREA} m², max ${POLY_MAX_PTS} pts)\n`);
   process.stderr.write(`  Overture: ${lines} rows -> ${rows.length} readable ` +
     `(${tooSmall} under ${AREA_FLOOR} m², ${noGeom} unusable geometry, ${noBox} no box); ` +
     `${rows.filter(r => r.a >= MIN_BUILDING_AREA).length} at or above ${MIN_BUILDING_AREA} m²\n`);
