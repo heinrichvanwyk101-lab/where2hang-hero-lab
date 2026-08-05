@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v102', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v104', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -391,7 +391,7 @@ const camera = new THREE.PerspectiveCamera(52, 1, 1, 6000);
    Canvas row 0 is the zenith after the default flipY, so the stops read top-down: sky, haze,
    horizon, sun band, ground. The two mode textures share one builder because the only real
    difference between night and dusk here is where the warm band sits and how wide it is. */
-function skyTexture(stops){
+function skyTexture(stops, mapping){
   const cv = document.createElement('canvas');
   cv.width = 32; cv.height = 256;
   const g = cv.getContext('2d');
@@ -399,24 +399,64 @@ function skyTexture(stops){
   stops.forEach(st => grd.addColorStop(st[0], st[1]));
   g.fillStyle = grd; g.fillRect(0, 0, 32, 256);
   const t = new THREE.CanvasTexture(cv);
-  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.mapping = mapping || THREE.EquirectangularReflectionMapping;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
-const nightSkyTex = skyTexture([
+const NIGHT_STOPS = [
   [0.000,'#04080C'],[0.400,'#0B1A24'],[0.485,'#1E333E'],
-  [0.515,'#2A2317'],[0.700,'#080D12'],[1.000,'#03060A']]);
+  [0.515,'#2A2317'],[0.700,'#080D12'],[1.000,'#03060A']];
 /* BELOW THE HORIZON IS SEA. The obvious thing to paint under a sky is ground, and it is wrong
    for this scene: the camera is always over water looking at islands, so every ray that misses
    the water plane should still land on something that looks like sea. Painting it brown put a
    band of desert across the far half of the frame and there was no waterline anywhere. */
-const duskSkyTex = skyTexture([
+const DUSK_STOPS = [
   [0.000,'#2A5A86'],[0.300,'#6E9CC0'],[0.440,'#C6D6DE'],[0.492,'#F7D4A2'],
-  [0.512,'#C9A882'],[0.560,'#5A6C79'],[1.000,'#28343E']]);
+  [0.512,'#C9A882'],[0.560,'#5A6C79'],[1.000,'#28343E']];
+const nightSkyTex = skyTexture(NIGHT_STOPS);
+const duskSkyTex  = skyTexture(DUSK_STOPS);
 
 const pmrem    = new THREE.PMREMGenerator(renderer);
 const nightEnv = pmrem.fromEquirectangular(nightSkyTex).texture;
 const duskEnv  = pmrem.fromEquirectangular(duskSkyTex).texture;
+
+/* THE SKY IS A MESH NOW, AND scene.background NEVER RECEIVES A TEXTURE AGAIN.
+
+   f0each found twenty-one seconds of the first frame in the background, with every mesh in the
+   scene hidden and only 25 ms of actual drawing to account for. skyTexture stamps
+   EquirectangularReflectionMapping on its canvas, and three.js cannot draw an equirect as a
+   background: WebGLCubeUVMaps converts it on first use, running its own PMREMGenerator — a cube
+   render plus the five-level SphericalGaussianBlur chain — synchronously inside the draw, on a
+   device reporting parallel-compile NO.
+
+   Handing it duskEnv instead would have skipped the conversion, since that is the same conversion
+   already done at module scope. It would also have made the sky the PMREM's blurred mip 0, and
+   the dusk stops turn over across twenty thousandths at 0.492 to 0.512 — the horizon is the one
+   feature in this gradient that has anything to lose.
+
+   So: a sphere. Its own texture, UVMapping, sampled as a plain map by a basic material. No
+   conversion path exists for it to fall into. The dome costs one draw call and 1,536 triangles.
+
+   Three properties earn their place:
+     depthTest false + renderOrder -1000  draws first and is painted over by everything, so the
+                                          radius is arbitrary and no clip plane can reach it
+     frustumCulled false                  it is centred on the camera every frame; culling it
+                                          against its own centre is a coin toss not worth taking
+     fog false                            haze is for distance, and this has none
+
+   Radius 5 against a near clip of 1. It sits in scene and not in world, which is what keeps
+   applyView's traverse and warmHideAll off it — both walk world. */
+const skyDomeTex = { dusk: skyTexture(DUSK_STOPS, THREE.UVMapping),
+                     night: skyTexture(NIGHT_STOPS, THREE.UVMapping) };
+const skyDome = new THREE.Mesh(
+  new THREE.SphereGeometry(5, 32, 24),
+  new THREE.MeshBasicMaterial({ map: skyDomeTex.dusk, side: THREE.BackSide,
+                                depthTest: false, depthWrite: false, fog: false }));
+skyDome.name = 'skyDome';
+skyDome.renderOrder = -1000;
+skyDome.frustumCulled = false;
+skyDome.userData.helper = true;   // belt and braces if it is ever reparented under world
+scene.add(skyDome);
 
 /* ---------- lighting ---------- */
 /* NIGHT WAS DARK BECAUSE OF THE ALBEDOS, AND THE FOG WAS FINISHING THE JOB.
@@ -1485,11 +1525,26 @@ function applyView(next){
   chip.textContent = LABEL[view];
   chip.setAttribute('aria-pressed', String(!dusk));
 
+  /* TWENTY-ONE SECONDS OF THE FIRST FRAME USED TO BE SPENT HERE, ON A 32x256 GRADIENT.
+
+     f0each settled it by elimination: with every mesh hidden the first frame still cost 21,209 ms,
+     and the five meshes it was supposed to be drawing came to 25 ms between them. Nothing in the
+     scene graph was responsible. The background was — an equirect handed to scene.background,
+     converted to CubeUV by WebGLCubeUVMaps on first use, inside the draw. See skyDome at the top
+     of the file for the whole argument and for what replaced it.
+
+     What matters here: scene.background takes a COLOUR in all six views and a texture in none. */
+  /* The background is a COLOUR in every view now, including the two that used to hand it a
+     gradient. In dusk and night the dome covers the frame and the colour is never seen; it is set
+     to each gradient's zenith stop anyway, so that a gap would read as sky rather than as black. */
   scene.background = plan ? new THREE.Color(0x101418)
                    : check ? new THREE.Color(0x8FA3AE)
                    : sil ? new THREE.Color(0xC8D8DF)
                    : day ? new THREE.Color(0x9FC4DA)
-                   : dusk ? duskSkyTex : nightSkyTex;
+                   : dusk ? new THREE.Color(0x2A5A86) : new THREE.Color(0x04080C);
+  /* Driven explicitly rather than by the traverse below, which walks world and never reaches it. */
+  skyDome.visible = dusk || night;
+  if (skyDome.visible) skyDome.material.map = dusk ? skyDomeTex.dusk : skyDomeTex.night;
   /* No haze in Check. Distance fog is exactly what stops you comparing a street at the near edge
      of the island with the one at the far edge, which is the comparison this mode is for. */
   fogKey = sil || plan || check ? null : day ? 'day' : dusk ? 'dusk' : 'night';
@@ -3010,6 +3065,12 @@ function frame(){
     reframe();
   }
   camera.lookAt(tx, cur.target.y, tz);
+
+  /* The dome is 5 units across and the camera travels thousands, so it has to be carried. Done
+     here, after lookAt and before anything renders, because a stale position for one frame is a
+     visible lurch in the horizon during a flight. Position only — rotating it with the camera
+     would drag the horizon line around with the yaw. */
+  if (skyDome.visible) skyDome.position.copy(camera.position);
 
   /* THE HAZE FOLLOWS THE CAMERA, EVERY FRAME. cur.dist and cur.elev are the damped values the
      camera was just built from, so this is the distance actually being looked through rather
