@@ -310,7 +310,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v108', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v109', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -846,9 +846,26 @@ const flushPaint = async tag => {
   await nextPaint();
   const wv = world.visible;
   world.visible = false;
-  /* The dome is 5 units across and the camera has not been placed yet at the first of these. If it
-     sits behind the camera the draw submits nothing and flushes nothing, which would make this an
-     expensive no-op that looks like it worked. */
+  /* TWO DRAWS, BECAUSE "THE FIRST DRAW AFTER buildWorld COSTS 20 SECONDS" IS STILL TWO CLAIMS.
+
+     world is hidden across both, so neither can be uploading city geometry or city textures —
+     three.js culls on visible before it creates a buffer. That already rules out the obvious
+     reading of this number, and fl_mass 4 ms confirms it: the layer that draw was meant to pay for
+     was hidden from it.
+
+     So the cost is either in the draw of the one visible mesh, or in what the renderer does before
+     any mesh at all — the clear, the state reset, whatever the driver has queued behind them.
+     Hiding the dome as well leaves a render with nothing in it but that. At frame 0 the equivalent
+     read 1 ms, but by then fl_world had already paid, so it proves nothing about this point.
+
+       fl_<tag>0   clear and state only, no meshes
+       fl_<tag>    the same again with the dome, so the difference is the dome's draw */
+  const dv = skyDome.visible;
+  skyDome.visible = false;
+  const t0 = performance.now();
+  renderer.render(scene, camera);
+  PH['fl_' + tag + '0'] = performance.now() - t0;
+  skyDome.visible = dv;
   skyDome.position.copy(camera.position);
   const t = performance.now();
   renderer.render(scene, camera);
