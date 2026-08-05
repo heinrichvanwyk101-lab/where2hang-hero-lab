@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v142';
+export const BUILD = 'world v145';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5563,38 +5563,59 @@ function groundFeaturesFor(d, feats){
        reads as an infinity edge in every photograph of this hotel. Water, so they get their own
        ramp rather than the ground's: bright in Day, dark and reflective at night. */
     const wat = flatSet(0x14313B, 0x2E7E92, 0x37A6C0, 0.25, 8);
-    /* THE HOTEL'S OWN BEARING, READ OFF THE BAKE RATHER THAN EYEBALLED. The anchor was
-       (-23.7, 388.7) at +0.2057 rad, which is +11.8 degrees. The building sitting there is
-       270 x 136 m at -13.6 degrees — the largest footprint in the site and the only one tagged
-       `dine`. So the water was set 25 degrees off its own hotel, which is exactly the diagonal
-       that showed. Anchor and angle now both come from that footprint.
 
-       THE INFINITY POOL WAS NEVER AT THE SEA. Its offset put it 110 m inland. Walking outward
-       along +v from the hotel centre, the water is reached at 118 m on the headland side and
-       186 m dead ahead, so the third pool moves to u -100, v 103 — its seaward edge lands about
-       5 m off the coastline, which is what an infinity edge is. */
-    /* TWO COURTYARD POOLS WERE INSIDE A SOLID BUILDING, WHICH IS WHY THEY WENT DARK.
+    /* CAFE DEL MAR BEACH CLUB, SURVEYED. Fourteen dropped pins around the peninsula, converted
+       through the frame index.json declares — origin lat 24.49, lon 54.42, metres east and north:
 
-       The real hotel is an E on plan with water in the gaps. The BAKE does not know that: it
-       carries one oriented box, 270 x 136 m, and an OBB has no courtyards. So both pools were
-       placed inside forty metres of extruded hotel and could only be glimpsed under its edges —
-       the dark squares. There is no courtyard to put them in until the building is modelled as
-       an E, and that is a landmark job, not a ground-feature one.
+         x = (lon - 54.42) * 101313        local_x = (x - 18538.2) / 7.8
+         y = (lat - 24.49) * 110540        local_z = -(y + 396.5) / 7.8
 
-       Which is no loss, because the pools that read in every photograph of this place are not the
-       courtyards at all. They are on the waterfront between the pier and the arena, at the water's
-       edge. Placed in island coordinates directly, on the shore bearing of -17 degrees measured
-       off the baked coastline through this stretch, rather than on the hotel's. */
-    const SHORE_TH = -0.2967;
-    for (const [px, pz, w, h] of [[-18, 406.5, 90, 34], [-6, 404, 54, 26]]){
+       Taken as a convex hull they close at 276 m round and 0.48 ha, and the hull contains both the
+       pool pin and Google's own Cafe del Mar label while excluding the bar building to landward —
+       three consistency checks the plan artefact failed. The bake carries this peninsula as five
+       fragments with NO HEIGHT on any of them, which is why it renders as flat clutter; the deck,
+       the pool and the pavilion are all ground-plane, so they read without needing one. */
+    const CLUB = [[-26.06,403.34], [-23.66,401.70], [-14.28,399.38], [-13.05,404.80],
+                  [-14.07,407.09], [-21.76,408.18], [-22.81,408.32], [-24.32,406.48]];
+    const deck = flatSet(0x6A6157, 0xC3B9A6, 0xE2D8C4, 0.90, 7);
+    const cs = new THREE.Shape();
+    cs.moveTo(CLUB[0][0], -CLUB[0][1]);
+    for (let i = 1; i < CLUB.length; i++) cs.lineTo(CLUB[i][0], -CLUB[i][1]);
+    cs.closePath();
+    const dm = new THREE.Mesh(new THREE.ShapeGeometry(cs), deck.base);
+    dm.rotation.x = -Math.PI / 2;
+    dm.position.y = GROUND + 0.020;
+    g.add(tagGround(dm, deck));
+
+    /* The circular pavilion at the seaward tip, on Google's label point. Radius from the spread of
+       the five pins that ring it, which measure about 30 m across. */
+    const pav = flatSet(0x5A5347, 0xA79374, 0xC4AE8A, 0.92, 7);
+    const pv = new THREE.Mesh(new THREE.CircleGeometry(15 / M_PER_UNIT, 40), pav.base);
+    pv.rotation.x = -Math.PI / 2;
+    pv.position.set(-15.0, GROUND + 0.026, 405.4);
+    g.add(tagGround(pv, pav));
+
+    /* THE BAR RANGE, AT ONE STOREY. The developer render settles the number the bake could not:
+       everything on this peninsula is low, a single-storey white range with a shaded terrace along
+       the landward edge, and nothing tall on the club at all. Five metres, not the eight I guessed.
+       Corners surveyed as 89 x 21.5 m on the hotel's own bearing, centred (-19.9, 399.0). */
+    const barMat = flatSet(0x4E4A44, 0xCFC9BE, 0xEFEAE0, 0.88, 0);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(89 / M_PER_UNIT, 5 / M_PER_UNIT, 21.5 / M_PER_UNIT), barMat.base);
+    bar.rotation.y = 0.2374;
+    bar.position.set(-19.9, GROUND + 2.5 / M_PER_UNIT, 399.0);
+    g.add(tagGround(bar, barMat));
+
+    /* The pool, on its own twice-confirmed pin, sitting on the deck rather than on the ground.
+       Enlarged to 80 x 46 m: the render shows it filling most of the peninsula, not a lap strip. */
+    const SHORE_TH = -0.2967, HOTEL_TH = -0.2374;
+    for (const [px, pz, w, h, th, y] of [[-21.9, 390.6, 64, 22, HOTEL_TH, 0.010],
+                                         [-18.8, 405.3, 80, 46, SHORE_TH, 0.032]]){
       const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
-      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -SHORE_TH;
-      pm.position.set(px, GROUND + 0.010, pz);
+      pm.rotation.x = -Math.PI / 2; pm.rotation.z = -th;
+      pm.position.set(px, GROUND + y, pz);
       g.add(tagGround(pm, wat));
     }
-    /* A STRING, AND THAT IS THE POINT. The overlay prints `' b' + x.baySurf` behind a truthiness
-       test, so a numeric zero printed nothing — the one outcome the counter existed to report.
-       'kept/insite' is always truthy, so `b0/10512` and no `b` at all are now different answers. */
+
     d.baySurf = bayN + '/' + siteN;
   }
 
