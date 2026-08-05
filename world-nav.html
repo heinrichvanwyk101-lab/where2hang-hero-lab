@@ -210,6 +210,15 @@ const phase = name => { PH[name] = performance.now() - _phT; _phT = performance.
    for a span you want isolated inside one. phaseAt takes its own start and still moves the marker,
    so the next phase() is not handed the span that was just accounted for. */
 const phaseAt = (name, t0) => { PH[name] = performance.now() - t0; _phT = performance.now(); };
+/* AWAIT THE PAINT, NOT THE FRAME. A single requestAnimationFrame resumes INSIDE the rAF callback,
+   which runs before the browser composites — so anything awaiting one rAF and then blocking starts
+   its block in the same frame and the compositor never gets a turn. That is why v106 rendered the
+   sky at 7 ms and showed nothing: f1canvas drew, buildWorld blocked 1.5 s, the rAF resumed and
+   immediately blocked 27 s, and not one of those frames ever reached the screen.
+
+   rAF then setTimeout(0): the timeout is scheduled from inside the rAF callback, so it runs after
+   that frame has been committed. Resuming there means the previous draw is on screen. */
+const nextPaint = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 const PAGE_T0 = performance.now();
 
 const V = '?v=' + Date.now();
@@ -289,7 +298,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v106', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v107', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -498,6 +507,10 @@ scene.add(skyDome);
   renderer.render(scene, camera);
   phaseAt('f1canvas', _t1);
 }
+/* AND LET IT REACH THE SCREEN BEFORE ANYTHING BLOCKS AGAIN. buildWorld runs synchronously for a
+   second and a half immediately below; without this the sky drawn above is still sitting in a back
+   buffer when that starts, and the user watches black through all of it. */
+await nextPaint();
 
 /* ---------- lighting ---------- */
 /* NIGHT WAS DARK BECAUSE OF THE ALBEDOS, AND THE FOG WAS FINISHING THE JOB.
@@ -814,7 +827,7 @@ phase('buildWorld');
    await rAF before each one so the browser can actually paint the sky between stages. Without the
    yield this is the same unbroken block with more markers in it. */
 const flushPaint = async tag => {
-  await new Promise(r => requestAnimationFrame(r));
+  await nextPaint();
   const wv = world.visible;
   world.visible = false;
   /* The dome is 5 units across and the camera has not been placed yet at the first of these. If it
