@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v100', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v102', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1767,7 +1767,16 @@ document.getElementById('vProg').addEventListener('click', () => {
         'f0scene  vis ' + F0INFO.vis + ' meshes, ' + F0INFO.visTri.toLocaleString() +
           ' tri visible   drew ' + F0INFO.tri.toLocaleString() + ' tri in ' + F0INFO.calls +
           ' calls   prog ' + F0INFO.prog0 + ' -> ' + F0INFO.prog1 +
-          '  (+' + (F0INFO.prog1 - F0INFO.prog0) + ' linked inside f0plain)']),
+          '  (+' + (F0INFO.prog1 - F0INFO.prog0) + ' linked inside f0plain)',
+        'f0resid  hid ' + F0INFO.hid + ' meshes, ' + F0INFO.hidTri.toLocaleString() +
+          ' tri resident-not-drawn   by warm ' + F0INFO.byWarm + '  by fp ' + F0INFO.byFp +
+          '  by self ' + F0INFO.bySelf + '   geo ' + F0INFO.geo0 + '  tex ' + F0INFO.tex0,
+        '',
+        'f0each   background alone, no meshes: ' + F0INFO.bgMs + ' ms',
+        ...(F0INFO.each || []).map(e =>
+          '  ' + String(e.ms).padStart(6) + ' ms  ' + String(e.tri).padStart(7) + ' tri  ' +
+          e.mat + '  "' + e.n + '" in "' + e.par + '"' +
+          (e.tex ? '\n            ' + e.tex : ''))]),
       'warm     ' + (WARM_COST.length ? WARM_COST.length + ' meshes, ' +
           Math.round(WARM_COST.reduce((a, w) => a + w.ms, 0)) + ' ms total' : 'off'),
       ...(WARM_COST.length ? ['', 'slowest first draws:'].concat(
@@ -3208,19 +3217,105 @@ function frame(){
        program set is still linked and still lands in f0plain, which is exactly why this is a flag
        and not the default. */
     if (F0SPLIT){
-      /* THE CENSUS, TAKEN BEFORE THE RENDER THAT IS BEING BLAMED FOR IT. */
-      let _vm = 0, _vt = 0;
-      scene.traverse(o => {
-        if (!o.isMesh || !_visibleChain(o)) return;
-        _vm++;
+      /* THE CENSUS, TAKEN BEFORE THE RENDER THAT IS BEING BLAMED FOR IT.
+
+         Split visible from resident, because those are two different theories and one number
+         cannot tell them apart. Four generations of the same buildings are parented in this scene
+         — landmass, generated fabric, Overture footprints, bespoke landmarks — and a later one
+         superseding an earlier one hides it rather than removing it. If the cost scales with what
+         is DRAWN, the visible column explains it. If it scales with what is RESIDENT, the hidden
+         column does, and no amount of hiding will ever touch it. */
+      let _vm = 0, _vt = 0, _hm = 0, _ht = 0;
+      const _triOf = o => {
         const g = o.geometry;
-        if (g && g.index) _vt += (g.index.count / 3) * (o.count || 1);
-        else if (g && g.attributes && g.attributes.position)
-          _vt += (g.attributes.position.count / 3) * (o.count || 1);
+        if (!g) return 0;
+        const n = g.index ? g.index.count : (g.attributes && g.attributes.position
+                                             ? g.attributes.position.count : 0);
+        return (n / 3) * (o.count || 1);
+      };
+      scene.traverse(o => {
+        if (!o.isMesh) return;
+        if (_visibleChain(o)){ _vm++; _vt += _triOf(o); }
+        else { _hm++; _ht += _triOf(o); }
       });
       F0INFO.vis = _vm;
       F0INFO.visTri = Math.round(_vt);
+      F0INFO.hid = _hm;
+      F0INFO.hidTri = Math.round(_ht);
+      /* WHY THE HIDDEN ONES ARE HIDDEN, because "resident but not drawn" has four causes here and
+         they have four different owners. A mesh can carry more than one mark; counted separately
+         on purpose, so overlapping authorities show up as columns that do not sum to hid. */
+      let _byWarm = 0, _byFp = 0, _bySelf = 0;
+      scene.traverse(o => {
+        if (!o.isMesh || _visibleChain(o)) return;
+        if (o.userData.warmHidden) _byWarm++;
+        if (o.userData.fpHidden) _byFp++;
+        if (!o.visible && !o.userData.warmHidden && !o.userData.fpHidden) _bySelf++;
+      });
+      F0INFO.byWarm = _byWarm;
+      F0INFO.byFp = _byFp;
+      F0INFO.bySelf = _bySelf;
+      F0INFO.geo0 = renderer.info.memory.geometries;
+      F0INFO.tex0 = renderer.info.memory.textures;
       F0INFO.prog0 = renderer.info.programs ? renderer.info.programs.length : -1;
+
+      /* FIVE MESHES, TWENTY-ONE SECONDS, ONE AT A TIME.
+
+         f0scene closed the search: the first frame draws 5 meshes, 53,086 triangles, 10 calls and
+         links 3 programs, and costs twenty-one seconds. Nothing about that is geometry, draw count
+         or linking. Whatever it is is attached to one of five objects, or to the first render
+         itself, and five is small enough to test exhaustively rather than argue about.
+
+         Same principle as warm1 and for the same reason: a marker around a call cannot attribute
+         cost the driver has deferred past it, but a DIFFERENCE BETWEEN SCENES can. Hide all five,
+         render — that is the background and the driver's own first-render cost, with no mesh in
+         it. Then reveal exactly one, render, and the difference is that mesh's first draw. There
+         is nowhere for the work to hide: the next render reveals a different mesh.
+
+         Textures are listed per mesh because that is the leading suspect. paintGround writes into
+         canvases, and a canvas-sourced texture pays its upload and its mipmap generation on first
+         draw, synchronously — which is exactly the cost texUp cannot see, because texUp measures
+         the call that defers it. */
+      const _vis = [];
+      scene.traverse(o => { if (o.isMesh && _visibleChain(o)) _vis.push(o); });
+      const _texOf = o => {
+        const m = o.material;
+        if (!m) return '';
+        const out = [];
+        [].concat(m).forEach(mm => ['map','normalMap','roughnessMap','emissiveMap','alphaMap','aoMap']
+          .forEach(k => {
+            const t = mm && mm[k];
+            const im = t && (t.image || (t.source && t.source.data));
+            if (!im) return;
+            const w = im.width || 0, h = im.height || 0;
+            out.push(k + ' ' + w + 'x' + h + (im instanceof HTMLCanvasElement ? ' canvas' : '') +
+                     (t.generateMipmaps ? ' mip' : ''));
+          }));
+        return out.join(', ');
+      };
+
+      renderer.shadowMap.enabled = false;
+      _vis.forEach(o => { o.visible = false; });
+      let _tb = performance.now();
+      renderer.render(scene, camera);
+      F0INFO.bgMs = Math.round(performance.now() - _tb);
+
+      F0INFO.each = [];
+      for (const o of _vis){
+        o.visible = true;
+        const _te = performance.now();
+        renderer.render(scene, camera);
+        F0INFO.each.push({
+          ms: Math.round(performance.now() - _te),
+          n: o.name || '(unnamed)',
+          par: (o.parent && o.parent.name) || '(no parent name)',
+          tri: Math.round(_triOf(o)),
+          mat: (o.material && ([].concat(o.material)[0].type)) || '?',
+          tex: _texOf(o)
+        });
+        o.visible = false;
+      }
+      _vis.forEach(o => { o.visible = true; });
 
       const _sm = renderer.shadowMap.enabled;
       let _t = performance.now();
