@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v146';
+export const BUILD = 'world v147';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5899,7 +5899,7 @@ function footprintsFor(d, list){
       h = 3.6 / M_PER_UNIT;
     }
     specs.push({ x:b.x, z:b.z, w:Math.max(1.2, b.w), dp:Math.max(1.2, b.dp), rot:b.rot, h,
-                 v:b.v || 0, vk:b.vk || null });
+                 v:b.v || 0, vk:b.vk || null, p:b.p || null });
   }
 
   /* Bucketed by material and window class exactly as the fabric is, so a footprint and a
@@ -5953,8 +5953,20 @@ function footprintsFor(d, list){
   const winOf  = sp => vkOf(sp) === 'dine'
                      ? Math.min(WCLASS.length - 1, wClass(sp.h) + 1)
                      : wClass(sp.h);
+  /* SPLIT: RINGS ARE NOT INSTANCED. An InstancedMesh shares one geometry across every instance and
+     varies only the matrix, which is exactly right for a box and impossible for a footprint that
+     has its own outline. The 186 buildings carrying a ring get one mesh each — a rounding error
+     against 26,325, and the only ones anybody looks at closely.
+
+     Both paths must agree on the bucket key, because the instanced buckets are ALLOCATED from the
+     first count. Sizing the buckets over all specs and then drawing some of them elsewhere would
+     leave holes: allocated slots never written, which render as unit boxes at the origin. So the
+     count below runs over `boxed` alone. */
+  const ringed = specs.filter(sp => sp.p && sp.p.length >= 3 && sp.h > 0);
+  const boxed  = ringed.length ? specs.filter(sp => !(sp.p && sp.p.length >= 3 && sp.h > 0)) : specs;
+
   const need = new Map();
-  for (const sp of specs){ const k = matOf(sp) + '#' + winOf(sp);
+  for (const sp of boxed){ const k = matOf(sp) + '#' + winOf(sp);
     need.set(k, (need.get(k) || 0) + 1); }
 
   const meshes = new Map();
@@ -5967,7 +5979,7 @@ function footprintsFor(d, list){
   });
 
   const M = new THREE.Object3D(), idx = new Map();
-  for (const sp of specs){
+  for (const sp of boxed){
     /* GROUND, NOT GROUND + h/2. The profile geometry is built with its rings at y = t for t in
        0..1 — its origin is at the BASE, not the centre. urbanFabric has always written
        `GROUND + o.y` with no half-height term because there is no half-height to add, and this
@@ -6008,6 +6020,32 @@ function footprintsFor(d, list){
 
   const g = new THREE.Group();
   g.name = 'footprints';
+
+  /* THE RINGED ONES, EXTRUDED. The shape is written (x, -z) and the geometry rotated -PI/2 about
+     X, which is the same convention the golf course and the bay deck use: a shape point (sx, sy)
+     lands at world (sx, 0, -sy), so the ring's z must be negated going in and comes back out
+     correct. Extrusion runs along the shape's +Z, which that rotation turns into +Y, so `depth` is
+     simply the height in units and the base sits on GROUND with no half-height term — the same
+     thing the box path had to learn.
+
+     `rot` is deliberately NOT applied. The ring arrives in the island frame already oriented; the
+     box needs its rotation because a box has none of its own. Applying both would turn every
+     landmark by its own bearing twice. */
+  for (const sp of ringed){
+    const sh = new THREE.Shape();
+    sh.moveTo(sp.p[0][0], -sp.p[0][1]);
+    for (let i = 1; i < sp.p.length; i++) sh.lineTo(sp.p[i][0], -sp.p[i][1]);
+    sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: sp.h, bevelEnabled: false, curveSegments: 1 });
+    geo.rotateX(-Math.PI / 2);
+    const t = matOf(sp), c = winOf(sp);
+    const rm = new THREE.Mesh(geo, MATS[t][+c]);
+    rm.userData.dayMats = MATS[t].day[+c];
+    rm.castShadow = true; rm.receiveShadow = true;
+    rm.position.set(sp.x, GROUND, sp.z);
+    g.add(rm);
+  }
+
   meshes.forEach((m, k) => {
     m.count = idx.get(k) || 0;
     m.instanceMatrix.needsUpdate = true;

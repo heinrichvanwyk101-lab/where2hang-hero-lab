@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v9';
+export const BUILD = 'basemap v10';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -307,6 +307,16 @@ export function buildingsUnits(island, origin){
        fall through to the height rule unchanged. */
     v:  b.v || 0,
     vk: b.vk || null,
+    /* THE REAL FOOTPRINT, WHERE THE BAKE HAS ONE. An oriented box is the right reduction for
+       twenty-six thousand background buildings and the wrong one for the handful you can walk up
+       to: the Hilton on Yas measures 36,706 m² as a box and 19,672 m² as a ring, and the missing
+       46 per cent is a courtyard with a pool in it.
+
+       Offsets from the box centre in bake metres, so they convert like any other length, and the
+       northing flips to -z exactly as the centre does. NOT expressed in the box's rotated frame —
+       the ring already carries its own orientation, so anything drawing it must NOT also apply
+       `rot`. Present on 186 buildings of 26,325 and absent on the rest by design. */
+    p: b.p ? b.p.map(q => [m2u(q[0]), -m2u(q[1])]) : null,
   }));
 }
 
