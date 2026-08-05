@@ -285,7 +285,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v99', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v100', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -821,6 +821,31 @@ const cur  = { target:goal.target.clone(), dist:goal.dist, elev:goal.elev,
 /* ?f0split — the first-frame bisection. Long name on purpose: `fp` already proved that a short
    flag becomes a substring of another query string sooner or later. */
 const F0SPLIT = typeof location !== 'undefined' && location.search.includes('f0split');
+/* WHAT THE FIRST FRAME ACTUALLY DRAWS, AND HOW MANY PROGRAMS IT LINKS WHILE DRAWING IT.
+
+   f0split has taken the ladder as far as it goes: shadows are 1-2 ms, the composer 80-88, the
+   environment nothing at all, and twenty-two seconds sits in one plain render. Every remaining
+   theory is about the CONTENT of that render, and nothing on the overlay describes it.
+
+   warmHideAll runs before the first frame and hides every mesh under world, so on paper f0plain
+   draws the sea and the sky. If that is true, twenty-two seconds cannot be geometry upload and
+   cannot be program linking, because neither happens for a mesh that is not drawn. If it is false
+   — if the hide is not holding, or something walks the hidden meshes anyway — then the whole
+   premise of the last three sessions is wrong and it is worth knowing which.
+
+   Three numbers, captured around the plain render and nowhere else:
+
+     vis    meshes with visible true up the whole parent chain, at the moment of the render
+     tri    triangles the plain render actually submitted
+     prog   programs before -> after, so linking inside f0plain is a subtraction, not a theory
+
+   renderer.info.autoReset is false, so render counters have to be reset by hand or they read
+   cumulative and mean nothing. Reset immediately before, read immediately after. */
+const F0INFO = {};
+function _visibleChain(o){
+  for (let p = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
 const ZOOM_MIN = 0.08;
 const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
 function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0; }
@@ -1736,6 +1761,13 @@ document.getElementById('vProg').addEventListener('click', () => {
             return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
           } catch (e){ return '?'; } })(),
       'frames   ' + FRAME_MS.join(', ') + '  ms',
+      /* Only on ?f0split loads, because only those loads have it. Absent means the flag was not
+         set, which is a different statement from zero and has to look different. */
+      ...(F0INFO.prog0 === undefined ? [] : [
+        'f0scene  vis ' + F0INFO.vis + ' meshes, ' + F0INFO.visTri.toLocaleString() +
+          ' tri visible   drew ' + F0INFO.tri.toLocaleString() + ' tri in ' + F0INFO.calls +
+          ' calls   prog ' + F0INFO.prog0 + ' -> ' + F0INFO.prog1 +
+          '  (+' + (F0INFO.prog1 - F0INFO.prog0) + ' linked inside f0plain)']),
       'warm     ' + (WARM_COST.length ? WARM_COST.length + ' meshes, ' +
           Math.round(WARM_COST.reduce((a, w) => a + w.ms, 0)) + ' ms total' : 'off'),
       ...(WARM_COST.length ? ['', 'slowest first draws:'].concat(
@@ -3176,11 +3208,29 @@ function frame(){
        program set is still linked and still lands in f0plain, which is exactly why this is a flag
        and not the default. */
     if (F0SPLIT){
+      /* THE CENSUS, TAKEN BEFORE THE RENDER THAT IS BEING BLAMED FOR IT. */
+      let _vm = 0, _vt = 0;
+      scene.traverse(o => {
+        if (!o.isMesh || !_visibleChain(o)) return;
+        _vm++;
+        const g = o.geometry;
+        if (g && g.index) _vt += (g.index.count / 3) * (o.count || 1);
+        else if (g && g.attributes && g.attributes.position)
+          _vt += (g.attributes.position.count / 3) * (o.count || 1);
+      });
+      F0INFO.vis = _vm;
+      F0INFO.visTri = Math.round(_vt);
+      F0INFO.prog0 = renderer.info.programs ? renderer.info.programs.length : -1;
+
       const _sm = renderer.shadowMap.enabled;
       let _t = performance.now();
       renderer.shadowMap.enabled = false;
+      renderer.info.reset();
       renderer.render(scene, camera);
       PH.f0plain = Math.round(performance.now() - _t);
+      F0INFO.tri   = renderer.info.render.triangles;
+      F0INFO.calls = renderer.info.render.calls;
+      F0INFO.prog1 = renderer.info.programs ? renderer.info.programs.length : -1;
 
       _t = performance.now();
       renderer.shadowMap.enabled = true;
