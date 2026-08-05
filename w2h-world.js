@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v145';
+export const BUILD = 'world v146';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5599,7 +5599,18 @@ function groundFeaturesFor(d, feats){
        everything on this peninsula is low, a single-storey white range with a shaded terrace along
        the landward edge, and nothing tall on the club at all. Five metres, not the eight I guessed.
        Corners surveyed as 89 x 21.5 m on the hotel's own bearing, centred (-19.9, 399.0). */
-    const barMat = flatSet(0x4E4A44, 0xCFC9BE, 0xEFEAE0, 0.88, 0);
+    /* NOT flatSet. That builder is for decals lying on the island: it applies negative polygonOffset
+       and its Plan/Check key is MeshBasicMaterial, deliberately unlit so a plan reads as a drawing.
+       On a box every face then returns the same flat colour and the thing is indistinguishable from
+       a plane viewed from above — which is exactly what it looked like. A building wants shading in
+       all four keys and no depth bias, so the set is built by hand here. */
+    const barSet = (n, dk, dy) => {
+      const mk = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.86 });
+      const base = mk(n); base.userData.duskColor = dk;
+      const duskM = mk(dk); duskM.userData.duskColor = dk;
+      return { base, dayM: mk(dy), duskM, planM: mk(dy) };
+    };
+    const barMat = barSet(0x3E3A34, 0xBFB6A8, 0xEFEAE0);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(89 / M_PER_UNIT, 5 / M_PER_UNIT, 21.5 / M_PER_UNIT), barMat.base);
     bar.rotation.y = 0.2374;
     bar.position.set(-19.9, GROUND + 2.5 / M_PER_UNIT, 399.0);
