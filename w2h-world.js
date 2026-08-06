@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v165';
+export const BUILD = 'world v166';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6084,6 +6084,12 @@ function footprintsFor(d, list){
      rather than on a judgement. One of the three is the 168 x 118 m box at 15 m standing on the
      Hilton's pools. */
   const MERGE_MIN_M2 = 4000, MERGE_HOLDS = 2, MERGE_TALL_M = 45;
+  /* LOWER THAN MERGE_MIN_M2, AND IT CAN AFFORD TO BE. The containment rule has one gate and needs
+     a large area to stay safe; the parcel rule below has three, so it can reach further down
+     without taking anything real. Measured at each step: 3,000 m2 flags 0.9 per cent of Saadiyat's
+     footprints, 1.7 of Corniche's and 1.2 of Yas's. 2,000 nearly doubles that for another four
+     hectares on Saadiyat, which is a poor trade against the risk of flattening ordinary stock. */
+  const PARCEL_MIN_M2 = 3000;
   const GROUNDS_M2 = 10000;
   const merged = new Set();
   {
@@ -6113,6 +6119,28 @@ function footprintsFor(d, list){
         if (Math.abs(u) <= b.w / 2 && Math.abs(w) <= b.dp / 2){ if (++n >= MERGE_HOLDS) break; }
       }
       if (n >= MERGE_HOLDS) merged.add(i);
+      /* THE VACANT PARCEL, WHICH CONTAINMENT CANNOT SEE.
+
+         The test above asks whether other mapped buildings stand inside this outline, and that is
+         a good question about a plot with something on it and a useless one about a plot with
+         NOTHING on it. Saadiyat is covered in surveyed empty parcels — the sand rectangles between
+         the museums — and every one of them contains zero buildings, passes the test and extrudes
+         as a solid block. 45 of Saadiyat's 76 large footprints escape this way, 42 hectares of
+         ground standing up as building, and the same class runs to 211 hectares across the five
+         islands. It has been there since the footprint import.
+
+         THREE NEGATIVES, ALL REQUIRED, BECAUSE ANY ONE ALONE WOULD TAKE SOMETHING REAL.
+
+           no surveyed height — Overture measures the big ones. A mall, a terminal, a museum comes
+             back with a height; a parcel does not. This is the load-bearing one.
+           no ring           — the 186 buildings carrying a polygon outline are the hand-checked
+             landmarks and are drawn as extrusions, not boxes. Never touch them.
+           no venue joined   — if the bake knows people GO there, something is standing on it,
+             whatever Overture failed to measure.
+
+         AND THE ACTION IS THE PODIUM, NOT DELETION, for the reason Yas Bay taught: hiding a merge
+         removed the site. A parcel flattened to 6 m is hard standing, which is what it is. */
+      if (A >= PARCEL_MIN_M2 && b.h == null && !b.p && !(b.v > 0)) merged.add(i);
     });
   }
   let hidMerge = 0;
