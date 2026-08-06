@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v154';
+export const BUILD = 'world v159';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -190,6 +190,12 @@ const BAY_DEBUG = typeof location !== 'undefined' && location.search.includes('b
    Populated when the kit is built, read by footprintsFor. Empty for every island with no kit,
    which is every island except Corniche today. */
 const KIT_ZONES = {};
+
+/* Surveyed heights from every island so far, binned by footprint area, so a band too thin on one
+   island can borrow the same band from the others. Filled by footprintsFor as each island lands;
+   Corniche's 3,460 arrive first and carry most of it. See poolFor for why this is the right
+   fallback and the island-wide pool was the wrong one. */
+const GLOBAL_BANDS = [];
 
 /* STAGE TIMING, AND IT IS HERE BECAUSE SIXTEEN SECONDS IS TOO SLOW TO GUESS AT.
 
@@ -1653,9 +1659,25 @@ function roadGrid(d){
     for (let i = 0; i < pts.length - 1; i++)
       segs.push([pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], clear]);
   };
+  /* THE REAL NETWORK, WHERE THERE IS ONE. This index used to see only the generated skeleton —
+     the comment above still records that as a fact and it was one — while the PAINTER at
+     paintGround took drawRing/drawArterials, the imported Overture centrelines. Two street systems:
+     one drawn, one deciding where buildings stand, with nothing making them agree.
+
+     That is the whole misalignment. Generated stock landed in real streets and real footprints
+     landed across generated blocks, and cullFabric's 14 m radius was a fudge for it rather than a
+     fix. Buildings placed against the same centrelines that get drawn need no fudge, and the
+     Overture footprints were surveyed against those streets in the first place.
+
+     Fallback, not replacement: an island with no imported network keeps the generated skeleton and
+     behaves exactly as before. Corniche ships 10,664 segments and Yas 2,526; an island with none
+     falls through to R.ring / R.arterials untouched. */
   const ringClear = roadW(d, ROAD_RING_M) * 0.5 * ROAD_KERB;
-  for (const r of (R.ring || [])) push(r, ringClear);
-  for (const a of (R.arterials || []))
+  const useRing = (R.drawRing && R.drawRing.length) ? R.drawRing : (R.ring || []);
+  const useArts = (R.drawArterials && R.drawArterials.length) ? R.drawArterials
+                                                              : (R.arterials || []);
+  for (const r of useRing) push(r, ringClear);
+  for (const a of useArts)
     push(a, roadW(d, a.major ? ROAD_MAJOR_M : ROAD_ART_M) * 0.5 * ROAD_KERB);
 
   let maxClear = 0;
@@ -4799,6 +4821,28 @@ function urbanFabric(d, layer, opts){
      ROOF IS NEVER GLAZED, and neither is anything flagged `raw`. Plant rooms, parapets, caps and
      masts are bitumen, concrete and metal; lighting them would put windows on the one set of
      surfaces that are definitively not facades. */
+  /* ARITHMETIC ONLY, WHEN THE MESHES ARE GOING TO BE HIDDEN ANYWAY.
+
+     THE ROW THAT MADE THIS OBVIOUS: `saad 1842>1841/500r m25 fab18782 hid59/0v`. The last field is
+     fabric currently VISIBLE, and it is zero. Not "mostly hidden" — none of it. On every island
+     with real footprints the entire generated fabric was built and then hidden in full: 18,782
+     instances on Saadiyat, 3,519 on Reem, geometry and materials and draw-call setup for a city
+     that is never drawn.
+
+     WHY IT COULD NOT SIMPLY BE SKIPPED, until now. urbanFabric returns { cells, blocks } and
+     buildGroundFor reads them — `const f = d.fabric; if (!f) return;`. The block layout, the
+     paving and the road grid are all derived from that arithmetic, so skipping the call took the
+     ground with it. That trap already cost one attempt at deferring Corniche's mass.
+
+     The split is clean because the two halves never touch: everything above this line computes
+     cells and blocks, everything below builds InstancedMeshes, and the mesh half reads neither.
+     So `meshes:false` returns the same arithmetic and builds no geometry at all.
+
+     THIS REPLACES hideFabric RATHER THAN HELPING IT. Generating in order to hide was always the
+     wrong shape — the hide ratios told the story, 59 meshes retired against 1,841 real footprints
+     landing, because there was nothing to retire that mattered. */
+  if (opts.meshes === false) return { cells, blocks };
+
   const MATS = fabricMats(cool);
 
   const need = new Map();
@@ -5671,11 +5715,14 @@ function groundFeaturesFor(d, feats){
                    sat six metres inside it and vanished behind the mass at any oblique angle.
                    Raised to sit on the deck it belongs to.
 
-       POSITION STAYS AT THE ORIGINAL PIN, -21.9 / 390.6. Converting the seven pins through the
-       bake-to-island offset put it at -14.5 / 413.1, which is SEAWARD of the Cafe del Mar lagoon
-       pool at 405.3 — and the courtyard basin is inland of that lagoon, not outside it. So the
-       offset used for that conversion is wrong somewhere, and the pin that was already here is
-       right. The pins still fix the size and the direction, which do not depend on the offset.
+       POSITION -22.5 / 391.8, THE SEVEN PINS CONVERTED PROPERLY. An earlier pass put this at
+       -14.5 / 413.1, seaward of the Cafe del Mar lagoon at 405.3, which cannot be right — the
+       courtyard basin is inland of that lagoon. The fault was the conversion, not the pins:
+       ISLAND UNITS ARE METRES / 7.8, and the offsets were being applied as metres. A 24 m shift
+       became 187 m. Same error moved the whole hotel into the sea earlier in the same session.
+
+       Now done by tools/pin.mjs, which reads extent.cx/cy out of index.json and self-tests against
+       this building's own literal. Never convert one of these by hand again.
 
        STILL A RECTANGLE, AND THAT IS THE REMAINING FAULT. The trace shows a broad inland head with
        a notch, narrowing to a leg — a free-form outline, like the lagoon pool below it. Both want
@@ -5683,7 +5730,7 @@ function groundFeaturesFor(d, feats){
        in it, so it is left visible here rather than half-done. */
     const SHORE_TH = -0.2967, HOTEL_TH = -0.2374;
     const DECK_Y = 7.4 / M_PER_UNIT;
-    for (const [px, pz, w, h, th, y] of [[-21.9, 390.6, 30, 47, HOTEL_TH, DECK_Y],
+    for (const [px, pz, w, h, th, y] of [[-22.5, 391.8, 30, 47, HOTEL_TH, DECK_Y],
                                          [-18.8, 405.3, 80, 46, SHORE_TH, 0.032]]){
       const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
       pm.rotation.x = -Math.PI / 2; pm.rotation.z = -th;
@@ -5750,8 +5797,34 @@ function footprintsFor(d, list){
   /* Eight is enough to carry a spread and few enough that only genuinely empty bands fall through
      to the island-wide pool. Twenty island-wide is the point below which resampling is just
      repeating three numbers, and the old falloff — wrong but continuous — is the better failure. */
-  const poolFor = a => { const b = bands[bandOf(a)];
-                         return b.length >= 8 ? b : anyReal.length >= 20 ? anyReal : null; };
+  /* THE FALLBACK WAS THE FAULT, NOT THE BANDING. A band needs eight samples; Yas has ONE in
+     0-150 m2 and ONE in 150-400, so its villas fell through to the island-wide pool — and that
+     pool is 32 buildings with a median of 27 m, because Overture measured Yas's arenas and hotels
+     and none of its houses. A 299 m2 villa then drew its height from a hotel.
+
+     That bias is systematic, not a Yas accident. Median footprint of a MEASURED building: Maryah
+     3,493 m2, Reem 2,181, Yas 4,094. Median of an UNMEASURED one: 116, 134, 299. Overture measures
+     the big ones everywhere, so every island's own pool over-represents exactly what the missing
+     buildings are not.
+
+     So a thin band now falls through to THE SAME BAND ON THE OTHER ISLANDS before it falls through
+     to this island's mixed pool. Corniche alone ships 3,460 surveyed heights and its small bands
+     are dense — median 6 m under 300 m2 — which is a far better answer for a Yas villa than 27.
+     Cross-island is defensible here in a way it would not be for, say, a skyline: a 250 m2
+     building in Abu Dhabi is a house or a shop wherever on the archipelago it stands.
+
+     Order still matters and still works: Corniche builds first and fills the global bands before
+     any outer island asks. If it ever does not, the old island-wide fallback is still underneath. */
+  HB.slice(0, -1).forEach((_, i) => { if (!GLOBAL_BANDS[i]) GLOBAL_BANDS[i] = []; });
+  bands.forEach((v, i) => { for (const h of v) GLOBAL_BANDS[i].push(h); });
+  GLOBAL_BANDS.forEach(v => v.sort((p, q) => p - q));
+
+  const poolFor = a => { const i = bandOf(a);
+                         const b = bands[i];
+                         if (b.length >= 8) return b;
+                         const g = GLOBAL_BANDS[i];
+                         if (g && g.length >= 8) return g;
+                         return anyReal.length >= 20 ? anyReal : null; };
 
   /* PLOT OUTLINES ARE NOT BUILDINGS, AND OVERTURE CANNOT TELL YOU WHICH IS WHICH.
 
@@ -6141,7 +6214,23 @@ function buildFabricFor(d){
      Instancing means the extra count is free in draw calls. */
   /* SAME DENSITY, SAME SEED, DIFFERENT FLOOR. The layers are the same city; mass simply omits
      anything under minH, so the world view holds the massing and zooming in fills the gaps. */
-  urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool, minH:5.4 });
+  /* THE FABRIC IS BUILT ON EVERY ISLAND AGAIN, and v156's meshes:false is withdrawn.
+
+     That flag skipped generating stock wherever real footprints were coming, on the evidence that
+     the fabric was being hidden in full — `hid59/0v`, zero visible against 18,782 built. Correct
+     about the waste and wrong about the cure: the payload does not cover these islands. Saadiyat
+     has 1,841 real buildings against 18,782 generated, so not generating left it scarce, while Yas
+     has 3,803 real against 1,079 generated and barely noticed. Opposite failures, same flag.
+
+     cullFabric in world-nav.html now zeroes only the instances a real building stands on, so the
+     generated stock survives in the gaps and the two layers stop being an either/or. Which means
+     the meshes have to exist to be culled. The arithmetic-only path stays in urbanFabric — it is
+     correct and it costs nothing unused — but nothing asks for it today.
+
+     SAME DENSITY, SAME SEED, DIFFERENT FLOOR. The layers are the same city; mass simply omits
+     anything under minH, so the world view holds the massing and zooming in fills the gaps. */
+  urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool,
+                             minH:5.4 });
   const built = urbanFabric(d, d.detail,
                            { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
   d.fabric = built;
