@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v40';
+export const BUILD = 'city v41';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1274,37 +1274,22 @@ function hiltonYasBay(x0, z0, facing){
     }
   }
 
-  /* THE COURTYARD POOL — SEVEN PINS, SO NOTHING HERE IS ESTIMATED.
+  /* NO POOL IS BUILT HERE, AND THAT IS DELIBERATE.
 
-     Bounding the pins gives 30 m across by 47 m long, centred at bake (18362.6, -3452.5), long
-     axis running seaward. The traced guess before this was 24 x 44, which was close, and close is
-     not the point: this is now the best-measured object in the whole model and everything else
-     around it can be checked against it.
+     The ground feature system already owns this courtyard's pool — Yas bakes 296 pool pins and one
+     of them is this basin, which is why a correctly shaped hole appears in the deck without this
+     function drawing anything. Building a head-and-leg approximation on top of it put two pools in
+     the same courtyard, a traced one and a pinned one, clashing.
 
-     IT IS ALSO WHAT CAUGHT THE ANCHOR. Converted into this function's frame against the old
-     placement the pool landed at z +25.8, running z +2.3 to +49.3 against a court spanning -25 to
-     +29.5 — twenty metres of pool through the seaward link and out the other side. Seven pins beat
-     a straight-line fit through eleven points, so the anchor moved rather than the pool: island z
-     388.7 to 412.7 in w2h-world.js, which is the building 24 m seaward of where the fit put it.
+     The pinned one wins: it comes from the same survey the seven pool pins came from rather than
+     from boxes fitted by eye, and it is a free-form outline where these were rectangles. If its
+     SCALE is wrong that is a ground-feature fix, not a landmark one, and doing it here would only
+     hide the real fault under a second object.
 
-     That is the fit's own error showing up, and it is the error you would predict. Fitting a line
-     through a U puts the centre in the courtyard, which drags the whole mass inland.
-
-     Head and leg rather than one box, because the step is what makes it read as this pool. */
-  const poolHead = new THREE.Mesh(new THREE.BoxGeometry(30 / M, 0.4 / M, 29 / M), glassM);
-  /* ON TOP OF THE PODIUM, NOT INSIDE IT. The podium is 2*F tall centred at y = F, so its deck is
-     at 2*F — 7.2 m. Set at 0.5/M in the rewrite these basins sat six and a half metres inside it
-     and showed as a cyan sliver where the podium edge did not quite cover them. The version this
-     replaced had it right; the rewrite lost it. */
-  poolHead.position.set(4 / M, 2 * F + 0.3 / M, 14 / M);
-  g.add(poolHead);
-  const poolLeg = new THREE.Mesh(new THREE.BoxGeometry(16 / M, 0.4 / M, 18 / M), glassM);
-  poolLeg.position.set(4 / M, 2 * F + 0.3 / M, 37 / M);
-  g.add(poolLeg);
-  /* The notch in the inland edge, cut by standing a strip of deck in it. */
-  const notch = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 0.6 / M, 8 / M), podM);
-  notch.position.set(4 / M, 2 * F + 0.4 / M, 2 / M);
-  g.add(notch);
+     WHAT THE SEVEN PINS ARE STILL FOR. 30 m across by 47 m long, centred at bake
+     (18362.6, -3452.5), long axis seaward. They are the check on the ground feature's scale and
+     they are what re-centred the U in this function — the court runs z 0 to +60 because the pool
+     has to sit inside it. Kept in writing here because the geometry no longer records them. */
 
   /* THE PROMENADE RESTAURANT ROW at v -77, where Bua Thai, L'Antica and Bayside Burger register.
      Single storey at 3.6 m. Four units of jittered width under one canopy, so it reads as a row of
