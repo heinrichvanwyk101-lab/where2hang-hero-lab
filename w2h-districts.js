@@ -86,7 +86,19 @@ export const GEN_TALLEST = {
   corniche: 34,   // 265 m — the cap below trims this further
   maryah:   26,   // 203 m  (was 40 = 312 m against a real ~200 m)
   reem:     38,   // 296 m  (was 44 = 343 m against Sky Tower's 292 m)
-  saadiyat:  8,   //  62 m  (was 14 = 109 m against a real ~55 m — double)
+  /* 39 m, WHICH IS THE CULTURAL DISTRICT AND NOT THE ISLAND.
+
+     v164 put this at 1.5 — 12 m — because Saadiyat's surveyed median is 6.4 m and 83 per cent of
+     it is under 10. That is true of the island and false of its north-west corner: the Cultural
+     District is six to twelve storeys of pale limestone running from the Louvre past the Zayed
+     Museum, and a 12 m ceiling flattened it AND handed every block in it a clay villa roof, which
+     is the one thing the aerials say it must not have.
+
+     A bimodal island cannot be described by one ceiling. So this number is now the TALLER mode —
+     the Cultural District — and the villa carpet is brought down by lowRise blobs on the district
+     entry, which is the mechanism that already exists for exactly this and which Saadiyat was the
+     only island never to use. */
+  saadiyat:  5,   //  39 m — the Cultural District. Villas handled by lowRise, not by this.
   yas:      14,   // 109 m  (was 18 = 140 m against a real ~105 m)
   lulu:      0,
 };

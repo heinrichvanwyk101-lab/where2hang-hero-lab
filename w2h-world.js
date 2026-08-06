@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v163';
+export const BUILD = 'world v165';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -114,6 +114,18 @@ function grainHash(x, z){
 export function grainFit(genW, genD, genH, grain, x, z){
   if (!grain || grain.n < GRAIN_MIN_N || !(grain.pw > 0)) return null;
   if (grain.pw > GRAIN_MAX_S) return null;
+  /* A BUILDING THAT IS ALREADY A HOUSE IS LEFT ALONE, AND THIS IS NOT AN OPTIMISATION.
+
+     Generated villa stock now carries a clay roof built at generation time as a SEPARATE instanced
+     mesh. Shrinking the wall here and not the roof would leave the cap floating proud of the box
+     it belongs to. The roof cannot be resized in step because it is not index-aligned with the
+     wall — it is position-aligned, which is what makes the cull work and what makes a paired
+     resize impossible.
+
+     Nothing is lost. Grain existed to drag oversized generated plots down to the local scale, and
+     below VILLA_ABS_M the generation-time rules have already done that properly, with the right
+     facade and the right window class instead of a shrunken tower. */
+  if (genH * 7.8 <= 12) return null;
   const genPlan = (genW + genD) / 2;
   if (!(genPlan > grain.pw)) return null;              // neighbours are bigger; nothing to do
   const s = Math.max(GRAIN_FLOOR, grain.pw / genPlan);
@@ -3468,6 +3480,29 @@ const DISTRICTS = [
      to the sand, which is what actually punctuates a beach of that length. The rest stays
      painter-only, as the brief asks. */
   { id:'saadiyat', name:'Saadiyat',   x:-44*ISLE_SCALE, z:-116*ISLE_SCALE, r:56*ISLE_SCALE, rot: 0.15, tint:0xDDD3C0,
+    /* THE VILLA CARPET, AS THREE SOFT BLOBS, DERIVED AND NOT DRAWN.
+
+       Saadiyat is bimodal — a mid-rise Cultural District on the north-west corner and villas over
+       everything else — and one GEN_TALLEST cannot say that. These bring the estates down to 1.4
+       units, 11 m, which puts them under VILLA_ABS_M and so hands them the render facade, the
+       ground-floor window class and the clay roof. Outside them the island keeps its 39 m ceiling
+       and the Cultural District stays flat-capped limestone.
+
+       CENTRES FROM THE BAKE, NOT FROM THE MAP. The 1,485 villa-scale footprints were clustered and
+       each blob sits on a cluster centroid with r0 at roughly its eightieth-percentile radius. The
+       two eastern blobs are clean — 15 and 10 large buildings inside them against 525 and 404
+       villas. The western one is trimmed deliberately: its members run to r80 177, but the museums
+       stand at x -409 to -466 and r1 172 stops 18 units short of the nearest. That margin is the whole
+       reason this is three blobs and not four.
+
+       THE FOURTH CLUSTER WAS DISCARDED. The north beach centroid holds 76 large footprints against
+       105 villas — resorts, not an estate — and a low-rise blob there would have flattened the St
+       Regis and the Park Hyatt. A cluster is not a zone until the contamination count says so. */
+    lowRise:[
+      { x: 386, z:-377, r0:110, r1:180, h:1.4 },   // Saadiyat Lagoons / Basatin, the densest
+      { x: 191, z: -93, r0:105, r1:175, h:1.4 },   // the central estates
+      { x:-183, z: 138, r0:105, r1:172, h:1.4 },   // Saadiyat Beach Villas, held off the museums
+    ],
     shore:[
       /* Saadiyat's straight run is the NORTH-WEST coast, t 0.02 to 0.28 by the same measurement.
          Groynes are shorter and lower than v41's: fourteen units out was a pier, not a groyne. */
@@ -4974,6 +5009,7 @@ function urbanFabric(d, layer, opts){
   const M   = new THREE.Object3D();
   const col = new THREE.Color();
   const idx = new Map();
+  const villaRoofs = [];
 
   keep.forEach(sp => walkSpec(sp, lod, o => {
     /* The plant room's offset is in the BUILDING's frame, so it has to be rotated with it. Adding
@@ -4988,7 +5024,54 @@ function urbanFabric(d, layer, opts){
     idx.set(k, i + 1);
     m.setMatrixAt(i, M.matrix);
     m.setColorAt(i, tintFrom(col, o.tint));
+    /* A HOUSE, AND THEREFORE A ROOF. Plain boxes only: a plant room, a parapet or a podium tier is
+       low by nature and putting clay tiles on one would cap a tower with a cottage. */
+    if (!o.raw && o.t !== 'roof' && (o.g || 'box') === 'box' &&
+        o.h * M_PER_UNIT <= VILLA_ABS_M){
+      villaRoofs.push({ x:M.position.x, z:M.position.z, y:M.position.y + o.h,
+                        w:o.w, d:o.d, rot:sp.rot });
+    }
   }));
+
+  /* ---------- THE SAME CLAY ROOFS, ON THE GENERATED STOCK ----------
+
+     footprintsFor got these first and it was not enough: Saadiyat carries 10,956 generated
+     instances against 1,841 real, so roofing only the real ones roofed one building in seven and
+     the island still read as towers with a terracotta patch in the middle of it.
+
+     COLLECTED IN THE WRITE LOOP ABOVE, not walked again, because walkSpec is the expensive part
+     and it has already run twice by this line.
+
+     ORDERING DOES NOT MATTER TO THE CULL. cullFabric decides per instance from its POSITION, and
+     a roof stands at its building's x and z, so it lives or dies with the wall beneath it without
+     any index correspondence between the two meshes. That is the property that makes this safe;
+     without it the roofs would need to be culled in lockstep and they are not. */
+  if (villaRoofs.length){
+    const split = [[], []];
+    for (const r of villaRoofs){
+      let q = Math.imul(Math.round(r.x * 733) ^ Math.imul(Math.round(r.z * 733), 0x9E3779B1), 0x85EBCA6B);
+      q ^= q >>> 15;
+      split[(q >>> 0) % 100 < 58 ? 0 : 1].push(r);
+    }
+    ['tile', 'tileL'].forEach((fam, t) => {
+      if (!split[t].length) return;
+      const rm = new THREE.InstancedMesh(ROOF_GEO, MATS[fam].raw, split[t].length);
+      rm.userData.dayMats = MATS[fam].dayRaw;
+      rm.castShadow = true; rm.receiveShadow = true;
+      rm.name = 'roofs';
+      const R = new THREE.Object3D();
+      split[t].forEach((r, i) => {
+        const short = Math.min(r.w, r.d);
+        const pitch = Math.max(1.6 / M_PER_UNIT, Math.min(3.6 / M_PER_UNIT, short * 0.30));
+        R.position.set(r.x, r.y, r.z);
+        R.rotation.set(0, -r.rot, 0);
+        R.scale.set(r.w * 1.08, pitch, r.d * 1.08);
+        R.updateMatrix();
+        rm.setMatrixAt(i, R.matrix);
+      });
+      layer.add(rm);
+    });
+  }
 
   meshes.forEach((m, k) => {
     m.count = idx.get(k) || 0;
