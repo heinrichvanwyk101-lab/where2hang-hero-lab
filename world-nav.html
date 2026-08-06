@@ -87,6 +87,19 @@
   .dbg{margin-top:10px;font:500 11px/1.5 ui-monospace,monospace;color:#4E6B5F;
     display:none;white-space:pre}
   .dbg.on{display:block}
+  /* THE BUILD STAMP, WHICH IS NOT PART OF THE DEBUG OVERLAY AND MUST NOT BE.
+
+     Every wrong conclusion this project has reached about a deploy came from reading numbers off a
+     build that was not the one just shipped — Pages caches modules hard, and a stale load looks
+     exactly like a change that did not work. The stamp answers "which build am I looking at" and
+     nothing else, so it can stay on when the forty-line overlay is off.
+
+     Bottom left, above the Back button, small and dim: legible if you look for it, invisible if
+     you are looking at the city. */
+  .stamp{position:fixed;left:14px;bottom:64px;z-index:5;pointer-events:none;
+    font:500 10px/1.4 ui-monospace,monospace;color:rgba(180,200,192,.42);
+    text-shadow:0 1px 2px rgba(0,0,0,.55);white-space:pre}
+  .stamp.off{display:none}
   .back{position:fixed;left:12px;bottom:18px;z-index:6;appearance:none;
     border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
     font:600 14px Inter,sans-serif;padding:11px 18px;border-radius:999px;
@@ -118,6 +131,7 @@
   <div class="hint" id="hint">Tap an island</div>
   <div class="dbg" id="dbg"></div>
 </div>
+<div class="stamp" id="stamp"></div>
 
 <button class="back" id="back">Back</button>
 
@@ -310,7 +324,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v109', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v110', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -341,6 +355,14 @@ const OPENING_PLACE = 'Emirates Palace';
 const FP_ON = location.search.includes('fp');
 const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
 if (DEBUG) document.getElementById('dbg').classList.add('on');
+/* Written once, at boot, from the same constants the overlay uses. #nostamp hides it for a clean
+   screenshot; #debug leaves it alone, because the overlay already carries the same line and two
+   copies of it on screen is worse than none. */
+{
+  const st = document.getElementById('stamp');
+  if (location.hash.indexOf('nostamp') >= 0 || DEBUG) st.classList.add('off');
+  else st.textContent = B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS;
+}
 
 
 /* ---------- renderer ---------- */
