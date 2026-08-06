@@ -324,7 +324,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v114', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v115', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3894,6 +3894,9 @@ function frame(){
              kept/cull is the pair that matters now: how many generated instances survived the two
              tests, and how many were zeroed for being either on top of a real building or too far
              from one to be plausible. kept is what is actually filling the gaps. */
+          /* ROOFS BEFORE keep/cull, because the keep/cull pair is what runs off the right edge of a
+             folded phone and this is now the number being judged. */
+          (d.fpRoof ? '  roof' + d.fpRoof : '') +
           '  keep' + (d.fpKept || 0) + '/cull' + (d.fpCull || 0) +
           /* HOW MANY SURVIVORS WERE RESIZED TO THE LOCAL GRAIN. Zero on an island that reads as a
              street wall means the signal never fired - too few neighbours, or neighbours bigger

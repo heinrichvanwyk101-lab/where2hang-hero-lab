@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v161';
+export const BUILD = 'world v162';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3017,6 +3017,26 @@ Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, dus
 
 const matRoofDeck = stdMat({ color:0x101216, roughness:0.97, metalness:0.02 });
 matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
+
+/* CLAY TILE, WHICH IS THE THING THAT MAKES A VILLA ESTATE READ AS ONE.
+
+   Every Saadiyat satellite says the same: Beach Villas, Hidd Al Saadiyat and the Lagoons are
+   identifiable from altitude by a WARM ROOF PLANE over a pale wall, not by their massing. Our
+   low stock is flat-topped in a single sand tone, so at district range it dissolves into the
+   ground it stands on — which is exactly the complaint, and no amount of resizing the box fixes
+   it because the box was never the signal.
+
+   matRoofDeck is the wrong material for this and stays where it is: bitumen and ballast is what
+   sits on a commercial roof, and it is nearly black. A house has fired clay on it.
+
+   TWO TONES, NOT ONE. A real estate is not uniform - the Beach Villas run a deeper terracotta and
+   the Lagoons a paler sand-tile - and a single hex over fifteen hundred roofs reads as a printed
+   pattern rather than as a neighbourhood. Two buckets is two draw calls, which is the cheapest
+   variation available anywhere in this file. */
+const matRoofTile  = stdMat({ color:0x1A1210, roughness:0.94, metalness:0.02 });
+matRoofTile.userData.duskColor  = 0xA9663F;       // fired terracotta, the deeper of the two
+const matRoofTileL = stdMat({ color:0x1C1714, roughness:0.94, metalness:0.02 });
+matRoofTileL.userData.duskColor = 0xC0906A;       // sand-tile, the Lagoons tone
 const matPlaceGlass = stdMat({ color:0x111C22, roughness:0.35, metalness:0.1 });
 /* ===========================================================================
    FACADE WINDOWS, AND THE END OF THE BAND.
@@ -3197,6 +3217,8 @@ const DAY_FAMILY = {
   glass:  0xA8BAC4,      // blue-green solar glass, darker than the stone around it
   bronze: 0xBCA88C,      // bronze coating, warm and duller
   roof:   0x9A9384,      // ballast and plant
+  tile:   0xB5714A,      // fired clay, the Beach Villas roof
+  tileL:  0xC9A177,      // sand tile, the Lagoons roof
 };
 function dayFacade(family, tex){
   const m = stdMat({
@@ -4695,11 +4717,16 @@ function fabricMats(cool){
   const base = { white:matStoneWhite, rend:matStoneRend, stone:matPlaceStone, clad:matStoneClad,
                  glass:matPlaceGlass, bronze:matGlassBronze };
   const out = {};
-  Object.entries(Object.assign({ roof:matRoofDeck }, base)).forEach(([n, m]) => {
-    out[n] = WCLASS.map((_, i) => n === 'roof' ? m : glazed(m, WIN_TEX[i][cool ? 1 : 0]));
+  /* tile and tileL join roof on the UNGLAZED side of this. A window texture on a pitched clay
+     roof would put lit floors up the slope, which is the sort of thing that is invisible in a
+     thumbnail and unmistakable the moment anyone looks at a house. */
+  const BARE = { roof:1, tile:1, tileL:1 };
+  Object.entries(Object.assign({ roof:matRoofDeck, tile:matRoofTile, tileL:matRoofTileL }, base))
+        .forEach(([n, m]) => {
+    out[n] = WCLASS.map((_, i) => BARE[n] ? m : glazed(m, WIN_TEX[i][cool ? 1 : 0]));
     out[n].raw = m;                       // crowns, plant rooms and anything else not a wall
     // The Day counterparts, hung on the same buckets and therefore free.
-    out[n].day = WCLASS.map((_, i) => dayFacade(n, n === 'roof' ? null : DAY_TEX[i]));
+    out[n].day = WCLASS.map((_, i) => dayFacade(n, BARE[n] ? null : DAY_TEX[i]));
     out[n].dayRaw = dayFacade(n, null);
   });
   FABRIC_MATS.set(k, out);
@@ -5797,6 +5824,45 @@ function groundFeaturesFor(d, feats){
   return (golfN || trackN || parkN || d.baySurf) ? g : null;
 }
 
+/* A HIPPED ROOF, ONE UNIT BOX, BUILT ONCE.
+
+   Base 1 x 1 in xz centred on the origin, apex at y = 1, ridge running along local x from -0.25
+   to +0.25. Eight triangles. Scaled per instance to the building's own w, dp and a pitch derived
+   from its short side, so a wide villa gets a shallow roof and a narrow one a steeper one, which
+   is what actually happens when the pitch is fixed and the span is not.
+
+   WINDING VERIFIED BY CROSS PRODUCT, NOT BY EYE. The bay surfaces cost most of a session to
+   exactly this fault - quads wound so every normal faced the seabed under a FrontSide material,
+   which renders as nothing at all with no error anywhere. Each of the four planes below was
+   checked by taking (b - a) x (c - a) and confirming the sign points away from the ridge. */
+function hipRoofGeo(){
+  const g = new THREE.BufferGeometry();
+  const v = [
+    -0.5, 0, -0.5,   0.5, 0, -0.5,   0.5, 0,  0.5,  -0.5, 0,  0.5,   // 0..3 eaves
+    -0.25, 1, 0,     0.25, 1, 0,                                      // 4,5 ridge
+  ];
+  const f = [
+    3, 2, 5,  3, 5, 4,      // the +z slope
+    1, 0, 4,  1, 4, 5,      // the -z slope
+    1, 5, 2,                // the +x hip
+    0, 3, 4,                // the -x hip
+  ];
+  g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  g.setIndex(f);
+  g.computeVertexNormals();
+  return g;
+}
+const ROOF_GEO = hipRoofGeo();
+
+/* WHAT COUNTS AS A HOUSE. Both gates, because either alone is wrong: a 12 m warehouse is low and
+   is not a villa, and a 400 m2 shop unit is small and is not one either.
+
+   800 m2 and 12 m catch 1,485 of Saadiyat's 1,842 footprints - 81 per cent - which matches what
+   the satellite shows, an island that is overwhelmingly villa carpet with a cultural district and
+   some resorts on it. A venue join vetoes: if the bake knows people GO there it is a restaurant or
+   a clinic, not a house, whatever its size. */
+const VILLA_AREA = 800, VILLA_H = 12;
+
 function footprintsFor(d, list){
   if (!list || !list.length) return null;
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
@@ -6210,6 +6276,58 @@ function footprintsFor(d, list){
 
   const g = new THREE.Group();
   g.name = 'footprints';
+
+  /* ---------- CLAY ROOFS ON THE HOUSES ----------
+
+     ONE EXTRA PASS OVER THE SAME `boxed` ARRAY, and two draw calls per island. Not folded into the
+     wall buckets, because an InstancedMesh takes one geometry and a roof is not a box; and not a
+     material group on the box, because InstancedMesh + multi-material is the sort of thing that
+     works on desktop and finds a driver on the Adreno.
+
+     THE ROOF IS THE ONLY THING THAT IDENTIFIES A VILLA AT DISTRICT RANGE. Saadiyat is 81 per cent
+     villa-scale footprints and it was reading as a grey field, because a flat-topped box in the
+     island's own sand tone is indistinguishable from the ground whatever size it is. Two sessions
+     were spent on the size.
+
+     THE TONE IS DETERMINISTIC IN POSITION, not drawn from a stream, so it does not depend on the
+     order the specs happen to arrive in and a reload rebuilds the identical estate. */
+  const villas = boxed.filter(sp => !sp.vk &&
+    sp.h * M_PER_UNIT <= VILLA_H &&
+    sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT <= VILLA_AREA);
+  if (villas.length){
+    const tone = sp => {
+      let q = Math.imul(Math.round(sp.x * 733) ^ Math.imul(Math.round(sp.z * 733), 0x9E3779B1), 0x85EBCA6B);
+      q ^= q >>> 15;
+      return (q >>> 0) % 100 < 58 ? 0 : 1;      // 58/42 toward the deeper terracotta
+    };
+    const split = [[], []];
+    for (const sp of villas) split[tone(sp)].push(sp);
+    ['tile', 'tileL'].forEach((fam, t) => {
+      if (!split[t].length) return;
+      const rm = new THREE.InstancedMesh(ROOF_GEO, MATS[fam].raw, split[t].length);
+      rm.userData.dayMats = MATS[fam].dayRaw;
+      rm.castShadow = true; rm.receiveShadow = true;
+      rm.name = 'roofs';
+      const R = new THREE.Object3D();
+      split[t].forEach((sp, i) => {
+        /* PITCH FROM THE SHORT SIDE. A fixed angle over a varying span is what a real roof does,
+           so the tall narrow ones get a steeper cap and the wide ones a shallower. Clamped both
+           ways: below 1.6 m it is a kerb and above 3.6 m it is a barn. */
+        const short = Math.min(sp.w, sp.dp);
+        const pitch = Math.max(1.6 / M_PER_UNIT, Math.min(3.6 / M_PER_UNIT, short * 0.30));
+        /* EAVES. 8 per cent over the wall on each side, which is the shadow line that separates
+           roof from wall when the sun is anywhere but overhead. Without it the cap reads as a
+           coloured top face rather than as a roof. */
+        R.position.set(sp.x, GROUND + sp.h, sp.z);
+        R.rotation.set(0, -sp.rot, 0);
+        R.scale.set(sp.w * 1.08, pitch, sp.dp * 1.08);
+        R.updateMatrix();
+        rm.setMatrixAt(i, R.matrix);
+      });
+      g.add(rm);
+    });
+    d.fpRoof = villas.length;
+  }
 
   /* THE RINGED ONES, EXTRUDED. The shape is written (x, -z) and the geometry rotated -PI/2 about
      X, which is the same convention the golf course and the bay deck use: a shape point (sx, sy)
