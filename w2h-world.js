@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v166';
+export const BUILD = 'world v170';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3480,29 +3480,6 @@ const DISTRICTS = [
      to the sand, which is what actually punctuates a beach of that length. The rest stays
      painter-only, as the brief asks. */
   { id:'saadiyat', name:'Saadiyat',   x:-44*ISLE_SCALE, z:-116*ISLE_SCALE, r:56*ISLE_SCALE, rot: 0.15, tint:0xDDD3C0,
-    /* THE VILLA CARPET, AS THREE SOFT BLOBS, DERIVED AND NOT DRAWN.
-
-       Saadiyat is bimodal — a mid-rise Cultural District on the north-west corner and villas over
-       everything else — and one GEN_TALLEST cannot say that. These bring the estates down to 1.4
-       units, 11 m, which puts them under VILLA_ABS_M and so hands them the render facade, the
-       ground-floor window class and the clay roof. Outside them the island keeps its 39 m ceiling
-       and the Cultural District stays flat-capped limestone.
-
-       CENTRES FROM THE BAKE, NOT FROM THE MAP. The 1,485 villa-scale footprints were clustered and
-       each blob sits on a cluster centroid with r0 at roughly its eightieth-percentile radius. The
-       two eastern blobs are clean — 15 and 10 large buildings inside them against 525 and 404
-       villas. The western one is trimmed deliberately: its members run to r80 177, but the museums
-       stand at x -409 to -466 and r1 172 stops 18 units short of the nearest. That margin is the whole
-       reason this is three blobs and not four.
-
-       THE FOURTH CLUSTER WAS DISCARDED. The north beach centroid holds 76 large footprints against
-       105 villas — resorts, not an estate — and a low-rise blob there would have flattened the St
-       Regis and the Park Hyatt. A cluster is not a zone until the contamination count says so. */
-    lowRise:[
-      { x: 386, z:-377, r0:110, r1:180, h:1.4 },   // Saadiyat Lagoons / Basatin, the densest
-      { x: 191, z: -93, r0:105, r1:175, h:1.4 },   // the central estates
-      { x:-183, z: 138, r0:105, r1:172, h:1.4 },   // Saadiyat Beach Villas, held off the museums
-    ],
     shore:[
       /* Saadiyat's straight run is the NORTH-WEST coast, t 0.02 to 0.28 by the same measurement.
          Groynes are shorter and lower than v41's: fourteen units out was a pier, not a groyne. */
@@ -4856,6 +4833,32 @@ function urbanFabric(d, layer, opts){
   const frontMin = roadW(d, _pf[0]);
   const frontMax = roadW(d, _pf[1]);
 
+  /* VILLA PITCH, IN METRES, AND NOTHING TO DO WITH THE SUPERBLOCK.
+
+     Saadiyat Lagoons runs roughly 17 m frontages on 20 m plots in parallel ranks with a service
+     lane behind each pair. The superblock's own numbers — 22 to 34 m fronts on a 26 m depth — are
+     a Gulf apartment plot and produce the block this generator has always produced. */
+  const VF = roadW(d, 17), VD = roadW(d, 20), VL = roadW(d, 9);
+
+  /* THE BLOCK CORE IS EMPTY, AND ON A VILLA ISLAND THAT IS THE WHOLE BUG.
+
+     Four frontages 26 m deep around a 280 x 200 m block leave a void of 228 x 148 m in the middle.
+     That void is the black rectangle: buildings ringing the street, nothing behind them. A correct
+     CBD block and a nonsensical villa estate — and untouchable by roofs, facades, heights or
+     ceilings, because all of those describe what a building LOOKS like and this is a decision
+     about where the generator puts one.
+
+     ASKED OF THE BAKE, NOT OF A CIRCLE. v167 and v168 gated this on hand-clustered lowRise blobs,
+     which is the best that could be done while urbanFabric ran before the footprints loaded. It
+     overshot at the edges, and it left Hidd Al Saadiyat — an entire villa spit — on the perimeter
+     model because nobody had drawn a circle round it. DIS.villaAt answers from a mask precomputed
+     off the real footprints, so the question is now "are there houses here" rather than "is this
+     inside a shape somebody drew", and it covers every island at once.
+
+     GUARDED, because a cached w2h-districts.js without the mask must still build a city. Absent,
+     every block takes the perimeter branch exactly as it did before. */
+  const villaHere = (DIS && DIS.villaAt) ? ((nx, ny) => DIS.villaAt(d.id, nx, ny)) : (() => false);
+
   const cells = [];
   /* The block outlines go back with the cells. The ground painter used to reconstruct the street
      layout from a single `pitch`, which was possible only while every plot was an identical square
@@ -4873,6 +4876,34 @@ function urbanFabric(d, layer, opts){
       // The block's four corners, island-normalised, for the painter's apron.
       const quad = [[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([qu, qv]) => toWorldN(qu, qv));
       let used = false;
+
+      const [bcx, bcy] = toWorldN((u0 + u1) / 2, (v0 + v1) / 2);
+      if (villaHere(bcx, bcy)){
+        /* RANKS ACROSS THE WHOLE BLOCK, not a ring around it. Rows run along u and step in v by a
+           plot depth plus a lane, so the block fills edge to edge the way the satellite shows.
+           Every guard below is the same one the perimeter path uses and in the same order —
+           coastline, avoid list, inner hole, road, cleared plot, then the vacancy mask, which must
+           stay last so it consumes no random numbers and mass and detail take the same branch. */
+        for (let vv = v0 + VD / 2; vv <= v1 - VD / 2; vv += VD + VL){
+          const nP = Math.max(1, Math.floor((u1 - u0) / VF));
+          const fw = (u1 - u0) / nP;
+          for (let i = 0; i < nP; i++){
+            const uu = u0 + (i + 0.5) * fw;
+            const [jx, jy] = toWorldN(uu, vv);
+            if (!insideIsle(d.id, jx, jy)) continue;
+            if (distToOutline(d.id, jx, jy) < COAST_CLEAR + VD * 0.6) continue;
+            if (avoid && inAvoid(d, jx, jy, VD * 0.5)) continue;
+            if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
+            if (onRoad(d, jx, jy, VD)) continue;
+            if (rnd() > 0.94) continue;              // fewer gaps than a tower block; estates are full
+            if (VAC_ON && DIS && DIS.vacantAt(d.id, jx, jy)) continue;
+            used = true;
+            cells.push({ jx, jy, rot:th, wN:fw, dN:VD, w:fw * d.r, dp:VD * d.r, vil:true });
+          }
+        }
+        if (used) blocks.push(quad);
+        continue;
+      }
 
       /* Each of the four frontages, laid as a run of plots. side 0 and 2 face along u, 1 and 3
          along v; the building's long axis follows the street it fronts, which is why the
@@ -4920,9 +4951,19 @@ function urbanFabric(d, layer, opts){
   /* ---------- PASS 2: SPECS ----------
      The entire remaining stream is consumed here, one fixed-size draw per plot, with no
      knowledge of minH or lod. This is what makes the two layers the same city. */
+  /* THE MASK GOVERNS HEIGHT AS WELL AS LAYOUT, and it must, or a ranked block outside the old
+     hand-drawn blobs would come out as 39 m slabs in rows — which is worse than the void it
+     replaced. VILLA_CAP is under VILLA_ABS_M by design, so a ranked plot lands on the render
+     facade, the ground-floor window class and the clay roof without any of them being asked
+     separately. This is why the three lowRise circles on Saadiyat could be deleted: they were
+     doing this job for three estates, and the mask does it for every estate on every island. */
+  const VILLA_CAP = 11 / M_PER_UNIT;
   const specs = cells.map(c => buildingSpec(rnd, {
     jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r, rot:c.rot,
-    plotW:c.w, plotD:c.dp, tallest, capH:cap, softH:cellCap(d, c.jx, c.jy, cap),
+    plotW:c.w, plotD:c.dp, tallest,
+    capH:  c.vil ? Math.min(cap, VILLA_CAP) : cap,
+    softH: c.vil ? Math.min(cellCap(d, c.jx, c.jy, cap), VILLA_CAP)
+                 : cellCap(d, c.jx, c.jy, cap),
     coreX, coreZ }));
 
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
