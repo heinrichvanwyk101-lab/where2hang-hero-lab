@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v34';
+export const BUILD = 'city v38';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1176,53 +1176,128 @@ function hiltonYasBay(x0, z0, facing){
      was got backwards for a whole deploy and the wings reached inland across Yas Drive. */
 
   /* THE PODIUM, two storeys, over the registered extent u -100..+95, v -32..+32. */
-  const pod = new THREE.Mesh(new THREE.BoxGeometry(195 / M, 2 * F, 64 / M), podM);
-  pod.position.set(-3 / M, F, 0);
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 2 * F, 175 / M), podM);
+  pod.position.set(0, F, -12 / M);
   pod.castShadow = true; pod.receiveShadow = true;
   g.add(pod);
 
   /* THE SPINE, on the inland row the ATM, point 6 and Sofia describe. Eleven storeys — 545 rooms
      over a 169 m double-loaded corridor is nine guest floors, and the ballrooms are on Floor 2. */
-  const HT = 11 * F;
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(176 / M, HT, 26 / M), stone);
-  spine.position.set(-8 / M, HT / 2, -18 / M);
-  spine.castShadow = true; spine.receiveShadow = true;
-  g.add(spine);
+  /* STEPPED, NOT FLAT, and the step is symmetric about the centre. The three-view reference shows
+     the mass rising to a tall central block and falling away twice on both sides — tall centre,
+     lower flanks, low end pavilions. The old single 176 m box at a uniform eleven storeys is the
+     one thing the reference contradicts outright, and it is what made the horizon render read as
+     a wall.
 
-  /* Nine balcony bands, one per guest floor. The room description specifies floor-to-ceiling
-     glazing with a balcony to every room, so this is sourced rather than styling. The spine is
-     26 m deep centred on z -18, so its faces are at -31 and -5. */
-  for (let i = 0; i < 9; i++){
-    const y = 2 * F + i * F + F * 0.5;
-    for (const zz of [-31.9 / M, -4.1 / M]){
-      const bd = new THREE.Mesh(new THREE.BoxGeometry(176 / M, F * 0.16, 1.8 / M), band);
-      bd.position.set(-8 / M, y, zz);
-      g.add(bd);
+     THE CENTRE IS 69 M BECAUSE THE SURVEY SAYS SO. The three inland points — ATM, point 6, Sofia
+     — span exactly that, and the reference's tall block covers about the middle third of a 176 m
+     frontage. Two sources, same answer, so the tall part is 69 m and not a guess.
+
+     Eleven storeys stays: 545 rooms over a double-loaded 169 m corridor is nine guest floors and
+     the ballrooms are on Floor 2. The flanks take eight and the end pavilions four, which is the
+     reference's profile read off the front elevation. */
+  /* A U OPENING TO THE SEA, and this supersedes the E.
+
+     THE PLAN CAME FROM A TRACE ON THE IMAGERY, the first ground truth this building has had. Two
+     closed loops: an outer perimeter, and an inner one around the pool-and-garden court. The mass
+     wraps that court on the inland side and both ends and thins almost to nothing on the seaward
+     side. A courtyard block, not a spine with arms.
+
+     IT RECONCILES THE SURVEY RATHER THAN CONTRADICTING IT. The eleven points fall in two rows
+     because a U has two rows: the inland wing at v +17..+25, and the seaward edge at v -5..-24
+     with points 4 and 9 at u -89 and +80 as the arm ends. A straight-line fit driven through
+     those rows lands in the courtyard, which is how a 175 m deep building became a 49 m bar.
+
+     AND IT RESCUES THE BAKE, which this function was written to override on the grounds that its
+     270 x 136 m box "conflates podium, forecourt and car deck into the hotel". The trace says the
+     box had the extent right. Scaled against the lagoon pool the outer footprint reads about
+     270 x 175 m. Long axis from the bake, where two sources already agreed within two degrees;
+     the 175 m depth is the soft number and the one to replace if a measurement arrives.
+
+     WHY THE RENDER LOOKED LIKE A CONTINUOUS FRONTAGE. From the water you see the tall inland wing
+     ACROSS the open court with the terrace and pools in front. That reads as one long elevation
+     with recesses — which is what made first a crescent and then an E look reasonable. */
+  const HT = 11 * F;
+  const HF = 8 * F;
+  const HE = 4 * F;
+  const seg = (w, h, du, dz, d) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w / M, h, d / M), stone);
+    b.position.set(du / M, h / 2, dz / M);
+    b.castShadow = true; b.receiveShadow = true;
+    g.add(b);
+  };
+
+  /* THE INLAND WING, 270 m, stepped as the front elevation shows: tall centre over the surveyed
+     69 m stretch, flanks at eight, end pavilions at four. 50 m deep, centred at z -50, so its
+     seaward face at -25 looks across the court. */
+  seg(69,  HT,    0, -50, 50);
+  seg(70,  HF,  -69, -50, 50);
+  seg(70,  HF,   69, -50, 50);
+  seg(31,  HE, -119, -50, 50);
+  seg(31,  HE,  119, -50, 50);
+
+  /* THE TWO ARMS closing the U, running seaward down each end. Points 4 and 9 are the tips. */
+  seg(39, HF, -115, 6, 63);
+  seg(39, HF,  115, 6, 63);
+
+  /* THE SEAWARD LINK across the mouth — a two-storey terrace edge, not a wall, so it never blocks
+     the wing behind it from the water. The trace has the south band at about a fifth of the north
+     band's depth and the render shows a low terrace there with the pools in front. */
+  seg(192, 2 * F, 0, 36, 13);
+
+  /* BANDS ON THE ARMS' INNER AND OUTER FACES, six floors each above the podium. */
+  for (const a of [-115, 115]){
+    for (let i = 0; i < 6; i++){
+      const y = 2 * F + i * F + F * 0.5;
+      for (const du of [a - 20.4, a + 20.4]){
+        const bd = new THREE.Mesh(new THREE.BoxGeometry(1.8 / M, F * 0.16, 63 / M), band);
+        bd.position.set(du / M, y, 6 / M);
+        g.add(bd);
+      }
     }
-    for (const zz of [-30.8 / M, -5.2 / M]){
-      const wg = new THREE.Mesh(new THREE.BoxGeometry(172 / M, F * 0.62, 0.4 / M), glassM);
-      wg.position.set(-8 / M, y + F * 0.06, zz);
+  }
+
+  /* THE INLAND WING'S BANDS FACE THE COURT AND THE SEA BEYOND IT, at z -25. Nine on the tall
+     centre, six on the flanks. This is the elevation the reference photographs. */
+  for (const w of [{ u:0, n:9, l:69 }, { u:-69, n:6, l:70 }, { u:69, n:6, l:70 }]){
+    for (let i = 0; i < w.n; i++){
+      const y = 2 * F + i * F + F * 0.5;
+      const bd = new THREE.Mesh(new THREE.BoxGeometry(w.l / M, F * 0.16, 1.8 / M), band);
+      bd.position.set(w.u / M, y, -24.9 / M);
+      g.add(bd);
+      const wg = new THREE.Mesh(new THREE.BoxGeometry((w.l - 4) / M, F * 0.62, 0.4 / M), glassM);
+      wg.position.set(w.u / M, y + F * 0.06, -23.8 / M);
       g.add(wg);
     }
   }
 
-  /* THE THREE ARMS, reaching seaward. The outer two land on points 4 and 9. The middle one is the
-     only invented member in this function, placed midway because an E has three arms and the
-     layout draws three. Eight storeys, so they sit below the spine rather than compete with it. */
-  const HA = 8 * F;
-  for (const du of [-87 / M, -3 / M, 80 / M]){
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(34 / M, HA, 40 / M), stone);
-    arm.position.set(du, HA / 2, 10 / M);
-    arm.castShadow = true; arm.receiveShadow = true;
-    g.add(arm);
-  }
+  /* THE COURTYARD POOL — SEVEN PINS, SO NOTHING HERE IS ESTIMATED.
 
-  /* THE POOL COURTYARDS, in the two gaps between the arms. The void is the point. */
-  for (const du of [-45 / M, 38 / M]){
-    const pool = new THREE.Mesh(new THREE.BoxGeometry(40 / M, 0.4 / M, 26 / M), glassM);
-    pool.position.set(du, 2 * F + 0.3 / M, 12 / M);
-    g.add(pool);
-  }
+     Bounding the pins gives 30 m across by 47 m long, centred at bake (18362.6, -3452.5), long
+     axis running seaward. The traced guess before this was 24 x 44, which was close, and close is
+     not the point: this is now the best-measured object in the whole model and everything else
+     around it can be checked against it.
+
+     IT IS ALSO WHAT CAUGHT THE ANCHOR. Converted into this function's frame against the old
+     placement the pool landed at z +25.8, running z +2.3 to +49.3 against a court spanning -25 to
+     +29.5 — twenty metres of pool through the seaward link and out the other side. Seven pins beat
+     a straight-line fit through eleven points, so the anchor moved rather than the pool: island z
+     388.7 to 412.7 in w2h-world.js, which is the building 24 m seaward of where the fit put it.
+
+     That is the fit's own error showing up, and it is the error you would predict. Fitting a line
+     through a U puts the centre in the courtyard, which drags the whole mass inland.
+
+     Head and leg rather than one box, because the step is what makes it read as this pool. */
+  const poolHead = new THREE.Mesh(new THREE.BoxGeometry(30 / M, 0.4 / M, 29 / M), glassM);
+  poolHead.position.set(4 / M, 0.5 / M, -9.5 / M);
+  g.add(poolHead);
+  const poolLeg = new THREE.Mesh(new THREE.BoxGeometry(16 / M, 0.4 / M, 18 / M), glassM);
+  poolLeg.position.set(4 / M, 0.5 / M, 14 / M);
+  g.add(poolLeg);
+  /* The notch in the inland edge, cut by standing a strip of deck in it. */
+  const notch = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 0.6 / M, 8 / M), podM);
+  notch.position.set(4 / M, 0.6 / M, -21 / M);
+  g.add(notch);
 
   /* THE PROMENADE RESTAURANT ROW at v -77, where Bua Thai, L'Antica and Bayside Burger register.
      Single storey at 3.6 m. Four units of jittered width under one canopy, so it reads as a row of
@@ -1237,6 +1312,106 @@ function hiltonYasBay(x0, z0, facing){
   can.position.set(14 / M, F * 1.12, 77 / M);
   can.castShadow = true;
   g.add(can);
+
+  if (facing !== undefined) g.rotation.y = -facing;
+  g.position.set(x0, 0, z0);
+  return g;
+}
+
+/* CAFE DEL MAR ABU DHABI — the circular deck at the Hilton's waterline.
+
+   IT IS ON THE SHORE, NOT ON PILES OVER OPEN WATER. The three-view render shows it standing out
+   in the sea on a pile ring off the end of the hotel; satellite shows a circle set into the edge
+   where the free-form lagoon pool meets the beach, with a rock groyne running seaward from it.
+   Same wide-lens flattening that turned this hotel into a crescent. The render is good for what
+   stands on the deck and useless for where the deck is.
+
+   WHAT THE SATELLITE GIVES DIRECTLY: a circle, a radial deck pattern, a ring of pale tensile
+   canopies over its seaward half, and the groyne. Those are built. What it does not give is a
+   dimension, so the radius is the one soft number here and it is stated rather than buried —
+   24 m, read off the circle against the lagoon pool beside it, which is itself about 80 m on its
+   long axis. If a measurement ever arrives, change R and nothing else.
+
+   ITS OWN GROUND PLATE. The deck carries its own apron and waterline so it does not depend on
+   whatever the band system paints underneath, which is the rule that keeps a landmark judgeable
+   on the bench alone. */
+function cafeDelMar(x0, z0, facing){
+  const g = new THREE.Group();
+  const M = 7.8;
+
+  const mk = (dusk, day, rough, emis, ei) => {
+    const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough == null ? 0.8 : rough });
+    if (emis !== undefined){ m.emissive = new THREE.Color(emis); m.emissiveIntensity = ei; }
+    m.userData.duskColor = dusk;
+    m.userData.dayMats = new THREE.MeshStandardMaterial({
+      color:day, roughness:rough == null ? 0.8 : rough });
+    m.userData.planMats = new THREE.MeshBasicMaterial({ color:day });
+    return m;
+  };
+  const deckM   = mk(0x6B5A46, 0xB89A72, 0.90, 0xFFD9A0, 0.06);   // timber
+  const sailM   = mk(0xA8A296, 0xF2EDE2, 0.70, 0xFFF0D8, 0.14);   // tensile fabric
+  const stone   = mk(0x8C877B, 0xE4DED0, 0.85, 0xFFE9C6, 0.08);
+  const rockM   = mk(0x5E5950, 0x9C948494 & 0xFFFFFF, 0.95);
+
+  const R = 24 / M;                  // the one soft number
+  const DECK_Y = 1.4 / M;
+
+  /* THE DECK, and the radial pattern is the thing that identifies it from the air. Twenty-four
+     slats rather than a texture, because at hero distance the radial lines are the read and a
+     texture on a 48 m disc would be invisible. */
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(R, R, DECK_Y, 40), deckM);
+  disc.position.set(0, DECK_Y / 2, 0);
+  disc.castShadow = true; disc.receiveShadow = true;
+  g.add(disc);
+  for (let i = 0; i < 24; i++){
+    const a = (i / 24) * Math.PI * 2;
+    const sl = new THREE.Mesh(new THREE.BoxGeometry(R * 0.94, 0.12 / M, 0.5 / M), stone);
+    sl.position.set(Math.cos(a) * R * 0.5, DECK_Y + 0.05 / M, Math.sin(a) * R * 0.5);
+    sl.rotation.y = -a;
+    g.add(sl);
+  }
+
+  /* THE CANOPIES. Five, over the seaward half, which is where the satellite shows them and where
+     the render shows them too — the one thing the two sources agree on without qualification.
+     Four-sided cones read as tensioned sails at this scale; a real hypar would be a lot of
+     triangles for a shape that is 12 m across in a scene measured in kilometres. */
+  for (let i = 0; i < 5; i++){
+    const a = Math.PI * (0.15 + (i / 4) * 0.7);
+    const r = R * 0.55;
+    const sail = new THREE.Mesh(new THREE.ConeGeometry(7.5 / M, 4.2 / M, 4), sailM);
+    sail.position.set(Math.cos(a) * r, DECK_Y + 5.6 / M, Math.sin(a) * r);
+    sail.rotation.y = a;
+    sail.castShadow = true;
+    g.add(sail);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.22 / M, 0.22 / M, 5.6 / M, 6), stone);
+    mast.position.set(Math.cos(a) * r, DECK_Y + 2.8 / M, Math.sin(a) * r);
+    g.add(mast);
+  }
+
+  /* THE BALUSTRADE, a low ring, and the seaward gap where the steps go down to the groyne. */
+  for (let i = 0; i < 40; i++){
+    const a = (i / 40) * Math.PI * 2;
+    if (a > Math.PI * 0.42 && a < Math.PI * 0.58) continue;
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.3 / M, 1.1 / M, R * 0.17), stone);
+    p.position.set(Math.cos(a) * R * 0.97, DECK_Y + 0.55 / M, Math.sin(a) * R * 0.97);
+    p.rotation.y = -a;
+    g.add(p);
+  }
+
+  /* THE APRON AND THE GROYNE. The apron is this landmark's own ground, so the deck never floats
+     on whatever the band system happens to paint. The groyne runs seaward, which is local +z. */
+  const apron = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.22, R * 1.22, 0.5 / M, 32), stone);
+  apron.position.set(0, 0.25 / M, 0);
+  apron.receiveShadow = true;
+  g.add(apron);
+  for (let i = 0; i < 7; i++){
+    const rk = new THREE.Mesh(new THREE.BoxGeometry((5 - i * 0.4) / M, (2.2 - i * 0.2) / M,
+                                                    (5 - i * 0.4) / M), rockM);
+    rk.position.set((i % 2 ? 1.6 : -1.6) / M, 0.6 / M, (R * 1.2 + i * 5.5 / M));
+    rk.rotation.y = i * 0.7;
+    rk.castShadow = true;
+    g.add(rk);
+  }
 
   if (facing !== undefined) g.rotation.y = -facing;
   g.position.set(x0, 0, z0);
@@ -1543,5 +1718,5 @@ function lowRise(count, xMin, xMax, z, zJit, em){
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena, yasBayPier,
-         hiltonYasBay, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
+         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }

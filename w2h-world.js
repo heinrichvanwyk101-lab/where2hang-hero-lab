@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v150';
+export const BUILD = 'world v151';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5096,7 +5096,12 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      the one landmark on Yas that genuinely needs one: the footprint underneath is 270 x 136 m of
      conflated plot at a flat 40 m, and without the zone the authored hotel would stand inside a
      slab of its own forecourt. The pier never did this, and the pier was never right. */
-  if (kit.hiltonYasBay) built.push(kit.hiltonYasBay(-23.7, 388.7, -0.2057));
+  /* z MOVED 388.7 -> 412.7 ON SEVEN POOL PINS. The old figure came from fitting a straight line
+     through eleven surveyed points, and the building is a U — so the fit ran through the courtyard
+     and pulled the whole mass 24 m inland. The courtyard pool is now bounded by seven pins at bake
+     (18362.6, -3452.5), and against the old anchor it stood 20 m outside the court it sits in.
+     Measured beats fitted. Long axis and facing are unchanged; only the seaward offset moves. */
+  if (kit.hiltonYasBay) built.push(kit.hiltonYasBay(-23.7, 412.7, -0.2057));
 
   /* THE JETTY, AND IT DELIBERATELY DOES NOT GO THROUGH `built`.
 
