@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v38';
+export const BUILD = 'city v40';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1176,8 +1176,11 @@ function hiltonYasBay(x0, z0, facing){
      was got backwards for a whole deploy and the wings reached inland across Yas Drive. */
 
   /* THE PODIUM, two storeys, over the registered extent u -100..+95, v -32..+32. */
-  const pod = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 2 * F, 175 / M), podM);
-  pod.position.set(0, F, -12 / M);
+  /* THE PODIUM IS THE BAKE FOOTPRINT, 270 x 136, CENTRED ON THE ANCHOR. It was 270 x 175 centred
+     at -12, which overhung the real footprint by 20 m on the seaward side before the anchor was
+     ever moved. The ground plate under this landmark is correct, so the podium matches it. */
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 2 * F, 136 / M), podM);
+  pod.position.set(0, F, 0);
   pod.castShadow = true; pod.receiveShadow = true;
   g.add(pod);
 
@@ -1230,28 +1233,28 @@ function hiltonYasBay(x0, z0, facing){
   /* THE INLAND WING, 270 m, stepped as the front elevation shows: tall centre over the surveyed
      69 m stretch, flanks at eight, end pavilions at four. 50 m deep, centred at z -50, so its
      seaward face at -25 looks across the court. */
-  seg(69,  HT,    0, -50, 50);
-  seg(70,  HF,  -69, -50, 50);
-  seg(70,  HF,   69, -50, 50);
-  seg(31,  HE, -119, -50, 50);
-  seg(31,  HE,  119, -50, 50);
+  seg(69,  HT,    0, -38, 60);
+  seg(70,  HF,  -69, -38, 60);
+  seg(70,  HF,   69, -38, 60);
+  seg(31,  HE, -119, -38, 60);
+  seg(31,  HE,  119, -38, 60);
 
   /* THE TWO ARMS closing the U, running seaward down each end. Points 4 and 9 are the tips. */
-  seg(39, HF, -115, 6, 63);
-  seg(39, HF,  115, 6, 63);
+  seg(39, HF, -115, 30, 60);
+  seg(39, HF,  115, 30, 60);
 
   /* THE SEAWARD LINK across the mouth — a two-storey terrace edge, not a wall, so it never blocks
      the wing behind it from the water. The trace has the south band at about a fifth of the north
      band's depth and the render shows a low terrace there with the pools in front. */
-  seg(192, 2 * F, 0, 36, 13);
+  seg(192, 2 * F, 0, 63, 10);
 
   /* BANDS ON THE ARMS' INNER AND OUTER FACES, six floors each above the podium. */
   for (const a of [-115, 115]){
     for (let i = 0; i < 6; i++){
       const y = 2 * F + i * F + F * 0.5;
       for (const du of [a - 20.4, a + 20.4]){
-        const bd = new THREE.Mesh(new THREE.BoxGeometry(1.8 / M, F * 0.16, 63 / M), band);
-        bd.position.set(du / M, y, 6 / M);
+        const bd = new THREE.Mesh(new THREE.BoxGeometry(1.8 / M, F * 0.16, 60 / M), band);
+        bd.position.set(du / M, y, 30 / M);
         g.add(bd);
       }
     }
@@ -1263,10 +1266,10 @@ function hiltonYasBay(x0, z0, facing){
     for (let i = 0; i < w.n; i++){
       const y = 2 * F + i * F + F * 0.5;
       const bd = new THREE.Mesh(new THREE.BoxGeometry(w.l / M, F * 0.16, 1.8 / M), band);
-      bd.position.set(w.u / M, y, -24.9 / M);
+      bd.position.set(w.u / M, y, -7.9 / M);
       g.add(bd);
       const wg = new THREE.Mesh(new THREE.BoxGeometry((w.l - 4) / M, F * 0.62, 0.4 / M), glassM);
-      wg.position.set(w.u / M, y + F * 0.06, -23.8 / M);
+      wg.position.set(w.u / M, y + F * 0.06, -6.8 / M);
       g.add(wg);
     }
   }
@@ -1289,14 +1292,18 @@ function hiltonYasBay(x0, z0, facing){
 
      Head and leg rather than one box, because the step is what makes it read as this pool. */
   const poolHead = new THREE.Mesh(new THREE.BoxGeometry(30 / M, 0.4 / M, 29 / M), glassM);
-  poolHead.position.set(4 / M, 0.5 / M, -9.5 / M);
+  /* ON TOP OF THE PODIUM, NOT INSIDE IT. The podium is 2*F tall centred at y = F, so its deck is
+     at 2*F — 7.2 m. Set at 0.5/M in the rewrite these basins sat six and a half metres inside it
+     and showed as a cyan sliver where the podium edge did not quite cover them. The version this
+     replaced had it right; the rewrite lost it. */
+  poolHead.position.set(4 / M, 2 * F + 0.3 / M, 14 / M);
   g.add(poolHead);
   const poolLeg = new THREE.Mesh(new THREE.BoxGeometry(16 / M, 0.4 / M, 18 / M), glassM);
-  poolLeg.position.set(4 / M, 0.5 / M, 14 / M);
+  poolLeg.position.set(4 / M, 2 * F + 0.3 / M, 37 / M);
   g.add(poolLeg);
   /* The notch in the inland edge, cut by standing a strip of deck in it. */
   const notch = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 0.6 / M, 8 / M), podM);
-  notch.position.set(4 / M, 0.6 / M, -21 / M);
+  notch.position.set(4 / M, 2 * F + 0.4 / M, 2 / M);
   g.add(notch);
 
   /* THE PROMENADE RESTAURANT ROW at v -77, where Bua Thai, L'Antica and Bayside Burger register.
