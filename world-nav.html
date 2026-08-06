@@ -324,7 +324,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v113', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v114', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2910,6 +2910,7 @@ async function addGroundFeatures(d){
    the footprints arrive later, async, from the basemap. Reordering that is the prefetch race that
    already made Al Maryah render generated-or-real non-deterministically per load, and the comment
    above footprintsFrom says so. At THIS point both datasets are in hand and nothing has to move. */
+const NO_GRAIN = /[?&]nograin\b/.test(location.search);
 const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
 /* AND THE FAR TEST, WHICH IS THE OTHER HALF OF THE SAME IDEA.
 
@@ -2941,35 +2942,64 @@ function cullFabric(d, list){
   /* One grid at the COARSER radius so a single +/-1 cell sweep serves both tests. Binning at
      CULL_R instead would need an eleven-cell sweep to answer the far question. */
   const CELL = KEEP_R;
+  /* HOISTED ABOVE nearGrain, which reads FAR2. It worked where it was only because nothing calls
+     nearGrain until after the declaration runs; that is a temporal-dead-zone trap waiting for the
+     first person who moves a line. */
+  const NEAR2 = CULL_R * CULL_R, FAR2 = KEEP_R * KEEP_R;
   const grid = new Map();
   const key = (x, z) => Math.floor(x / CELL) + ':' + Math.floor(z / CELL);
   for (const u of list){
     const x = u.x != null ? u.x : (u[0] || 0);
     const z = u.z != null ? u.z : (u[1] || 0);
+    /* w, dp AND h, WHICH THIS GRID HAS ALWAYS THROWN AWAY. buildingsUnits has carried them since
+       basemap v1; cullFabric bins only x and z, so every question it could answer was reduced to
+       a distance. The plan size of the neighbours is the signal that says whether this is a villa
+       estate or a business district, and it was already in the payload. */
+    const w = u.w != null ? u.w : 0, dp = u.dp != null ? u.dp : 0;
     const k = key(x, z);
     let a = grid.get(k);
     if (!a){ a = []; grid.set(k, a); }
-    a.push([x, z]);
+    a.push([x, z, (w + dp) / 2, u.h > 0 ? u.h : 0]);
   }
-  /* Squared distance to the nearest real footprint, or Infinity if none is in reach. */
-  const nearest2 = (x, z) => {
+  /* NEAREST DISTANCE AND NEIGHBOURHOOD GRAIN IN ONE SWEEP. The 3x3 walk already visits every real
+     building within reach; summing plan size and height over the ones inside FAR2 costs two adds
+     per visit and no extra traversal.
+
+     THE MEAN IS OVER THE WHOLE 160 m NEIGHBOURHOOD, NOT THE SINGLE NEAREST. One building next
+     door can be a clubhouse in an estate of houses, and the fabric would then be sized to the
+     clubhouse. Grain is a property of an area; it needs the area.
+
+     Height is averaged only over the footprints that HAVE one - Overture leaves h null on most
+     of the payload, and folding those in as zero would drive every estate to the two-storey
+     floor whether or not the real stock is low. */
+  const nearGrain = (x, z) => {
     const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
-    let best = Infinity;
+    let best = Infinity, n = 0, sp = 0, nh = 0, sh = 0;
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++){
       const a = grid.get((cx + i) + ':' + (cz + j));
       if (!a) continue;
-      for (const [px, pz] of a){
+      for (const [px, pz, pp, ph] of a){
         const dx = px - x, dz = pz - z;
         const d2 = dx * dx + dz * dz;
         if (d2 < best) best = d2;
+        if (d2 <= FAR2 && pp > 0){ n++; sp += pp; if (ph > 0){ nh++; sh += ph; } }
       }
     }
-    return best;
+    return { d2: best, n, pw: n ? sp / n : 0, ph: nh ? sh / nh : 0 };
   };
-  const NEAR2 = CULL_R * CULL_R, FAR2 = KEEP_R * KEEP_R;
+  /* GUARDED, because an older w2h-world.js in a browser cache has no grainFit and the island must
+     still cull. Absent, every line below behaves exactly as v113 did. */
+  const GFIT = (!NO_GRAIN && WORLD.grainFit) ? WORLD.grainFit : null;
 
   const m = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
-  let culled = 0, kept = 0;
+  /* Scratch for the survivors only. decompose is the expensive call the original loop was written
+     to avoid, and it still is - it now runs on the instances that SURVIVE both tests, which on
+     Saadiyat is a small fraction of the count, and it runs once at swap time rather than per
+     frame. */
+  const gp = new THREE.Vector3(), gq = new THREE.Quaternion(), gs = new THREE.Vector3(),
+        goff = new THREE.Vector3(), gjit = new THREE.Quaternion(),
+        GY = new THREE.Vector3(0, 1, 0);
+  let culled = 0, kept = 0, grained = 0;
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
@@ -2978,10 +3008,28 @@ function cullFabric(d, list){
         o.getMatrixAt(i, m);
         /* Elements 12 and 14 are the translation's x and z. Cheaper than decompose, and this runs
            once per instance across tens of thousands of them. */
-        const d2 = nearest2(m.elements[12], m.elements[14]);
+        const ix = m.elements[12], iz = m.elements[14];
+        const g = nearGrain(ix, iz);
         /* Too close: a real building already stands here. Too far: nobody builds here at all. */
-        if (d2 < NEAR2 || d2 > FAR2){ o.setMatrixAt(i, zero); culled++; }
-        else kept++;
+        if (g.d2 < NEAR2 || g.d2 > FAR2){ o.setMatrixAt(i, zero); culled++; continue; }
+        kept++;
+        if (!GFIT) continue;
+        /* THE SCALE IS THE BOX. urbanFabric writes M.scale.set(o.w, o.h, o.d) onto a unit profile
+           whose origin is at the FOOT, so x and z are the plan in island units, y is the height in
+           island units, and shrinking y does not need the position moved. */
+        m.decompose(gp, gq, gs);
+        const fit = GFIT(gs.x, gs.z, gs.y, g, ix, iz);
+        if (!fit) continue;
+        /* The offset is in the building's OWN frame so it slides along its plot rather than across
+           the street. The quaternion carries the street angle already. */
+        goff.set(fit.dx, 0, fit.dz).applyQuaternion(gq);
+        gp.add(goff);
+        gjit.setFromAxisAngle(GY, fit.dRot);
+        gq.multiply(gjit);
+        gs.set(fit.w, fit.h, fit.d);
+        m.compose(gp, gq, gs);
+        o.setMatrixAt(i, m);
+        grained++;
       }
       o.instanceMatrix.needsUpdate = true;
       /* NOT marked fpHidden and NOT set invisible: the mesh stays in the scene and stays drawn,
@@ -2991,6 +3039,7 @@ function cullFabric(d, list){
   });
   d.fpCull = culled;
   d.fpKept = kept;
+  d.fpGrain = grained;
   return culled;
 }
 
@@ -3846,6 +3895,10 @@ function frame(){
              tests, and how many were zeroed for being either on top of a real building or too far
              from one to be plausible. kept is what is actually filling the gaps. */
           '  keep' + (d.fpKept || 0) + '/cull' + (d.fpCull || 0) +
+          /* HOW MANY SURVIVORS WERE RESIZED TO THE LOCAL GRAIN. Zero on an island that reads as a
+             street wall means the signal never fired - too few neighbours, or neighbours bigger
+             than GRAIN_MAX_S - and that is a threshold to move, not a renderer to open. */
+          (d.fpGrain ? '/grain' + d.fpGrain : '') +
           '  ' + fabricVisible(d) + 'v' +
           /* THE TWO NUMBERS THE VACANCY MASK IS JUDGED ON, and the reason it can ship behind a
              flag rather than behind a day of bisecting.
