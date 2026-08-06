@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v162';
+export const BUILD = 'world v163';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3093,6 +3093,10 @@ const WCLASS = WBOUND.map((hi, i) => {
 });
 const wClass = h => { for (let i = 0; i < WCLASS.length; i++) if (h < WCLASS[i].max) return i;
                       return WCLASS.length - 1; };
+/* THE ONE ABSOLUTE HEIGHT IN A FILE OTHERWISE BUILT ENTIRELY ON PROPORTIONS. Three storeys and a
+   parapet. Above it the relative rules are right and stay in charge; below it the building is a
+   house and no proportion of an island ceiling has anything useful to say about it. */
+const VILLA_ABS_M = 12;
 
 /* Lifted from w2h-city.js, which worked this out the expensive way and whose reasoning holds
    here unchanged:
@@ -4544,13 +4548,34 @@ function buildingSpec(rnd, ctx){
      on the glass test by the time we get here, and on this branch it is known to lie above the
      threshold — so rescaling it to [0, 1) gives a clean uniform for free. Adding a roll to the
      block above would have shuffled every building on every island for a palette change. */
+  /* AN ABSOLUTE FLOOR UNDER THE FACADE RULE, WHICH IT HAS NEVER HAD.
+
+     Every branch below is RELATIVE to the island ceiling — h > tallest * 0.50, glass at 0.62 of
+     the roll. That is a good reading of a skyline and a nonsensical one of a suburb, because a
+     proportion of whatever exists always gets curtain wall. Lower GEN_TALLEST as far as you like
+     and the same fraction of the remaining stock is still glass: the result is not villas, it is
+     towers at 1:6 scale. Saadiyat has been showing exactly that, and shrinking the boxes in
+     cullFabric made it worse rather than better — a shrunk instance cannot leave the InstancedMesh
+     it was allocated in, so it kept the tower facade and the tower window spacing and became a
+     mini high-rise.
+
+     A house is not a small tower. Below VILLA_ABS_M it is render or white, never glass, never
+     bronze, never clad, and its windows come from the lowest class regardless of what the island
+     around it is doing. Absolute metres, because 9 m is 9 m on Saadiyat and on Corniche alike. */
+  const villaAbs = h * M_PER_UNIT <= VILLA_ABS_M && !sculpt;
   const gThresh = h > tallest * 0.50 ? 0.62 : 0.10;
-  const isGlass = sculpt || R.glass < gThresh;
+  const isGlass = !villaAbs && (sculpt || R.glass < gThresh);
   const u = (R.glass - gThresh) / (1 - gThresh);
   let mat, tAmount, tWarm;
   if (isGlass){
     if (R.glassKind < (h > tallest * 0.72 ? 0.14 : 0.55)){ mat = 'bronze'; tAmount = 0.26; tWarm = 0.9; }
     else                                                 { mat = 'glass';  tAmount = 0.30; tWarm = 0.2; }
+  } else if (villaAbs){
+    /* Three warm renders, weighted toward white, which is what an Abu Dhabi villa wall is. No
+       clad: brushed aluminium on a house is a shed. */
+    if      (u < 0.50){ mat = 'white'; tAmount = 0.34; tWarm = 0.70; }
+    else if (u < 0.82){ mat = 'rend';  tAmount = 0.46; tWarm = 1.15; }
+    else              { mat = 'stone'; tAmount = 0.40; tWarm = 1.00; }
   } else if (frac < 0.36){
     if      (u < 0.44){ mat = 'white'; tAmount = 0.34; tWarm = 0.70; }
     else if (u < 0.78){ mat = 'stone'; tAmount = 0.42; tWarm = 1.00; }
@@ -4928,7 +4953,10 @@ function urbanFabric(d, layer, opts){
   const need = new Map();
   // Class is decided on the INSTANCE height, so a podium and the shaft above it get different
   // storey counts without the spec having to know anything about it.
-  const key = o => o.t + '#' + (o.raw || o.t === 'roof' ? 'r' : wClass(o.h)) + '|' + (o.g || 'box');
+  /* THE WINDOW CLASS TAKES THE SAME ABSOLUTE FLOOR. Bucketing a 9 m house into the class its
+     height would otherwise earn is what put five rows of lit office glazing on two storeys. */
+  const key = o => o.t + '#' + (o.raw || o.t === 'roof' ? 'r'
+                    : (o.h * M_PER_UNIT <= VILLA_ABS_M ? 0 : wClass(o.h))) + '|' + (o.g || 'box');
   keep.forEach(sp => walkSpec(sp, lod, o => { const k = key(o); need.set(k, (need.get(k) || 0) + 1); }));
 
   const meshes = new Map();
@@ -6185,7 +6213,11 @@ function footprintsFor(d, list){
      run off the end of the table. */
   const VK_MAT = { dine:'white', culture:'stone', worship:'stone',
                    sport:'clad', leisure:'rend', other:null };
-  const typeOf = h => h > tallest * 0.62 ? 'glass' : h > tallest * 0.3 ? 'clad' : 'rend';
+  /* SAME ABSOLUTE FLOOR AS THE GENERATED STOCK, AND FOR THE SAME REASON. This rule is relative to
+     the island ceiling too, so on an island whose ceiling is low a villa still qualified for
+     cladding. Below VILLA_ABS_M it is render, full stop. */
+  const typeOf = h => h * M_PER_UNIT <= VILLA_ABS_M ? 'rend'
+                    : h > tallest * 0.62 ? 'glass' : h > tallest * 0.3 ? 'clad' : 'rend';
   /* THE VENUE TELLS YOU WHAT IS INSIDE, NOT WHAT THE BUILDING IS, AND ABOVE A CERTAIN SIZE THOSE
      ARE DIFFERENT QUESTIONS. The join is by coordinate, so whichever venue lands in a footprint
      wins it. That is right for a 550 m2 building — the median vk footprint, and at that size the
@@ -6206,7 +6238,11 @@ function footprintsFor(d, list){
   const vkOf   = sp => (sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT > VK_MAX_M2 || sp.v >= VK_MAX_V)
                      ? null : sp.vk;
   const matOf  = sp => (vkOf(sp) && VK_MAT[vkOf(sp)]) || typeOf(sp.h);
-  const winOf  = sp => vkOf(sp) === 'dine'
+  /* THE VILLA FLOOR BEATS BOTH BRANCHES. A house gets class 0 windows whether or not a restaurant
+     is joined to it — the dine bump exists to light a ground-floor unit under offices, and there
+     are no offices above a villa. */
+  const winOf  = sp => sp.h * M_PER_UNIT <= VILLA_ABS_M ? 0
+                     : vkOf(sp) === 'dine'
                      ? Math.min(WCLASS.length - 1, wClass(sp.h) + 1)
                      : wClass(sp.h);
   /* SPLIT: RINGS ARE NOT INSTANCED. An InstancedMesh shares one geometry across every instance and
