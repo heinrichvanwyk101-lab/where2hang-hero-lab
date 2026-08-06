@@ -324,7 +324,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v111', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v112', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2911,14 +2911,36 @@ async function addGroundFeatures(d){
    already made Al Maryah render generated-or-real non-deterministically per load, and the comment
    above footprintsFrom says so. At THIS point both datasets are in hand and nothing has to move. */
 const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
+/* AND THE FAR TEST, WHICH IS THE OTHER HALF OF THE SAME IDEA.
+
+   Near-culling alone still fills every part of an island that has no footprints in it, and on
+   Saadiyat that is most of the island. Its 1,842 buildings sit in a clean diagonal band from
+   north-east to south-west — the villa estates and the Cultural District — and the entire
+   south-east is sand, mangrove and laydown yards. Generated stock carpeted it, which is a city
+   invented in a desert and the loudest thing wrong with the island.
+
+   So an instance survives only if a real building is FAR ENOUGH to leave room and NEAR ENOUGH to
+   suggest people build here. Overture is trustworthy about WHERE and unreliable about HOW MANY —
+   Saadiyat returns roughly half its villas but puts them all in the right places — so proximity to
+   a real footprint is a good proxy for "this is a built area" and absence of one for hundreds of
+   metres is a good proxy for "this is empty ground".
+
+   KEEP_R IS THE COARSER OF THE TWO NUMBERS AND THE MORE LIKELY TO NEED MOVING. Too small and the
+   fill hugs the real buildings and leaves holes inside genuine estates; too large and the desert
+   comes back. 160 m is about two villa plots plus a street, which is the scale at which a gap in
+   the payload stops being a gap and starts being open ground.
+
+   YAS IS THE CHECK ON IT. Yas already reads correctly — its villa estates are real footprints and
+   their form and grouping are right — and its southern half is theme parks and circuit, where
+   there is almost nothing real to be near. If this is calibrated properly Yas barely moves. */
+const KEEP_R = 160 / 7.8;
 
 function cullFabric(d, list){
   if (!list || !list.length) return 0;
 
-  /* A coarse hash rather than a loop over pairs. Saadiyat is 1,841 x 18,782, which is 34 million
-     distance tests done naively and about eighteen thousand done this way. Same argument roadGrid
-     already made when it replaced its own O(n^3) scan. */
-  const CELL = CULL_R * 2;
+  /* One grid at the COARSER radius so a single +/-1 cell sweep serves both tests. Binning at
+     CULL_R instead would need an eleven-cell sweep to answer the far question. */
+  const CELL = KEEP_R;
   const grid = new Map();
   const key = (x, z) => Math.floor(x / CELL) + ':' + Math.floor(z / CELL);
   for (const u of list){
@@ -2929,18 +2951,22 @@ function cullFabric(d, list){
     if (!a){ a = []; grid.set(k, a); }
     a.push([x, z]);
   }
-  const near = (x, z) => {
+  /* Squared distance to the nearest real footprint, or Infinity if none is in reach. */
+  const nearest2 = (x, z) => {
     const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    let best = Infinity;
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++){
       const a = grid.get((cx + i) + ':' + (cz + j));
       if (!a) continue;
       for (const [px, pz] of a){
         const dx = px - x, dz = pz - z;
-        if (dx * dx + dz * dz < CULL_R * CULL_R) return true;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < best) best = d2;
       }
     }
-    return false;
+    return best;
   };
+  const NEAR2 = CULL_R * CULL_R, FAR2 = KEEP_R * KEEP_R;
 
   const m = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
   let culled = 0, kept = 0;
@@ -2952,7 +2978,9 @@ function cullFabric(d, list){
         o.getMatrixAt(i, m);
         /* Elements 12 and 14 are the translation's x and z. Cheaper than decompose, and this runs
            once per instance across tens of thousands of them. */
-        if (near(m.elements[12], m.elements[14])){ o.setMatrixAt(i, zero); culled++; }
+        const d2 = nearest2(m.elements[12], m.elements[14]);
+        /* Too close: a real building already stands here. Too far: nobody builds here at all. */
+        if (d2 < NEAR2 || d2 > FAR2){ o.setMatrixAt(i, zero); culled++; }
         else kept++;
       }
       o.instanceMatrix.needsUpdate = true;
