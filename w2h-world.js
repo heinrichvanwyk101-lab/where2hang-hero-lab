@@ -69,13 +69,66 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v160';
+export const BUILD = 'world v161';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
 export const ISLE_BEVEL_T = 0.5;
 export const ISLE_BEVEL_S = 1.6;
 export const GROUND = ISLE_DEPTH + ISLE_BEVEL_T;   // 2.9 — the top face of every island
+
+/* LOCAL GRAIN: WHAT SIZE THE NEIGHBOURS ARE, NOT JUST WHETHER THERE ARE ANY.
+
+   cullFabric already asks the payload "is a real building near this generated one" and answers
+   with a distance. The payload has always carried w, dp and h alongside x and z, and nothing has
+   ever read them. That is the whole bug on Saadiyat: the villa estates get generated stock at the
+   grain the SUPERBLOCK chose - 30-plus metre plots laid along a street frontage - and a street
+   wall is exactly wrong where the real neighbours are 17 m detached houses.
+
+   PURE, EXPORTED AND UNIT-TESTABLE, so the decision can be argued with in the container instead
+   of inspected on a phone. Given the generated box and a summary of the real stock around it,
+   return the box it should have been, or null to leave it alone.
+
+   IT ONLY EVER SHRINKS, AND ONLY EVER INSIDE THE OLD PLAN EXTENT. Growing a box would put it
+   through a real facade that CULL_R sized the clearance for. The offset is bounded so that
+   newHalf + |offset| <= oldHalf for every s, which keeps that guarantee arithmetic rather than
+   hopeful.
+
+   SILENT WHERE THE SIGNAL IS WEAK. Fewer than GRAIN_MIN_N neighbours is noise; real stock bigger
+   than GRAIN_MAX_S is a district that genuinely builds big and must not be shrunk to villas. Al
+   Maryah and the Cultural District both fall out here and are untouched. */
+export const GRAIN_MIN_N  = 4;
+export const GRAIN_MAX_S  = 30 / 7.8;    // island units. Above this the neighbours are not villas.
+export const GRAIN_FLOOR  = 0.34;        // never shrink past a third; below that it is confetti
+export const GRAIN_H_MULT = 1.25;
+export const GRAIN_H_MIN  = 7 / 7.8;     // two storeys, so nothing becomes a slab
+const GRAIN_JIT = 5 * Math.PI / 180;
+
+/* Deterministic per-position, so a reload does not reshuffle the estate. */
+function grainHash(x, z){
+  let h = Math.imul(Math.round(x * 977) ^ Math.imul(Math.round(z * 977), 0x9E3779B1), 0x85EBCA6B);
+  h ^= h >>> 13; h = Math.imul(h, 0xC2B2AE35); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+export function grainFit(genW, genD, genH, grain, x, z){
+  if (!grain || grain.n < GRAIN_MIN_N || !(grain.pw > 0)) return null;
+  if (grain.pw > GRAIN_MAX_S) return null;
+  const genPlan = (genW + genD) / 2;
+  if (!(genPlan > grain.pw)) return null;              // neighbours are bigger; nothing to do
+  const s = Math.max(GRAIN_FLOOR, grain.pw / genPlan);
+  if (s > 0.94) return null;                           // within noise, not worth a recompose
+  let h = genH;
+  if (grain.ph > 0) h = Math.min(genH, Math.max(GRAIN_H_MIN, grain.ph * GRAIN_H_MULT));
+  const r1 = grainHash(x, z), r2 = grainHash(z, x);
+  const slack = (1 - s) * 0.55;
+  return {
+    w: genW * s, d: genD * s, h,
+    dx: (r1 - 0.5) * genW * slack,
+    dz: (r2 - 0.5) * genD * slack,
+    dRot: (r1 + r2 - 1) * GRAIN_JIT * (1 - s) / (1 - GRAIN_FLOOR),
+  };
+}
 
 export function buildWorld(scene, kit, opts = {}){
 const MAX_ANISO = opts.maxAnisotropy || 4;
@@ -4658,59 +4711,6 @@ function fabricMats(cool){
    over — outside it the island keeps its ordinary paint. */
 const SITE_YASBAY = [[-88.17,416.83],[-80.86,428.85],[-36.22,430.96],[-27.01,429.10],[25.71,396.12],
                      [23.05,383.86],[15.77,369.39],[-40.64,379.21],[-52.20,382.54]];
-
-/* LOCAL GRAIN: WHAT SIZE THE NEIGHBOURS ARE, NOT JUST WHETHER THERE ARE ANY.
-
-   cullFabric already asks the payload "is a real building near this generated one" and answers
-   with a distance. The payload has always carried w, dp and h alongside x and z, and nothing has
-   ever read them. That is the whole bug on Saadiyat: the villa estates get generated stock at the
-   grain the SUPERBLOCK chose - 30-plus metre plots laid along a street frontage - and a street
-   wall is exactly wrong where the real neighbours are 17 m detached houses.
-
-   PURE, EXPORTED AND UNIT-TESTABLE, so the decision can be argued with in the container instead
-   of inspected on a phone. Given the generated box and a summary of the real stock around it,
-   return the box it should have been, or null to leave it alone.
-
-   IT ONLY EVER SHRINKS, AND ONLY EVER INSIDE THE OLD PLAN EXTENT. Growing a box would put it
-   through a real facade that CULL_R sized the clearance for. The offset is bounded so that
-   newHalf + |offset| <= oldHalf for every s, which keeps that guarantee arithmetic rather than
-   hopeful.
-
-   SILENT WHERE THE SIGNAL IS WEAK. Fewer than GRAIN_MIN_N neighbours is noise; real stock bigger
-   than GRAIN_MAX_S is a district that genuinely builds big and must not be shrunk to villas. Al
-   Maryah and the Cultural District both fall out here and are untouched. */
-export const GRAIN_MIN_N  = 4;
-export const GRAIN_MAX_S  = 30 / 7.8;    // island units. Above this the neighbours are not villas.
-export const GRAIN_FLOOR  = 0.34;        // never shrink past a third; below that it is confetti
-export const GRAIN_H_MULT = 1.25;
-export const GRAIN_H_MIN  = 7 / 7.8;     // two storeys, so nothing becomes a slab
-const GRAIN_JIT = 5 * Math.PI / 180;
-
-/* Deterministic per-position, so a reload does not reshuffle the estate. */
-function grainHash(x, z){
-  let h = Math.imul(Math.round(x * 977) ^ Math.imul(Math.round(z * 977), 0x9E3779B1), 0x85EBCA6B);
-  h ^= h >>> 13; h = Math.imul(h, 0xC2B2AE35); h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-
-export function grainFit(genW, genD, genH, grain, x, z){
-  if (!grain || grain.n < GRAIN_MIN_N || !(grain.pw > 0)) return null;
-  if (grain.pw > GRAIN_MAX_S) return null;
-  const genPlan = (genW + genD) / 2;
-  if (!(genPlan > grain.pw)) return null;              // neighbours are bigger; nothing to do
-  const s = Math.max(GRAIN_FLOOR, grain.pw / genPlan);
-  if (s > 0.94) return null;                           // within noise, not worth a recompose
-  let h = genH;
-  if (grain.ph > 0) h = Math.min(genH, Math.max(GRAIN_H_MIN, grain.ph * GRAIN_H_MULT));
-  const r1 = grainHash(x, z), r2 = grainHash(z, x);
-  const slack = (1 - s) * 0.55;
-  return {
-    w: genW * s, d: genD * s, h,
-    dx: (r1 - 0.5) * genW * slack,
-    dz: (r2 - 0.5) * genD * slack,
-    dRot: (r1 + r2 - 1) * GRAIN_JIT * (1 - s) / (1 - GRAIN_FLOOR),
-  };
-}
 
 function urbanFabric(d, layer, opts){
   const { coreX = 0, coreZ = 0, tallest, innerHole = 0, cool = false,
