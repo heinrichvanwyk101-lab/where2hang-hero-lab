@@ -98,7 +98,7 @@ export const GEN_TALLEST = {
      the Cultural District — and the villa carpet is brought down by lowRise blobs on the district
      entry, which is the mechanism that already exists for exactly this and which Saadiyat was the
      only island never to use. */
-  saadiyat:  5,   //  39 m — the Cultural District. Villas handled by villaAt, not by this.
+  saadiyat:  5,   //  39 m — the Cultural District. Villas come from villaAt, not from this.
   yas:      14,   // 109 m  (was 18 = 140 m against a real ~105 m)
   lulu:      0,
 };
