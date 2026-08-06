@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v153';
+export const BUILD = 'world v154';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5671,13 +5671,19 @@ function groundFeaturesFor(d, feats){
                    sat six metres inside it and vanished behind the mass at any oblique angle.
                    Raised to sit on the deck it belongs to.
 
+       POSITION STAYS AT THE ORIGINAL PIN, -21.9 / 390.6. Converting the seven pins through the
+       bake-to-island offset put it at -14.5 / 413.1, which is SEAWARD of the Cafe del Mar lagoon
+       pool at 405.3 — and the courtyard basin is inland of that lagoon, not outside it. So the
+       offset used for that conversion is wrong somewhere, and the pin that was already here is
+       right. The pins still fix the size and the direction, which do not depend on the offset.
+
        STILL A RECTANGLE, AND THAT IS THE REMAINING FAULT. The trace shows a broad inland head with
        a notch, narrowing to a leg — a free-form outline, like the lagoon pool below it. Both want
        shape geometry rather than PlaneGeometry, which is a change to this loop and not to a number
        in it, so it is left visible here rather than half-done. */
     const SHORE_TH = -0.2967, HOTEL_TH = -0.2374;
     const DECK_Y = 7.4 / M_PER_UNIT;
-    for (const [px, pz, w, h, th, y] of [[-14.5, 413.1, 30, 47, HOTEL_TH, DECK_Y],
+    for (const [px, pz, w, h, th, y] of [[-21.9, 390.6, 30, 47, HOTEL_TH, DECK_Y],
                                          [-18.8, 405.3, 80, 46, SHORE_TH, 0.032]]){
       const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
       pm.rotation.x = -Math.PI / 2; pm.rotation.z = -th;
