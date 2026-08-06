@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v152';
+export const BUILD = 'world v153';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5659,10 +5659,25 @@ function groundFeaturesFor(d, feats){
     bar.position.set(-19.9, GROUND + 2.5 / M_PER_UNIT, 399.0);
     g.add(tagGround(bar, barMat));
 
-    /* The pool, on its own twice-confirmed pin, sitting on the deck rather than on the ground.
-       Enlarged to 80 x 46 m: the render shows it filling most of the peninsula, not a lap strip. */
+    /* THE COURTYARD POOL, ON SEVEN PINS, AND IT WAS WRONG THREE WAYS.
+
+       It read 64 x 22 m at y 0.010. Seven pins dropped around the basin bound it at 30 across by
+       47 long, centred at bake (18362.6, -3452.5) — island (-14.5, 413.1). So:
+
+         SIZE      64 x 22 -> 30 x 47. Not a refinement; the old figures were a guess.
+         DIRECTION the long axis runs SEAWARD, across the building, not along it. Swapping w and h
+                   is the whole fix, and it is why the pool read as a bar lying the wrong way.
+         HEIGHT    0.010 units is 8 cm above ground, and the hotel podium is a 7.2 m deck. The pool
+                   sat six metres inside it and vanished behind the mass at any oblique angle.
+                   Raised to sit on the deck it belongs to.
+
+       STILL A RECTANGLE, AND THAT IS THE REMAINING FAULT. The trace shows a broad inland head with
+       a notch, narrowing to a leg — a free-form outline, like the lagoon pool below it. Both want
+       shape geometry rather than PlaneGeometry, which is a change to this loop and not to a number
+       in it, so it is left visible here rather than half-done. */
     const SHORE_TH = -0.2967, HOTEL_TH = -0.2374;
-    for (const [px, pz, w, h, th, y] of [[-21.9, 390.6, 64, 22, HOTEL_TH, 0.010],
+    const DECK_Y = 7.4 / M_PER_UNIT;
+    for (const [px, pz, w, h, th, y] of [[-14.5, 413.1, 30, 47, HOTEL_TH, DECK_Y],
                                          [-18.8, 405.3, 80, 46, SHORE_TH, 0.032]]){
       const pm = new THREE.Mesh(new THREE.PlaneGeometry(w / M_PER_UNIT, h / M_PER_UNIT), wat.base);
       pm.rotation.x = -Math.PI / 2; pm.rotation.z = -th;
