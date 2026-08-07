@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v170';
+export const BUILD = 'world v171';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4838,6 +4838,10 @@ function urbanFabric(d, layer, opts){
      Saadiyat Lagoons runs roughly 17 m frontages on 20 m plots in parallel ranks with a service
      lane behind each pair. The superblock's own numbers — 22 to 34 m fronts on a 26 m depth — are
      a Gulf apartment plot and produce the block this generator has always produced. */
+  /* GOLF AND THE LARGE PARKS, AS POLYGONS, RESOLVED ONCE PER ISLAND RATHER THAN PER PLOT.
+     Guarded: a cached w2h-districts.js without greenAt builds exactly as before. */
+  const GREEN = (DIS && DIS.greenAt) ? ((nx, ny) => DIS.greenAt(d.id, nx, ny)) : (() => false);
+
   const VF = roadW(d, 17), VD = roadW(d, 20), VL = roadW(d, 9);
 
   /* THE BLOCK CORE IS EMPTY, AND ON A VILLA ISLAND THAT IS THE WHOLE BUG.
@@ -4895,6 +4899,7 @@ function urbanFabric(d, layer, opts){
             if (avoid && inAvoid(d, jx, jy, VD * 0.5)) continue;
             if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
             if (onRoad(d, jx, jy, VD)) continue;
+            if (GREEN(jx, jy)) continue;             // the fairway is not a plot
             if (rnd() > 0.94) continue;              // fewer gaps than a tower block; estates are full
             if (VAC_ON && DIS && DIS.vacantAt(d.id, jx, jy)) continue;
             used = true;
@@ -4928,7 +4933,13 @@ function urbanFabric(d, layer, opts){
           if (distToOutline(d.id, jx, jy) < COAST_CLEAR + plotDN * 0.6) continue;
           if (avoid && inAvoid(d, jx, jy, plotDN * 0.5)) continue;
           if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
-          if (onRoad(d, jx, jy, plotDN)) continue;      // THE ROAD STILL WINS, as a backstop
+          if (onRoad(d, jx, jy, plotDN)) continue;
+        /* AND THE PERIMETER PATH TOO, WHICH IS WHERE THE HOUSES ON THE GOLF COURSE CAME FROM.
+           Removing golf from VILLA_MASK stopped the villa BRANCH building there and changed
+           nothing on screen, because those buildings were never villa-branch buildings: an
+           ordinary block comes out under 12 m against Saadiyat's 39 m ceiling and anything under
+           12 m is handed a clay roof. Both branches need the test; one of them is not a fix. */
+        if (GREEN(jx, jy)) continue;      // THE ROAD STILL WINS, as a backstop
           if (rnd() > 0.90) continue;                   // the occasional cleared plot
           /* PLATTED AND EMPTY. Deterministic in (id, jx, jy) and consumes no random numbers, so
              mass and detail take the same branch and stay the same city — the contract at line
