@@ -302,49 +302,54 @@ function calibrate(v){
 
 
 
+
 /* ---------------------------------------------------------------------------------------------
    THE VILLA MASK — WHERE HOUSES ACTUALLY STAND, TAKEN FROM THE BAKE AND NOT FROM A CIRCLE.
 
    urbanFabric decides land use before a single real footprint has loaded — the prefetch race — so
-   the estates were once described by hand-clustered circles on Saadiyat. Circles overshoot, miss
-   the tails, and say nothing about islands nobody clustered. This is precomputed from the baked
-   footprints and shipped as a table, the same trick vacantAt uses.
+   the estates were once described by hand-clustered circles on Saadiyat. Precomputed here from the
+   baked footprints and shipped as a table, the same trick vacantAt uses.
 
    THE FRAME IS b.x / d.r WITH THE REFITTED r — max(extent)/2/M_PER_UNIT. Corniche is 1,220 units,
    not the authored 190. Built in the authored frame this mask put two thirds of Saadiyat outside
    its own window.
 
    PER-ISLAND GRID, CONSTANT 250 m CELL. A fixed grid gives Corniche 575 m cells against Saadiyat's
-   281 because their radii differ eightfold, and at 575 m Corniche claimed more villa ground than
-   its estates occupy.
+   281 because their radii differ eightfold.
 
-   THE HEIGHT PRIOR IS PER ISLAND, AND THAT IS THE WHOLE CORRECTION IN THIS VERSION.
-
-   Only 17 to 31 per cent of footprints carry a surveyed height, so most cells must assume one. The
-   first version assumed 6.4 m everywhere — Saadiyat's median — and it was catastrophic on
+   THE HEIGHT PRIOR IS PER ISLAND. Only 17 to 31 per cent of footprints carry a surveyed height, so
+   most cells must assume one. Assuming 6.4 m everywhere — Saadiyat's median — was catastrophic on
    Corniche, where 860 cells covering 54 km2 were capped at 11 m and a mid-rise city rendered as a
-   flat carpet with a few towers standing in it.
-
-   The measured evidence says why. Of footprints under 800 m2 with a surveyed height:
+   flat carpet. Of footprints under 800 m2 WITH a surveyed height:
 
        Saadiyat   401 measured, median  6.4 m,  5% over 12 m   -> houses
        Corniche  2560 measured, median 22.4 m, 75% over 12 m   -> apartment blocks
 
-   A small footprint is a VILLA on Saadiyat and a MID-RISE BLOCK on Corniche, and no global
-   constant can express that. So each island's unmeasured stock is assumed to be whatever its own
-   measured small stock actually is. Corniche falls from 54 km2 to 2.0.
+   A small footprint is a villa on Saadiyat and a mid-rise block on Corniche. An island with fewer
+   than ten measured small footprints gets NO prior and its cells need two measured heights of their
+   own. Yas, Reem and Maryah all fail that and come out at zero or one cell, correctly: Reem is
+   towers, and Yas has 3,803 real footprints already doing the work.
 
-   AN ISLAND WITH FEWER THAN TEN MEASURED SMALL FOOTPRINTS GETS NO PRIOR AT ALL, and its cells need
-   two measured heights of their own or they stay unknown. Yas, Reem and Maryah all fail that test
-   and come out at zero or one cell — correct in every case. Reem is towers and was showing villas;
-   Yas is villas but has 3,803 REAL footprints already doing the work and needs no generated ranks.
+   GREEN IS SUBTRACTED LAST, AND IT HAD TO BE ADDED.
 
-   0 MEANS NO AND ALSO MEANS DO NOT KNOW, deliberately merged: an unsurveyed cell keeps the
-   perimeter block it has always had. ONE DILATION PASS INTO UNKNOWN CELLS ONLY.
+   The villa branch checks coast, avoid list, inner hole, roads and vacancy — and nothing about
+   parks or golf, because the golf rings load on the SAME async path as the footprints and
+   urbanFabric cannot see them either. So Saadiyat grew ranks of clay-roofed houses across the
+   Saadiyat Beach golf course, which sits in the middle of the estate band and was therefore
+   surrounded by villa cells on every side.
+
+   Same answer as the rest of this table: precompute it. A villa cell is dropped if its CENTRE OR
+   ANY OF ITS FOUR CORNERS falls inside a golf ring or a park over 40,000 m2. Corners as well as
+   centre because a cell that merely clips the green still puts houses on it, and the conservative
+   error — a slightly smaller estate — is invisible where the other one is not. 24 cells go on
+   Saadiyat, 1.5 km2, and the island drops from 7.6 km2 of villa ground to 6.1.
+
+   0 MEANS NO AND ALSO MEANS DO NOT KNOW. ONE DILATION PASS INTO UNKNOWN CELLS ONLY, BEFORE the
+   green subtraction, so dilation can never put a house back onto the fairway.
    --------------------------------------------------------------------------------------------- */
 export const VILLA_LO = -1.45, VILLA_HI = 1.45;
 export const VILLA_MASK = {
-  /* corniche: N=110, cell 251 m, prior 22.4, 31 villa cells, 2.0 km2 */
+  /* corniche: N=110, cell 251 m, prior 22.4, 30 villa cells, 1.9 km2, 1 dropped on green */
   corniche: [
     '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
@@ -389,7 +394,7 @@ export const VILLA_MASK = {
     '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000',
-    '00000000000000000000000000000000000000000000000000110110000000000000000000000000000000000000000000000000000000',
+    '00000000000000000000000000000000000000000000000000010110000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000000001110000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000110001100000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000010011000000000000000000000000000000000000000000000000000000000',
@@ -457,7 +462,7 @@ export const VILLA_MASK = {
     '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
   ],
-  /* maryah: N=16, cell 221 m, prior none, 0 villa cells, 0.0 km2 */
+  /* maryah: N=16, cell 221 m, prior none, 0 villa cells, 0.0 km2, 0 dropped on green */
   maryah: [
     '0000000000000000',
     '0000000000000000',
@@ -476,7 +481,7 @@ export const VILLA_MASK = {
     '0000000000000000',
     '0000000000000000',
   ],
-  /* reem: N=21, cell 248 m, prior none, 0 villa cells, 0.0 km2 */
+  /* reem: N=21, cell 248 m, prior none, 0 villa cells, 0.0 km2, 0 dropped on green */
   reem: [
     '000000000000000000000',
     '000000000000000000000',
@@ -500,7 +505,7 @@ export const VILLA_MASK = {
     '000000000000000000000',
     '000000000000000000000',
   ],
-  /* saadiyat: N=54, cell 250 m, prior 6.4, 122 villa cells, 7.6 km2 */
+  /* saadiyat: N=54, cell 250 m, prior 6.4, 98 villa cells, 6.1 km2, 24 dropped on green */
   saadiyat: [
     '000000000000000000000000000000000000000000000000000000',
     '000000000000000000000000000000000000000000000000000000',
@@ -524,14 +529,14 @@ export const VILLA_MASK = {
     '000000000000000000000000000000000000000000000000000000',
     '000000000000011010001111001000000000000000000000000000',
     '000000000000000110010111100000000000000000000000000000',
-    '000000000000100000111111111000000000000000000000000000',
-    '000000000001001001111111110100000000000000000000000000',
-    '000000000000000000100011001001000000000000000000000000',
-    '000000000000000000000000111011100000000000000000000000',
-    '000000000000000000000000011001111100000000000000000000',
-    '000000000000000000000000000100111110000000000000000000',
-    '000000000000000000000000000000011111000000000000000000',
-    '000000000000000000000000000000001110000000000000000000',
+    '000000000000100000111101000000000000000000000000000000',
+    '000000000001001001110010000100000000000000000000000000',
+    '000000000000000000100010000001000000000000000000000000',
+    '000000000000000000000000100000100000000000000000000000',
+    '000000000000000000000000011000011100000000000000000000',
+    '000000000000000000000000000000000110000000000000000000',
+    '000000000000000000000000000000000111000000000000000000',
+    '000000000000000000000000000000000110000000000000000000',
     '000000000000000000000000000000001110000000000000000000',
     '000000000000000000000000000000001110000000000000000000',
     '000000000000000000000000000000000111000000000000000000',
@@ -557,7 +562,7 @@ export const VILLA_MASK = {
     '000000000000000000000000000000000000000000000000000000',
     '000000000000000000000000000000000000000000000000000000',
   ],
-  /* yas: N=43, cell 247 m, prior none, 1 villa cells, 0.1 km2 */
+  /* yas: N=43, cell 247 m, prior none, 1 villa cells, 0.1 km2, 0 dropped on green */
   yas: [
     '0000000000000000000000000000000000000000000',
     '0000000000000000000000000000000000000000000',
@@ -605,7 +610,6 @@ export const VILLA_MASK = {
   ],
 };
 
-/* nx, ny are the island-normalised coordinates urbanFabric and vacantAt already work in. */
 export function villaAt(id, nx, ny){
   const g = VILLA_MASK[id];
   if (!g) return false;
