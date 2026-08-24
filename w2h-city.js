@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v44';
+export const BUILD = 'city v45';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1847,12 +1847,18 @@ function grandMosque(x0, z0){
      scale rather than a fraction of it; four mid domes stepping down behind them so the roof
      reads as a field rather than three balls in a row; two domed turrets at the hall's own front
      corners, distinct from the four tall minarets at the plan's outer corners. */
-  const hallH = AH * 2.0;
-  dome(0, southZ, MAIN_R, hallH + MAIN_R * 1.7, hallH);
-  dome(-MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
-  dome( MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
+  /* southZ IS ABSOLUTE — z0 + (COURT+WING)/2 — AND dome() ADDS z0 ITSELF (z0 + dz). Passed
+     straight through, that double-counts z0: invisible at the bench's z0=0, where 0+southZ and
+     southZ-z0 give the same number, and wrong by z0 itself — nearly 900 units, at the real anchor.
+     The turret and parapet dome calls already subtract z0 correctly a few lines below; these four
+     did not, which is why the whole main cluster rendered off in open water on the live site while
+     the bench, tested only at the origin, never could have shown it. sZ is that correction. */
+  const hallH = AH * 2.0, sZ = southZ - z0;
+  dome(0, sZ, MAIN_R, hallH + MAIN_R * 1.7, hallH);
+  dome(-MAIN_R * 1.55, sZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
+  dome( MAIN_R * 1.55, sZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
   [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
-    dome(sx * MAIN_R * 2.7, southZ + sz * HALL * 0.28, MID_R, hallH + MID_R * 1.4, hallH);
+    dome(sx * MAIN_R * 2.7, sZ + sz * HALL * 0.28, MID_R, hallH + MID_R * 1.4, hallH);
   });
   [-1, 1].forEach(sgn => {
     const tx = sgn * (PLAN / 2 - WING * 0.7), tz = southZ + HALL / 2 - WING * 0.6;
@@ -1898,8 +1904,16 @@ function grandMosque(x0, z0){
     const spike = new THREE.Mesh(new THREE.ConeGeometry(w * 0.05, MH * 0.03, 6), glow);
     spike.position.set(x0 + dx, BASE_Y + y + MH * 0.015, z0 + dz); g.add(spike);
   }
+  /* SAME BUG AS THE DOME CLUSTER, IN A FUNCTION I DID NOT CHECK WHEN I FIXED THAT ONE. mNz and
+     mSz are both absolute z-coordinates — mNz starts from z0, mSz starts from southZ, which is
+     itself z0-based — and minaret() adds z0 again internally, same as dome() did. Two north
+     minarets landed near z0's own offset short of where they should be and two south minarets
+     landed nearly z0 short past southZ; at the bench's z0=0 both errors vanish, which is why
+     four full minarets were missing from the live site with nothing showing in an isolated test
+     built at the origin. Subtracting z0 here matches the correction already applied to the dome
+     calls a few lines above. */
   const mcx = PLAN / 2 - INSET;
-  const mNz = z0 - (COURT + WING) / 2 + INSET, mSz = southZ + HALL / 2 - INSET;
+  const mNz = (z0 - (COURT + WING) / 2 + INSET) - z0, mSz = (southZ + HALL / 2 - INSET) - z0;
   [[-mcx, mNz], [mcx, mNz], [-mcx, mSz], [mcx, mSz]].forEach(([dx, dz]) => minaret(dx, dz));
 
   [-1, 1].forEach(sgn => {
