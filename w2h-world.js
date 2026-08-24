@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v171';
+export const BUILD = 'world v173';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4910,6 +4910,58 @@ function urbanFabric(d, layer, opts){
         continue;
       }
 
+      /* ---------- THE CORE, WHICH HAS ALWAYS BEEN NOTHING ----------
+
+         A ring of plots one plotDepth deep around a superblock leaves the middle empty, and the
+         middle is large: 228 x 148 m on Saadiyat, 3.4 hectares, 132 x 62 on Corniche, 140 x 40 on
+         Al Maryah. In plan that void is the black rectangle with a fine fringe of buildings round
+         it that has been in every screenshot since the footprint import. No city block is hollow.
+         A real one has a car park, a service yard, a courtyard, some back-of-house sheds — and
+         crucially it has SOMETHING, so the eye reads a block rather than a hole.
+
+         BACK-OF-HOUSE, NOT MORE STREET FRONTAGE. What goes in a core is not another row of the
+         same buildings: it is lower, smaller, plainer and more loosely spaced than anything on the
+         perimeter. A grid of low boxes at a quarter to a third of the block's ceiling, with gaps,
+         which is what a service yard looks like from 400 m up.
+
+         SKIPPED ENTIRELY WHERE THE CORE IS SMALL. Below CORE_MIN in either direction there is no
+         room for anything but the ring, and filling it would close a courtyard that should stay
+         open. Yas's 420 x 300 block with 140 m plots has a core of 140 x 20 and takes nothing.
+
+         EVERY GUARD THE PERIMETER USES, IN THE SAME ORDER, and the vacancy mask last so it
+         consumes no random numbers and mass and detail take the same branch. */
+      if (!villaHere(bcx, bcy)){
+        const cu0 = u0 + plotDN, cu1 = u1 - plotDN;
+        const cv0 = v0 + plotDN, cv1 = v1 - plotDN;
+        const CORE_MIN = roadW(d, 55);
+        if (cu1 - cu0 > CORE_MIN && cv1 - cv0 > CORE_MIN){
+          /* Sized off the block's own plot depth rather than a constant, so a district with big
+             plots gets big outbuildings and Corniche's fine grain stays fine. */
+          const bw = plotDN * 0.42, gap = plotDN * 0.26;
+          const nu = Math.max(1, Math.floor((cu1 - cu0) / (bw + gap)));
+          const nv = Math.max(1, Math.floor((cv1 - cv0) / (bw + gap)));
+          const su = (cu1 - cu0) / nu, sv = (cv1 - cv0) / nv;
+          for (let a = 0; a < nu; a++) for (let b = 0; b < nv; b++){
+            const u = cu0 + (a + 0.5) * su, v = cv0 + (b + 0.5) * sv;
+            const [jx, jy] = toWorldN(u, v);
+            if (!insideIsle(d.id, jx, jy)) continue;
+            if (distToOutline(d.id, jx, jy) < COAST_CLEAR + plotDN * 0.6) continue;
+            if (avoid && inAvoid(d, jx, jy, plotDN * 0.5)) continue;
+            if (innerHole > 0 && Math.hypot(jx, jy) < innerHole) continue;
+            if (onRoad(d, jx, jy, plotDN * 0.6)) continue;
+            if (GREEN(jx, jy)) continue;
+            /* HALF THE CORE IS OPEN GROUND. A yard that is fully built is just a second block;
+               the gaps are what make it read as back-of-house. */
+            if (rnd() > 0.52) continue;
+            if (VAC_ON && DIS && DIS.vacantAt(d.id, jx, jy)) continue;
+            used = true;
+            cells.push({ jx, jy, rot:th,
+                         wN:su * 0.74, dN:sv * 0.74,
+                         w:su * 0.74 * d.r, dp:sv * 0.74 * d.r, core:true });
+          }
+        }
+      }
+
       /* Each of the four frontages, laid as a run of plots. side 0 and 2 face along u, 1 and 3
          along v; the building's long axis follows the street it fronts, which is why the
          rotation differs by a quarter turn between the two pairs. */
@@ -4969,12 +5021,24 @@ function urbanFabric(d, layer, opts){
      separately. This is why the three lowRise circles on Saadiyat could be deleted: they were
      doing this job for three estates, and the mask does it for every estate on every island. */
   const VILLA_CAP = 11 / M_PER_UNIT;
+  const CORE_FLOOR = 7 / M_PER_UNIT, CORE_ABS = 16 / M_PER_UNIT;
+  const coreCap = cap => Math.max(CORE_FLOOR, Math.min(CORE_ABS, cap * 0.32));
   const specs = cells.map(c => buildingSpec(rnd, {
     jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r, rot:c.rot,
     plotW:c.w, plotD:c.dp, tallest,
-    capH:  c.vil ? Math.min(cap, VILLA_CAP) : cap,
-    softH: c.vil ? Math.min(cellCap(d, c.jx, c.jy, cap), VILLA_CAP)
-                 : cellCap(d, c.jx, c.jy, cap),
+    /* CORE_CAP is a FRACTION of the island ceiling, not a fixed height, because back-of-house is
+       relative: a service block behind a Corniche tower is taller than a whole villa. A third,
+       floored at two storeys so nothing becomes a slab. */
+    /* A FRACTION OF THE ISLAND CEILING, AND THEN AN ABSOLUTE LID. Back-of-house is relative — a
+       service block behind a Corniche tower is taller than a whole villa — but the fraction alone
+       is not enough: a third of Al Reem's 296 m ceiling is 95 m, which is a tower standing in a
+       service yard. CORE_ABS is what a yard actually contains: sheds, plant, a car park deck,
+       three or four storeys. Floored at two so nothing becomes a slab. */
+    capH:  c.vil  ? Math.min(cap, VILLA_CAP)
+         : c.core ? coreCap(cap) : cap,
+    softH: c.vil  ? Math.min(cellCap(d, c.jx, c.jy, cap), VILLA_CAP)
+         : c.core ? Math.min(coreCap(cap), Math.max(CORE_FLOOR, cellCap(d, c.jx, c.jy, cap)))
+                  : cellCap(d, c.jx, c.jy, cap),
     coreX, coreZ }));
 
   /* ---------- PASS 3: TALLY, ALLOCATE, EMIT ----------
