@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v50';
+export const BUILD = 'city v52';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1943,6 +1943,60 @@ function grandMosque(x0, z0){
      parking. What's left below is the building itself — platform, courtyard, hall, minarets,
      domes, and the two reflecting pools that are part of the hall's own wings — nothing that
      was guessed at precinct scale. */
+
+  /* REAL PRECINCT DATA, TWO LAYERS, BOTH FROM geojson.io TRACES ON SATELLITE IMAGERY.
+
+     Same conversion for both: tools/bake-city.mjs's shared-origin equirectangular projector
+     (lat0/lon0 = 24.49/54.42), Corniche's own extent.cx/cy from data/index.json, and the scene's
+     M_PER_UNIT = 7.8 — the codebase's own documented pipeline, not a guess. Checked against a
+     traced polygon of the building itself before being trusted: that one's centroid landed at
+     (1050.8, 804.9) against the tap-verified anchor of (1051, 804), under a unit of error, no
+     correction factor needed anywhere.
+
+     THE SHAPE-TO-GROUND ROTATION FLIPS NORTH-SOUTH BY DEFAULT. THREE.Shape builds in its own XY
+     plane; rotateX(-PI/2) to lay it flat sends shape-Y to WORLD -Z, not +Z, verified directly
+     against THREE.Geometry's own math before trusting it, not assumed. Every offset below has
+     its dz term negated at the Vector2 stage for exactly that reason — leave that out and the
+     whole precinct mirrors across the building's east-west axis. */
+  function tracedGround(offsets, mat, y){
+    const shape = new THREE.Shape(offsets.map(([dx, dz]) => new THREE.Vector2(dx, -dz)));
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x0, y, z0);
+    g.add(mesh);
+  }
+
+  /* LAYER 1 — THE SITE BOUNDARY. The developed area's outer edge, out to the surrounding roads.
+     Runs mostly west and north of the building, which is real, not an artifact: it is the edge
+     of the whole compound relative to where the building sits within it, not a shape centred on
+     the mosque. Says nothing about what's inside it — that's layer 2. */
+  tracedGround([
+    [34.29,-66.25],[11.84,-76.84],[11.43,-76.85],[-9.22,-75.87],[-9.77,-76.29],
+    [-31.05,-62.68],[-31.52,-62.9],[-48.53,-56.03],[-48.8,-56.2],[-30.86,1.57],
+    [-30.96,1.27],[-42.25,63.36],[-42.67,63.21],[10.68,78.38],[10.31,78.28],
+    [25.46,75.48],[25.37,74.93],[37.63,64.0],[37.63,63.77],[45.07,43.3],[44.88,43.12],
+  ], paving, BASE_Y + 0.015);
+
+  /* LAYER 2 — HARDSCAPE AND GARDENS. The closer, organic boundary hugging the building on three
+     sides — the ornamental paving and planting immediately around the mosque, inside the site
+     edge above. A slightly higher paving layer for now, distinguishing it from raw site ground
+     until planting detail arrives as its own pass. */
+  tracedGround([
+    [26.31,21.41],[-0.87,28.69],[-0.89,28.65],[-9.34,35.04],[-9.57,35.02],
+    [-20.25,35.22],[-20.57,35.02],[-25.97,31.98],[-26.07,31.84],[-31.43,24.22],
+    [-31.56,24.02],[-26.61,14.87],[-26.64,14.75],[-25.02,5.05],[-25.2,4.91],
+    [-27.4,-2.31],[-27.51,-2.62],[-25.39,-9.19],[-25.49,-8.99],[-24.49,-14.07],
+    [-24.62,-14.2],[-31.37,-19.83],[-31.56,-19.99],[-29.36,-26.48],[-29.54,-26.65],
+    [-22.05,-26.77],[-22.3,-26.94],[-12.25,-23.95],[-12.47,-24.05],[-2.08,-24.95],
+    [-2.34,-25.21],[8.88,-26.13],[8.66,-26.36],[16.14,-29.3],[15.89,-29.26],
+    [13.44,-47.0],[13.29,-47.21],[17.41,-51.06],[17.34,-51.27],[29.85,-53.89],
+    [29.78,-53.87],[36.42,-8.72],[36.15,-8.99],[20.0,-5.01],[19.95,-5.23],
+    [14.87,-3.48],[14.74,-3.49],[15.98,1.28],[15.89,1.14],[33.46,-2.42],
+    [33.26,-2.62],[37.75,-2.31],[37.6,-2.62],[37.91,9.93],[37.89,9.83],
+    [30.97,12.75],[30.94,12.72],[25.09,13.81],[24.86,13.59],
+  ], paving, BASE_Y + 0.02);
+
   return g;
 }
 
