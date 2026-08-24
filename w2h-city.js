@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v42';
+export const BUILD = 'city v43';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1726,76 +1726,92 @@ function lowRise(count, xMin, xMax, z, zJit, em){
    dome cluster and stands taller than the other three, which stay at the base arcade height. */
 function grandMosque(x0, z0){
   const g = new THREE.Group();
+  /* PALER THROUGHOUT, ON PURPOSE. The first version's stone sat close to the fabric's own warm
+     render tone and disappeared into it in a dusk screenshot. This is white marble, not sandstone
+     — cooler and paler than anything else on the island, the same separating logic the palace
+     uses in the other direction (warm where the fabric is pale, this building goes pale where the
+     fabric is warm). */
   const stone = new THREE.MeshStandardMaterial({
-    color:0x161613, roughness:0.85, metalness:0.02, emissive:0xDDDDD6, emissiveIntensity:0.045 });
-  stone.userData.duskColor = 0xE4E1D6;
-  stone.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEDEBE4, roughness:0.85 });
+    color:0x18181A, roughness:0.8, metalness:0.02, emissive:0xE8E8EA, emissiveIntensity:0.05 });
+  stone.userData.duskColor = 0xEDEDEE;
+  stone.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF4F4F2, roughness:0.8 });
   const arch = new THREE.MeshStandardMaterial({
-    color:0x1B1A16, roughness:0.82, emissive:0xEDEBE4, emissiveIntensity:0.09 });
-  arch.userData.duskColor = 0xF0EEE6;
-  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF6F4EC, roughness:0.82 });
+    color:0x1C1C1E, roughness:0.78, emissive:0xF0F0EE, emissiveIntensity:0.10 });
+  arch.userData.duskColor = 0xF4F3EE;
+  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF9F8F4, roughness:0.78 });
   const glow = new THREE.MeshStandardMaterial({
     color:0x241E0E, roughness:0.6, emissive:0xE8B547, emissiveIntensity:0.36 });
   glow.userData.duskColor = 0xF6E2A8;
   glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF3E0A6, roughness:0.6 });
+  const paving = new THREE.MeshStandardMaterial({
+    color:0x242220, roughness:0.75, emissive:0xEAE6DA, emissiveIntensity:0.13 });
+  paving.userData.duskColor = 0xE6E1D2;
+  paving.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xECE7DA, roughness:0.75 });
   const pool = new THREE.MeshStandardMaterial({
     color:0x0C2A33, roughness:0.25, metalness:0.1, emissive:0x1E5866, emissiveIntensity:0.20 });
   pool.userData.duskColor = 0x3E97A8;
   pool.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x4FA9BC, roughness:0.2 });
-  /* PAVING, NOT ARCH. The courtyard floor was sharing the arcade's nearly-black material — the
-     right choice for a shadowed recess under an arch, the wrong one for the single largest
-     visible surface in the whole complex. A recessed floor under a raking sun reads as a void
-     whatever colour it is, so it needs to start pale enough that shadow lands on stone, not on
-     black. */
-  const paving = new THREE.MeshStandardMaterial({
-    color:0x232019, roughness:0.8, emissive:0xD8D2C0, emissiveIntensity:0.11 });
-  paving.userData.duskColor = 0xDCD6C6;
-  paving.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE2DCCC, roughness:0.8 });
 
+  /* REBUILT AGAINST THE ORBIT SET DIRECTLY, not against the first pass's proportions. Three
+     things the first version had wrong, each visible in every reference frame at once:
+
+     THE DOME CLUSTER COVERS MOST OF THE PRAYER HALL ROOF. Not three domes — a big central dome,
+     two large flanks nearly its own size, four more at a smaller grade, and two domed corner
+     turrets bracketing the whole cluster. It reads as a field of domes, not an accent.
+
+     THE MINARETS ARE NEEDLES. Real proportion is close to 30 diameters tall; the first pass built
+     them at 13, which reads as a squat post with a pointed cap rather than a tower. Thinned hard.
+
+     THE PRAYER HALL IS A DEEP BLOCK, NOT A FRAME THE SAME THICKNESS AS THE OTHER THREE SIDES. The
+     plan view shows it roughly as deep as the courtyard is wide — a real mass with its own
+     corners, not a colonnade matching the north wing's thickness. The footprint is no longer
+     square because of this; the real building's isn't either. */
   const AH   = 2.0;
-  const PLAN = AH * 19.0;
-  const COURT = AH * 9.5;
-  const WING = (PLAN - COURT) / 2;
-  const MH   = AH * 4.86;
+  const PLAN = AH * 19.0;               // 38.0 — east-west width, unchanged
+  const COURT = AH * 9.5;               // 19.0 — the open sahn
+  const WING = (PLAN - COURT) / 2;      // 9.5  — north / east / west thickness
+  const HALL = AH * 8.4;                // 16.8 — prayer hall depth, nearly the courtyard's width
+
+  const MH   = AH * 7.2;                // 14.4 — taller than the first pass, needle-proportioned
+  const MW   = MH * 0.040;              // ~30:1 height to width — the real minaret's own ratio
   const INSET = AH * 0.9;
-  const DOME_H = AH * 3.86;
-  const DOME_R = AH * 1.49 / 2;
-  const FLANK_R = DOME_R * 0.62;
-  const SMALL_R = DOME_R * 0.22;
 
-  /* EVERYTHING STANDS ON A DATUM, NOT ON y = 0 DIRECTLY.
+  const MAIN_R  = AH * 1.9;             // main dome, larger and the visual anchor
+  const FLANK_R = MAIN_R * 0.74;        // two large flanks, close to the main in scale
+  const MID_R   = MAIN_R * 0.40;        // four mid domes filling the cluster
+  const TURRET_R = MAIN_R * 0.30;       // two domed corner turrets on the hall itself
+  const SMALL_R = MAIN_R * 0.15;        // arcade parapet rhythm
 
-     The platform is 0.3 units thick. The first version put every wing's bottom at y = 0 — half
-     of each wing was buried inside the platform rather than resting on it, and the near-coplanar
-     interpenetrating surfaces produced the crossing dark triangles across the courtyard: not a
-     missing-geometry gap, z-fighting between two solids occupying the same 0-to-0.3 slice. BASE_Y
-     is the platform's top; everything above is positioned from there, and nothing is positioned
-     from bare ground again in this function. */
   const PLAT_H = 0.3, BASE_Y = PLAT_H;
+  const southZ = z0 + COURT / 2 + HALL / 2;
 
-  const plat = new THREE.Mesh(new THREE.BoxGeometry(PLAN + 3, PLAT_H, PLAN + 3), stone);
-  plat.position.set(x0, PLAT_H / 2, z0); g.add(plat);
+  const plat = new THREE.Mesh(new THREE.BoxGeometry(PLAN + 3, PLAT_H, COURT + WING + HALL + 3), stone);
+  plat.position.set(x0, PLAT_H / 2, z0 + (HALL - WING) / 2); g.add(plat);
 
-  const south = new THREE.Mesh(new THREE.BoxGeometry(PLAN, AH * 1.3, WING), stone);
-  south.position.set(x0, BASE_Y + AH * 0.65, z0 + (COURT + WING) / 2); g.add(south);
+  /* THE FRAME. South is now HALL deep, not WING — a genuinely different mass from the other
+     three, which is the point: the prayer hall is the building and the other three sides are
+     the wall that closes the courtyard round it. */
+  const south = new THREE.Mesh(new THREE.BoxGeometry(PLAN, AH * 2.0, HALL), stone);
+  south.position.set(x0, BASE_Y + AH * 1.0, southZ); g.add(south);
   const north = new THREE.Mesh(new THREE.BoxGeometry(PLAN, AH, WING), stone);
   north.position.set(x0, BASE_Y + AH * 0.5, z0 - (COURT + WING) / 2); g.add(north);
-  const east = new THREE.Mesh(new THREE.BoxGeometry(WING, AH, PLAN), stone);
-  east.position.set(x0 + (COURT + WING) / 2, BASE_Y + AH * 0.5, z0); g.add(east);
-  const west = new THREE.Mesh(new THREE.BoxGeometry(WING, AH, PLAN), stone);
-  west.position.set(x0 - (COURT + WING) / 2, BASE_Y + AH * 0.5, z0); g.add(west);
+  const eastZ0 = z0 - (COURT + WING) / 2, eastZ1 = southZ + HALL / 2;
+  const east = new THREE.Mesh(new THREE.BoxGeometry(WING, AH, eastZ1 - eastZ0), stone);
+  east.position.set(x0 + (COURT + WING) / 2, BASE_Y + AH * 0.5, (eastZ0 + eastZ1) / 2); g.add(east);
+  const west = new THREE.Mesh(new THREE.BoxGeometry(WING, AH, eastZ1 - eastZ0), stone);
+  west.position.set(x0 - (COURT + WING) / 2, BASE_Y + AH * 0.5, (eastZ0 + eastZ1) / 2); g.add(west);
 
   const yard = new THREE.Mesh(new THREE.BoxGeometry(COURT, 0.1, COURT), paving);
   yard.position.set(x0, BASE_Y + 0.05, z0); g.add(yard);
 
-  [[south, PLAN, z0 + COURT / 2 + 0.3, 'x'], [north, PLAN, z0 - COURT / 2 - 0.3, 'x'],
-   [east, COURT, x0 + COURT / 2 + 0.3, 'z'], [west, COURT, x0 - COURT / 2 - 0.3, 'z']]
-    .forEach(([, span, edge, axis]) => {
+  [[PLAN, southZ, 'x'], [PLAN, z0 - (COURT + WING) / 2, 'x'],
+   [COURT, x0 + (COURT + WING) / 2, 'z'], [COURT, x0 - (COURT + WING) / 2, 'z']]
+    .forEach(([span, edge, axis]) => {
       const n = Math.round(span / 1.6);
       for (let i = 0; i < n; i++){
         const t = (i + 0.5) / n * span - span / 2;
-        const p = new THREE.Mesh(new THREE.BoxGeometry(0.22, AH * 0.9, 0.22), arch);
-        if (axis === 'x') p.position.set(x0 + t, BASE_Y + AH * 0.45, edge);
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.22, AH * 1.6, 0.22), arch);
+        if (axis === 'x') p.position.set(x0 + t, BASE_Y + AH * 0.8, edge - WING * 0.3);
         else               p.position.set(edge, BASE_Y + AH * 0.45, z0 + t);
         g.add(p);
       }
@@ -1804,20 +1820,36 @@ function grandMosque(x0, z0){
   function dome(dx, dz, r, hy){
     const d = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI*2, 0, Math.PI/2), glow);
     d.position.set(x0 + dx, BASE_Y + hy, z0 + dz); d.userData.hero = true; g.add(d);
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.86, r*0.86, 0.6, 18), stone);
-    drum.position.set(x0 + dx, BASE_Y + hy - 0.3, z0 + dz); g.add(drum);
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.55, 8), glow);
-    fin.position.set(x0 + dx, BASE_Y + hy + r + 0.24, z0 + dz); g.add(fin);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.86, r*0.86, 0.5, 18), stone);
+    drum.position.set(x0 + dx, BASE_Y + hy - 0.25, z0 + dz); g.add(drum);
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), glow);
+    fin.position.set(x0 + dx, BASE_Y + hy + r + 0.22, z0 + dz); g.add(fin);
   }
-  const southZ = z0 + (COURT + WING) / 2;
-  dome(0, southZ - WING * 0.15, DOME_R, DOME_H - DOME_R);
-  dome(-DOME_R - FLANK_R - 0.4, southZ - WING * 0.15, FLANK_R, DOME_H * 0.78 - FLANK_R);
-  dome( DOME_R + FLANK_R + 0.4, southZ - WING * 0.15, FLANK_R, DOME_H * 0.78 - FLANK_R);
 
-  [[south, PLAN, southZ, 'x', AH * 1.3], [north, PLAN, z0 - (COURT + WING) / 2, 'x', AH],
-   [east, COURT, x0 + (COURT + WING) / 2, 'z', AH], [west, COURT, x0 - (COURT + WING) / 2, 'z', AH]]
-    .forEach(([, span, edge, axis, wh]) => {
-      const n = Math.max(4, Math.round(span / 6.5));
+  /* THE CLUSTER. Main dome centred on the hall; two large flanks either side, close to it in
+     scale rather than a fraction of it; four mid domes stepping down behind them so the roof
+     reads as a field rather than three balls in a row; two domed turrets at the hall's own front
+     corners, distinct from the four tall minarets at the plan's outer corners. */
+  const hallH = AH * 2.0;
+  dome(0, southZ, MAIN_R, hallH + MAIN_R * 1.7);
+  dome(-MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5);
+  dome( MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5);
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
+    dome(sx * MAIN_R * 2.7, southZ + sz * HALL * 0.28, MID_R, hallH + MID_R * 1.4);
+  });
+  [-1, 1].forEach(sgn => {
+    const tx = sgn * (PLAN / 2 - WING * 0.7), tz = southZ + HALL / 2 - WING * 0.6;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(TURRET_R * 1.05, TURRET_R * 1.15, AH * 1.4, 12), stone);
+    base.position.set(x0 + tx, BASE_Y + AH * 0.7, tz); g.add(base);
+    dome(tx, tz - z0, TURRET_R, AH * 1.4 + TURRET_R);
+  });
+
+  /* PARAPET RHYTHM, denser than the first pass — the reference shows the whole hall roofline
+     studded near edge to edge, and the arcade wings carry a lighter version of the same rhythm. */
+  [[PLAN, southZ, 'x', hallH], [PLAN, z0 - (COURT + WING) / 2, 'x', AH],
+   [COURT, x0 + (COURT + WING) / 2, 'z', AH], [COURT, x0 - (COURT + WING) / 2, 'z', AH]]
+    .forEach(([span, edge, axis, wh]) => {
+      const n = Math.max(6, Math.round(span / 3.2));
       for (let i = 0; i < n; i++){
         const t = (i + 0.5) / n * span - span / 2;
         const hy = wh - SMALL_R;
@@ -1826,24 +1858,29 @@ function grandMosque(x0, z0){
       }
     });
 
+  /* MINARETS — needle-thin, four times the segments' worth of height over width the first pass
+     had. Square shaft, octagonal drum, a gallery band, a cylindrical lantern, gold finial. */
   function minaret(dx, dz){
-    const w = MH * 0.075;
-    const shaftH = MH * 0.55, octH = MH * 0.25, lanternH = MH * 0.12, finH = MH * 0.08;
+    const w = MW;
+    const shaftH = MH * 0.50, octH = MH * 0.18, galleryH = MH * 0.05,
+          lanternH = MH * 0.17, finH = MH * 0.10;
+    let y = 0;
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(w, shaftH, w), stone);
-    shaft.position.set(x0 + dx, BASE_Y + shaftH / 2, z0 + dz); g.add(shaft);
+    shaft.position.set(x0 + dx, BASE_Y + y + shaftH / 2, z0 + dz); g.add(shaft); y += shaftH;
     const oct = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.46, w * 0.5, octH, 8), stone);
-    oct.position.set(x0 + dx, BASE_Y + shaftH + octH / 2, z0 + dz); g.add(oct);
-    const lantern = new THREE.Mesh(
-      new THREE.CylinderGeometry(w * 0.30, w * 0.40, lanternH, 16), arch);
-    lantern.position.set(x0 + dx, BASE_Y + shaftH + octH + lanternH / 2, z0 + dz); g.add(lantern);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.34, finH, 12), glow);
-    cap.position.set(x0 + dx, BASE_Y + shaftH + octH + lanternH + finH / 2, z0 + dz); g.add(cap);
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(w * 0.06, MH * 0.04, 6), glow);
-    spike.position.set(x0 + dx, BASE_Y + shaftH + octH + lanternH + finH + MH * 0.02, z0 + dz);
-    g.add(spike);
+    oct.position.set(x0 + dx, BASE_Y + y + octH / 2, z0 + dz); g.add(oct); y += octH;
+    const gallery = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.62, w * 0.42, galleryH, 12), arch);
+    gallery.position.set(x0 + dx, BASE_Y + y + galleryH / 2, z0 + dz); g.add(gallery); y += galleryH;
+    const lantern = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.26, w * 0.34, lanternH, 14), stone);
+    lantern.position.set(x0 + dx, BASE_Y + y + lanternH / 2, z0 + dz); g.add(lantern); y += lanternH;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.30, finH, 12), glow);
+    cap.position.set(x0 + dx, BASE_Y + y + finH / 2, z0 + dz); g.add(cap); y += finH;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(w * 0.05, MH * 0.03, 6), glow);
+    spike.position.set(x0 + dx, BASE_Y + y + MH * 0.015, z0 + dz); g.add(spike);
   }
-  const cx = PLAN / 2 - INSET;
-  [[-cx,-cx], [cx,-cx], [-cx,cx], [cx,cx]].forEach(([dx, dz]) => minaret(dx, dz));
+  const mcx = PLAN / 2 - INSET;
+  const mNz = z0 - (COURT + WING) / 2 + INSET, mSz = southZ + HALL / 2 - INSET;
+  [[-mcx, mNz], [mcx, mNz], [-mcx, mSz], [mcx, mSz]].forEach(([dx, dz]) => minaret(dx, dz));
 
   [-1, 1].forEach(sgn => {
     const p = new THREE.Mesh(new THREE.BoxGeometry(PLAN * 0.16, 0.08, WING * 0.7), pool);
