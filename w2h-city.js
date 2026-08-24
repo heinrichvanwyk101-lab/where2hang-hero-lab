@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v49';
+export const BUILD = 'city v50';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1924,65 +1924,25 @@ function grandMosque(x0, z0){
 
   /* ---------- THE PRECINCT ----------
 
-     Every aerial of this building shows the same thing surrounding it: parking on both flanks
-     that alone covers more ground than the mosque itself, formal geometric garden beds between
-     the parking and the walls, and a grand paved forecourt on the north approach — the side every
-     photograph is actually taken from, which is also why the reflecting pools sit there rather
-     than on the south.
+     Removed for now (see below) — this heading marks where the building's own geometry ends
+     and precinct-scale guesses used to begin. Left in place so a future addition lands in the
+     same spot with the same discipline: measured, not guessed. */
+  /* PRECINCT REMOVED — FORECOURT, FOUNTAIN, DRIVE, AND GARDENS.
 
-     BUILT FROM z0 AND x0 DIRECTLY, NOT FROM south/north/east/westZ. Those were the source of both
-     bugs already fixed here — absolute coordinates fed into a function that adds z0 again. Every
-     offset below is relative by construction: (something) with no z0/x0 folded in until the very
-     last position.set() call, matching the pattern the turret and parapet domes already got right. */
-  const forecourtR = PLAN * 0.62;
-  const gardenW = PLAN * 0.22;
+     The forecourt (a 47-unit paved disc) and the drive extending from it both reached well past
+     the building's own footprint and directly into where the real interchange road actually
+     sits on the basemap — confirmed by tracing the rendered shape and checking its bounds
+     against the coded geometry: the disc alone spans x:1059-1106, the drive x:1101-1134, and
+     the real road is right there too. None of that was measured from anything; it was a
+     plausible-sounding plaza that happened to collide with real infrastructure.
 
-  /* THE FORECOURT. A broad paved oval on the north approach, standing in for the plaza and
-     fountain axis every photograph leads with. */
-  const forecourt = new THREE.Mesh(
-    new THREE.CylinderGeometry(forecourtR, forecourtR, 0.06, 40), paving);
-  forecourt.position.set(x0, BASE_Y + 0.03, z0 - (COURT + WING) / 2 - forecourtR * 0.75);
-  g.add(forecourt);
-  const fountain = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.4, 0.14, 28), pool);
-  fountain.position.set(x0, BASE_Y + 0.1, z0 - (COURT + WING) / 2 - forecourtR * 0.75);
-  g.add(fountain);
-  const jet = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.8, 10), stone);
-  jet.position.set(x0, BASE_Y + 1.0, z0 - (COURT + WING) / 2 - forecourtR * 0.75);
-  g.add(jet);
-
-  /* PARKING REMOVED, DELIBERATELY. Every attempt at this from a reference photo or a screenshot
-     comparison got some part of the shape or orientation wrong — this file's history above is
-     the record of that. Heinrich is overlaying the real parking footprint directly (survey data
-     or a traced outline) rather than have me keep guessing from images. Once that lands as a
-     poly-trace or GPS corners, it gets built as an actual polygon shape here, not a rectangle
-     approximation. Until then: no parking, just the building and its immediate precinct
-     (forecourt, gardens, approach drive), which were never in question. */
-
-  /* FORMAL GARDENS, BETWEEN EACH PARKING LOT AND THE BUILDING ITSELF. Geometric parterre beds —
-     ornamental at building scale, the way the reference notes this precinct's own landscaping. */
-  function gardenStrip(sgn){
-    const cx = sgn * (PLAN / 2 + WING / 2 + gardenW / 2);
-    const cz = southZ - z0;
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(gardenW, 0.04, HALL * 0.9), arch);
-    bed.position.set(x0 + cx, BASE_Y + 0.02, z0 + cz);
-    g.add(bed);
-    const n = 5;
-    for (let i = 0; i < n; i++){
-      const t = (i + 0.5) / n * HALL * 0.9 - HALL * 0.45;
-      const shrub = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), stone);
-      shrub.position.set(x0 + cx, BASE_Y + 0.22, z0 + cz + t);
-      g.add(shrub);
-    }
-  }
-  [-1, 1].forEach(gardenStrip);
-
-  /* THE APPROACH ROAD, forecourt to the outer precinct edge — a single pale strip is enough to
-     read as the entry drive without competing with the building for attention. */
-  const drive = new THREE.Mesh(new THREE.BoxGeometry(6, 0.04, forecourtR * 1.4), paving);
-  drive.position.set(x0, BASE_Y + 0.02,
-    z0 - (COURT + WING) / 2 - forecourtR * 1.5 - forecourtR * 0.7);
-  g.add(drive);
-
+     Gardens go too, on the same logic as the parking removal: they were built as a "flank the
+     parking lot" companion piece that no longer has a lot to flank, and their own position was
+     never independently checked against a reference either. Rather than leave a second unverified
+     guess standing after the first one turned out wrong, this waits for real data same as the
+     parking. What's left below is the building itself — platform, courtyard, hall, minarets,
+     domes, and the two reflecting pools that are part of the hall's own wings — nothing that
+     was guessed at precinct scale. */
   return g;
 }
 
