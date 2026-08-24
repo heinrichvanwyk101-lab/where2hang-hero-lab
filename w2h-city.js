@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v52';
+export const BUILD = 'city v54';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1959,7 +1959,7 @@ function grandMosque(x0, z0){
      its dz term negated at the Vector2 stage for exactly that reason — leave that out and the
      whole precinct mirrors across the building's east-west axis. */
   function tracedGround(offsets, mat, y){
-    const shape = new THREE.Shape(offsets.map(([dx, dz]) => new THREE.Vector2(dx, -dz)));
+    const shape = new THREE.Shape(offsets.map(([dx, dz]) => new THREE.Vector2(dz, dx)));
     const geo = new THREE.ShapeGeometry(shape);
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, mat);
@@ -1980,8 +1980,10 @@ function grandMosque(x0, z0){
 
   /* LAYER 2 — HARDSCAPE AND GARDENS. The closer, organic boundary hugging the building on three
      sides — the ornamental paving and planting immediately around the mosque, inside the site
-     edge above. A slightly higher paving layer for now, distinguishing it from raw site ground
-     until planting detail arrives as its own pass. */
+     edge above. Given the `arch` material rather than `paving`: same material already used for
+     the (now-removed) garden beds earlier in this file — a paler, warmer cream — specifically so
+     this layer reads as visually distinct from the plainer outer site ground rather than
+     blending into it, since the two were indistinguishable on the last pass. */
   tracedGround([
     [26.31,21.41],[-0.87,28.69],[-0.89,28.65],[-9.34,35.04],[-9.57,35.02],
     [-20.25,35.22],[-20.57,35.02],[-25.97,31.98],[-26.07,31.84],[-31.43,24.22],
@@ -1995,7 +1997,7 @@ function grandMosque(x0, z0){
     [14.87,-3.48],[14.74,-3.49],[15.98,1.28],[15.89,1.14],[33.46,-2.42],
     [33.26,-2.62],[37.75,-2.31],[37.6,-2.62],[37.91,9.93],[37.89,9.83],
     [30.97,12.75],[30.94,12.72],[25.09,13.81],[24.86,13.59],
-  ], paving, BASE_Y + 0.02);
+  ], arch, BASE_Y + 0.02);
 
   return g;
 }
