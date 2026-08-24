@@ -325,7 +325,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v120', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v121', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1343,23 +1343,23 @@ function anchorWorld(d, a){
 function pickRebuildMarkers(){
   if (PICK.markers){ scene.remove(PICK.markers); }
   const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xE8B547 });
+  const mat = new THREE.MeshBasicMaterial({ color: 0xE8B547, depthTest: false });
   PICK.points.forEach(pt => {
-    /* A FIXED SIZE, NOT ONE DERIVED FROM THE ISLAND. The first version scaled the marker by
-       d.r * s — the ENTIRE island's own radius, ~1220 units for Corniche — meaning the sphere
-       came out around 73 units across, bigger than the whole mosque. An island's radius has
-       nothing to do with how big a "you are here" pin should read; a marker only needs to be
-       visible against whatever it's sitting on, which a small size scaled by the island's
-       display correction alone (s) already does consistently across islands. */
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1.4 * pt._s, 14, 10), mat);
+    /* A plain sphere at a nominal radius of 1 — the actual on-screen size is set every frame in
+       frame(), scaled by distance to camera so it holds constant regardless of zoom. This mesh's
+       own scale gets overwritten before the first render, so the geometry radius here is just a
+       stable base to scale from, not a meaningful size on its own. */
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), mat);
     m.position.set(pt._wx, pt._wy + 1, pt._wz);
+    m.renderOrder = 999;
     g.add(m);
   });
   if (PICK.mode === 'poly' && PICK.points.length > 1){
     const pts = PICK.points.map(pt => new THREE.Vector3(pt._wx, pt._wy + 1, pt._wz));
     const line = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({ color: 0xE8B547 }));
+      new THREE.LineBasicMaterial({ color: 0xE8B547, depthTest: false }));
+    line.renderOrder = 998;
     g.add(line);
   }
   scene.add(g);
@@ -3496,6 +3496,32 @@ function frame(){
      visible lurch in the horizon during a flight. Position only — rotating it with the camera
      would drag the horizon line around with the yaw. */
   if (skyDome.visible) skyDome.position.copy(camera.position);
+
+  /* PICK MARKERS RESCALED HERE, EVERY FRAME, RATHER THAN LEFT AT A FIXED WORLD SIZE.
+
+     A fixed-size sphere read as a reasonable dot at a 186-unit place-shot distance and was
+     invisible at the 4191-unit district overview — both times the point was actually recorded
+     correctly, which is the giveaway that this was never a data problem. A first attempt to fix
+     it reached for Sprite + sizeAttenuation, which promises constant screen size, but that
+     property has documented inconsistencies across camera setups and I could not verify its exact
+     pixel behavior without a live renderer to check against. This does the same job with ordinary
+     mesh scale and arithmetic I can reason about exactly: distance from camera to marker, times
+     the tangent of the half-FOV, is the world-space size one screen-height covers at that
+     distance — scaling the marker by that quantity holds its ON-SCREEN size constant at any zoom,
+     using nothing but numbers already being computed for the camera this same frame. */
+  if (PICK.markers){
+    // cur.fov, not camera.fov — camera.fov isn't assigned from cur.fov until later in this
+    // same frame (line ~3537), so reading it here would be one frame stale. cur.fov is also
+    // exactly what the existing pan-gesture formula above uses for this same conversion.
+    const fovRad = cur.fov * Math.PI / 180;
+    PICK.markers.children.forEach(o => {
+      if (!o.isMesh) return;   // the poly line strip has no meaningful "size" to hold constant
+      const dist = camera.position.distanceTo(o.position);
+      const worldPerScreenUnit = 2 * dist * Math.tan(fovRad / 2);
+      const s = worldPerScreenUnit * 0.012;
+      o.scale.set(s, s, s);
+    });
+  }
 
   /* THE HAZE FOLLOWS THE CAMERA, EVERY FRAME. cur.dist and cur.elev are the damped values the
      camera was just built from, so this is the distance actually being looked through rather
