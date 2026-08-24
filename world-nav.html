@@ -137,6 +137,7 @@
 
 <div class="views">
   <button class="chip" id="vProg" style="display:none">Progs</button>
+  <button class="chip" id="vPick" aria-pressed="false">Pick: off</button>
   <button class="chip" id="vMode" aria-pressed="false">Dusk</button>
 </div>
 <div id="err"></div>
@@ -324,7 +325,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v117', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v118', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1334,6 +1335,46 @@ function anchorWorld(d, a){
   };
 }
 
+/* PICK MARKERS — a small persistent group, cleared and rebuilt on every record/reset rather than
+   diffed, since a placement session is a handful of taps at most and correctness here matters far
+   more than avoiding a few extra mesh allocations. Point mode gets one marker; poly mode gets one
+   per vertex plus a line strip, since seeing the shape you are tracing is the actual point of
+   tracing it on the ground rather than reading coordinates blind. */
+function pickRebuildMarkers(){
+  if (PICK.markers){ scene.remove(PICK.markers); }
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xE8B547 });
+  PICK.points.forEach(pt => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(pt._r * 0.06, 12, 8), mat);
+    m.position.set(pt._wx, pt._wy + 1, pt._wz);
+    g.add(m);
+  });
+  if (PICK.mode === 'poly' && PICK.points.length > 1){
+    const pts = PICK.points.map(pt => new THREE.Vector3(pt._wx, pt._wy + 1, pt._wz));
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0xE8B547 }));
+    g.add(line);
+  }
+  scene.add(g);
+  PICK.markers = g;
+}
+
+/* pickRecord TAKES THE SAME (d, s, p) THE PLACE-ANCHOR LOOKUP ABOVE ALREADY COMPUTED — d is the
+   active district, s its display scale, p the exact ground-plane hit in scene units. Converts to
+   the district's own local units via the precise inverse of anchorWorld's forward transform
+   (offset, scale, rotation) so the numbers this prints are the same numbers an LM.<name> = {x,z}
+   entry expects directly, not something needing further conversion by hand. */
+function pickRecord(d, s, p){
+  const c = Math.cos(d.rot), n = Math.sin(d.rot);
+  const wx = (p.x - d.x) / s, wz = (p.z - d.z) / s;
+  const lx = wx * c - wz * n, lz = wx * n + wz * c;
+  const pt = { x: Math.round(lx), z: Math.round(lz), _wx: p.x, _wy: p.y, _wz: p.z, _r: d.r * s };
+  if (PICK.mode === 'point') PICK.points = [pt];
+  else PICK.points.push(pt);
+  pickRebuildMarkers();
+}
+
 /* WAIT FOR FOOTPRINTS, THE SAME TEST attractTick ALREADY TRUSTS, BEFORE FRAMING A PLACE.
 
    setDistrict is synchronous for generated fabric but addFootprints is not, and on most islands
@@ -2054,6 +2095,15 @@ document.getElementById('vProg').addEventListener('click', () => {
   } catch (e){ noteError('progs', e); }
 });
 
+document.getElementById('vPick').addEventListener('click', () => {
+  PICK.mode = PICK_MODES[(PICK_MODES.indexOf(PICK.mode) + 1) % PICK_MODES.length];
+  PICK.points = [];
+  pickRebuildMarkers();
+  const btn = document.getElementById('vPick');
+  btn.textContent = 'Pick: ' + PICK.mode;
+  btn.setAttribute('aria-pressed', PICK.mode !== 'off');
+});
+
 document.getElementById('vMode').addEventListener('click', () => {
   const next = MODES[(MODES.indexOf(view) + 1) % MODES.length];
   /* lift MEANS SOMETHING DIFFERENT EITHER SIDE OF THIS BOUNDARY — a height multiplier in the lit
@@ -2121,6 +2171,13 @@ const mapGesture = () => view === 'plan' || view === 'check';
 canvas.addEventListener('pointermove', e => {
   if (!pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+  /* THE CAMERA DOES NOT MOVE WHILE PICKING. This is the actual fix, not the button — a tap that
+     drifts a few pixels during a normal one-finger orbit gets read as a drag and orbit.on flips
+     true, and pointerup's own drag check (12px) then discards it as "not a tap" before pickRecord
+     ever runs. Freezing every camera update here means there is no drag to misread; whatever the
+     finger does before lifting, the pointerup handler below sees a still camera and a clean tap. */
+  if (PICK.mode !== 'off') return;
 
   if (pointers.size >= 2){
     const [a, b] = [...pointers.values()];
@@ -2199,7 +2256,12 @@ canvas.addEventListener('pointerup', e => {
   const many = pointers.size > 1;
   endPointer(e);
   // Tap, not drag, and not the tail of a pinch. Without this every camera drag fires a selection.
-  if (many || Math.hypot(e.clientX-dx0, e.clientY-dy0) > 12 || performance.now()-dt0 > 600) return;
+  // The 12px/600ms check exists to reject an accidental tap in the middle of an orbit drag — but
+  // while picking, the camera never moves (frozen above), so there is no drag to distinguish a
+  // tap from, and this same check was the second half of why picking silently did nothing before.
+  if (many) return;
+  if (PICK.mode === 'off' &&
+      (Math.hypot(e.clientX-dx0, e.clientY-dy0) > 12 || performance.now()-dt0 > 600)) return;
   ndc.x =  (e.clientX / window.innerWidth) * 2 - 1;
   ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
   ray.setFromCamera(ndc, camera);
@@ -2223,21 +2285,13 @@ canvas.addEventListener('pointerup', e => {
       const dd = Math.hypot(w.x-p.x, w.z-p.z);
       if (dd < bestD){ bestD = dd; best = a; }
     });
-    /* DEBUG-ONLY GROUND COORDINATE READOUT. Placement conversations have repeatedly stalled on
-       "where exactly is that" — screenshots with hand-drawn circles, guessed from perspective,
-       wrong more than once. p here is the exact scene-local (x,z) under the tap, in the same
-       units every LM entry already uses; converting a tap to a usable anchor should not need
-       three rounds of guessing. Undo the group's own display scale to get back to the island's
-       true local units, matching what LM.<name> = {x,z} expects directly. */
-    if (DEBUG){
-      // Exact inverse of anchorWorld's forward transform above (d.x/d.z offset, dispScale,
-      // rotation) — a first version of this skipped the offset and rotation entirely and would
-      // have been silently wrong on any island but Corniche, where both happen to be zero/0deg.
-      const c = Math.cos(d.rot), n = Math.sin(d.rot);
-      const wx = (p.x - d.x) / s, wz = (p.z - d.z) / s;
-      const lx = wx * c - wz * n, lz = wx * n + wz * c;
-      TAP_INFO.msg = d.id + '  x:' + Math.round(lx) + '  z:' + Math.round(lz);
-    }
+    /* PICK TAKES OVER THE TAP ENTIRELY WHEN ACTIVE — no place-navigation underneath it, so a
+       pick attempt can never accidentally jump you to the nearest gate instead of recording a
+       point. p here is already the exact scene-local ground point; pickRecord below applies the
+       same inverse of anchorWorld's transform (offset, dispScale, rotation) that a first version
+       of this got wrong by skipping entirely — silently correct only on Corniche, where both
+       happen to be zero. */
+    if (PICK.mode !== 'off'){ pickRecord(d, s, p); return; }
     // Gate in DISPLAYED units. d.r is the island's true radius; the thing on screen is d.r * s,
     // and a gate a seventh of the size of the island it guards rejects almost every real tap.
     if (best && bestD < d.r * s) setPlace(d, best);
@@ -2796,7 +2850,14 @@ const ATTRACT_OFF = location.search.includes('still');
    Kept to the last error and a count. A trap that scrolls is a trap nobody reads on a 6-inch
    screen, and the first one is nearly always the real one anyway. */
 const ERR = { msg:null, n:0 };
-const TAP_INFO = { msg:null };   // debug-only: last tapped ground coordinate, #debug view
+
+/* PICK — a real, discoverable coordinate tool, replacing a first attempt that only worked behind
+   #debug with no visible control and needed a pixel-perfect tap that one-finger orbit was
+   swallowing as a drag. Modes cycle OFF -> POINT -> POLY -> OFF via the bottom-bar button.
+   While active, orbit is frozen — every pointer interaction is unambiguously a pick, not a
+   competing camera gesture, which was the actual cause of "nothing happens" before. */
+const PICK = { mode:'off', points:[], markers:null };
+const PICK_MODES = ['off', 'point', 'poly'];
 function noteError(where, e){
   ERR.n++;
   const m = (e && e.message) || String(e);
@@ -4028,7 +4089,10 @@ function frame(){
             Math.max(0, ((attract.until - performance.now()) / 1000)).toFixed(1) + 's')
         : ('stopped, idle ' + ((performance.now() - attract.lastInput) / 1000).toFixed(0) + 's')) + '\n' +
       (ERR.msg ? 'ERROR  ' + ERR.msg + (ERR.n > 1 ? '  (x' + ERR.n + ')' : '') + '\n' : '') +
-      (TAP_INFO.msg ? 'tap    ' + TAP_INFO.msg + '\n' : '') +
+      (PICK.mode !== 'off' ? 'pick   ' + PICK.mode + '(' + PICK.points.length + ')' +
+        (PICK.points.length
+          ? '  ' + JSON.stringify(PICK.points.map(pt => [pt.x, pt.z]))
+          : '  tap the ground') + '\n' : '') +
       /* ?marks LISTS WHAT THE BAKE ACTUALLY CALLS THINGS.
 
          marks says reem 0/3 and saad 1/3, which tells us the match failed and nothing else. The
