@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v176';
+export const BUILD = 'world v177';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -580,15 +580,19 @@ const LM = {
      palace: 3.0 units between the nearest tower and the palace block. */
   etihad: { x: -17.5 * ISLE_SCALE, z:-11 * ISLE_SCALE },
   adnoc:  { x: 42.25 * ISLE_SCALE, z: 7.25 * ISLE_SCALE },
-  /* THE GRAND MOSQUE HAS NO BAKE ENTRY AND NEVER WILL. The real complex is on the mainland at
-     the Maqta crossing — off every one of the five islands this scene draws — so it is not in
-     Corniche's Overpass landmark table and LM_OSM below has nothing to look it up by. Placed by
-     hand, on Corniche's own south-eastern tip: found the coastline point nearest the real mainland
-     direction, then pulled seventy-five units IN from it rather than out over open water, since
-     nothing exists past the shore to stand the building on. As close to geographically honest as
-     a model with no mainland ground can get — a composition choice in the same family as the
-     Ferrari World / Yas Mall anchor gap, not a measurement. */
-  mosque: { x: 1111, z: 883 },
+  /* THE GRAND MOSQUE HAS NO NAMED LANDMARK ENTRY, BUT IT DOES HAVE A REAL FOOTPRINT — found late,
+     because it carries none of the tags that would have surfaced it earlier. Corniche's Overpass
+     landmark table has nothing under "mosque" or "Sheikh Zayed" (checked), and neither does a
+     search across every building's sub/vk/cls tag for anything religious or worship-related
+     (checked — 453 hits, all ordinary neighbourhood mosques under 55m across). This one has none
+     of that: id 0a986630-31c3-4c49-ab30-7f3732a6d0ca, w 424.6 x d 316.3 — within a few metres of
+     the real complex's known ~418m facade width — a 46-point irregular outline consistent with an
+     actual architectural survey rather than a placeholder box, and sub/vk/cls/h all null, which is
+     exactly the signature of a structure too unusual for the classifier rather than a mosque that
+     was never captured. The first placement here was a hand-derived coastline estimate, honest
+     about being one; this replaces it with the surveyed position directly. Converted from the raw
+     record (x:6399.8, y:-9034.4) the same way every other landmark's coordinates are. */
+  mosque: { x: 1157, z: 856 },
 };
 
 /* THE ANCHORS COME FROM THE MAP WHEN THERE IS ONE, and v79 showed why they must.
