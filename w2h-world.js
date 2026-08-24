@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v179';
+export const BUILD = 'world v180';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -254,15 +254,26 @@ const BAY_DEBUG = typeof location !== 'undefined' && location.search.includes('b
 /* Island-local rectangles where an authored landmark stands and a surveyed footprint must not.
    Populated when the kit is built, read by footprintsFor.
 
-   EXPORTED, WHICH IT WAS NOT. That was fine while only footprintsFor (in this same file) read it
-   — real survey buildings correctly disappear under a landmark. Generated fabric never got the
-   same courtesy: world-nav.html's cullFabric only tests proximity to real surveyed footprints,
+   SHARED WITH world-nav.html NOW, WHICH IT WAS NOT. That was fine while only footprintsFor (in
+   this same file) read it — real survey buildings correctly disappear under a landmark. Generated
+   fabric never got the same courtesy: cullFabric only tests proximity to real surveyed footprints,
    and a modern precinct like the mosque's has almost none nearby to trigger that test, so filler
    buildings happily populate ground a hand-built landmark or a traced precinct shape already
-   covers. Exporting this is what lets cullFabric ask the same question footprintsFor already
-   answers correctly. Empty for every island with no kit, which is every island except Corniche
-   today. */
-export const KIT_ZONES = {};
+   covers. Sharing this is what lets cullFabric ask the same question footprintsFor already
+   answers correctly.
+
+   NOT A MODULE EXPORT — THIS IS A CLOSURE VARIABLE INSIDE buildWorld, LIKE EVERYTHING NEAR IT.
+   `export const KIT_ZONES` broke the whole file: esbuild (accurate; Node's own --check missed it)
+   reported "Unexpected export" at this exact line, and removing only the word `export` — nothing
+   else — made the entire 7028-line file parse clean again. That is the signature of `export`
+   appearing inside a function body rather than at true module top level, which this is: buildWorld
+   wraps almost everything in this file, KIT_ZONES included, and shares what it needs to through
+   the plain object it returns at the very end, the same way buildIsland, footprintsFor and the
+   rest already do. KIT_ZONES joins that return object instead — no bare `export` keyword involved,
+   and reached from outside exactly the way every other buildWorld internal already is: from the
+   destructured return value in world-nav.html, not from the module namespace. Empty for every
+   island with no kit, which is every island except Corniche today. */
+const KIT_ZONES = {};
 
 /* Surveyed heights from every island so far, binned by footprint area, so a band too thin on one
    island can borrow the same band from the others. Filled by footprintsFor as each island lands;
@@ -7019,7 +7030,7 @@ function buildIsland(id){
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
          buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,
-         corniche, GROUND, propCount,
+         corniche, GROUND, propCount, KIT_ZONES,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
             of them have junctions. */
