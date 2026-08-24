@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v43';
+export const BUILD = 'city v44';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1817,11 +1817,28 @@ function grandMosque(x0, z0){
       }
     });
 
-  function dome(dx, dz, r, hy){
+  /* dome() PLACES A HEMISPHERE AND A DRUM AT hy — IT NEVER CONNECTED EITHER TO THE ROOF.
+
+     hy for the main cluster came from hallH + r*1.7, an offset invented in the rebuild and never
+     checked against hallH itself. hallH is 4.0; that formula puts the main drum's underside near
+     9.9 — 5.9 units of daylight between the wing roof and the dome, which is exactly the floating
+     look in the render: domes standing on nothing, the building mass ending well short of them.
+
+     riseFrom FIXES THE CAUSE RATHER THAN THE SYMPTOM. Passed the height of the roof the dome
+     actually stands on, it builds a riser cylinder that closes the gap outright — geometrically
+     guaranteed to touch both ends, rather than a second offset tuned by eye that could as easily
+     under- or overshoot. Real domes on real roofs always have this transitional drum; it was
+     never a detail to skip, it was the piece doing the load-bearing work in the silhouette. */
+  function dome(dx, dz, r, hy, riseFrom){
     const d = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI*2, 0, Math.PI/2), glow);
     d.position.set(x0 + dx, BASE_Y + hy, z0 + dz); d.userData.hero = true; g.add(d);
     const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.86, r*0.86, 0.5, 18), stone);
     drum.position.set(x0 + dx, BASE_Y + hy - 0.25, z0 + dz); g.add(drum);
+    if (riseFrom !== undefined && riseFrom < hy - 0.5){
+      const riserH = hy - 0.5 - riseFrom;
+      const riser = new THREE.Mesh(new THREE.CylinderGeometry(r*0.86, r*0.95, riserH, 18), stone);
+      riser.position.set(x0 + dx, BASE_Y + riseFrom + riserH / 2, z0 + dz); g.add(riser);
+    }
     const fin = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), glow);
     fin.position.set(x0 + dx, BASE_Y + hy + r + 0.22, z0 + dz); g.add(fin);
   }
@@ -1831,17 +1848,17 @@ function grandMosque(x0, z0){
      reads as a field rather than three balls in a row; two domed turrets at the hall's own front
      corners, distinct from the four tall minarets at the plan's outer corners. */
   const hallH = AH * 2.0;
-  dome(0, southZ, MAIN_R, hallH + MAIN_R * 1.7);
-  dome(-MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5);
-  dome( MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5);
+  dome(0, southZ, MAIN_R, hallH + MAIN_R * 1.7, hallH);
+  dome(-MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
+  dome( MAIN_R * 1.55, southZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
   [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
-    dome(sx * MAIN_R * 2.7, southZ + sz * HALL * 0.28, MID_R, hallH + MID_R * 1.4);
+    dome(sx * MAIN_R * 2.7, southZ + sz * HALL * 0.28, MID_R, hallH + MID_R * 1.4, hallH);
   });
   [-1, 1].forEach(sgn => {
     const tx = sgn * (PLAN / 2 - WING * 0.7), tz = southZ + HALL / 2 - WING * 0.6;
     const base = new THREE.Mesh(new THREE.CylinderGeometry(TURRET_R * 1.05, TURRET_R * 1.15, AH * 1.4, 12), stone);
     base.position.set(x0 + tx, BASE_Y + AH * 0.7, tz); g.add(base);
-    dome(tx, tz - z0, TURRET_R, AH * 1.4 + TURRET_R);
+    dome(tx, tz - z0, TURRET_R, AH * 1.4 + TURRET_R, AH * 1.4);
   });
 
   /* PARAPET RHYTHM, denser than the first pass — the reference shows the whole hall roofline
@@ -1852,9 +1869,12 @@ function grandMosque(x0, z0){
       const n = Math.max(6, Math.round(span / 3.2));
       for (let i = 0; i < n; i++){
         const t = (i + 0.5) / n * span - span / 2;
-        const hy = wh - SMALL_R;
-        if (axis === 'x') dome(t, edge - z0, SMALL_R, hy);
-        else               dome(edge - x0, t, SMALL_R, hy);
+        /* Parapet domes sit proud of the roofline they crown, not buried in it — hy is now the
+           roof height PLUS a small rise, matching the same riseFrom logic as the main cluster
+           rather than a bare offset that happened to leave these embedded. */
+        const hy = wh + SMALL_R * 0.6;
+        if (axis === 'x') dome(t, edge - z0, SMALL_R, hy, wh);
+        else               dome(edge - x0, t, SMALL_R, hy, wh);
       }
     });
 
