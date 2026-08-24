@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v177';
+export const BUILD = 'world v178';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -592,7 +592,13 @@ const LM = {
      was never captured. The first placement here was a hand-derived coastline estimate, honest
      about being one; this replaces it with the surveyed position directly. Converted from the raw
      record (x:6399.8, y:-9034.4) the same way every other landmark's coordinates are. */
-  mosque: { x: 1157, z: 856 },
+  /* CORRECTED AGAIN, this time from an on-device pick tap rather than a bake-data footprint
+     match. The survey-footprint centroid above placed the anchor at (1157, 856); tapping the
+     mosque directly in nav v121's point mode put it at (1051, 804) — about 118 units off, which
+     reads as a real discrepancy at this building's scale, not noise. Taking the tap as ground
+     truth since it is a direct observation against the rendered scene rather than an inference
+     from an untagged bake record. */
+  mosque: { x: 1051, z: 804 },
 };
 
 /* THE ANCHORS COME FROM THE MAP WHEN THERE IS ONE, and v79 showed why they must.
