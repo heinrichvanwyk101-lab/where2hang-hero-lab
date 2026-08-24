@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v41';
+export const BUILD = 'city v42';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -452,7 +452,7 @@ function emiratesPalace(x0, z0){
      three together would have produced a uniform terracotta block and thrown away the internal
      contrast that makes the mass legible. */
   const stone = new THREE.MeshStandardMaterial({
-    color:0x191009, roughness:0.92, metalness:0.03, emissive:C.gold, emissiveIntensity:0.025 });
+    color:0x191009, roughness:0.92, metalness:0.03, emissive:0xE8B547, emissiveIntensity:0.025 });
   stone.userData.duskColor = 0xC98F63;
   /* The palace has its own three materials rather than going through cityMaterial, so it needs
      its Day colours set here or it falls through to the switcher's flat fallback exactly as the
@@ -461,14 +461,14 @@ function emiratesPalace(x0, z0){
   stone.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0xC98055, roughness:0.92, metalness:0.03 });
   const arch = new THREE.MeshStandardMaterial({
-    color:0x1A150E, roughness:0.9, emissive:C.gold, emissiveIntensity:0.10 });
+    color:0x1A150E, roughness:0.9, emissive:0xE8B547, emissiveIntensity:0.10 });
   /* Warmed a step to stay in the same family as the stone below it — an arcade cut into rose
      limestone is not cream — but kept clearly lighter, because it is the step up in the three-tone
      hierarchy this builder has always used. */
   arch.userData.duskColor = 0xE8BE93;
   arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6BB92, roughness:0.9 });
   const glow = new THREE.MeshStandardMaterial({
-    color:0x2A2216, roughness:0.7, emissive:C.gold, emissiveIntensity:0.34 });
+    color:0x2A2216, roughness:0.7, emissive:0xE8B547, emissiveIntensity:0.34 });
   glow.userData.duskColor = 0xF4E4BC;
   glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2E6C6, roughness:0.7 });
 
@@ -1705,10 +1705,159 @@ function lowRise(count, xMin, xMax, z, zJit, em){
   }
   return g;
 }
+/* SHEIKH ZAYED GRAND MOSQUE — the second landmark this scene needs and the first that has no
+   island of its own. The real complex sits on the mainland at the Maqta crossing, off every one
+   of the five islands this model draws. Placed on Corniche's own south-eastern tip, seventy-five
+   units in from the coastline point nearest that real direction — as close to correct as a model
+   with no mainland ground can get, and pulled IN from the shore rather than out over open water,
+   since nothing exists past the coastline to stand the building on.
+
+   PROPORTIONS ARE THE WHOLE JOB. From the orbit reference: arcade height is the base unit,
+   minarets stand 4.86 of it, the main dome crowns at 3.86, the facade runs 19.0 wide, the
+   courtyard void is half the plan. Every dimension below is that unit times its ratio, not a
+   number chosen by eye — the silhouette rule the reference gives is explicit: four tall verticals
+   bracketing a low horizontal mass with a dome cluster offset to one side, and the minaret-to-
+   arcade ratio is what makes it read at forty pixels wide. Get the ratio right and the absolute
+   size is a composition choice, the same trade the palace already makes at 384 m for a real 1,000.
+
+   A HOLLOW SQUARE, NOT A BOX. Four wings frame an open courtyard rather than one solid mass — the
+   plan is a sahn open to the sky with the prayer hall on one side, and building it solid would
+   lose the one feature every photograph of this building leads with. The south wing carries the
+   dome cluster and stands taller than the other three, which stay at the base arcade height. */
+function grandMosque(x0, z0){
+  const g = new THREE.Group();
+  const stone = new THREE.MeshStandardMaterial({
+    color:0x161613, roughness:0.85, metalness:0.02, emissive:0xDDDDD6, emissiveIntensity:0.045 });
+  stone.userData.duskColor = 0xE4E1D6;
+  stone.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEDEBE4, roughness:0.85 });
+  const arch = new THREE.MeshStandardMaterial({
+    color:0x1B1A16, roughness:0.82, emissive:0xEDEBE4, emissiveIntensity:0.09 });
+  arch.userData.duskColor = 0xF0EEE6;
+  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF6F4EC, roughness:0.82 });
+  const glow = new THREE.MeshStandardMaterial({
+    color:0x241E0E, roughness:0.6, emissive:0xE8B547, emissiveIntensity:0.36 });
+  glow.userData.duskColor = 0xF6E2A8;
+  glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF3E0A6, roughness:0.6 });
+  const pool = new THREE.MeshStandardMaterial({
+    color:0x0C2A33, roughness:0.25, metalness:0.1, emissive:0x1E5866, emissiveIntensity:0.20 });
+  pool.userData.duskColor = 0x3E97A8;
+  pool.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x4FA9BC, roughness:0.2 });
+  /* PAVING, NOT ARCH. The courtyard floor was sharing the arcade's nearly-black material — the
+     right choice for a shadowed recess under an arch, the wrong one for the single largest
+     visible surface in the whole complex. A recessed floor under a raking sun reads as a void
+     whatever colour it is, so it needs to start pale enough that shadow lands on stone, not on
+     black. */
+  const paving = new THREE.MeshStandardMaterial({
+    color:0x232019, roughness:0.8, emissive:0xD8D2C0, emissiveIntensity:0.11 });
+  paving.userData.duskColor = 0xDCD6C6;
+  paving.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE2DCCC, roughness:0.8 });
+
+  const AH   = 2.0;
+  const PLAN = AH * 19.0;
+  const COURT = AH * 9.5;
+  const WING = (PLAN - COURT) / 2;
+  const MH   = AH * 4.86;
+  const INSET = AH * 0.9;
+  const DOME_H = AH * 3.86;
+  const DOME_R = AH * 1.49 / 2;
+  const FLANK_R = DOME_R * 0.62;
+  const SMALL_R = DOME_R * 0.22;
+
+  /* EVERYTHING STANDS ON A DATUM, NOT ON y = 0 DIRECTLY.
+
+     The platform is 0.3 units thick. The first version put every wing's bottom at y = 0 — half
+     of each wing was buried inside the platform rather than resting on it, and the near-coplanar
+     interpenetrating surfaces produced the crossing dark triangles across the courtyard: not a
+     missing-geometry gap, z-fighting between two solids occupying the same 0-to-0.3 slice. BASE_Y
+     is the platform's top; everything above is positioned from there, and nothing is positioned
+     from bare ground again in this function. */
+  const PLAT_H = 0.3, BASE_Y = PLAT_H;
+
+  const plat = new THREE.Mesh(new THREE.BoxGeometry(PLAN + 3, PLAT_H, PLAN + 3), stone);
+  plat.position.set(x0, PLAT_H / 2, z0); g.add(plat);
+
+  const south = new THREE.Mesh(new THREE.BoxGeometry(PLAN, AH * 1.3, WING), stone);
+  south.position.set(x0, BASE_Y + AH * 0.65, z0 + (COURT + WING) / 2); g.add(south);
+  const north = new THREE.Mesh(new THREE.BoxGeometry(PLAN, AH, WING), stone);
+  north.position.set(x0, BASE_Y + AH * 0.5, z0 - (COURT + WING) / 2); g.add(north);
+  const east = new THREE.Mesh(new THREE.BoxGeometry(WING, AH, PLAN), stone);
+  east.position.set(x0 + (COURT + WING) / 2, BASE_Y + AH * 0.5, z0); g.add(east);
+  const west = new THREE.Mesh(new THREE.BoxGeometry(WING, AH, PLAN), stone);
+  west.position.set(x0 - (COURT + WING) / 2, BASE_Y + AH * 0.5, z0); g.add(west);
+
+  const yard = new THREE.Mesh(new THREE.BoxGeometry(COURT, 0.1, COURT), paving);
+  yard.position.set(x0, BASE_Y + 0.05, z0); g.add(yard);
+
+  [[south, PLAN, z0 + COURT / 2 + 0.3, 'x'], [north, PLAN, z0 - COURT / 2 - 0.3, 'x'],
+   [east, COURT, x0 + COURT / 2 + 0.3, 'z'], [west, COURT, x0 - COURT / 2 - 0.3, 'z']]
+    .forEach(([, span, edge, axis]) => {
+      const n = Math.round(span / 1.6);
+      for (let i = 0; i < n; i++){
+        const t = (i + 0.5) / n * span - span / 2;
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.22, AH * 0.9, 0.22), arch);
+        if (axis === 'x') p.position.set(x0 + t, BASE_Y + AH * 0.45, edge);
+        else               p.position.set(edge, BASE_Y + AH * 0.45, z0 + t);
+        g.add(p);
+      }
+    });
+
+  function dome(dx, dz, r, hy){
+    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI*2, 0, Math.PI/2), glow);
+    d.position.set(x0 + dx, BASE_Y + hy, z0 + dz); d.userData.hero = true; g.add(d);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.86, r*0.86, 0.6, 18), stone);
+    drum.position.set(x0 + dx, BASE_Y + hy - 0.3, z0 + dz); g.add(drum);
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.55, 8), glow);
+    fin.position.set(x0 + dx, BASE_Y + hy + r + 0.24, z0 + dz); g.add(fin);
+  }
+  const southZ = z0 + (COURT + WING) / 2;
+  dome(0, southZ - WING * 0.15, DOME_R, DOME_H - DOME_R);
+  dome(-DOME_R - FLANK_R - 0.4, southZ - WING * 0.15, FLANK_R, DOME_H * 0.78 - FLANK_R);
+  dome( DOME_R + FLANK_R + 0.4, southZ - WING * 0.15, FLANK_R, DOME_H * 0.78 - FLANK_R);
+
+  [[south, PLAN, southZ, 'x', AH * 1.3], [north, PLAN, z0 - (COURT + WING) / 2, 'x', AH],
+   [east, COURT, x0 + (COURT + WING) / 2, 'z', AH], [west, COURT, x0 - (COURT + WING) / 2, 'z', AH]]
+    .forEach(([, span, edge, axis, wh]) => {
+      const n = Math.max(4, Math.round(span / 6.5));
+      for (let i = 0; i < n; i++){
+        const t = (i + 0.5) / n * span - span / 2;
+        const hy = wh - SMALL_R;
+        if (axis === 'x') dome(t, edge - z0, SMALL_R, hy);
+        else               dome(edge - x0, t, SMALL_R, hy);
+      }
+    });
+
+  function minaret(dx, dz){
+    const w = MH * 0.075;
+    const shaftH = MH * 0.55, octH = MH * 0.25, lanternH = MH * 0.12, finH = MH * 0.08;
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(w, shaftH, w), stone);
+    shaft.position.set(x0 + dx, BASE_Y + shaftH / 2, z0 + dz); g.add(shaft);
+    const oct = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.46, w * 0.5, octH, 8), stone);
+    oct.position.set(x0 + dx, BASE_Y + shaftH + octH / 2, z0 + dz); g.add(oct);
+    const lantern = new THREE.Mesh(
+      new THREE.CylinderGeometry(w * 0.30, w * 0.40, lanternH, 16), arch);
+    lantern.position.set(x0 + dx, BASE_Y + shaftH + octH + lanternH / 2, z0 + dz); g.add(lantern);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.34, finH, 12), glow);
+    cap.position.set(x0 + dx, BASE_Y + shaftH + octH + lanternH + finH / 2, z0 + dz); g.add(cap);
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(w * 0.06, MH * 0.04, 6), glow);
+    spike.position.set(x0 + dx, BASE_Y + shaftH + octH + lanternH + finH + MH * 0.02, z0 + dz);
+    g.add(spike);
+  }
+  const cx = PLAN / 2 - INSET;
+  [[-cx,-cx], [cx,-cx], [-cx,cx], [cx,cx]].forEach(([dx, dz]) => minaret(dx, dz));
+
+  [-1, 1].forEach(sgn => {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(PLAN * 0.16, 0.08, WING * 0.7), pool);
+    p.position.set(x0 + sgn * PLAN * 0.24, BASE_Y + 0.04, z0 - (COURT + WING) / 2 - WING * 0.55);
+    g.add(p);
+  });
+
+  return g;
+}
+
 
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, adnocHQ, ferrariWorld, yasMall, etihadArena, yasBayPier,
+         etihadTowers, emiratesPalace, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }

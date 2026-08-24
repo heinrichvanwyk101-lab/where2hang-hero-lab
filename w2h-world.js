@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v173';
+export const BUILD = 'world v174';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -580,6 +580,15 @@ const LM = {
      palace: 3.0 units between the nearest tower and the palace block. */
   etihad: { x: -17.5 * ISLE_SCALE, z:-11 * ISLE_SCALE },
   adnoc:  { x: 42.25 * ISLE_SCALE, z: 7.25 * ISLE_SCALE },
+  /* THE GRAND MOSQUE HAS NO BAKE ENTRY AND NEVER WILL. The real complex is on the mainland at
+     the Maqta crossing — off every one of the five islands this scene draws — so it is not in
+     Corniche's Overpass landmark table and LM_OSM below has nothing to look it up by. Placed by
+     hand, on Corniche's own south-eastern tip: found the coastline point nearest the real mainland
+     direction, then pulled seventy-five units IN from it rather than out over open water, since
+     nothing exists past the shore to stand the building on. As close to geographically honest as
+     a model with no mainland ground can get — a composition choice in the same family as the
+     Ferrari World / Yas Mall anchor gap, not a measurement. */
+  mosque: { x: 1111, z: 883 },
 };
 
 /* THE ANCHORS COME FROM THE MAP WHEN THERE IS ONE, and v79 showed why they must.
@@ -3305,6 +3314,11 @@ const DISTRICTS = [
       { label:'Emirates Palace', osm:'Emirates Palace',    x:LM.palace.x, z:LM.palace.z, h: 7, r:32 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
       { label:'ADNOC HQ',        osm:'ADNOC Headquarters', x: LM.adnoc.x, z: LM.adnoc.z, h:26, r:22 },
+      /* No osm match will ever come back for this one — see LM.mosque above — so it never gets
+         overwritten by the bake refit and always frames from the hand-placed anchor. h and r are
+         framing choices, not measurements: r wide enough to hold all four corners in shot, h set
+         from the built model's own eye-line rather than guessed. */
+      { label:'Grand Mosque', osm:'Sheikh Zayed Grand Mosque', x: LM.mosque.x, z: LM.mosque.z, h:10, r:26 },
       /* Both returned by the bake and neither was being asked for. Qasr Al Hosn is the oldest
          building in the city and the east end of the shot; Marina Mall is the Breakwater, which
          is the west end. Together they widen the Corniche framing from the palace-to-ADNOC span
@@ -5223,9 +5237,10 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const palace = kit.emiratesPalace(LM.palace.x, LM.palace.z);
   const etihad = kit.etihadTowers(LM.etihad.x, LM.etihad.z);
   const adnoc  = kit.adnocHQ(LM.adnoc.x, LM.adnoc.z);
+  const mosque = kit.grandMosque(LM.mosque.x, LM.mosque.z);
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, mosque].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -5242,7 +5257,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, mosque]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
