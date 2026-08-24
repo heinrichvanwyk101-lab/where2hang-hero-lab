@@ -325,7 +325,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v118', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v120', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1345,7 +1345,13 @@ function pickRebuildMarkers(){
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: 0xE8B547 });
   PICK.points.forEach(pt => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(pt._r * 0.06, 12, 8), mat);
+    /* A FIXED SIZE, NOT ONE DERIVED FROM THE ISLAND. The first version scaled the marker by
+       d.r * s — the ENTIRE island's own radius, ~1220 units for Corniche — meaning the sphere
+       came out around 73 units across, bigger than the whole mosque. An island's radius has
+       nothing to do with how big a "you are here" pin should read; a marker only needs to be
+       visible against whatever it's sitting on, which a small size scaled by the island's
+       display correction alone (s) already does consistently across islands. */
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1.4 * pt._s, 14, 10), mat);
     m.position.set(pt._wx, pt._wy + 1, pt._wz);
     g.add(m);
   });
@@ -1369,7 +1375,7 @@ function pickRecord(d, s, p){
   const c = Math.cos(d.rot), n = Math.sin(d.rot);
   const wx = (p.x - d.x) / s, wz = (p.z - d.z) / s;
   const lx = wx * c - wz * n, lz = wx * n + wz * c;
-  const pt = { x: Math.round(lx), z: Math.round(lz), _wx: p.x, _wy: p.y, _wz: p.z, _r: d.r * s };
+  const pt = { x: Math.round(lx), z: Math.round(lz), _wx: p.x, _wy: p.y, _wz: p.z, _s: s };
   if (PICK.mode === 'point') PICK.points = [pt];
   else PICK.points.push(pt);
   pickRebuildMarkers();
@@ -2271,7 +2277,14 @@ canvas.addEventListener('pointerup', e => {
     if (hit) setDistrict(hit.object.userData.district);
     return;
   }
-  if (state === STATE.DISTRICT && activeDistrict){
+  /* DISTRICT OR PLACE — PICKING NEEDS BOTH. activeDistrict stays set once you drill into a place
+     (setPlace assigns it the same as setDistrict does), so the ground-plane math below is
+     identical either way; only the ORIGINAL place-anchor-navigation gate below cared about the
+     distinction. Restricting this whole block to DISTRICT alone meant a pick attempt taken from
+     inside a place view — which is where anyone checking a specific landmark's surroundings
+     actually is — hit no matching branch at all and silently did nothing, no error, no marker,
+     nothing to click through to a fix. */
+  if ((state === STATE.DISTRICT || state === STATE.PLACE) && activeDistrict){
     const d = activeDistrict;
     const s = d.dispScale || 1;
     // The plane the user is tapping is the island's VISIBLE top face, which the group scale
