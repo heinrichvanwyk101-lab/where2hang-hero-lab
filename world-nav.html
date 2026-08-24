@@ -119,6 +119,27 @@
   #err{position:fixed;left:12px;right:12px;bottom:76px;z-index:9;display:none;
     background:#3A1414;border:1px solid #7A2A2A;border-radius:10px;padding:10px;
     font:500 12px/1.4 ui-monospace,monospace;color:#FFD9D9;white-space:pre-wrap}
+/* THE PICK READOUT, DELIBERATELY NOT PART OF #dbg.
+
+   The 40-line debug dump lives inside .top, which is position:fixed with no scroll container
+   of its own and a body that has overflow:hidden — so on a tall dump, on a phone, in landscape
+   with browser chrome eating vertical space, the last few lines (pick's array among them) can
+   sit below the visible viewport with no way to reach them. Scrolling the page does nothing,
+   because there is nothing set up to scroll; the overlay is just taller than the screen.
+
+   Rather than trim the dump or make it scrollable — which would still make Heinrich hunt for
+   the one line he actually needs among 40 others — the pick result gets its own small panel,
+   independent of #debug entirely, docked low enough to clear .views but high enough to never
+   be pushed off by dump length, because it does not live inside the thing that grows. */
+#pickout{position:fixed;left:12px;right:12px;bottom:74px;z-index:7;display:none;
+    background:rgba(16,22,28,.92);border:1px solid rgba(255,255,255,.16);border-radius:10px;
+    padding:9px 10px;backdrop-filter:blur(8px)}
+#pickout.on{display:flex;align-items:center;gap:10px}
+#pickout .txt{flex:1;min-width:0;font:500 11px/1.4 ui-monospace,monospace;color:#EAFFF9;
+    white-space:pre-wrap;word-break:break-all;max-height:96px;overflow-y:auto}
+#pickout button{appearance:none;flex:none;border:1px solid #1E8C7A;background:#125F53;
+    color:#EAFFF9;font:600 12px Inter,sans-serif;padding:8px 12px;border-radius:999px}
+#pickout button:active{background:#0E463D}
 </style>
 </head>
 <body>
@@ -132,6 +153,8 @@
   <div class="dbg" id="dbg"></div>
 </div>
 <div class="stamp" id="stamp"></div>
+
+<div id="pickout"><div class="txt" id="pickoutTxt"></div><button id="pickoutCopy">Copy</button></div>
 
 <button class="back" id="back">Back</button>
 
@@ -325,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v121', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v122', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1379,6 +1402,23 @@ function pickRecord(d, s, p){
   if (PICK.mode === 'point') PICK.points = [pt];
   else PICK.points.push(pt);
   pickRebuildMarkers();
+  pickUpdateReadout();
+}
+
+/* THE READOUT'S OWN CONTENT, KEPT IN SYNC ON EVERY RECORD AND EVERY MODE CYCLE rather than
+   folded into the once-a-frame debug string builder — this has to update the instant a tap
+   lands, not on whatever cadence the frame loop happens to refresh #dbg, and it has to keep
+   working with #debug off since that is the whole point of it existing separately. */
+function pickUpdateReadout(){
+  const el = document.getElementById('pickout');
+  const txt = document.getElementById('pickoutTxt');
+  if (PICK.mode === 'off' || !PICK.points.length){
+    el.classList.remove('on');
+    return;
+  }
+  el.classList.add('on');
+  txt.textContent = PICK.mode + '(' + PICK.points.length + ')  ' +
+    JSON.stringify(PICK.points.map(pt => [pt.x, pt.z]));
 }
 
 /* WAIT FOR FOOTPRINTS, THE SAME TEST attractTick ALREADY TRUSTS, BEFORE FRAMING A PLACE.
@@ -2105,9 +2145,41 @@ document.getElementById('vPick').addEventListener('click', () => {
   PICK.mode = PICK_MODES[(PICK_MODES.indexOf(PICK.mode) + 1) % PICK_MODES.length];
   PICK.points = [];
   pickRebuildMarkers();
+  pickUpdateReadout();
   const btn = document.getElementById('vPick');
   btn.textContent = 'Pick: ' + PICK.mode;
   btn.setAttribute('aria-pressed', PICK.mode !== 'off');
+});
+
+/* COPY, WITH A FALLBACK, BECAUSE navigator.clipboard IS NOT A GIVEN.
+
+   It requires a secure context (this site is HTTPS, so that part is fine) but some in-app and
+   embedded webviews — exactly the kind a phone browser's share sheet or an assistant overlay
+   can be running inside — block the permission outright, and there is no reliable way to detect
+   that in advance except trying it and catching the rejection. The fallback is the same trick
+   pages used before the Clipboard API existed: put the text in a real (if invisible) textarea,
+   select it, and ask the browser to copy the current selection instead of asking permission for
+   programmatic access. Button label flips to "Copied" briefly either way, so success looks the
+   same to Heinrich regardless of which path actually ran. */
+document.getElementById('pickoutCopy').addEventListener('click', () => {
+  const btn = document.getElementById('pickoutCopy');
+  const text = document.getElementById('pickoutTxt').textContent;
+  const flash = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); };
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      flash();
+    } catch (e){ noteError('pickCopy', e); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(flash, fallback);
+  } else {
+    fallback();
+  }
 });
 
 document.getElementById('vMode').addEventListener('click', () => {
