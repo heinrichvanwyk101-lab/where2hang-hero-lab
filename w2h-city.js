@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v48';
+export const BUILD = 'city v49';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1950,47 +1950,13 @@ function grandMosque(x0, z0){
   jet.position.set(x0, BASE_Y + 1.0, z0 - (COURT + WING) / 2 - forecourtR * 0.75);
   g.add(jet);
 
-  /* PARKING, ASYMMETRIC — REPLACING THE MIRRORED TWO-FLANK VERSION.
-
-     The mirrored version assumed parking split evenly either side of the building, matching
-     no aerial reference actually checked against — it was a plausible-sounding guess, not a
-     measurement. A real reference photo (Google Maps, Aug 2026) shows something different: one
-     large lot dominating the WEST side of the precinct, tipped slightly NORTH, and a distinctly
-     smaller second lot further south along the same west side, near the real Gate 7 entrance.
-     Nothing comparable exists on the east side at all.
-
-     THE COMPASS MAPPING IS VERIFIED, NOT ASSUMED. This building sits inside a wrapper rotated
-     -90 degrees to match the real footprint's orientation on the basemap (see the wrapper setup
-     above), so a raw offset here does not land where its own dx/dz would suggest — raw dz drives
-     the world east-west axis and raw dx drives world north-south, per the same transform already
-     proven for the minaret/dome fix. Checked directly against THREE.Group's own matrix math
-     before writing these numbers, not derived by hand: raw (dx:-8.4, dz:70.3) resolves to world
-     offset (-70.3, -8.4) — west, mildly north. raw (dx:21.8, dz:50.3) resolves to (-50.3, 21.8)
-     — west, clearly south. Both match the reference photo's layout.
-
-     Tree density kept consistent with the old single-lot version (rows per unit depth, cols per
-     unit width) rather than reused row/col counts, so the bigger lot doesn't read sparser than
-     the small one. */
-  function parkingLot(dx, dz, w, d){
-    const lot = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), paving);
-    lot.position.set(x0 + dx, BASE_Y + 0.025, z0 + dz);
-    g.add(lot);
-    const rows = Math.max(2, Math.round(d * 0.31)), cols = Math.max(2, Math.round(w * 0.139));
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){
-      const tx = dx + (c + 0.5) / cols * w - w / 2;
-      const tz = dz + (r + 0.5) / rows * d - d / 2;
-      const tree = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), paving);
-      tree.position.set(x0 + tx, BASE_Y + 0.3, z0 + tz);
-      g.add(tree);
-    }
-  }
-  const lotW_big = PLAN * 1.6, lotD_big = HALL * 2.0;
-  const westOff_big = PLAN / 2 + WING + gardenW + lotW_big / 2 + 3;
-  parkingLot(-HALL * 0.5, westOff_big, lotW_big, lotD_big);
-
-  const lotW_small = PLAN * 0.55, lotD_small = HALL * 0.75;
-  const westOff_small = PLAN / 2 + WING + gardenW + lotW_small / 2 + 3;
-  parkingLot(HALL * 1.3, westOff_small, lotW_small, lotD_small);
+  /* PARKING REMOVED, DELIBERATELY. Every attempt at this from a reference photo or a screenshot
+     comparison got some part of the shape or orientation wrong — this file's history above is
+     the record of that. Heinrich is overlaying the real parking footprint directly (survey data
+     or a traced outline) rather than have me keep guessing from images. Once that lands as a
+     poly-trace or GPS corners, it gets built as an actual polygon shape here, not a rectangle
+     approximation. Until then: no parking, just the building and its immediate precinct
+     (forecourt, gardens, approach drive), which were never in question. */
 
   /* FORMAL GARDENS, BETWEEN EACH PARKING LOT AND THE BUILDING ITSELF. Geometric parterre beds —
      ornamental at building scale, the way the reference notes this precinct's own landscaping. */
