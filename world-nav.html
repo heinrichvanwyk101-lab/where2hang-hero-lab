@@ -324,7 +324,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v115', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v116', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1334,7 +1334,30 @@ function anchorWorld(d, a){
   };
 }
 
-function setPlace(d, anchor){
+/* WAIT FOR FOOTPRINTS, THE SAME TEST attractTick ALREADY TRUSTS, BEFORE FRAMING A PLACE.
+
+   setDistrict is synchronous for generated fabric but addFootprints is not, and on most islands
+   that is invisible because the generated fill covers the screen while real buildings catch up.
+   Al Maryah has almost none by design — large plots, wide gaps, built to read from its real
+   footprints — so a place shot framed the instant a pin is tapped can land on bare ground with
+   nothing to hide the gap. attractTick already refuses to advance past a hold leg until
+   isleReady(); a hand tap through World -> district -> place had no such guard and could beat the
+   fetch by acting faster than a camera flight ever would.
+
+   BOUNDED, not open-ended: a payload that resolves to 'none' is still ready, and 900 ms is roughly
+   what footprints take to land once the district is built, not a number to raise if a single slow
+   load is observed once. If it is still not settled at the bound, the shot composes anyway — a
+   late-arriving payload finishes what a place shot already started, which is the same trade
+   setDistrict makes deliberately rather than a compromise particular to this path. */
+async function awaitFootprints(d, maxMs){
+  const until = performance.now() + maxMs;
+  while (!isleReady(d) && performance.now() < until){
+    await new Promise(r => setTimeout(r, 60));
+  }
+}
+
+async function setPlace(d, anchor){
+  if (FP_ON && d) await awaitFootprints(d, 900);
   resetOrbit();
   state = STATE.PLACE; activeDistrict = d; activePlace = anchor;
   const w = anchorWorld(d, anchor), s = w.s;
