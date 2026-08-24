@@ -324,7 +324,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v116', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v117', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2223,6 +2223,21 @@ canvas.addEventListener('pointerup', e => {
       const dd = Math.hypot(w.x-p.x, w.z-p.z);
       if (dd < bestD){ bestD = dd; best = a; }
     });
+    /* DEBUG-ONLY GROUND COORDINATE READOUT. Placement conversations have repeatedly stalled on
+       "where exactly is that" — screenshots with hand-drawn circles, guessed from perspective,
+       wrong more than once. p here is the exact scene-local (x,z) under the tap, in the same
+       units every LM entry already uses; converting a tap to a usable anchor should not need
+       three rounds of guessing. Undo the group's own display scale to get back to the island's
+       true local units, matching what LM.<name> = {x,z} expects directly. */
+    if (DEBUG){
+      // Exact inverse of anchorWorld's forward transform above (d.x/d.z offset, dispScale,
+      // rotation) — a first version of this skipped the offset and rotation entirely and would
+      // have been silently wrong on any island but Corniche, where both happen to be zero/0deg.
+      const c = Math.cos(d.rot), n = Math.sin(d.rot);
+      const wx = (p.x - d.x) / s, wz = (p.z - d.z) / s;
+      const lx = wx * c - wz * n, lz = wx * n + wz * c;
+      TAP_INFO.msg = d.id + '  x:' + Math.round(lx) + '  z:' + Math.round(lz);
+    }
     // Gate in DISPLAYED units. d.r is the island's true radius; the thing on screen is d.r * s,
     // and a gate a seventh of the size of the island it guards rejects almost every real tap.
     if (best && bestD < d.r * s) setPlace(d, best);
@@ -2781,6 +2796,7 @@ const ATTRACT_OFF = location.search.includes('still');
    Kept to the last error and a count. A trap that scrolls is a trap nobody reads on a 6-inch
    screen, and the first one is nearly always the real one anyway. */
 const ERR = { msg:null, n:0 };
+const TAP_INFO = { msg:null };   // debug-only: last tapped ground coordinate, #debug view
 function noteError(where, e){
   ERR.n++;
   const m = (e && e.message) || String(e);
@@ -4012,6 +4028,7 @@ function frame(){
             Math.max(0, ((attract.until - performance.now()) / 1000)).toFixed(1) + 's')
         : ('stopped, idle ' + ((performance.now() - attract.lastInput) / 1000).toFixed(0) + 's')) + '\n' +
       (ERR.msg ? 'ERROR  ' + ERR.msg + (ERR.n > 1 ? '  (x' + ERR.n + ')' : '') + '\n' : '') +
+      (TAP_INFO.msg ? 'tap    ' + TAP_INFO.msg + '\n' : '') +
       /* ?marks LISTS WHAT THE BAKE ACTUALLY CALLS THINGS.
 
          marks says reem 0/3 and saad 1/3, which tells us the match failed and nothing else. The
