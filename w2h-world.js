@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v175';
+export const BUILD = 'world v176';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5244,7 +5244,26 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const palace = kit.emiratesPalace(LM.palace.x, LM.palace.z);
   const etihad = kit.etihadTowers(LM.etihad.x, LM.etihad.z);
   const adnoc  = kit.adnocHQ(LM.adnoc.x, LM.adnoc.z);
-  const mosque = kit.grandMosque(LM.mosque.x, LM.mosque.z);
+  /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
+
+     Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
+     under a group transform — because that is what the z0-doubling bug fix demanded: coordinates
+     had to be checkable against the real anchor directly. The cost of that is that the returned
+     group has no meaningful local origin to rotate around; a bare `mosque.rotation.y = ...` would
+     spin the whole precinct around WORLD (0,0,0), flinging a building anchored near (1111,883)
+     somewhere else on the map entirely rather than turning it in place.
+
+     So it is wrapped: the raw group is shifted by -LM.mosque so its anchor lands at the wrapper's
+     own local origin, the wrapper is placed at LM.mosque, and the wrapper is what gets rotated.
+     Verified before shipping, not assumed — a point 60 units due east of the anchor maps to 60
+     units due south of it under this exact transform, confirming the turn is clockwise on this
+     scene's +x-east/+z-south convention, not the 90 degrees the wrong way. */
+  const mosqueRaw = kit.grandMosque(LM.mosque.x, LM.mosque.z);
+  mosqueRaw.position.set(-LM.mosque.x, 0, -LM.mosque.z);
+  const mosque = new THREE.Group();
+  mosque.add(mosqueRaw);
+  mosque.position.set(LM.mosque.x, 0, LM.mosque.z);
+  mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
   if (!NO_KIT) [palace, etihad, adnoc, mosque].forEach(o => { o.position.y = GROUND; D.add(o); });
