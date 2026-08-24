@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v54';
+export const BUILD = 'city v56';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1953,6 +1953,22 @@ function grandMosque(x0, z0){
      (1050.8, 804.9) against the tap-verified anchor of (1051, 804), under a unit of error, no
      correction factor needed anywhere.
 
+     A SMALL RESIDUAL TILT AND A FEW VERTICES TOO CLOSE TO REAL ROADS — BOTH CHECKED AGAINST
+     data/roads-corniche.json DIRECTLY, NOT ESTIMATED. Under a unit of error on the 41-unit
+     building trace is invisible; the same small angular error reads as visible drift at the site
+     boundary's ~90-unit reach. A 1-degree clockwise rotation is baked into every offset below
+     (this scene's +x-east/+z-south convention: x'=x·cosθ-z·sinθ, z'=x·sinθ+z·cosθ) — this alone
+     cut major-road crossings from 8 to 6 when checked against the real baked road geometry, not
+     eliminated it, so it wasn't the whole story. The remaining handful of site-boundary vertices
+     that still sat within 0-3 units of an actual major road (Corniche's own road data, filtered
+     to `cls==='major'` so internal site driveways — which a boundary trace is expected to cross —
+     don't count as false positives) were pulled back to a 3-unit clearance along the real road's
+     own perpendicular, not toward the shape's centroid, which would have distorted the trace for
+     no geometric reason. Five road-adjacent points remain even after that — the same fix applied
+     harder starts measurably reshaping what was actually traced rather than correcting it, which
+     is a worse trade. The hardscape/garden layer needed none of this: zero major-road crossings
+     at 1 degree, checked the same way.
+
      THE SHAPE-TO-GROUND ROTATION FLIPS NORTH-SOUTH BY DEFAULT. THREE.Shape builds in its own XY
      plane; rotateX(-PI/2) to lay it flat sends shape-Y to WORLD -Z, not +Z, verified directly
      against THREE.Geometry's own math before trusting it, not assumed. Every offset below has
@@ -1972,10 +1988,11 @@ function grandMosque(x0, z0){
      of the whole compound relative to where the building sits within it, not a shape centred on
      the mosque. Says nothing about what's inside it — that's layer 2. */
   tracedGround([
-    [34.29,-66.25],[11.84,-76.84],[11.43,-76.85],[-9.22,-75.87],[-9.77,-76.29],
-    [-31.05,-62.68],[-31.52,-62.9],[-48.53,-56.03],[-48.8,-56.2],[-30.86,1.57],
-    [-30.96,1.27],[-42.25,63.36],[-42.67,63.21],[10.68,78.38],[10.31,78.28],
-    [25.46,75.48],[25.37,74.93],[37.63,64.0],[37.63,63.77],[45.07,43.3],[44.88,43.12],
+    [36.87,-65.79],[13.18,-76.62],[12.77,-76.64],[-7.06,-74.24],[-7.34,-74.1],
+    [-29.95,-63.21],[-30.33,-63.2],[-47.54,-56.87],[-47.77,-56.91],[-30.88,1.03],
+    [-30.98,0.73],[-43.35,62.61],[-43.77,62.46],[9.31,78.55],[8.94,78.45],
+    [23.97,75.65],[24.06,75.36],[34.12,63.42],[34.21,63.24],[46.01,44.06],
+    [46.01,43.88],
   ], paving, BASE_Y + 0.015);
 
   /* LAYER 2 — HARDSCAPE AND GARDENS. The closer, organic boundary hugging the building on three
@@ -1985,18 +2002,18 @@ function grandMosque(x0, z0){
      this layer reads as visually distinct from the plainer outer site ground rather than
      blending into it, since the two were indistinguishable on the last pass. */
   tracedGround([
-    [26.31,21.41],[-0.87,28.69],[-0.89,28.65],[-9.34,35.04],[-9.57,35.02],
-    [-20.25,35.22],[-20.57,35.02],[-25.97,31.98],[-26.07,31.84],[-31.43,24.22],
-    [-31.56,24.02],[-26.61,14.87],[-26.64,14.75],[-25.02,5.05],[-25.2,4.91],
-    [-27.4,-2.31],[-27.51,-2.62],[-25.39,-9.19],[-25.49,-8.99],[-24.49,-14.07],
-    [-24.62,-14.2],[-31.37,-19.83],[-31.56,-19.99],[-29.36,-26.48],[-29.54,-26.65],
-    [-22.05,-26.77],[-22.3,-26.94],[-12.25,-23.95],[-12.47,-24.05],[-2.08,-24.95],
-    [-2.34,-25.21],[8.88,-26.13],[8.66,-26.36],[16.14,-29.3],[15.89,-29.26],
-    [13.44,-47.0],[13.29,-47.21],[17.41,-51.06],[17.34,-51.27],[29.85,-53.89],
-    [29.78,-53.87],[36.42,-8.72],[36.15,-8.99],[20.0,-5.01],[19.95,-5.23],
-    [14.87,-3.48],[14.74,-3.49],[15.98,1.28],[15.89,1.14],[33.46,-2.42],
-    [33.26,-2.62],[37.75,-2.31],[37.6,-2.62],[37.91,9.93],[37.89,9.83],
-    [30.97,12.75],[30.94,12.72],[25.09,13.81],[24.86,13.59],
+    [25.93,21.87],[-1.37,28.67],[-1.39,28.63],[-9.95,34.87],[-10.18,34.85],
+    [-20.86,34.86],[-21.18,34.66],[-26.52,31.52],[-26.62,31.38],[-31.85,23.67],
+    [-31.97,23.47],[-26.87,14.4],[-26.89,14.28],[-25.1,4.61],[-25.28,4.47],
+    [-27.36,-2.79],[-27.46,-3.1],[-25.23,-9.63],[-25.33,-9.43],[-24.24,-14.5],
+    [-24.37,-14.63],[-31.02,-20.37],[-31.21,-20.54],[-28.89,-26.99],[-29.07,-27.16],
+    [-21.58,-27.15],[-21.83,-27.33],[-11.83,-24.16],[-12.05,-24.26],[-1.64,-24.98],
+    [-1.9,-25.25],[9.33,-25.97],[9.12,-26.2],[16.65,-29.01],[16.4,-28.98],
+    [14.26,-46.76],[14.11,-46.97],[18.3,-50.75],[18.23,-50.96],[30.79,-53.36],
+    [30.72,-53.34],[36.57,-8.08],[36.3,-8.36],[20.08,-4.66],[20.04,-4.88],
+    [14.93,-3.22],[14.8,-3.23],[15.96,1.56],[15.87,1.42],[33.5,-1.84],
+    [33.3,-2.04],[37.78,-1.65],[37.64,-1.96],[37.73,10.59],[37.71,10.49],
+    [30.74,13.29],[30.71,13.26],[24.85,14.25],[24.62,14.02],
   ], arch, BASE_Y + 0.02);
 
   return g;

@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v122', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v123', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3124,6 +3124,14 @@ const KEEP_R = 160 / 7.8;
 function cullFabric(d, list){
   if (!list || !list.length) return 0;
 
+  /* KIT_ZONES, THE SAME LANDMARK RECTANGLES footprintsFor ALREADY TRUSTS, NOW READ HERE TOO.
+     Newly exported from w2h-world.js for exactly this — this loop only knew "is a real surveyed
+     building nearby", and a hand-built landmark or a traced precinct shape isn't one, so ground
+     it already covers kept generating filler regardless. Checked once per call, not per instance;
+     the zone list for a district is at most a handful of rectangles. */
+  const zones = (WORLD.KIT_ZONES && WORLD.KIT_ZONES[d.id]) || [];
+  const inZone = (x, z) => zones.some(b => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
+
   /* One grid at the COARSER radius so a single +/-1 cell sweep serves both tests. Binning at
      CULL_R instead would need an eleven-cell sweep to answer the far question. */
   const CELL = KEEP_R;
@@ -3194,6 +3202,9 @@ function cullFabric(d, list){
         /* Elements 12 and 14 are the translation's x and z. Cheaper than decompose, and this runs
            once per instance across tens of thousands of them. */
         const ix = m.elements[12], iz = m.elements[14];
+        /* Zone check first and unconditional — a landmark or a traced precinct wins regardless
+           of what the real-building proximity test would have said on its own. */
+        if (inZone(ix, iz)){ o.setMatrixAt(i, zero); culled++; continue; }
         const g = nearGrain(ix, iz);
         /* Too close: a real building already stands here. Too far: nobody builds here at all. */
         if (g.d2 < NEAR2 || g.d2 > FAR2){ o.setMatrixAt(i, zero); culled++; continue; }

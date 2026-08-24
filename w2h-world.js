@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v178';
+export const BUILD = 'world v179';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -252,9 +252,17 @@ const BAY_ALL   = typeof location !== 'undefined' && location.search.includes('b
 const BAY_DEBUG = typeof location !== 'undefined' && location.search.includes('baydebug');
 
 /* Island-local rectangles where an authored landmark stands and a surveyed footprint must not.
-   Populated when the kit is built, read by footprintsFor. Empty for every island with no kit,
-   which is every island except Corniche today. */
-const KIT_ZONES = {};
+   Populated when the kit is built, read by footprintsFor.
+
+   EXPORTED, WHICH IT WAS NOT. That was fine while only footprintsFor (in this same file) read it
+   — real survey buildings correctly disappear under a landmark. Generated fabric never got the
+   same courtesy: world-nav.html's cullFabric only tests proximity to real surveyed footprints,
+   and a modern precinct like the mosque's has almost none nearby to trigger that test, so filler
+   buildings happily populate ground a hand-built landmark or a traced precinct shape already
+   covers. Exporting this is what lets cullFabric ask the same question footprintsFor already
+   answers correctly. Empty for every island with no kit, which is every island except Corniche
+   today. */
+export const KIT_ZONES = {};
 
 /* Surveyed heights from every island so far, binned by footprint area, so a band too thin on one
    island can borrow the same band from the others. Filled by footprintsFor as each island lands;
