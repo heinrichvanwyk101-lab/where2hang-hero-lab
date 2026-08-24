@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v174';
+export const BUILD = 'world v175';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3318,7 +3318,14 @@ const DISTRICTS = [
          overwritten by the bake refit and always frames from the hand-placed anchor. h and r are
          framing choices, not measurements: r wide enough to hold all four corners in shot, h set
          from the built model's own eye-line rather than guessed. */
-      { label:'Grand Mosque', osm:'Sheikh Zayed Grand Mosque', x: LM.mosque.x, z: LM.mosque.z, h:10, r:26 },
+      /* r AND h ARE MEASURED FROM THE BUILT MODEL, NOT GUESSED, and had to be re-measured once
+         already: the first rebuild deepened the prayer hall and grew the whole complex to 41 x
+         50.6 units with its true centre 2.5 units south of the root anchor, and the place shot
+         still framed on the old smaller footprint — camera aimed at the empty courtyard end with
+         every dome and all four minarets standing outside the frame. z below carries that offset;
+         r is the model's own half-diagonal (32.6) with a small margin, not the previous 26. */
+      { label:'Grand Mosque', osm:'Sheikh Zayed Grand Mosque',
+        x: LM.mosque.x, z: LM.mosque.z + 2.5, h:9, r:34 },
       /* Both returned by the bake and neither was being asked for. Qasr Al Hosn is the oldest
          building in the city and the east end of the shot; Marina Mall is the Breakwater, which
          is the west end. Together they widen the Corniche framing from the palace-to-ADNOC span
