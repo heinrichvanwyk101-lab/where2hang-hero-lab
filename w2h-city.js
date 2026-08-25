@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v66';
+export const BUILD = 'city v67';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -670,19 +670,49 @@ const PALACE_RING = [
 
 function emiratesPalace(x0, z0){
   const g = new THREE.Group();
+
+  /* THE PALACE WAS ORANGE AND THE BUILDING IS BLUSH BEIGE. The palette this replaces was chasing
+     a real problem — the palace had drifted to the same value as the fabric's white render and
+     lost the separation that identified it — and reached for the wrong lever, pulling warm AND
+     red until the stone was terracotta.
+
+     MEASURED OFF AN AERIAL, white-balanced first: 3,069 near-neutral bright pixels in the same
+     frame have a median of #EDEAE5, giving gains of 0.99 / 1.00 / 1.02. The photograph was
+     already neutral, so the samples stand as read.
+
+         facade, lit        #D6B9AB    R-B  +43   R-G  +29
+         facade, shaded     #C6AA9F    R-B  +39   R-G  +28
+         upper terrace      #E6D2C9    R-B  +29   R-G  +20
+         grand dome         #D5D3D2    R-B   +3   R-G   +2
+         small dome         #E7DDD8    R-B  +15   R-G  +10
+
+         was: stone         #C98055    R-B +116   R-G  +73
+         was: domes         #F2E6C6    R-B  +44   R-G  +12
+
+     The stone was two and a half times too saturated.
+
+     SEPARATION COMES FROM HUE, NOT SATURATION, and that is the lesson worth keeping. The fabric's
+     warmest day tone is limestone render at 0xE2D6BB, R-G +12 — a YELLOW beige. The palace at
+     R-G +29 is a PINK beige. Those two are easy to tell apart at any distance and neither has to
+     be lurid to do it. Forcing the gap with chroma was solving a hue problem with the wrong lever,
+     and it is why one correction produced the next.
+
+     AND THE DOMES ARE NEUTRAL, R-B +3 on the grand one. They were a cream as warm as the real
+     WALLS are. The gold everyone remembers is the night floodlighting and it already lives in the
+     emissive; the daytime shells are pale stone and lead, cooler than what they stand on. */
   const stone = new THREE.MeshStandardMaterial({
     color:0x191009, roughness:0.92, metalness:0.03, emissive:0xE8B547, emissiveIntensity:0.025 });
-  stone.userData.duskColor = 0xC98F63;
+  stone.userData.duskColor = 0xD3B4A4;
   stone.userData.dayMats = new THREE.MeshStandardMaterial({
-    color:0xC98055, roughness:0.92, metalness:0.03 });
+    color:0xD6B9AB, roughness:0.92, metalness:0.03 });
   const arch = new THREE.MeshStandardMaterial({
     color:0x1A150E, roughness:0.9, emissive:0xE8B547, emissiveIntensity:0.10 });
-  arch.userData.duskColor = 0xE8BE93;
-  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6BB92, roughness:0.9 });
+  arch.userData.duskColor = 0xE3CEC4;
+  arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6D2C9, roughness:0.9 });
   const glow = new THREE.MeshStandardMaterial({
     color:0x2A2216, roughness:0.7, emissive:0xE8B547, emissiveIntensity:0.34 });
-  glow.userData.duskColor = 0xF4E4BC;
-  glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2E6C6, roughness:0.7 });
+  glow.userData.duskColor = 0xE0D6CC;
+  glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xDCD8D6, roughness:0.7 });
 
   /* H_WING IS THE RECORD'S OWN HEIGHT. The bake gives this footprint h 25.6 m, which is 3.28
      units — so the old hand-set 3.4 was very nearly right and is simply replaced by the

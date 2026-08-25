@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v181';
+export const BUILD = 'world v182';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -579,8 +579,21 @@ const ISLE_SCALE = 2.5;
    gardens would run into it. Shifted 7 west, this leaves twenty units of open ground on the
    garden side, six on the Etihad side, and fabric between the two landmarks — which is what the
    aerials show. */
-const PALACE_FOOT   = opts.PALACE_FOOT || { w:49.2, d:12.0, dz:0.4 };
-const PALACE_ESTATE = { dx:-7, w:76, d:34 };
+const PALACE_FOOT   = opts.PALACE_FOOT || { w:64.3, d:49.3, dz:0.0 };
+/* RESIZED WITH THE PALACE, AND IT HAD TO BE. city v66 rebuilt the building on its real traced
+   footprint — 64.3 x 49.3 units against the hand-authored bar's 49.2 x 12.0 — so a 76 x 34
+   reservation no longer contains the thing it is reserving. The building spans z -24.6 to +24.6
+   and the rectangle stopped at +/-17: eight units of the southern range and part of the eastern
+   wing stood OUTSIDE their own hole, which is an invitation for the fabric to generate on top of
+   a landmark.
+
+   dx GOES TO ZERO. The -7 offset existed because the old bar's mass sat west of the anchor. The
+   traced ring is symmetric about the anchor in both axes — its own bounding box is centred there
+   — so the offset is now a lean in the wrong direction.
+
+   76 x 60 leaves roughly 6 units of margin on every side, which is a reservation sized to the
+   palace and its forecourt exactly as the note below intends. */
+const PALACE_ESTATE = { dx:0, w:76, d:60 };
 
 /* Positions ON the island, so they scale with it — unlike the buildings standing on them, which
    are already at true scale and must not. */
@@ -3483,7 +3496,18 @@ const DISTRICTS = [
          palace front, not to the lawn. */
       { kind:'lawn',   x:LM.palace.x + PALACE_ESTATE.dx, z:LM.palace.z + PALACE_FOOT.dz,
                        w:PALACE_ESTATE.w - 8, d:PALACE_ESTATE.d - 8 },
-      { kind:'paving', x:LM.palace.x, z:LM.palace.z + 5.5, w:PALACE_FOOT.w * 0.7, d:14 },
+      /* THE PALACE APRON IS SUSPENDED, NOT RESIZED, AND THAT IS DELIBERATE. It was 45 x 14 laid
+         at z + 5.5, which was the forecourt of a building 12 units deep. The traced footprint is
+         49 units deep, so that rectangle now sits ENTIRELY INSIDE the palace — paving under a
+         building, drawing nothing and costing a draw call.
+
+         Not simply moved outward, because there is nothing to move it to that would be true: the
+         real forecourt is a circular drive, a radial axis and a flagpole plaza, and none of that
+         is a rectangle. It also is not in the bake — the estate's internal drives are absent from
+         the road data and the greenspace rings stop at its edge. It wants tracing, the way
+         grandMosque's SITE_POLY and HARDSCAPE_POLY were traced. Until then, nothing here is
+         better than a wrong rectangle. */
+      // { kind:'paving', x:LM.palace.x, z:LM.palace.z + 5.5, w:PALACE_FOOT.w * 0.7, d:14 },
       { kind:'paving', x:LM.etihad.x + ETIHAD_PLAZA.dx, z:LM.etihad.z + ETIHAD_PLAZA.dz,
                        w:ETIHAD_PLAZA.w, d:ETIHAD_PLAZA.d },   // Etihad plaza
       { kind:'paving', x: LM.adnoc.x, z: LM.adnoc.z, w:17, d:13 },   // ADNOC apron
