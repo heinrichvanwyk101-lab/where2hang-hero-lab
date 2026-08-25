@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v184';
+export const BUILD = 'world v186';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -625,6 +625,14 @@ const LM = {
      on the ring, because the ring is a dumbbell and its own centre falls in the link corridor
      between the two masses. The kit solves the dome seat from the polygon instead. */
   qasr:   { x: -1150.6, z: 79.8 },
+  /* MARINA MALL. Building's own OBB centre, not the bake's label-pin — same convention Emirates
+     Palace and Qasr use, since the traced ring is authored around this point. */
+  marina: { x: -949.88, z: -105.87 },
+  /* FAIRMONT MARINA RESIDENCES. Same anchor the "Rixos" build used — the footprint itself was
+     always right, only the name and the massing on top of it were wrong. See the header note in
+     w2h-city.js's fairmontMarina() for the correction in full. True Rixos Marina Abu Dhabi, the
+     actual low-rise resort, is not in this data and is not built. */
+  fairmont: { x: -938.27, z: -132.10 },
   /* THE GRAND MOSQUE HAS NO NAMED LANDMARK ENTRY, BUT IT DOES HAVE A REAL FOOTPRINT — found late,
      because it carries none of the tags that would have surfaced it earlier. Corniche's Overpass
      landmark table has nothing under "mosque" or "Sheikh Zayed" (checked), and neither does a
@@ -3379,6 +3387,8 @@ const DISTRICTS = [
          64.3, so the same framing wants a proportionally larger radius. h 9 aims the camera at
          the dome rather than at the wings. */
       { label:'Qasr Al Watan',  osm:'Qasr Al Watan', x:LM.qasr.x, z:LM.qasr.z, h: 9, r:46 },
+      { label:'Marina Mall',   osm:'Marina Mall',    x:LM.marina.x, z:LM.marina.z, h: 6, r:30 },
+      { label:'Fairmont Marina Residences', osm:'Fairmont Marina Residences', x:LM.fairmont.x, z:LM.fairmont.z, h: 10, r:16 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
       { label:'ADNOC HQ',        osm:'ADNOC Headquarters', x: LM.adnoc.x, z: LM.adnoc.z, h:26, r:22 },
       /* No osm match will ever come back for this one — see LM.mosque above — so it never gets
@@ -3455,6 +3465,8 @@ const DISTRICTS = [
       /* Sized off the kit's own measured extent, 87.7 x 69.6, plus the same ~6 units of margin
          the palace gets. Nothing generated may stand inside a presidential compound. */
       { x: LM.qasr.x, z: LM.qasr.z, w:100, d:82 },    // Qasr Al Watan
+      { x: LM.marina.x, z: LM.marina.z, w:60, d:57 },     // Marina Mall, kit measures 47.8 x 45.2
+      { x: LM.fairmont.x, z: LM.fairmont.z, w:32, d:24 },  // Fairmont Marina, kit measures 23.5 x 15.8
     ],
     /* THE SKIRT. One entry, and only the palace needs one: Etihad's shortest tower is 21.8 units
        and ADNOC is 44, so both stand clear of a 26-unit neighbour on their own.
@@ -5326,6 +5338,8 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const etihad = kit.etihadTowers(LM.etihad.x, LM.etihad.z);
   const adnoc  = kit.adnocHQ(LM.adnoc.x, LM.adnoc.z);
   const qasr   = kit.qasrAlWatan(LM.qasr.x, LM.qasr.z);
+  const marina = kit.marinaMall(LM.marina.x, LM.marina.z);
+  const fairmont = kit.fairmontMarina(LM.fairmont.x, LM.fairmont.z);
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -5348,7 +5362,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, mosque].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -5365,7 +5379,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, mosque]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;

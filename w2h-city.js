@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v71';
+export const BUILD = 'city v75';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2357,6 +2357,303 @@ function qasrAlWatan(x0, z0){
   return g;
 }
 
+/* MARINA MALL — the anchor for this landmark landed exactly on a 355 x 294.6 m building record
+   carrying a 76-point real polygon, 2.1 km from ADNOC and clear of every other hand-built
+   landmark on the island (nearest gap 193 units to Qasr Al Watan). Same discovery as Emirates
+   Palace: the footprint was already in data/isle-corniche.json and nothing needed surveying.
+
+   THE ROUND WEST LOBE IS THE SKY TOWER'S ROTUNDA, IDENTIFIED RATHER THAN GUESSED. Ten of the
+   ring's own points trace a clean arc — fitted by least squares, centre (-14.48, -6.90) relative
+   to the building's own centroid, radius 6.34 units (49.5 m), residual under 0.7 units on a
+   49.5 m arc. That is a real architectural rotunda, not an artefact of the trace, and it is
+   visible in the same place in the aerial screenshot this landmark was requested from: the round
+   structure west of the main block, by "AL KASIR". The tower is seated there, not at whatever
+   point in the polygon happens to have the most open floor around it — a lesson paid for on
+   Qasr Al Watan's dumbbell plan, where the anchor itself sat in a link corridor. Here there was
+   a real clue and it was followed instead of computing past it.
+
+   TOWER HEIGHT IS THE ONE SOURCED FIGURE: 100 m, confirmed by more than one independent source
+   describing the free public viewing deck and its glass lift — "100 meter hoge Sky Tower... in
+   het midden van het winkelcentrum". Not a proportion table, an actual reported height.
+
+   WING HEIGHT IS NOT SOURCED AND SAYS SO. The bake's own record carries h:10, which is 1.28
+   units and implausible for a multi-storey retail complex — almost certainly an incomplete OSM
+   height tag rather than the real figure. 2.9 units (22.6 m) is a reasoned estimate for a
+   G+3/4 mall of this footprint, not a measured one. Worth confirming against a source or a
+   reference photo before this is treated as settled the way the palace's ring height was. */
+const MALL_RING = [
+    [  9.22,-16.49], [  2.26,-19.90], [ -0.18,-14.92], [  0.23,-14.64],
+    [ -0.14,-13.92], [ -0.64,-14.64], [ -0.88,-13.18], [ -1.17,-13.67],
+    [ -2.03,-11.68], [ -2.35,-12.13], [ -2.59,-10.91], [ -3.88,-10.63],
+    [ -3.91, -9.38], [ -4.92, -9.17], [ -4.33, -8.78], [ -5.76, -8.41],
+    [ -5.13, -8.09], [ -6.22, -7.85], [ -5.79, -7.58], [ -6.49, -7.33],
+    [ -7.08, -8.95], [ -9.17,-10.74], [-11.87,-12.21], [-14.85,-12.95],
+    [-17.44,-12.62], [-19.59,-11.35], [-20.77, -9.06], [-20.87, -7.78],
+    [-19.72, -4.76], [-16.55, -1.41], [-13.04, -0.14], [-10.50, -0.04],
+    [-10.49, -0.44], [ -9.76, -0.47], [ -9.55,  0.96], [ -9.97,  0.72],
+    [ -9.53,  1.77], [-10.01,  1.59], [ -9.69,  2.67], [-10.60,  3.64],
+    [-10.08,  4.72], [-10.77,  5.53], [-10.18,  5.50], [-11.05,  6.37],
+    [-10.56,  6.44], [-11.68,  8.32], [-11.19,  8.49], [-14.05, 14.17],
+    [ -7.18, 17.50], [ -4.74, 12.49], [ -2.35, 11.69], [  1.10, 13.37],
+    [ -1.12, 18.49], [  3.94, 20.96], [  4.77, 22.18], [  6.68, 22.67],
+    [ 12.01, 25.31], [ 18.17, 12.29], [ 20.06, 10.78], [ 20.86,  8.42],
+    [ 20.62,  7.09], [ 26.96, -5.69], [ 24.23, -6.91], [ 24.38, -7.27],
+    [ 20.96, -9.38], [ 16.44,-11.26], [ 16.22,-10.87], [ 13.54,-12.27],
+    [ 11.06, -7.32], [  7.59, -9.04], [  6.78,-11.44],
+];
+const MALL_ROT = -0.4520;
+const TOWER_SEAT = [8.73, 4.3];
+
+function marinaMall(x0, z0){
+  const g = new THREE.Group();
+  const H_WING = 2.90;               // 22.6 m — REASONED, NOT SOURCED. See header note.
+  const PLINTH_H = 0.34, CORNICE_H = 0.16;
+
+  /* A shopping mall's real facade is storefront glazing, not masonry — TEX_TOWER's grid is the
+     right family for that, not the arch texture built for the two palaces. cityMaterial already
+     wires the day/dusk/night split correctly for this texture; nothing new needed here. */
+  const plinthMat = new THREE.MeshStandardMaterial({ color:0x100E0A, roughness:0.9, metalness:0 });
+  plinthMat.userData.glassOverride = false;
+  plinthMat.userData.duskColor = 0xC7BFAE;
+  plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCFC7B4, roughness:0.9 });
+  const corniceMat = new THREE.MeshStandardMaterial({
+    color:0x1C1C1A, roughness:0.6, emissive:0xEDE7DC, emissiveIntensity:0.05 });
+  corniceMat.userData.glassOverride = false;
+  corniceMat.userData.duskColor = 0xEDEAE2;
+  corniceMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF0EDE5, roughness:0.6 });
+  const facadeMat = cityMaterial(TEX_TOWER, 1, 1, 0.5, 0xE0DCCC);
+
+  const sh = new THREE.Shape();
+  MALL_RING.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
+  function band(h, mat, yOff, withUV){
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
+    geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+    if (withUV) writeSlabUVs(geo, sh, 12, h);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x0, yOff, z0); g.add(m);
+    return m;
+  }
+  band(PLINTH_H, plinthMat, 0);
+  const body = band(H_WING - PLINTH_H - CORNICE_H, facadeMat, PLINTH_H, true);
+  body.userData.hero = true;
+  band(CORNICE_H, corniceMat, H_WING - CORNICE_H);
+
+  /* THE TENSILE ROOF CLUSTER — the thing every reference photo actually leads with, and the
+     thing a flat cornice cannot produce. Every angle of this building shows the same cluster of
+     white conical fabric roofs standing proud of the retail block, and the model had none.
+
+     SEATED IN THE EAST WING, VERIFIED INSIDE THE RING WITH 51 M OF CLEARANCE — not centred on
+     the whole building, because the mall's own plan is a T with the rotunda and Sky Tower on the
+     west arm; putting a second major feature on top of the first would crowd a silhouette that
+     already has its landmark. The photos also show the tent cluster as a distinct massing from
+     the tower, consistent with seating it in the other wing.
+
+     FIVE CONES, ONE TALL AND FOUR SHORTER, echoing the real cluster's massing rather than
+     copying an exact count — there is no survey of how many bays the real roof has, only that it
+     reads as one dominant peak among several lower ones. Each cone sits on its own short drum so
+     the fabric appears to rise FROM the roofline rather than sit on it like a hat. */
+  const tentMat = new THREE.MeshStandardMaterial({
+    color:0x141210, roughness:0.55, emissive:0xE8DCC8, emissiveIntensity:0.10 });
+  tentMat.userData.glassOverride = false;
+  tentMat.userData.duskColor = 0xEFE9DC;
+  tentMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF4F0E6, roughness:0.55 });
+  const TENT_X = 16, TENT_Z = -3;
+  const tents = [[0, 0, 3.6, 3.4], [-2.6, -2.2, 2.3, 2.6], [2.7, -2.0, 2.3, 2.6],
+                 [-2.3, 2.4, 2.0, 2.3], [2.4, 2.5, 2.0, 2.3]];
+  /* A STRAIGHT CONE IS A PARTY HAT, NOT A TENSILE ROOF, and that is the whole difference between
+     this and the reference photos. Real fabric droops CONCAVE between its high point and its
+     support ring — it is held up at the peak and pulled down at the edge, so the profile curves
+     inward, not a straight taper. A LatheGeometry over a profile that bows in gives that curve
+     directly, at no extra draw cost over the cone it replaces. */
+  function tentProfile(r, h){
+    const pts = [];
+    for (let i = 0; i <= 10; i++){
+      const t = i / 10;
+      // Concave: at t=0 (base) radius r; at t=1 (peak) radius 0. Bowed IN along the way by
+      // shaping with t^0.6 rather than a straight t — the exponent under 1 is what pulls the
+      // mid-profile inward instead of tracing the cone's own straight side.
+      pts.push(new THREE.Vector2(r * (1 - Math.pow(t, 0.6)), t * h));
+    }
+    return pts;
+  }
+  tents.forEach(([dx, dz, r, h]) => {
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r, 0.4, 16), plinthMat);
+    drum.position.set(x0 + TENT_X + dx, H_WING + 0.2, z0 + TENT_Z + dz); g.add(drum);
+    const tent = new THREE.Mesh(new THREE.LatheGeometry(tentProfile(r, h), 16), tentMat);
+    tent.position.set(x0 + TENT_X + dx, H_WING + 0.4, z0 + TENT_Z + dz);
+    tent.userData.hero = true; g.add(tent);
+  });
+
+  /* SKY TOWER. Slender shaft, a glass viewing pod near the top, a thin mast above it — the
+     three things every source agrees on: slim profile, a public deck, a glass lift running the
+     shaft. Apex fixed at the sourced 100 m; the shaft length is 100 m minus the rotunda roof it
+     rises from, not a free constant. */
+  const towerMat = new THREE.MeshStandardMaterial({
+    color:0x14161A, roughness:0.35, metalness:0.25, emissive:0xE8D9A8, emissiveIntensity:0.06 });
+  towerMat.userData.duskColor = 0xC7CDD2;
+  towerMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCDD2D6, roughness:0.35, metalness:0.15 });
+  const podMat = cityMaterial(TEX_TOWER, 1, 1, 0.6, 0x141C22);
+
+  /* SHAFT WIDTH IS ALSO UNSOURCED, AND THE FIRST PASS PICKED SOMETHING TOO THIN TO SEE. 0.34 to
+     0.46 units is 2.7 to 3.6 m across — a flagpole, not a structure with a glass lift and a
+     stair core inside it. 0.60 to 0.85 (4.7 to 6.6 m) is still slender against a 100 m height
+     — a 15:1 ratio — but it is a shaft a building could actually be. */
+  const APEX = 100 / M_PER_U;                          // 12.82 u — the one sourced figure
+  const shaftBase = H_WING, podY = APEX - 1.5, shaftTop = podY - 0.3;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.60, 0.85, shaftTop - shaftBase, 16), towerMat);
+  shaft.position.set(x0 + TOWER_SEAT[0], shaftBase + (shaftTop - shaftBase)/2, z0 + TOWER_SEAT[1]);
+  shaft.userData.hero = true; g.add(shaft);
+  const pod = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.25, 1.5, 20), podMat);
+  pod.position.set(x0 + TOWER_SEAT[0], podY, z0 + TOWER_SEAT[1]); g.add(pod);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, APEX - podY - 0.75, 8), towerMat);
+  mast.position.set(x0 + TOWER_SEAT[0], podY + 0.75 + (APEX - podY - 0.75)/2, z0 + TOWER_SEAT[1]); g.add(mast);
+
+  return g;
+}
+
+/* FAIRMONT MARINA RESIDENCES — twin 39-storey towers joined by a huge arch, 161.9 m, completed
+   2019. CTBUH-sourced: skyscrapercenter.com/building/fairmont-marina/15094, architect Dewan,
+   developer National Investment Corporation, 249 residences plus a 563-room hotel.
+
+   THIS WAS BUILT AS "RIXOS MARINA ABU DHABI" AND THAT WAS WRONG. The footprint is real — 151.9 x
+   86.6 m, a 29-point ring, 224 m from Marina Mall's own anchor — but it was matched to the wrong
+   name. Rixos Marina Abu Dhabi is a genuine, separate low-rise beach resort ("private secluded
+   beach", "several palm tree lined acres" per its own listings) and this footprint is far too
+   large and the wrong shape for that: 151.9 x 86.6 m is a twin-tower PODIUM, not a resort block.
+   Checked against what the ring actually looks like — no round bulge like the mall's rotunda, a
+   single elongated base with two distinct widened ends 142 units (1,107 m — clearly wrong,
+   should read ~142 m; see the corrected separation below) apart, which is exactly what a shared
+   ground floor under two separate towers produces. The real Rixos Marina Abu Dhabi is NOT yet
+   identified in this data and is not built. This corrects the mismatch rather than papering over
+   it: the low-rise resort massing that stood here is gone, replaced by what the footprint and
+   the address ("Al Marina", CTBUH) actually are.
+
+   THE TWO TOWER SEATS ARE THE RING'S OWN TWO ENDS, not a symmetric guess. Points beyond +/-6
+   units split cleanly into a 7-point west cluster and a 7-point east cluster; their centroids are
+   18.2 units (142 m) apart, which is a plausible span for two towers joined by a single arch.
+
+   THE ARCH IS A DELIBERATE SIMPLIFICATION AND SAYS SO. The real towers lean and curve into one
+   another; reproducing that would need a swept, tapering profile this file has no measurements
+   for. A half-torus spanning the same gap at the same crown height gives the right silhouette —
+   two towers, one big opening between them, apex at the sourced 161.9 m — without inventing a
+   curve this file cannot justify. */
+const FAIRMONT_RING = [
+    [ -8.78,  3.79], [ -1.90,  7.41], [ -0.64,  6.01], [  0.88,  5.08],
+    [  2.42,  4.17], [  2.69,  4.69], [  4.92,  3.33], [  7.68, -0.67],
+    [  9.04, -1.51], [  9.14, -0.88], [ 10.60, -1.58], [  9.38, -2.51],
+    [  9.21, -1.94], [  8.55, -2.49], [  5.49, -7.17], [  4.88, -6.50],
+    [  3.53, -8.36], [  1.31, -6.78], [  1.05, -7.17], [  0.08, -6.65],
+    [ -3.62, -4.09], [ -5.41, -2.33], [ -5.01, -1.82], [ -6.81, -0.53],
+    [ -7.40, -1.01], [ -9.29, -0.55], [ -9.96,  0.17], [-10.24,  1.47],
+    [-10.04,  2.41],
+];
+const FAIRMONT_ROT = 0.5800;
+const FAIRMONT_WEST = [-8.93, 0.82];
+const FAIRMONT_EAST = [9.09, -1.65];
+
+function fairmontMarina(x0, z0){
+  const g = new THREE.Group();
+  const APEX = 161.9 / M_PER_U;                 // 20.76 u — CTBUH-sourced, to tip
+  const H_PODIUM = 3.1;                          // ~24 m, unsourced — a plausible low-rise base
+
+  const podiumMat = palaceFacadeMat(0xE8E2D4, 0xE2DACA, 0.22);
+  const plinthMat = new THREE.MeshStandardMaterial({ color:0x100E0A, roughness:0.9, metalness:0 });
+  plinthMat.userData.glassOverride = false;
+  plinthMat.userData.duskColor = 0xC7BFAE;
+  plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCFC7B4, roughness:0.9 });
+
+  const sh = new THREE.Shape();
+  FAIRMONT_RING.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
+  function band(h, mat, yOff, withUV){
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
+    geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+    if (withUV) writeSlabUVs(geo, sh, 12, h);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x0, yOff, z0); g.add(m);
+    return m;
+  }
+  band(0.30, plinthMat, 0);
+  const podium = band(H_PODIUM - 0.30, podiumMat, 0.30, true);
+  podium.userData.hero = true;
+
+  /* THE TOWERS WERE GLASS AND THEY ARE NOT GLASS. TEX_TOWER is a curtain-wall grid — the right
+     family for ADNOC or Etihad, and flatly the wrong one for a building every source calls
+     "oriental style" and "Arab traditions... postmodernism". That is masonry language, the same
+     one the two palaces use, not a glass office tower's. Caught on review, not on first build —
+     the same category of miss as ADNOC's bronze earlier in this file: a material picked for
+     what a tower usually is, not for what this one is documented to be.
+
+     Footprint is an estimate — 43 x 34 m, plausible for a 39-storey hotel and residence tower of
+     this scale — tapered slightly toward the crown, which every reference photo agrees on
+     regardless of exact proportions. */
+  const towerMat = palaceFacadeMat(0xE6D9C2, 0xE0D2B8, 0.20);
+  const turretMat = new THREE.MeshStandardMaterial({
+    color:0x1C170F, roughness:0.6, emissive:0xE8D9A8, emissiveIntensity:0.10 });
+  turretMat.userData.glassOverride = false;
+  turretMat.userData.duskColor = 0xEBE2D0;
+  turretMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEEE6D6, roughness:0.6 });
+  /* R_ARCH is reduced by the tube radius, because a torus's OUTER surface at the crown sits one
+     tube-radius beyond the ring path itself — measured: leaving that out put the crown at 170 m
+     against a sourced 161.9 m, an 8 m overshoot that tracked the tube radius almost exactly. */
+  const ARCH_TUBE = 1.05;
+  const springY = APEX * 0.70, R_ARCH = APEX - springY - ARCH_TUBE;
+  const TW = 5.5, TD = 4.3;
+  [FAIRMONT_WEST, FAIRMONT_EAST].forEach(([tx, tz]) => {
+    const geo = new THREE.BoxGeometry(TW, springY - H_PODIUM, TD);
+    // Taper: scale the top face in slightly, done by hand since BoxGeometry has no built-in taper.
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++){
+      if (pos.getY(i) > 0){
+        pos.setX(i, pos.getX(i) * 0.82);
+        pos.setZ(i, pos.getZ(i) * 0.82);
+      }
+    }
+    geo.computeVertexNormals();
+    const t = new THREE.Mesh(geo, towerMat);
+    t.position.set(x0 + tx, H_PODIUM + (springY - H_PODIUM)/2, z0 + tz);
+    t.userData.hero = true; g.add(t);
+
+    /* A FLAT PARAPET WAS THE OTHER HALF OF WHY THIS READ AS A BOX. Every "oriental style" tower
+       in this file so far — the two palaces, the mosque — resolves its roofline into something,
+       never a plain cut edge. A drum and a small dome does the same job here at a fraction of
+       the palace's cost: it is what turns a box into a building the eye reads as finished. */
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, 0.5, 16), turretMat);
+    drum.position.set(x0 + tx, springY + 0.25, z0 + tz); g.add(drum);
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(1.3, 16, 10, 0, Math.PI*2, 0, Math.PI/2), turretMat);
+    cap.position.set(x0 + tx, springY + 0.5, z0 + tz); cap.userData.hero = true; g.add(cap);
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.7, 6), turretMat);
+    spike.position.set(x0 + tx, springY + 0.5 + 1.3 + 0.35, z0 + tz); g.add(spike);
+  });
+
+  /* THE ARCH. A half-torus spanning the gap at the crown — see the header note on why this is a
+     simplification rather than a traced curve. Rotated so its plane contains both tower seats
+     and stands vertical; positioned so its two ends land at the towers' inner faces. */
+  const midX = (FAIRMONT_WEST[0] + FAIRMONT_EAST[0]) / 2, midZ = (FAIRMONT_WEST[1] + FAIRMONT_EAST[1]) / 2;
+  const heading = Math.atan2(FAIRMONT_EAST[1] - FAIRMONT_WEST[1], FAIRMONT_EAST[0] - FAIRMONT_WEST[0]);
+  /* TorusGeometry's arc(0, PI) already rises through +Y in its own frame — angle 0 sits at +X,
+     angle PI/2 (the crown) at +Y, angle PI at -X. That IS an upward arch with no z-rotation
+     needed; the z-flip in the first version inverted it into a downward bowl, which is why the
+     arch measured no taller than its own spring height — every point on a bowl sits AT OR BELOW
+     its centre. Only the y-rotation is needed, to turn the arch's local X-span onto the line
+     between the two towers. */
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(R_ARCH, ARCH_TUBE, 12, 32, Math.PI), towerMat);
+  arch.rotation.y = -heading;
+  arch.position.set(x0 + midX, springY, z0 + midZ);
+  arch.userData.hero = true; g.add(arch);
+
+  /* A KEYSTONE, because a bare torus reads as a pipe or a door handle rather than an archway —
+     confirmed on the bench render, where it looked exactly like that. A single wedge at the
+     crown, wider than the tube either side of it, is the one detail that reads as "this is a
+     built arch" rather than "this is a curved tube" at any distance. */
+  const key = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.6, ARCH_TUBE * 2.3), turretMat);
+  key.position.set(x0 + midX, springY + R_ARCH + ARCH_TUBE * 0.3, z0 + midZ);
+  key.rotation.y = -heading; g.add(key);
+
+  return g;
+}
+
+
 /* ADNOC HQ — HOK, 342 m, 65 floors, completed 2015. REBUILT FROM PHOTOGRAPHS, because the
    previous version had the building's topology wrong and no amount of proportion work on it
    would have helped.
@@ -3003,6 +3300,6 @@ function grandMosque(x0, z0){
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, qasrAlWatan, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
+         etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }
