@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v57';
+export const BUILD = 'city v58';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1751,6 +1751,31 @@ function grandMosque(x0, z0){
     color:0x0C2A33, roughness:0.25, metalness:0.1, emissive:0x1E5866, emissiveIntensity:0.20 });
   pool.userData.duskColor = 0x3E97A8;
   pool.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x4FA9BC, roughness:0.2 });
+  /* ASPHALT AND LINE MARKING, FOR THE SITE LAYER SPECIFICALLY — "parking should be parking",
+     not the same pale hardscape tone the site ground and the garden layer both already used.
+     Genuinely dark, roughness high (matte tarmac, not wet-look), against a bright near-white
+     marking colour so the stripes actually read as paint on asphalt rather than another shade
+     of the same grey. */
+  const asphalt = new THREE.MeshStandardMaterial({
+    color:0x121214, roughness:0.92, emissive:0x0A0A0B, emissiveIntensity:0.05 });
+  asphalt.userData.duskColor = 0x1C1C1F;
+  asphalt.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x232326, roughness:0.92 });
+  const lineMark = new THREE.MeshStandardMaterial({
+    color:0xE8E4D8, roughness:0.55, emissive:0xE8E4D8, emissiveIntensity:0.25 });
+  lineMark.userData.duskColor = 0xF2EFE6;
+  lineMark.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF5F2EA, roughness:0.5 });
+  /* GARDEN PLANTING, FOR PORTIONS OF THE HARDSCAPE LAYER — "gardens should have garden portions",
+     not one uniform paved tone across the whole traced shape. Green enough to read as planting
+     against the arch material's pale cream, not so saturated it looks like a lawn from a
+     different, more temperate climate. */
+  const gardenBed = new THREE.MeshStandardMaterial({
+    color:0x3A4A32, roughness:0.85, emissive:0x2C3826, emissiveIntensity:0.08 });
+  gardenBed.userData.duskColor = 0x465A3C;
+  gardenBed.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x4C5F40, roughness:0.85 });
+  const shrubMat = new THREE.MeshStandardMaterial({
+    color:0x4A5C3E, roughness:0.8, emissive:0x323F2A, emissiveIntensity:0.10 });
+  shrubMat.userData.duskColor = 0x566B48;
+  shrubMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x5C7050, roughness:0.8 });
 
   /* REBUILT AGAINST THE ORBIT SET DIRECTLY, not against the first pass's proportions. Three
      things the first version had wrong, each visible in every reference frame at once:
@@ -1987,25 +2012,117 @@ function grandMosque(x0, z0){
     g.add(mesh);
   }
 
-  /* LAYER 1 — THE SITE BOUNDARY. The developed area's outer edge, out to the surrounding roads.
-     Runs mostly west and north of the building, which is real, not an artifact: it is the edge
-     of the whole compound relative to where the building sits within it, not a shape centred on
-     the mosque. Says nothing about what's inside it — that's layer 2. */
-  tracedGround([
-    [26.67,-65.12],[13.06,-75.74],[12.65,-75.79],[-6.63,-73.33],[-6.92,-73.2],
-    [-29.64,-62.39],[-29.97,-62.27],[-47.29,-56.0],[-47.5,-55.95],[-30.88,1.03],
-    [-30.98,0.73],[-43.35,62.61],[-43.77,62.46],[9.33,78.12],[8.96,78.1],
-    [23.44,74.81],[23.63,74.68],[33.23,62.96],[33.32,62.78],[39.01,43.8],
-    [39.01,43.62],
-  ], paving, BASE_Y + 0.015);
+  /* POINT-IN-POLYGON, IN THE SAME REAL-WORLD-ALIGNED (dx,dz) SPACE THE offsets ARRAYS THEMSELVES
+     USE — standard ray-cast, nothing scene-specific. Needed because scattering markings or
+     shrubs across a traced polygon's bounding box would put half of them outside the actual
+     traced shape; this keeps only the ones genuinely inside it. */
+  function pointInPoly(px, pz, poly){
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+      const xi = poly[i][0], zi = poly[i][1], xj = poly[j][0], zj = poly[j][1];
+      const hit = ((zi > pz) !== (zj > pz)) &&
+        (px < (xj - xi) * (pz - zi) / (zj - zi) + xi);
+      if (hit) inside = !inside;
+    }
+    return inside;
+  }
+
+  /* WORLD-ALIGNED OFFSET -> RAW OFFSET, THE SAME INVERSE USED FOR THE TRACED SHAPES THEMSELVES.
+     Anything placed with x0+dx_raw, z0+dz_raw (the pattern every other mesh in this function
+     already uses) gets the wrapper's rotation applied once, same as the building. A point already
+     expressed in real-world-aligned terms — which is what pointInPoly needs to test sensibly
+     against the traced polygons above — needs the inverse first: world_rel = (-rawZ, rawX), so
+     rawX = worldZ, rawZ = -worldX. Same relation verified against THREE.Group's real matrix math
+     when tracedGround itself was built; reused here rather than re-derived. */
+  function worldToRaw(wx, wz){ return [wz, -wx]; }
+
+  /* PARKING MARKINGS — SHORT PAINTED STROKES ON THE ASPHALT, STYLISED RATHER THAN SURVEYED.
+     No trace exists yet for where real stall lines actually run, so this is a regular grid of
+     bay dividers at a scale that reads as "marked parking" from altitude, clipped to the site
+     polygon so nothing paints itself onto ground outside the traced shape. Not a claim about
+     real stall positions — a visual language, same spirit as the old parking lot's tree grid
+     before it was pulled for being unmeasured. */
+  function parkingMarkings(poly){
+    const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+    const x0b = Math.min(...xs), x1b = Math.max(...xs);
+    const z0b = Math.min(...zs), z1b = Math.max(...zs);
+    const rowGap = 6.0, strokeGap = 3.0, strokeLen = 2.2, strokeW = 0.18;
+    for (let rz = z0b + rowGap / 2; rz < z1b; rz += rowGap){
+      for (let rx = x0b + strokeGap / 2; rx < x1b; rx += strokeGap){
+        if (!pointInPoly(rx, rz, poly)) continue;
+        const [rawX, rawZ] = worldToRaw(rx, rz);
+        const stroke = new THREE.Mesh(new THREE.BoxGeometry(strokeW, 0.03, strokeLen), lineMark);
+        stroke.position.set(x0 + rawX, BASE_Y + 0.017, z0 + rawZ);
+        g.add(stroke);
+      }
+    }
+  }
+
+  /* GARDEN PATCHES WITHIN THE HARDSCAPE LAYER — bed + shrub clusters over PART of the traced
+     shape, not all of it, so "hardscape and gardens" actually reads as both rather than one
+     paved tone. No sub-boundary exists yet for exactly which portion is planting versus paving,
+     so this samples a grid across the polygon and keeps roughly a third of the inside points,
+     clustered rather than scattered uniformly — a checkerboard-ish stride reads as deliberate
+     beds, a random third reads as noise.
+
+     DETERMINISTIC, NOT Math.random() — this file already has a convention for exactly this
+     (grainHash: "deterministic per-position, so a reload does not reshuffle the estate") and a
+     garden that rearranges itself on every load would be worse than the plain paving it replaces.
+     Same trick: hash the cell position into a stable pseudo-random unit interval. */
+  function cellRnd(gx, gz, salt){
+    const h = Math.imul(Math.round(gx * 977) ^ Math.imul(Math.round(gz * 977) + salt, 0x9E3779B1), 0x85EBCA6B);
+    return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+  }
+  function gardenPatches(poly){
+    const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+    const x0b = Math.min(...xs), x1b = Math.max(...xs);
+    const z0b = Math.min(...zs), z1b = Math.max(...zs);
+    const cell = 5.5;
+    let col = 0;
+    for (let gz = z0b + cell / 2; gz < z1b; gz += cell){
+      col++;
+      for (let gx = x0b + cell / 2; gx < x1b; gx += cell){
+        col++;
+        if (col % 3 !== 0) continue;               // keep roughly a third of the grid cells
+        if (!pointInPoly(gx, gz, poly)) continue;
+        const [rawX, rawZ] = worldToRaw(gx, gz);
+        const bed = new THREE.Mesh(new THREE.CircleGeometry(cell * 0.42, 10), gardenBed);
+        bed.rotation.x = -Math.PI / 2;
+        bed.position.set(x0 + rawX, BASE_Y + 0.021, z0 + rawZ);
+        g.add(bed);
+        const shrubN = 3 + Math.floor(cellRnd(gx, gz, 1) * 3);
+        for (let s = 0; s < shrubN; s++){
+          const a = cellRnd(gx, gz, 10 + s) * Math.PI * 2, r = cellRnd(gx, gz, 20 + s) * cell * 0.32;
+          const shrub = new THREE.Mesh(new THREE.SphereGeometry(0.38 + cellRnd(gx, gz, 30 + s) * 0.2, 7, 6), shrubMat);
+          shrub.position.set(x0 + rawX + Math.cos(a) * r, BASE_Y + 0.24, z0 + rawZ + Math.sin(a) * r);
+          g.add(shrub);
+        }
+      }
+    }
+  }
+
+  /* LAYER 1 — THE SITE BOUNDARY, NOW ASPHALT WITH PAINTED MARKINGS. Runs mostly west and north
+     of the building, which is real, not an artifact: it is the edge of the whole compound
+     relative to where the building sits within it, not a shape centred on the mosque. Cleared
+     from every real major road by a genuinely generous margin (half the actual 28 m corridor
+     width plus a 6-unit safety margin, ~7.8 units total) rather than a fine-tuned minimum —
+     checked with the segment-intersection test against data/roads-corniche.json, zero crossings,
+     same as before, just with room to spare this time instead of just clearing. */
+  const SITE_POLY = [
+    [22.89,-64.79],[12.54,-71.98],[12.13,-72.03],[-5.02,-69.9],[-5.31,-69.76],
+    [-28.29,-58.85],[-28.62,-58.72],[-46.26,-52.35],[-46.47,-52.29],[-30.88,1.03],
+    [-30.98,0.73],[-41.21,62.45],[-41.21,62.45],[9.5,74.33],[9.13,74.31],
+    [21.42,71.6],[21.61,71.47],[29.85,61.23],[29.94,61.05],[35.12,43.82],
+    [35.16,43.65],
+  ];
+  tracedGround(SITE_POLY, asphalt, BASE_Y + 0.015);
+  parkingMarkings(SITE_POLY);
 
   /* LAYER 2 — HARDSCAPE AND GARDENS. The closer, organic boundary hugging the building on three
      sides — the ornamental paving and planting immediately around the mosque, inside the site
-     edge above. Given the `arch` material rather than `paving`: same material already used for
-     the (now-removed) garden beds earlier in this file — a paler, warmer cream — specifically so
-     this layer reads as visually distinct from the plainer outer site ground rather than
-     blending into it, since the two were indistinguishable on the last pass. */
-  tracedGround([
+     edge above. `arch` base for the paving; gardenPatches lays actual planted beds over part of
+     the same traced shape rather than leaving it one uniform paved tone. */
+  const HARDSCAPE_POLY = [
     [25.93,21.87],[-1.37,28.67],[-1.39,28.63],[-9.95,34.87],[-10.18,34.85],
     [-20.86,34.86],[-21.18,34.66],[-26.52,31.52],[-26.62,31.38],[-31.85,23.67],
     [-31.97,23.47],[-26.87,14.4],[-26.89,14.28],[-25.1,4.61],[-25.28,4.47],
@@ -2018,7 +2135,9 @@ function grandMosque(x0, z0){
     [14.93,-3.22],[14.8,-3.23],[15.96,1.56],[15.87,1.42],[33.5,-1.84],
     [33.3,-2.04],[37.78,-1.65],[37.64,-1.96],[37.73,10.59],[37.71,10.49],
     [30.74,13.29],[30.71,13.26],[24.85,14.25],[24.62,14.02],
-  ], arch, BASE_Y + 0.02);
+  ];
+  tracedGround(HARDSCAPE_POLY, arch, BASE_Y + 0.02);
+  gardenPatches(HARDSCAPE_POLY);
 
   return g;
 }
