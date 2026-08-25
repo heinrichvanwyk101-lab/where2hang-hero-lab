@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v56';
+export const BUILD = 'city v57';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1953,21 +1953,25 @@ function grandMosque(x0, z0){
      (1050.8, 804.9) against the tap-verified anchor of (1051, 804), under a unit of error, no
      correction factor needed anywhere.
 
-     A SMALL RESIDUAL TILT AND A FEW VERTICES TOO CLOSE TO REAL ROADS — BOTH CHECKED AGAINST
-     data/roads-corniche.json DIRECTLY, NOT ESTIMATED. Under a unit of error on the 41-unit
-     building trace is invisible; the same small angular error reads as visible drift at the site
-     boundary's ~90-unit reach. A 1-degree clockwise rotation is baked into every offset below
-     (this scene's +x-east/+z-south convention: x'=x·cosθ-z·sinθ, z'=x·sinθ+z·cosθ) — this alone
-     cut major-road crossings from 8 to 6 when checked against the real baked road geometry, not
-     eliminated it, so it wasn't the whole story. The remaining handful of site-boundary vertices
-     that still sat within 0-3 units of an actual major road (Corniche's own road data, filtered
-     to `cls==='major'` so internal site driveways — which a boundary trace is expected to cross —
-     don't count as false positives) were pulled back to a 3-unit clearance along the real road's
-     own perpendicular, not toward the shape's centroid, which would have distorted the trace for
-     no geometric reason. Five road-adjacent points remain even after that — the same fix applied
-     harder starts measurably reshaping what was actually traced rather than correcting it, which
-     is a worse trade. The hardscape/garden layer needed none of this: zero major-road crossings
-     at 1 degree, checked the same way.
+     A SMALL RESIDUAL TILT AND SEVERAL VERTICES TOO CLOSE TO REAL ROADS — BOTH CHECKED AGAINST
+     data/roads-corniche.json DIRECTLY, NOT ESTIMATED. A 1-degree clockwise rotation is baked
+     into every offset below (this scene's +x-east/+z-south convention: x'=x·cosθ-z·sinθ,
+     z'=x·sinθ+z·cosθ), cutting major-road crossings from 8 to 6 — real, but not the whole
+     story. A SINGLE pull-back pass (each close vertex pushed to a fixed 3-unit clearance along
+     its nearest major road's own perpendicular) got crossings to 5 and looked done, but wasn't:
+     three vertices were still at 0.7 units, essentially touching the road, because pulling one
+     point clear of one road can land it closer to a second road the single pass never re-checked.
+     Fixed properly with an ITERATED correction instead — re-measure against every major road
+     after each pass, keep pushing anything still under a 4-unit clearance, repeat until a full
+     pass moves nothing and the segment-intersection test independently confirms zero crossings.
+     Converged in 2 iterations. One vertex moved substantially more than the rest (about 10 units,
+     roughly 78 real metres) to actually clear the road rather than just approach it — worth a
+     visual sanity check against the reference photo specifically there, since it's the one point
+     where "matches the trace" and "doesn't cross a live road" pulled hardest against each other,
+     and the second was treated as non-negotiable. `cls==='major'` only, throughout — internal
+     site driveways are expected to cross a boundary trace and were never counted as violations.
+     The hardscape/garden layer needed none of this: zero major-road crossings at 1 degree,
+     checked the same way, unchanged.
 
      THE SHAPE-TO-GROUND ROTATION FLIPS NORTH-SOUTH BY DEFAULT. THREE.Shape builds in its own XY
      plane; rotateX(-PI/2) to lay it flat sends shape-Y to WORLD -Z, not +Z, verified directly
@@ -1988,11 +1992,11 @@ function grandMosque(x0, z0){
      of the whole compound relative to where the building sits within it, not a shape centred on
      the mosque. Says nothing about what's inside it — that's layer 2. */
   tracedGround([
-    [36.87,-65.79],[13.18,-76.62],[12.77,-76.64],[-7.06,-74.24],[-7.34,-74.1],
-    [-29.95,-63.21],[-30.33,-63.2],[-47.54,-56.87],[-47.77,-56.91],[-30.88,1.03],
-    [-30.98,0.73],[-43.35,62.61],[-43.77,62.46],[9.31,78.55],[8.94,78.45],
-    [23.97,75.65],[24.06,75.36],[34.12,63.42],[34.21,63.24],[46.01,44.06],
-    [46.01,43.88],
+    [26.67,-65.12],[13.06,-75.74],[12.65,-75.79],[-6.63,-73.33],[-6.92,-73.2],
+    [-29.64,-62.39],[-29.97,-62.27],[-47.29,-56.0],[-47.5,-55.95],[-30.88,1.03],
+    [-30.98,0.73],[-43.35,62.61],[-43.77,62.46],[9.33,78.12],[8.96,78.1],
+    [23.44,74.81],[23.63,74.68],[33.23,62.96],[33.32,62.78],[39.01,43.8],
+    [39.01,43.62],
   ], paving, BASE_Y + 0.015);
 
   /* LAYER 2 — HARDSCAPE AND GARDENS. The closer, organic boundary hugging the building on three
