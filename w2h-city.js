@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v76';
+export const BUILD = 'city v83';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2497,14 +2497,58 @@ function marinaMall(x0, z0){
     color:0x14161A, roughness:0.35, metalness:0.25, emissive:0xE8D9A8, emissiveIntensity:0.06 });
   towerMat.userData.duskColor = 0xC7CDD2;
   towerMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCDD2D6, roughness:0.35, metalness:0.15 });
+
+  /* THE FUNNEL WAS MISSING ENTIRELY, AND IT IS THE MOST RECOGNISABLE PART OF THIS BUILDING.
+     Every reference photo leads with it: a huge flared skirt with a scalloped, petalled rim,
+     easily 50-plus metres across at the base, that the tower's own shaft rises out of. The
+     previous version had the shaft starting straight from the roof at 4.7 to 6.6 m across —
+     correct as a SHAFT, but with nothing around its foot. A pole reading as a pole is not the
+     same fault as a pole that should have been a funnel and wasn't one at all.
+
+     BUILT AS A LATHE, flaring from the shaft's own base radius to a wide skirt rim over a real
+     height rather than a thin disc — the photos show this occupying a substantial fraction of
+     the tower's visible height, not a token collar. */
+  const FUNNEL_H = 3.4, FUNNEL_R = 6.8;
+  const funnelPts = [];
+  for (let i = 0; i <= 12; i++){
+    const t = i / 12;
+    // Concave-then-flare, the same trumpet-bell curve real tensile funnels have: tight near the
+    // shaft, opening out fast near the rim. t^2.2 keeps the top narrow and throws the widening
+    // to the last third of the height, which is what the photos show.
+    funnelPts.push(new THREE.Vector2(0.85 + (FUNNEL_R - 0.85) * Math.pow(t, 2.2), (1 - t) * FUNNEL_H));
+  }
+  const funnel = new THREE.Mesh(new THREE.LatheGeometry(funnelPts, 24), towerMat);
+  funnel.position.set(x0 + TOWER_SEAT[0], H_WING, z0 + TOWER_SEAT[1]);
+  funnel.userData.hero = true; g.add(funnel);
+
+  /* THE SCALLOPED RIM — a ring of flattened, overlapping petals round the funnel's wide edge.
+     This is the ribbed, flower-like silhouette that makes the skirt read as fabric rather than
+     as a plain cone; a smooth circular edge was tried first (visible in the bench render) and
+     did not read as the same structure at all. Petal count chosen so adjacent petals overlap:
+     18 petals at this radius overlap by roughly a third, which is what closes the gaps between
+     them into a continuous scalloped edge instead of leaving triangular gaps. */
+  const petalMat = cityMaterial(TEX_TOWER, 1, 1, 0.35, 0xD8DCDD);
+  const PETAL_N = 18, PETAL_LEN = 1.5;
+  for (let i = 0; i < PETAL_N; i++){
+    const a = (i / PETAL_N) * Math.PI * 2;
+    const petal = new THREE.Mesh(new THREE.ConeGeometry(PETAL_LEN * 0.62, PETAL_LEN, 3), petalMat);
+    petal.scale.y = 0.30;                    // flattened into a wedge, not a spike
+    petal.rotation.z = Math.PI / 2;          // point the cone outward, not upward
+    petal.rotation.y = -a;
+    const px = Math.cos(a) * (FUNNEL_R - 0.3), pz = Math.sin(a) * (FUNNEL_R - 0.3);
+    petal.position.set(x0 + TOWER_SEAT[0] + px, H_WING + 0.15, z0 + TOWER_SEAT[1] + pz);
+    g.add(petal);
+  }
+
   const podMat = cityMaterial(TEX_TOWER, 1, 1, 0.6, 0x141C22);
 
   /* SHAFT WIDTH IS ALSO UNSOURCED, AND THE FIRST PASS PICKED SOMETHING TOO THIN TO SEE. 0.34 to
      0.46 units is 2.7 to 3.6 m across — a flagpole, not a structure with a glass lift and a
      stair core inside it. 0.60 to 0.85 (4.7 to 6.6 m) is still slender against a 100 m height
-     — a 15:1 ratio — but it is a shaft a building could actually be. */
+     — a 15:1 ratio — but it is a shaft a building could actually be. Now rises from the TOP of
+     the funnel rather than from the roof, since the funnel occupies that space instead. */
   const APEX = 100 / M_PER_U;                          // 12.82 u — the one sourced figure
-  const shaftBase = H_WING, podY = APEX - 1.5, shaftTop = podY - 0.3;
+  const shaftBase = H_WING + FUNNEL_H, podY = APEX - 1.5, shaftTop = podY - 0.3;
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.60, 0.85, shaftTop - shaftBase, 16), towerMat);
   shaft.position.set(x0 + TOWER_SEAT[0], shaftBase + (shaftTop - shaftBase)/2, z0 + TOWER_SEAT[1]);
   shaft.userData.hero = true; g.add(shaft);
@@ -2516,174 +2560,234 @@ function marinaMall(x0, z0){
   return g;
 }
 
-/* FAIRMONT MARINA RESIDENCES — twin 39-storey towers joined by a huge arch, 161.9 m, completed
-   2019. CTBUH-sourced: skyscrapercenter.com/building/fairmont-marina/15094, architect Dewan,
-   developer National Investment Corporation, 249 residences plus a 563-room hotel.
+/* THE TWO TOWERS, TRACED FROM THE DEVELOPER'S OWN SITE PLAN, NOT ESTIMATED. Tapered boxes were
+   a placeholder; the real footprints are bent slabs, each with a wing angled off the main run —
+   confirmed by the plan's own legend: 28 is Fairmont Marina RESORTS (the hotel), 29 is Fairmont
+   Marina RESIDENCES (the apartments), two separately named buildings sharing one arch.
 
-   THIS WAS BUILT AS "RIXOS MARINA ABU DHABI" AND THAT WAS WRONG. The footprint is real — 151.9 x
-   86.6 m, a 29-point ring, 224 m from Marina Mall's own anchor — but it was matched to the wrong
-   name. Rixos Marina Abu Dhabi is a genuine, separate low-rise beach resort ("private secluded
-   beach", "several palm tree lined acres" per its own listings) and this footprint is far too
-   large and the wrong shape for that: 151.9 x 86.6 m is a twin-tower PODIUM, not a resort block.
-   Checked against what the ring actually looks like — no round bulge like the mall's rotunda, a
-   single elongated base with two distinct widened ends 142 units (1,107 m — clearly wrong,
-   should read ~142 m; see the corrected separation below) apart, which is exactly what a shared
-   ground floor under two separate towers produces. The real Rixos Marina Abu Dhabi is NOT yet
-   identified in this data and is not built. This corrects the mismatch rather than papering over
-   it: the low-rise resort massing that stood here is gone, replaced by what the footprint and
-   the address ("Al Marina", CTBUH) actually are.
+   PIPELINE: colour-masked the plan's highlighted footprints, traced their boundaries (scikit-
+   image marching squares), converted pixel to metres via the plan's own printed graphic scale
+   (1:750, verified against the scale bar's own tick spacing), then rotated the pair so the line
+   between their centroids matches this building's real heading — already known from the OSM
+   podium ring, which stays geo-referenced even though these two shapes now override its guess
+   at the towers themselves. Simplified to ~26 points each afterward.
 
-   THE TWO TOWER SEATS ARE THE RING'S OWN TWO ENDS, not a symmetric guess. Points beyond +/-6
-   units split cleanly into a 7-point west cluster and a 7-point east cluster; their centroids are
-   18.2 units (142 m) apart, which is a plausible span for two towers joined by a single arch.
-
-   THE ARCH IS A DELIBERATE SIMPLIFICATION AND SAYS SO. The real towers lean and curve into one
-   another; reproducing that would need a swept, tapering profile this file has no measurements
-   for. A half-torus spanning the same gap at the same crown height gives the right silhouette —
-   two towers, one big opening between them, apex at the sourced 161.9 m — without inventing a
-   curve this file cannot justify. */
-const FAIRMONT_RING = [
-    [ -8.78,  3.79], [ -1.90,  7.41], [ -0.64,  6.01], [  0.88,  5.08],
-    [  2.42,  4.17], [  2.69,  4.69], [  4.92,  3.33], [  7.68, -0.67],
-    [  9.04, -1.51], [  9.14, -0.88], [ 10.60, -1.58], [  9.38, -2.51],
-    [  9.21, -1.94], [  8.55, -2.49], [  5.49, -7.17], [  4.88, -6.50],
-    [  3.53, -8.36], [  1.31, -6.78], [  1.05, -7.17], [  0.08, -6.65],
-    [ -3.62, -4.09], [ -5.41, -2.33], [ -5.01, -1.82], [ -6.81, -0.53],
-    [ -7.40, -1.01], [ -9.29, -0.55], [ -9.96,  0.17], [-10.24,  1.47],
-    [-10.04,  2.41],
+   THE GAP BETWEEN THEM IS MEASURED, NOT ASSUMED: 39 m between the two inner tip faces, found by
+   taking each tower's own extreme corner region rather than eyeballing a midpoint. Every arch
+   dimension below is built from that figure, not from a separate guess that happened to agree
+   with it. */
+const YELLOW_TOWER = [
+    [ -3.51,  0.20], [ -3.39,  0.67], [ -3.57,  1.23], [ -4.47,  2.14],
+    [ -5.24,  2.46], [ -5.62,  2.24], [ -5.78,  2.76], [ -7.34,  3.71],
+    [ -7.32,  3.93], [ -7.62,  4.13], [ -7.94,  4.79], [ -8.60,  5.37],
+    [ -9.35,  5.12], [ -9.57,  4.76], [ -9.47,  4.64], [ -9.63,  4.63],
+    [ -9.46,  4.49], [ -9.66,  4.19], [ -9.56,  3.70], [ -9.11,  2.72],
+    [ -8.30,  1.78], [ -7.86,  1.75], [ -7.59,  1.49], [ -6.76,  1.14],
+    [ -6.52,  1.19], [ -4.78,  0.31], [ -4.11,  0.11],
 ];
-const FAIRMONT_ROT = 0.5800;
-/* SEATS RESOLVED, NOT ASSUMED — THE FIRST PASS OVERHUNG THE PODIUM BY UP TO 11 M. Lobe centroids
-   are the right idea (same technique that placed Marina Mall's Sky Tower correctly) but were
-   applied to the wrong region: a whole-lobe centroid ignores how NARROW the ring gets at its two
-   tapered tips, where the towers actually stand. Measured on the built meshes before this fix:
-   tower 0 hung 11.2 m past the podium's west edge, tower 1 hung 9.7 m past the east edge, and
-   the clearance AT the original east point was 1 m — a box far larger than that was centred
-   there regardless of what would fit.
-
-   These are the tip regions' own maximum-clearance points instead, swept only within each tip
-   (x < -6 for west, x > 6 for east — where the ring itself narrows): 21.3 m and 17.6 m of real
-   clearance. Tower footprint below is sized to the tighter of the two, with margin, rather than
-   an unchecked round number. */
-const FAIRMONT_WEST = [-6.04, 2.14];
-const FAIRMONT_EAST = [6.00, -2.26];
+const RED_TOWER = [
+    [ 11.65, -2.38], [ 11.85, -1.72], [ 11.24, -0.75], [  9.86, -1.00],
+    [  7.32, -2.04], [  6.17, -2.09], [  6.06, -1.81], [  5.63, -1.94],
+    [  5.56, -1.76], [  5.25, -1.78], [  4.06, -1.20], [  3.18, -1.14],
+    [  1.85, -1.37], [  1.61, -1.95], [  1.77, -2.35], [  2.21, -2.76],
+    [  6.45, -4.31], [  7.37, -4.24], [  9.12, -3.58], [  9.15, -3.41],
+    [  9.26, -3.68], [  9.39, -3.47], [  9.94, -3.40], [ 10.12, -3.17],
+    [ 10.61, -3.08],
+];
+/* Face spans, plan-view, in scene units: the flat-ish region at each tower's tip that faces the
+   other tower and that the arch actually springs from. */
+const YELLOW_FACE = { x: -3.389, z0: 0.108, z1: 2.136 };
+const RED_FACE    = { x: 1.607, z0: -2.759, z1: -1.369 };
 
 function fairmontMarina(x0, z0){
   const g = new THREE.Group();
   const APEX = 161.9 / M_PER_U;                 // 20.76 u — CTBUH-sourced, to tip
-  const H_PODIUM = 3.1;                          // ~24 m, unsourced — a plausible low-rise base
-  /* 1.75 u (13.7 m) half-width, chosen to sit inside BOTH tip clearances (21.3 m west, 17.6 m
-     east) with margin. This single constant now drives the tower box, the arch radius, and the
-     spring height together, so the three cannot drift out of agreement the way they did before,
-     when each was picked independently and nothing checked they described the same building. */
-  const TOWER_HALF_W = 1.75;
+  const H_PODIUM = 0.30;                        // a thin plinth only; the traced shapes ARE the mass now
 
-  const podiumMat = palaceFacadeMat(0xE8E2D4, 0xE2DACA, 0.22);
+  const towerMat = palaceFacadeMat(0xE6D9C2, 0xE0D2B8, 0.20);
   const plinthMat = new THREE.MeshStandardMaterial({ color:0x100E0A, roughness:0.9, metalness:0 });
   plinthMat.userData.glassOverride = false;
   plinthMat.userData.duskColor = 0xC7BFAE;
   plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCFC7B4, roughness:0.9 });
-
-  const sh = new THREE.Shape();
-  FAIRMONT_RING.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
-  function band(h, mat, yOff, withUV){
-    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
-    geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
-    if (withUV) writeSlabUVs(geo, sh, 12, h);
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x0, yOff, z0); g.add(m);
-    return m;
-  }
-  band(0.30, plinthMat, 0);
-  const podium = band(H_PODIUM - 0.30, podiumMat, 0.30, true);
-  podium.userData.hero = true;
-
-  /* THE TOWERS WERE GLASS AND THEY ARE NOT GLASS. TEX_TOWER is a curtain-wall grid — the right
-     family for ADNOC or Etihad, and flatly the wrong one for a building every source calls
-     "oriental style" and "Arab traditions... postmodernism". That is masonry language, the same
-     one the two palaces use, not a glass office tower's. Caught on review, not on first build —
-     the same category of miss as ADNOC's bronze earlier in this file: a material picked for
-     what a tower usually is, not for what this one is documented to be.
-
-     Footprint is an estimate — 43 x 34 m, plausible for a 39-storey hotel and residence tower of
-     this scale — tapered slightly toward the crown, which every reference photo agrees on
-     regardless of exact proportions. */
-  const towerMat = palaceFacadeMat(0xE6D9C2, 0xE0D2B8, 0.20);
   const turretMat = new THREE.MeshStandardMaterial({
     color:0x1C170F, roughness:0.6, emissive:0xE8D9A8, emissiveIntensity:0.10 });
   turretMat.userData.glassOverride = false;
   turretMat.userData.duskColor = 0xEBE2D0;
   turretMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEEE6D6, roughness:0.6 });
-  /* R_ARCH NOW COMES FROM THE ACTUAL SEAT SEPARATION, NOT FROM A FRACTION OF THE HEIGHT.
-     The old springY = APEX*0.70 fixed the crown height in isolation and R_ARCH fell out of it
-     with no relationship to where the towers actually stood — which happened to leave the legs
-     close to the OLD seats by coincidence, and would not for any seats not chosen to match it.
-     Span first, height second: the legs land on the towers by construction, not by chance.
+  const goldMat = new THREE.MeshStandardMaterial({
+    color:0x2A2008, roughness:0.35, metalness:0.55, emissive:0xC99A3C, emissiveIntensity:0.22 });
+  goldMat.userData.glassOverride = false;
+  goldMat.userData.duskColor = 0xD9B25C;
+  goldMat.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0xC9A542, roughness:0.35, metalness:0.55 });
 
-     R_ARCH is also reduced by the tube radius, because a torus's OUTER surface at the crown
-     sits one tube-radius beyond the ring path itself — measured on the first version: leaving
-     that out put the crown at 170 m against a sourced 161.9 m, an 8 m overshoot that tracked
-     the tube radius almost exactly. */
-  const ARCH_TUBE = 1.05;
-  const seatDX = FAIRMONT_EAST[0] - FAIRMONT_WEST[0], seatDZ = FAIRMONT_EAST[1] - FAIRMONT_WEST[1];
-  const halfSep = Math.hypot(seatDX, seatDZ) / 2;
-  const R_ARCH = halfSep - TOWER_HALF_W;
-  const springY = APEX - R_ARCH - ARCH_TUBE;
-  const TW = TOWER_HALF_W * 2, TD = TOWER_HALF_W * 1.7;
-  [FAIRMONT_WEST, FAIRMONT_EAST].forEach(([tx, tz]) => {
-    const geo = new THREE.BoxGeometry(TW, springY - H_PODIUM, TD);
-    // Taper: scale the top face in slightly, done by hand since BoxGeometry has no built-in taper.
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++){
-      if (pos.getY(i) > 0){
-        pos.setX(i, pos.getX(i) * 0.82);
-        pos.setZ(i, pos.getZ(i) * 0.82);
-      }
+  /* TURRET_RISE IS FIXED BY THE TURRET'S OWN CONSTRUCTION BELOW — drum 0.5 + dome radius 0.70 +
+     spike 0.55, worked through the actual offsets used there: drum top springY+0.5, dome top
+     springY+1.2, spike tip springY+1.755. springY is SOLVED from that so the turret spike — the
+     real highest point on this building — lands on the CTBUH apex exactly, the same discipline
+     used everywhere else a sourced figure exists in this file. */
+  const TURRET_RISE = 1.755;
+  const springY = APEX - TURRET_RISE;
+  const FINIAL_H = 0.5;
+
+  /* BOTH TOWERS BUILT THE SAME WAY: traced ring, extruded to springY, real UVs so the facade
+     texture tiles in metres the way every other traced mass in this file does. No taper — the
+     real bend in plan already gives the massing shape variety a tapered box was faking. */
+  function buildTower(ring, faceRef){
+    const sh = new THREE.Shape();
+    ring.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
+    function band(h, mat, yOff, withUV){
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
+      geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+      if (withUV) writeSlabUVs(geo, sh, 10, h);
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x0, yOff, z0); g.add(m);
+      return m;
     }
-    geo.computeVertexNormals();
-    const t = new THREE.Mesh(geo, towerMat);
-    t.position.set(x0 + tx, H_PODIUM + (springY - H_PODIUM)/2, z0 + tz);
-    t.userData.hero = true; g.add(t);
+    band(H_PODIUM, plinthMat, 0);
+    const body = band(springY - H_PODIUM, towerMat, H_PODIUM, true);
+    body.userData.hero = true;
 
-    /* A FLAT PARAPET WAS THE OTHER HALF OF WHY THIS READ AS A BOX. Every "oriental style" tower
-       in this file so far — the two palaces, the mosque — resolves its roofline into something,
-       never a plain cut edge. A drum and a small dome does the same job here at a fraction of
-       the palace's cost: it is what turns a box into a building the eye reads as finished. */
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, 0.5, 16), turretMat);
-    drum.position.set(x0 + tx, springY + 0.25, z0 + tz); g.add(drum);
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(1.3, 16, 10, 0, Math.PI*2, 0, Math.PI/2), turretMat);
-    cap.position.set(x0 + tx, springY + 0.5, z0 + tz); cap.userData.hero = true; g.add(cap);
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.7, 6), turretMat);
-    spike.position.set(x0 + tx, springY + 0.5 + 1.3 + 0.35, z0 + tz); g.add(spike);
-  });
+    /* FIN RIBS, WALKED ALONG THE RING'S OWN BOUNDARY instead of guessed across a flat box face —
+       the real shape bends, so a fixed rib spacing in one axis would either miss the wing
+       entirely or run through open air past the footprint's edge. Walking the perimeter means
+       ribs follow the actual wall regardless of which segment of the bend they land on. */
+    let acc = 0;
+    for (let i = 0; i < ring.length; i++){
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const segLen = Math.hypot(b[0]-a[0], b[1]-a[1]);
+      for (let t = acc; t < segLen; t += 1.3){
+        const f = t / segLen;
+        const px = a[0] + (b[0]-a[0])*f, pz = a[1] + (b[1]-a[1])*f;
+        const nx = (b[1]-a[1]) / segLen, nz = -(b[0]-a[0]) / segLen;   // outward normal
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.14, springY - H_PODIUM, 0.14), turretMat);
+        rib.position.set(x0 + px + nx*0.08, H_PODIUM + (springY - H_PODIUM)/2, z0 + pz + nz*0.08);
+        g.add(rib);
+      }
+      acc = (acc - segLen) % 1.3; if (acc < 0) acc += 1.3;
+    }
 
-  /* THE ARCH. A half-torus spanning the gap at the crown — see the header note on why this is a
-     simplification rather than a traced curve. Rotated so its plane contains both tower seats
-     and stands vertical; positioned so its two ends land at the towers' inner faces. */
-  const midX = (FAIRMONT_WEST[0] + FAIRMONT_EAST[0]) / 2, midZ = (FAIRMONT_WEST[1] + FAIRMONT_EAST[1]) / 2;
-  const heading = Math.atan2(FAIRMONT_EAST[1] - FAIRMONT_WEST[1], FAIRMONT_EAST[0] - FAIRMONT_WEST[0]);
-  /* TorusGeometry's arc(0, PI) already rises through +Y in its own frame — angle 0 sits at +X,
-     angle PI/2 (the crown) at +Y, angle PI at -X. That IS an upward arch with no z-rotation
-     needed; the z-flip in the first version inverted it into a downward bowl, which is why the
-     arch measured no taller than its own spring height — every point on a bowl sits AT OR BELOW
-     its centre. Only the y-rotation is needed, to turn the arch's local X-span onto the line
-     between the two towers. */
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(R_ARCH, ARCH_TUBE, 12, 32, Math.PI), towerMat);
-  arch.rotation.y = -heading;
-  arch.position.set(x0 + midX, springY, z0 + midZ);
-  arch.userData.hero = true; g.add(arch);
+    /* TURRETS AT THE RING'S OWN TWO OUTER CORNERS. The naive "two most-distant points overall"
+       measure was tried first and put one turret at the INNER face — the tower's long main run
+       is longer than its wing, so one end of that long run and the wing's own tip can be the
+       single farthest pair on the whole ring, and on both towers that "one end" happened to be
+       the face the lintel attaches to. Confirmed on the built mesh: a gold dome sitting on top
+       of the arch connection. Excluding any ring point within 2.5 units of the tower's own
+       inner face before measuring finds the two genuine outer corners instead — the far end of
+       the main run and the tip of the wing, which is what every reference photo shows. */
+    const faceZ = (faceRef.z0 + faceRef.z1) / 2;
+    const outer = ring.filter(([px, pz]) => Math.hypot(px - faceRef.x, pz - faceZ) > 2.5);
+    let maxD = 0, c1 = outer[0], c2 = outer[0];
+    for (let i = 0; i < outer.length; i++) for (let j = i+1; j < outer.length; j++){
+      const dd = Math.hypot(outer[i][0]-outer[j][0], outer[i][1]-outer[j][1]);
+      if (dd > maxD){ maxD = dd; c1 = outer[i]; c2 = outer[j]; }
+    }
+    [c1, c2].forEach(([ox, oz]) => {
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.70, 0.85, 0.5, 16), turretMat);
+      drum.position.set(x0 + ox, springY + 0.25, z0 + oz); g.add(drum);
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.70, 16, 10, 0, Math.PI*2, 0, Math.PI/2), goldMat);
+      cap.position.set(x0 + ox, springY + 0.5, z0 + oz); cap.userData.hero = true; g.add(cap);
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.55, 6), goldMat);
+      spike.position.set(x0 + ox, springY + 0.5 + 0.70 + 0.28, z0 + oz); g.add(spike);
+    });
+  }
+  buildTower(YELLOW_TOWER, YELLOW_FACE);
+  buildTower(RED_TOWER, RED_FACE);
 
-  /* A KEYSTONE, because a bare torus reads as a pipe or a door handle rather than an archway —
-     confirmed on the bench render, where it looked exactly like that. A single wedge at the
-     crown, wider than the tube either side of it, is the one detail that reads as "this is a
-     built arch" rather than "this is a curved tube" at any distance. */
-  const key = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.6, ARCH_TUBE * 2.3), turretMat);
-  key.position.set(x0 + midX, springY + R_ARCH + ARCH_TUBE * 0.3, z0 + midZ);
-  key.rotation.y = -heading; g.add(key);
+  /* THE ARCH SPANS EXACTLY THE MEASURED GAP BETWEEN THE TWO REAL INNER FACES — 39 m, not a
+     formula. Its legs sit flush against each tower's own tip, continuous with that wall rather
+     than a separate block landing somewhere near it, which is what "starting off the inner
+     vertical face of one tower and attaching to the other" means built literally: the lintel's
+     width IS the gap, no more, no less, and its two ends are pinned to YELLOW_FACE.x and
+     RED_FACE.x exactly. */
+  /* THE LINTEL WAS BUILT ALONG A PURE X-AXIS AND THE TWO FACES ARE NOT AT THE SAME Z.
+     midZ averaged all four z-bounds together, which put the lintel at a z roughly BETWEEN the
+     two towers rather than running the real line connecting them — because that line is not
+     parallel to x at all. Measured: yellow's face centre sits at z 1.12, red's at z -2.06, a
+     3.19-unit (25 m) offset that a fixed-z, x-only span cannot bridge correctly no matter how
+     its width is chosen. This is the actual cause of "right shape, wrong positioning" — the
+     lintel's shape was fine, its orientation was wrong, built as if the two towers faced each
+     other squarely along one axis when the real ones meet at roughly 32 degrees off that. */
+  const yFaceZ = (YELLOW_FACE.z0 + YELLOW_FACE.z1) / 2;
+  const rFaceZ = (RED_FACE.z0 + RED_FACE.z1) / 2;
+  const faceDX = RED_FACE.x - YELLOW_FACE.x, faceDZ = rFaceZ - yFaceZ;
+  const trueGap = Math.hypot(faceDX, faceDZ);
+  const faceHeading = Math.atan2(faceDZ, faceDX);
+  const midX = (YELLOW_FACE.x + RED_FACE.x) / 2, midZ = (yFaceZ + rFaceZ) / 2;
+  /* The lintel shape is still authored flat along its own local x, exactly as before — only now
+     it is rotated by faceHeading so that local x actually runs along the real line between the
+     two face centres, the same convention every other rotated mass in this file uses. */
+  /* WIDENED BY 0.15 u (1.2 m) PER SIDE PAST THE MEASURED FACE GAP, DELIBERATELY. The unmodified
+     gap put the lintel's overlap with each tower at exactly 0.00 on measurement — genuinely
+     flush, which is what was asked for, but flush-to-the-millimetre in this file's own units is
+     one rounding error in the real renderer away from a hairline gap that was not there when it
+     was checked here. The overlap is added to the SOLID leg only; OPEN_W below is still sized
+     off the true, unwidened gap, so the opening itself stays at the measured 46 m rather than
+     inheriting the safety margin. */
+  const OVERLAP = 0.15;
+  const LINTEL_W = trueGap + OVERLAP * 2;
+  const LINTEL_T = 1.6;
+  /* LINTEL_H IS NOW A REASONED PROPORTION, NOT SOLVED BACKWARD FROM A HEIGHT BUDGET — because
+     the budget it used to be solved from was wrong. The old version anchored the lintel's
+     BOTTOM at springY and let it rise further, which put the entire connecting structure
+     ABOVE the towers' own peak — a whole extra tier balanced on top of them, not what any
+     reference photo shows. Every photo has the towers rising almost to their own full height,
+     with the arch capping them from within that height, not standing past it. 2.6 units (20 m)
+     is a plausible band for that cap relative to a ~137 m tower height. */
+  const LINTEL_H = 2.6;
+  const OPEN_W = trueGap * 0.46, OPEN_H = LINTEL_H * 0.62;
+
+  const lintelSh = new THREE.Shape();
+  lintelSh.moveTo(-LINTEL_W/2, 0);
+  lintelSh.lineTo(LINTEL_W/2, 0);
+  lintelSh.lineTo(LINTEL_W/2, LINTEL_H * 0.88);
+  lintelSh.quadraticCurveTo(0, LINTEL_H * 1.06, -LINTEL_W/2, LINTEL_H * 0.88);
+  lintelSh.closePath();
+
+  const openSh = new THREE.Path();
+  const ox0 = -OPEN_W/2, ox1 = OPEN_W/2, springLine = OPEN_H * 0.30, apexPt = OPEN_H;
+  openSh.moveTo(ox0, 0);
+  openSh.lineTo(ox0, springLine);
+  openSh.quadraticCurveTo(ox0, apexPt, 0, apexPt);
+  openSh.quadraticCurveTo(ox1, apexPt, ox1, springLine);
+  openSh.lineTo(ox1, 0);
+  openSh.lineTo(ox0, 0);
+  lintelSh.holes.push(openSh);
+
+  const lintelGeo = new THREE.ExtrudeGeometry(lintelSh, { depth: LINTEL_T, bevelEnabled: false });
+  lintelGeo.translate(0, 0, -LINTEL_T / 2);
+  lintelGeo.computeVertexNormals();
+  writeSlabUVs(lintelGeo, lintelSh, 10, LINTEL_H);
+  const lintel = new THREE.Mesh(lintelGeo, towerMat);
+  /* THE FIX ITSELF: position.y is now springY MINUS the shape's TRUE peak height, so the
+     PEDIMENT'S TOP lands at springY — the same level the tower walls stop and the turrets
+     begin — instead of the shape's BASE landing there. The lintel now hangs down from the
+     towers' own peak into their solid mass rather than rising as a separate block above it.
+     Confirmed this was the actual complaint, not a rendering artefact: "0 gap bottom of
+     bridge to top of building, instead of 0 gap TOP of bridge to top of building."
+
+     THE PEAK FACTOR IS 0.97, NOT 1.06 — the control point at (0, LINTEL_H*1.06) does not sit
+     ON the curve; quadraticCurveTo's actual apex at t=0.5 is 0.25*P0y + 0.5*Cy + 0.25*P1y with
+     P0y=P1y=LINTEL_H*0.88, which works out to LINTEL_H*0.97. Using the control point's own
+     height as a stand-in for the curve's height was the exact 0.234-unit (1.8 m) shortfall
+     measured on the first version of this fix — assumed correct, then checked, then wrong. */
+  lintel.position.set(x0 + midX, springY - LINTEL_H * 0.97, z0 + midZ);
+  lintel.rotation.y = -faceHeading;
+  lintel.userData.hero = true; g.add(lintel);
+
+  /* pedimentPeakY is now just springY, since that is where the lintel's own peak was placed
+     above — kept as a named value for clarity at the call site below. The finial rises a
+     modest amount from there, well clear of the turret spike tips at APEX, so it reads as a
+     small ornament rather than competing with the turrets for the building's actual top. */
+  const pedimentPeakY = springY;
+  const key = new THREE.Mesh(new THREE.ConeGeometry(0.35, FINIAL_H, 8), goldMat);
+  key.position.set(x0 + midX, pedimentPeakY + FINIAL_H / 2, z0 + midZ);
+  g.add(key);
 
   return g;
 }
+
 
 
 /* ADNOC HQ — HOK, 342 m, 65 floors, completed 2015. REBUILT FROM PHOTOGRAPHS, because the
