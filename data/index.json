@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-25T15:48:57.666Z",
+ "generated": "2026-08-25T16:04:42.247Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -12872,6 +12872,120 @@
     "golf": 0,
     "raceway": 0,
     "withVenues": 3
+   }
+  },
+  {
+   "id": "raha",
+   "name": "Al Raha",
+   "file": "isle-raha.json",
+   "extent": {
+    "x0": 14675.5,
+    "y0": -6014.3,
+    "x1": 19367.4,
+    "y1": -3852.4,
+    "w": 4691.9,
+    "d": 2161.9,
+    "cx": 17021.5,
+    "cy": -4933.3
+   },
+   "outline": [
+    [
+     17036.7,
+     -4569
+    ],
+    [
+     17034.9,
+     -4557.5
+    ],
+    [
+     16329.7,
+     -4727.5
+    ],
+    [
+     16323.7,
+     -4726.9
+    ],
+    [
+     15702.3,
+     -4886.1
+    ],
+    [
+     15691.5,
+     -4885
+    ],
+    [
+     14861.6,
+     -5197.2
+    ],
+    [
+     14856.1,
+     -5189.9
+    ],
+    [
+     14680.8,
+     -5251.4
+    ],
+    [
+     14675.5,
+     -5246.4
+    ],
+    [
+     15002.6,
+     -5656.9
+    ],
+    [
+     14991.6,
+     -5652.9
+    ],
+    [
+     14980.9,
+     -6012.2
+    ],
+    [
+     14969,
+     -6014.3
+    ],
+    [
+     19367.4,
+     -4641.2
+    ],
+    [
+     19360.4,
+     -4636.5
+    ],
+    [
+     19143.2,
+     -3982.9
+    ],
+    [
+     19145.9,
+     -3981.6
+    ],
+    [
+     19061.8,
+     -3852.4
+    ],
+    [
+     17100,
+     -4428.5
+    ],
+    [
+     17027.7,
+     -4448.5
+    ]
+   ],
+   "landmarks": {},
+   "bytes": 243122,
+   "counts": {
+    "outline": 21,
+    "roads": 1153,
+    "buildings": 584,
+    "inBox": 3644,
+    "withHeight": 195,
+    "parks": 40,
+    "golf": 0,
+    "raceway": 0,
+    "withVenues": 9
    }
   },
   {
