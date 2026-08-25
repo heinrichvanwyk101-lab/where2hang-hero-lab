@@ -108,6 +108,30 @@ const ISLANDS = [
   { id:'reem',     name:'Al Reem',          bbox:[24.4850, 54.3850, 24.5200, 54.4300], centre:[24.4980, 54.4060] },
   { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
   { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
+  /* AL RAHA — NOT AN ISLAND, AND SAID SO EXPLICITLY VIA noCoastline. Al Raha Beach is mainland,
+     part of Khalifa City, roughly 1.4 km south of Yas's own mapped extent — Aldar HQ's real
+     coordinates (24.44111, 54.57528) sit just outside every one of the five boxes above, which
+     is what surfaced the gap in the first place. There is no closed OSM coastline ring here for
+     pickIsland to find, because the area is not bounded by open water on more than one side —
+     Channel Street and Al Raha Creek cut through it, they do not enclose it.
+
+     outlineLL IS A TRACED SHAPE, NOT A GUESS — drawn by hand in geojson.io directly along Khor
+     Al Raha, the actual canal, rather than a rectangle that would cut across it. [lon, lat]
+     pairs, GeoJSON order, converted below. This is what noCoastline actually uses now; the bbox
+     below only has to be generous enough to fetch everything the traced shape needs, and was
+     widened east to 54.615 after the trace turned out to reach 54.6112 — past where the first,
+     un-traced version of this box stopped at 54.586. */
+  { id:'raha', name:'Al Raha', bbox:[24.4300, 54.5600, 24.4600, 54.6150], centre:[24.4460, 54.5850],
+    noCoastline: true,
+    outlineLL: [
+      [54.5881734,24.4489563], [54.5881551,24.4490593], [54.5811947,24.4475319],
+      [54.5811347,24.4475377], [54.5750014,24.4461074], [54.5748943,24.4461175],
+      [54.5667020,24.4433125], [54.5666481,24.4433784], [54.5649171,24.4428256],
+      [54.5648651,24.4428712], [54.5680941,24.4391831], [54.5679853,24.4392190],
+      [54.5678800,24.4359913], [54.5677624,24.4359725], [54.6111797,24.4483072],
+      [54.6111108,24.4483492], [54.6089666,24.4542213], [54.6089935,24.4542328],
+      [54.6081634,24.4553932], [54.5887981,24.4502185], [54.5880841,24.4500382],
+    ] },
 ];
 
 /* THE LANDMARKS, LOOKED UP BY NAME RATHER THAN TYPED AS COORDINATES.
@@ -1073,8 +1097,36 @@ async function bakeIsland(isle, proj){
 
   const chains = stitch(coastWays);
   const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]));
-  const outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
+  let outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
   process.stderr.write(`  ${isle.id}: ${chains.length} coast chains, took the ${picked.why}\n`);
+
+  /* MAINLAND PATCHES HAVE NO CLOSED COASTLINE RING, BECAUSE THEY ARE NOT ISLANDS — and until now
+     that meant `extent: null` and a renderer with nothing to paint. The Grand Mosque precinct hit
+     this exact wall and was solved by hand-tracing a site polygon outside this pipeline entirely,
+     which works for one precinct's worth of ground but does not scale, and does not pull real
+     roads or real Overture buildings the way every island here does.
+
+     `noCoastline: true` says: skip pickIsland, do not wait for a ring that will never exist.
+     TWO FALLBACKS, IN ORDER — a traced shape if the island carries `outlineLL` (points in
+     [lon, lat], the order geojson.io exports), or the fetch bbox itself as a plain rectangle if
+     it does not. Everything downstream — the coastline pre-clip, the extent computation, the
+     renderer's ground shape — reads `outline` the same way regardless of which path produced it,
+     so nothing else in this file needs to know the difference. A traced shape costs someone
+     drawing it; a rectangle costs nothing and looks like one, cutting straight across whatever
+     canal or coastline the real place actually has — worth the difference when it exists. */
+  if (!outline.length && isle.noCoastline){
+    if (isle.outlineLL && isle.outlineLL.length){
+      outline = isle.outlineLL.map(([lo, la]) => rd1(proj.fwd(la, lo)));
+      process.stderr.write(`  ${isle.id}: no coastline ring (expected, noCoastline set) — ` +
+                           `using the traced outlineLL shape instead (${outline.length} pts)\n`);
+    } else {
+      const [s, w, n, e] = isle.bbox;
+      const corners = [[s,w],[s,e],[n,e],[n,w]].map(([la,lo]) => proj.fwd(la, lo));
+      outline = corners.map(rd1);
+      process.stderr.write(`  ${isle.id}: no coastline ring (expected, noCoastline set) — ` +
+                           `no outlineLL either, using the fetch bbox as a rectangle instead\n`);
+    }
+  }
 
   /* The first moment the coastline exists, which is the first moment a building can be told it is
      not on this island. Reported rather than silent: the number dropped here is the overlap
