@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v180';
+export const BUILD = 'world v181';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -585,20 +585,27 @@ const PALACE_ESTATE = { dx:-7, w:76, d:34 };
 /* Positions ON the island, so they scale with it — unlike the buildings standing on them, which
    are already at true scale and must not. */
 const LM = {
-  palace: { x:-42 * ISLE_SCALE, z:  0 * ISLE_SCALE },
-  /* MOVED 14.4 UNITS — 112 METRES — OFF THE RING ROAD. Four of the five towers were standing in
-     it, and three had the CENTRELINE running through them: measured road distance 0.0 against a
-     2.4-unit kerb half-width. Exactly the ADNOC fault, in the one cluster the whole district is
-     composed around, and it survived the ADNOC fix because I checked the tower I had been told
-     about and not the other two.
+  /* PALACE, ETIHAD, ADNOC — ALL THREE WERE WRONG, AND NOT JUST BY A UNIFORM OFFSET.
+     The old positions used a hand-picked-number-times-ISLE_SCALE convention never checked
+     against real data, unlike the mosque below. Etihad's old position sat NORTH of the palace;
+     every real data point here — GPS, the baked footprint, both — puts it slightly SOUTH, so this
+     wasn't a translation error, it was a guess with the wrong relative arrangement entirely.
 
-     Solved the same way: nearest anchor clearing a three-unit floor on both coast and road.
-     Every tower now has 6.3 units or more of spare road clearance and 12.8 of coast. It also
-     happens to be geographically right — Etihad Towers stands immediately beside Emirates Palace
-     on the real Corniche, and the pair now read as the pair they are. Verified clear of the
-     palace: 3.0 units between the nearest tower and the palace block. */
-  etihad: { x: -17.5 * ISLE_SCALE, z:-11 * ISLE_SCALE },
-  adnoc:  { x: 42.25 * ISLE_SCALE, z: 7.25 * ISLE_SCALE },
+     Verified three separate ways before trusting any of it:
+     — Emirates Palace: real GPS -> the shared projector (tools/bake-city.mjs, lat0/lon0 =
+       24.49/54.42) -> Corniche's own extent.cx/cy (data/index.json) -> local units at M_PER_UNIT
+       = 7.8. Same pipeline the mosque's corrected anchor was cross-checked against.
+     — Etihad Towers: NOT a single point — found and verified individually. Etihad is five towers
+       with five different real heights (217.5, 234.0, 260.3, 305.3, 277.6 m); the bake carries a
+       cluster of five untagged records at almost exactly those heights (218, 234, 260, 305, 277)
+       within a few dozen units of the tower's real GPS position. Five independent matches, not
+       one — about as confident as this gets without a tap. Anchor is their centroid.
+     — ADNOC HQ: found by its height alone, 342 m real vs h:342 baked, at the exact raw position
+       already sitting in data/index.json's landmark table — independently confirms that entry was
+       already right, this just brings the LM anchor into agreement with it. */
+  palace: { x: -1003.3461538461538, z: 91.78205128205124 },
+  etihad: { x: -938.9, z: 141.04871794871792 },
+  adnoc:  { x: -908.9230769230769, z: 97.46153846153844 },
   /* THE GRAND MOSQUE HAS NO NAMED LANDMARK ENTRY, BUT IT DOES HAVE A REAL FOOTPRINT — found late,
      because it carries none of the tags that would have surfaced it earlier. Corniche's Overpass
      landmark table has nothing under "mosque" or "Sheikh Zayed" (checked), and neither does a
