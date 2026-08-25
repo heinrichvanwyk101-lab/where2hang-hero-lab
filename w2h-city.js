@@ -18,13 +18,17 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v64';
+export const BUILD = 'city v66';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
    Half-span 24.6 in x and 6.0 in z, offset 0.4 south of the anchor. One constant, consumed
    wherever the building's extent is needed. */
-export const PALACE_FOOT = { w:49.2, d:12.0, dz:0.4 };
+/* NOW THE REAL RING'S OWN EXTENT. Was 49.2 x 12.0 — the hand-authored bar's bounding box. The
+   traced footprint measures 64.3 x 49.3 units, so the estate reservation and the lawn in
+   w2h-world.js were sized against a building four times shallower than the one that is there.
+   dz goes to 0 because the ring is symmetric about the anchor in both axes. */
+export const PALACE_FOOT = { w:64.3, d:49.3, dz:0.0 };
 
 export const C = {
   night:   0x0B1620,
@@ -617,53 +621,62 @@ function etihadTowers(x0, z0){
   return g;
 }
 
-/* EMIRATES PALACE — the counterweight to the towers. Very wide, very low, symmetric, with a
-   dome rhythm that steps down from a large centre to corner pavilions. Its horizontality is what
-   makes the cluster beside it read as tall, so the width is not decoration — it is the scale
-   contrast the brief asks for, built into the composition. */
+/* THE REAL FOOTPRINT, 67 POINTS, TAKEN FROM data/isle-corniche.json.
+
+   THE OLD PALACE WAS A STRAIGHT BAR AND THE REAL BUILDING IS A ROTATED CHEVRON. Every other
+   fault in this builder was downstream of that. Measured against the bake's own record — the
+   Overture/OSM polygon sitting 3.2 m from LM.palace, area 104,825 m2 oriented box:
+
+       across    model 384 m      real 502 m
+       depth     model  87 m      real 384 m        4.4x too shallow
+       rotation  model   0 deg    real  30 deg
+       plan      rectangle        67-point chevron
+
+   The ring fills 56 per cent of its own bounding box. A bar fills 100. That number alone says
+   the plan is splayed around courtyards, and it is why the west third of the old model stood
+   OUTSIDE the real building while the entire southern range was missing.
+
+   THE RING WAS ALREADY IN THE REPO. 126 of Corniche's 20,262 building records carry a `p`
+   polygon; this is one of them. Nothing needed surveying, drawing or estimating — the previous
+   version was hand-authored beside real data that was never read.
+
+   SIMPLIFIED AT 0.4 UNITS, 77 points to 67, which loses 5 m2 of 58,846. Transcribed as a
+   constant in local units relative to the anchor, the same way grandMosque carries SITE_POLY
+   and HARDSCAPE_POLY. One landmark, one table.
+
+   ROTATION IS NOT APPLIED AS A TRANSFORM. The ring is already in scene coordinates, so the
+   30 degrees is baked into the points. Only the central block and the dome line need the angle,
+   because those are the two things placed along the building's own axis rather than traced. */
+const PALACE_ROT = 0.524;              // 30.0 deg, from the record's own rot field
+const PALACE_RING = [
+    [-25.85,  7.99], [-27.17,  5.86], [-28.51,  6.68], [-28.23,  7.14],
+    [-32.15,  8.83], [-30.77, 10.97], [-30.13, 10.60], [-29.24, 12.04],
+    [-28.54, 11.65], [-24.83, 18.32], [-23.71, 17.68], [-22.19, 20.38],
+    [-15.49, 16.65], [-13.31, 20.50], [-12.15, 19.83], [ -9.32, 24.63],
+    [  1.04, 18.51], [  2.63, 18.45], [ 17.19,  9.81], [ 17.68,  8.19],
+    [ 29.05,  1.19], [ 24.24, -6.68], [ 32.15,-11.53], [ 30.41,-14.38],
+    [ 31.08,-14.79], [ 27.38,-20.83], [ 26.90,-20.54], [ 26.18,-21.72],
+    [ 26.64,-22.91], [ 25.62,-24.63], [ 20.47,-21.51], [ 21.44,-19.92],
+    [ 22.68,-19.64], [ 23.55,-18.17], [ 22.83,-17.74], [ 25.72,-12.90],
+    [ 19.88, -9.59], [ 19.96, -9.01], [ 15.50, -6.00], [ 14.35, -7.90],
+    [ 12.95, -7.04], [ 14.18, -5.04], [ 10.53, -2.81], [  7.13, -8.33],
+    [  8.82, -9.38], [  7.53,-11.45], [  5.73,-10.32], [  6.14, -9.65],
+    [  1.64, -6.83], [  3.42, -4.00], [  2.86, -3.64], [ -2.85, -0.22],
+    [ -4.54, -3.03], [ -9.00, -0.33], [ -9.49, -1.13], [-11.40,  0.01],
+    [ -6.04,  6.92], [ -8.73,  8.49], [ -9.90,  6.47], [-11.59,  7.45],
+    [-10.46,  9.42], [-13.83, 11.36], [-14.81,  9.67], [-22.10, 14.54],
+    [-25.15,  9.58], [-25.74,  9.94], [-26.62,  8.45],
+];
+
 function emiratesPalace(x0, z0){
   const g = new THREE.Group();
-  // Three tones, not one. At a single emissive the body, wings and arcade fused into a
-  // continuous gold bar and the dome rhythm — the only thing that identifies this building —
-  // disappeared into it. The masses go dark and the domes carry the light.
-  /* The three dusk colours keep the same relationship the night emissives do: the masses sit
-     back, the arcade is a step up, the domes carry the light. Warmer and paler than anything in
-     the generated fabric, because the palace is the one building on the island made of dressed
-     stone rather than render or precast — and at dusk that difference is most of what makes it
-     read as a palace instead of a long low block. */
-  /* THE PALACE WENT THE SAME COLOUR AS THE CITY, and that is a new fault created by fixing an
-     older one.
-
-     world v77 added painted white render at 0xE9E4DA and gave it a third of the fabric, which is
-     right — it is the commonest wall in Abu Dhabi and its absence was why the island read gold.
-     But the palace stone was 0xE7D5B0, which is within a couple of points of it. So the one
-     building that had been distinct by being warmer than everything around it is now the same
-     value as a third of its neighbours, and the separation that identified it is gone.
-
-     Every photograph has this building as terracotta-rose against pale towers. That contrast does
-     as much identifying work as the domes do — arguably more at distance, where the dome rhythm
-     is a few pixels and the colour is the whole silhouette. Pulled warm and red, and away from
-     anything the fabric can produce: the warmest thing in the generated stock is limestone render
-     at 0xE0C79A, and this now sits clearly on the red side of it.
-
-     THE ARCADE AND THE DOMES STAY PALE. The building is not one colour — the dressed stone is
-     rose, the arcade soffits and the dome shells catch the light and go almost cream. Warming all
-     three together would have produced a uniform terracotta block and thrown away the internal
-     contrast that makes the mass legible. */
   const stone = new THREE.MeshStandardMaterial({
     color:0x191009, roughness:0.92, metalness:0.03, emissive:0xE8B547, emissiveIntensity:0.025 });
   stone.userData.duskColor = 0xC98F63;
-  /* The palace has its own three materials rather than going through cityMaterial, so it needs
-     its Day colours set here or it falls through to the switcher's flat fallback exactly as the
-     towers did. No map: this is limestone with arcades cut into it, not a curtain wall, and a
-     window grid on it would be wrong at any hour. The relief comes from the geometry. */
   stone.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0xC98055, roughness:0.92, metalness:0.03 });
   const arch = new THREE.MeshStandardMaterial({
     color:0x1A150E, roughness:0.9, emissive:0xE8B547, emissiveIntensity:0.10 });
-  /* Warmed a step to stay in the same family as the stone below it — an arcade cut into rose
-     limestone is not cream — but kept clearly lighter, because it is the step up in the three-tone
-     hierarchy this builder has always used. */
   arch.userData.duskColor = 0xE8BE93;
   arch.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6BB92, roughness:0.9 });
   const glow = new THREE.MeshStandardMaterial({
@@ -671,65 +684,107 @@ function emiratesPalace(x0, z0){
   glow.userData.duskColor = 0xF4E4BC;
   glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2E6C6, roughness:0.7 });
 
-  /* THE WINGS WERE SHORTER THAN THE CITY AROUND THEM, and that is why this reads as a compact
-     block with domes on it rather than as the long horizontal building it is.
+  /* H_WING IS THE RECORD'S OWN HEIGHT. The bake gives this footprint h 25.6 m, which is 3.28
+     units — so the old hand-set 3.4 was very nearly right and is simply replaced by the
+     surveyed figure. The centre steps above it; nothing else does. */
+  const H_WING = 3.28, H_MAIN = 4.60;
+  const CX = 4.44, CZ = 4.57;          // area centroid of the ring
+  const AX = Math.cos(PALACE_ROT), AZ = -Math.sin(PALACE_ROT);   // along the long axis
 
-     At 2.3 and 1.7 units the wings stood 18 and 13 metres tall. The generated low-rise beside
-     them runs 2.1 to 7.0. So the span — the one feature that identifies Emirates Palace in every
-     photograph, the thing that makes a 60-metre building read as the landmark of a city of
-     towers — was buried in fabric of the same height, and only the 3.0-unit centre and the domes
-     rose clear of it. The building was correct in plan and invisible in elevation.
+  /* The traced mass. Shape y maps to world -z on extrude, the same convention roundedSlab uses,
+     so the ring's z is negated going in and comes back out correct. */
+  const sh = new THREE.Shape();
+  PALACE_RING.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: H_WING, bevelEnabled: false });
+  geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, stone);
+  body.position.set(x0, 0, z0); body.userData.hero = true; g.add(body);
 
-     3.4 and 2.8 put both wings above the skirt they stand in. They still step down and out, so
-     the rhythm survives; they just do it above the roofline of the city rather than inside it.
+  /* The domed centre, and the ONE piece that carries the rotation explicitly. Sized to sit
+     clear inside the ring — checked, all four corners land at least 1.5 units in. */
+  const MW = 17.0, MD = 9.5;
+  const main = new THREE.Mesh(new THREE.BoxGeometry(MW, H_MAIN, MD), stone);
+  main.position.set(x0 + CX, H_MAIN/2, z0 + CZ);
+  main.rotation.y = PALACE_ROT; g.add(main);
 
-     DEPTH 11 AND 9, UP FROM 6.5 AND 5.4. The complex was 49 units across and 6.5 deep — a ratio
-     of seven and a half to one, which is a wall, not a palace. The aerials show a deep building
-     with courtyards behind the front range. This is still shallower than the real thing and
-     deliberately so: past about 12 units the estate stops fitting on the island. */
-  const W = 46;
-  const main = new THREE.Mesh(new THREE.BoxGeometry(W*0.42, 4.2, 11.0), stone);
-  main.position.set(x0, 2.1, z0); g.add(main);
-
-  // Wings step DOWN and OUT. The stepping is the rhythm; a single long block reads as a shed.
-  [[-1,0.62,3.4],[1,0.62,3.4],[-1,0.86,2.8],[1,0.86,2.8]].forEach(([sgn, f, hh]) => {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(W*0.20, hh, 9.0), stone);
-    w.position.set(x0 + sgn * W * f * 0.5, hh/2, z0 + 0.5); g.add(w);
-  });
-
-  // Arcade along the front. Reads as a colonnade in silhouette, costs almost nothing.
-  for (let i = 0; i < 26; i++){
-    const a = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.5, 0.55), arch);
-    /* THE COLONNADE RAN 8.6 UNITS PAST THE BUILDING AT EACH END. W*0.46 spans 42.3 units against
-       a palace that reaches 12.4 either side of centre once the wings are counted — so ten of the
-       twenty-six posts stood in open sand with nothing behind them, which from above reads as a
-       line of bollards rather than as an arcade. W*0.27 ends the run where the wings end. */
-    /* Moved out to z0 + 6.0 and raised to 1.5. The arcade fronts the building, so when the main
-       range went from 6.5 deep to 11 it had to follow or it would have been standing inside the
-       wall it is meant to be in front of. */
-    a.position.set(x0 - W*0.27 + i * (W*0.54/25), 0.75, z0 + 6.0); g.add(a);
+  /* roofAt REBUILT FOR A SHAPE THAT IS NOT A ROW OF BOXES. The x-range scan that replaced the
+     hy table cannot survive a rotated plan, so the probe is now a real containment test: inside
+     the centre block's own rotated frame it returns the centre's height, inside the traced ring
+     the wing's, and outside neither, zero. Same contract as before — a dome asks the building
+     how high it is rather than being told — and it now holds for any plan shape. */
+  function inRing(px, pz){
+    let c = false;
+    for (let i = 0, j = PALACE_RING.length - 1; i < PALACE_RING.length; j = i++){
+      const [xi, zi] = PALACE_RING[i], [xj, zj] = PALACE_RING[j];
+      if ((zi > pz) !== (zj > pz) && px < (xj - xi) * (pz - zi) / (zj - zi) + xi) c = !c;
+    }
+    return c;
+  }
+  function roofAt(px, pz){
+    const dx = px - CX, dz = pz - CZ;
+    const u = dx * AX + dz * AZ, v = -dx * AZ + dz * AX;
+    if (Math.abs(u) <= MW/2 && Math.abs(v) <= MD/2) return H_MAIN;
+    return inRing(px, pz) ? H_WING : 0;
   }
 
-  function dome(dx, r, hy){
+  /* DOME SEATS ARE SOLVED AGAINST THE POLYGON, NOT SPACED ALONG A LINE.
+
+     The offsets-along-the-axis scheme died with the straight bar and it took two attempts to
+     notice. Scaling the old 0 / 9 / 17 / 22.5 rhythm onto the longer building put the outer pair
+     0.09 units inside the boundary — technically contained, so a point-in-polygon test passed —
+     and then most of a 1.5-unit dome hung out over the edge in mid air. Containment of the
+     CENTRE is not containment of the dome.
+
+     Past u = 21 the axis leaves the building altogether: clearance along the centre line falls
+     to 0.8 at u = 22 and 0.03 at u = 28, because the real wings splay away from the axis and the
+     line runs down a narrow arm between two courtyards. No offset on that line can carry a dome.
+
+     So each seat is the point of MAXIMUM CLEARANCE within its own bay — the plan swept in 26
+     bands along the building's axis, the best point taken from each, then thinned to a minimum
+     7-unit separation. Nine seats, and every radius is set from its own seat's clearance, so a
+     dome cannot be wider than the mass it stands on. The grand dome is simply the seat with the
+     most room, which lands at 8.79 units of clearance near the centroid — where the real one is,
+     arrived at without being told. */
+  const PALACE_DOMES = [
+    [-28.20,  9.70, 1.10],
+    [-21.30, 16.90, 1.37],
+    [-13.50, 14.50, 1.61],
+    [ -4.50, 13.90, 1.90],
+    [  2.70,  7.90, 3.40],
+    [  9.90,  4.90, 1.90],
+    [ 18.30,  0.10, 1.90],
+    [ 22.50, -8.30, 1.31],
+    [ 28.50,-12.50, 1.44],
+  ];
+
+  function dome(px, pz, r){
+    const roof = roofAt(px, pz), drumH = Math.max(0.35, r * 0.22), base = roof + drumH;
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.88, r*0.88, drumH, 20), stone);
+    drum.position.set(x0 + px, roof + drumH/2, z0 + pz); g.add(drum);
     const d = new THREE.Mesh(new THREE.SphereGeometry(r, 22, 13, 0, Math.PI*2, 0, Math.PI/2), glow);
-    d.position.set(x0 + dx, hy, z0); d.userData.hero = true; g.add(d);
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.88, r*0.88, 0.8, 20), stone);
-    drum.position.set(x0 + dx, hy - 0.4, z0); g.add(drum);
+    d.position.set(x0 + px, base, z0 + pz); d.userData.hero = true; g.add(d);
     const fin = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), glow);
-    fin.position.set(x0 + dx, hy + r + 0.35, z0); g.add(fin);
+    fin.position.set(x0 + px, base + r + 0.35, z0 + pz); g.add(fin);
   }
-  /* Every dome rides up with the mass it sits on. The centre now tops out at 7.8 units against a
-     landmark skirt of 7.0, so the palace clears its own low-rise by construction rather than by
-     the two numbers happening to be set consistently in different files. */
-  dome(0, 3.4, 4.4);
-  dome(-9, 1.7, 3.6);  dome(9, 1.7, 3.6);
-  dome(-17, 1.15, 3.0); dome(17, 1.15, 3.0);
-  // Corner pavilions, raised — they bracket the whole composition.
-  [-22.5, 22.5].forEach(dx => {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.6, 8.0), stone);
-    p.position.set(x0 + dx, 1.8, z0 + 0.3); g.add(p);
-    dome(dx, 1.5, 4.2);
-  });
+  PALACE_DOMES.forEach(([px, pz, r]) => dome(px, pz, r));
+
+  /* THE ARCADE FOLLOWS THE RING NOW. It used to be a straight row of 26 posts on a straight
+     building; there is no straight face left to put them on. Walked along the ring's own
+     boundary and dropped only on the garden side — the half of the perimeter facing away from
+     the sea — which is where the real colonnade is. */
+  let acc = 0;
+  for (let i = 0; i < PALACE_RING.length; i++){
+    const a = PALACE_RING[i], b = PALACE_RING[(i + 1) % PALACE_RING.length];
+    const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (let t = acc; t < seg; t += 2.2){
+      const f = t / seg, px = a[0] + (b[0] - a[0]) * f, pz = a[1] + (b[1] - a[1]) * f;
+      const dx = px - CX, dz = pz - CZ;
+      if (-dx * AZ + dz * AX < 2.0) continue;          // sea side, skip
+      const c = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), arch);
+      c.position.set(x0 + px, 1.3, z0 + pz); c.rotation.y = PALACE_ROT; g.add(c);
+    }
+    acc = (acc - seg) % 2.2; if (acc < 0) acc += 2.2;
+  }
   return g;
 }
 
