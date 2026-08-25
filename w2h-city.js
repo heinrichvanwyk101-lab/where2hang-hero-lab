@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v83';
+export const BUILD = 'city v84';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3435,7 +3435,92 @@ function grandMosque(x0, z0){
 
 
 
+/* ALDAR HQ — "the coin building," Al Raha Beach. First circular building of its kind in the
+   Middle East, MZ Architects, completed 2010.
+
+   NOT A FLAT DISC — every real source agrees on that, independently and in the same words: "two
+   circular shaped convex [faces], joined by a narrow strip of corrugated glass," described
+   elsewhere as looking "like a glass and steel Oreo standing on its side." Two gently bulging
+   round faces meeting at a continuous edge is a lens, not a coin — the flat-faced cylinder this
+   session's first instinct would reach for is the wrong primitive before a single triangle is
+   drawn.
+
+   THREE REAL NUMBERS, NOT ONE, AND THEY DON'T DESCRIBE A PERFECT CIRCLE. Height 110 m: four
+   independent sources agree in the same words ("rises 110 metres above grade") and the bake's
+   own surveyed record carries h:110 on the matching footprint — a fifth, independent agreement.
+   Two other sources cite 121 m instead, evidently copying one another rather than two separate
+   measurements, and are outvoted five to two. Width and depth come from that same surveyed
+   footprint: 140.1 x 39.0 m, position 35 m from Aldar HQ's own published coordinates. A building
+   140 m across and only 110 m tall is not a circle standing on edge — it is a flattened lens,
+   wider than it is tall, which is exactly what "two convex faces" over "one flat coin" implies
+   once the numbers are read rather than assumed. The 39 m depth is the lens's own thickness at
+   its fattest point — the "narrow strip" the sources describe, narrow only relative to a
+   140-metre span. */
+function aldarHQ(x0, z0){
+  const g = new THREE.Group();
+  const R_THICK = (39.0 / 2) / M_PER_U;    // the lens's own thickness — "the narrow strip"
+  const R_TALL  = (110  / 2) / M_PER_U;    // sourced height, five independent agreements
+  const R_WIDE  = (140.1 / 2) / M_PER_U;   // surveyed footprint width
+  const ROT = -1.2780;                         // surveyed rotation, radians
+
+  /* THE LENS ITSELF — a unit sphere, non-uniformly scaled into an ellipsoid rather than built as
+     a flat-ended cylinder. A scaled sphere gives continuously convex faces on both sides by
+     construction, which is the one thing a flat-capped primitive cannot do without a second,
+     separate curved cap — matching "two convex circular facades" directly instead of
+     approximating it. */
+  const glassMat = new THREE.MeshStandardMaterial({
+    color:0x0A0E14, roughness:0.18, metalness:0.35, envMapIntensity:1.4 });
+  glassMat.userData.duskColor = 0x1C2430;
+  glassMat.userData.duskRough = 0.22; glassMat.userData.duskMetal = 0.30;
+  glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0x8BA4B8, roughness:0.15, metalness:0.25, envMapIntensity:1.6 });
+
+  const geo = new THREE.SphereGeometry(1, 40, 28);
+  geo.scale(R_THICK, R_TALL, R_WIDE);
+  geo.computeVertexNormals();
+  const lens = new THREE.Mesh(geo, glassMat);
+  lens.position.set(x0, R_TALL, z0);
+  lens.rotation.y = ROT;
+  lens.userData.hero = true;
+  g.add(lens);
+
+  /* THE ZIPPER — the corrugated glass strip every source names as its own element, distinct from
+     the two faces it joins. A thin torus, scaled the same non-uniform way as the lens so it
+     traces the lens's own equator (its widest cross-section, at half height) rather than a
+     circular ring that would sit proud of the surface on the long axis and buried in it on the
+     short one. */
+  const zipperMat = new THREE.MeshStandardMaterial({
+    color:0x14181C, roughness:0.4, metalness:0.5, emissive:0xC9D4DC, emissiveIntensity:0.06 });
+  zipperMat.userData.glassOverride = false;
+  zipperMat.userData.duskColor = 0xB8C2CA;
+  zipperMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xC4CDD4, roughness:0.4, metalness:0.4 });
+  const zipGeo = new THREE.TorusGeometry(1, 0.045, 10, 48);
+  zipGeo.scale(R_THICK, 1, R_WIDE);
+  zipGeo.rotateX(Math.PI / 2);
+  const zipper = new THREE.Mesh(zipGeo, zipperMat);
+  zipper.position.set(x0, R_TALL, z0);
+  zipper.rotation.y = ROT;
+  g.add(zipper);
+
+  /* A MODEST PLINTH, UNSOURCED AND SAID SO. An ellipsoid resting directly on the ground touches
+     it at one point, which reads as floating — every reference photo shows the lens rising from
+     a real ground-floor entrance structure, but none of the sources here give its footprint or
+     height. 0.6 units (4.7 m) is a plausible single-storey lobby allowance, not a measurement. */
+  const plinthMat = new THREE.MeshStandardMaterial({ color:0x1A1A18, roughness:0.85 });
+  plinthMat.userData.glassOverride = false;
+  plinthMat.userData.duskColor = 0xC4BEA8;
+  plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCEC8B2, roughness:0.85 });
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(R_THICK * 2.3, R_THICK * 2.6, 0.6, 24), plinthMat);
+  plinth.position.set(x0, 0.3, z0);
+  plinth.rotation.y = ROT;
+  g.add(plinth);
+
+  return g;
+}
+
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
-         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
+         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ };
 }
+
+

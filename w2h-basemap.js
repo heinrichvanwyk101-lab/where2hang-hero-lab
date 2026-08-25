@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v10';
+export const BUILD = 'basemap v11';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -122,6 +122,12 @@ export const DIORAMA = {
   reem:     [1560, -640 ],
   saadiyat: [ 520, -1560],
   yas:      [2300, -1180],
+  /* AL RAHA. Real bearing from Yas is ~1,517 m west and ~4,537 m south — genuinely Yas's nearest
+     neighbour of the six, closer to it than Saadiyat or Reem are to anything else in this table.
+     Composed close to Yas for exactly that reason: this is the one pair where "near" is honest
+     rather than a compression artefact, so the diorama gap is deliberately tighter than the
+     others rather than forced to match their spacing. */
+  raha:     [2080, -860 ],
 };
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.

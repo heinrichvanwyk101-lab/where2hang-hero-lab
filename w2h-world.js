@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v186';
+export const BUILD = 'world v187';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -652,6 +652,41 @@ const LM = {
      truth since it is a direct observation against the rendered scene rather than an inference
      from an untagged bake record. */
   mosque: { x: 1051, z: 804 },
+};
+
+/* AL RAHA'S OWN LANDMARK TABLE, KEPT SEPARATE FROM LM ABOVE ON PURPOSE. Every LM.<name> entry is
+   in CORNICHE's local frame — its own island's cx/cy from data/index.json, its own extent. Al
+   Raha is a different island with a different origin; mixing its local coordinates into LM would
+   put two incompatible coordinate systems under one name; the day a raha value got passed into a
+   corniche-frame call, or vice versa, it would place a landmark 1,500+ units from where it
+   belongs and nothing in the code would object.
+
+   FOUR RECORDS, MATCHED BY POSITION AND (FOR ALDAR) HEIGHT — none of the four carry name tags in
+   the bake (data/isle-raha.json's own landmarks table is empty; the Overpass "wanted" list was
+   never extended for this island), so unlike Corniche's OSM-matched anchors, these are hand-
+   identified the way the mosque's LM.mosque above is: by checking the surveyed footprint's real
+   position against known coordinates, not by a name match.
+
+   ALDAR HQ — the coin building. w140.1 x d39.0 is an odd shape for a building everyone describes
+   as circular, until the description is read literally: "a perfect circle standing on edge." A
+   coin on its edge, seen from directly above, is a thin sliver — the diameter across one axis,
+   the disc's own thickness across the other. h:110 in the bake matches Wikipedia's cited height
+   (110 m) exactly, and the position is 35 m from Aldar HQ's published coordinates
+   (24.44111, 54.57528) — both agreeing independently is about as confident as an unmatched
+   record gets.
+
+   AL RAHA MALL — w182.7 x d86.8, 10 m from the mall's published coordinates (24.439, 54.574).
+
+   AL RAHA BEACH RESORT — two separate footprint records, not one: 197.7 x 95.1 and 120.8 x 34.8,
+   68 m and 74 m respectively from the resort's published coordinates (24.4385, 54.5717). Almost
+   certainly two wings of the same complex rather than two different buildings — kept as two
+   entries because that is what the survey actually shows, not merged into an invented single
+   footprint. */
+const LM_RAHA = {
+  aldar:        { x: -164.81, z:  60.86 },   // w:140.1 d:39.0 rot:-1.2780 h:110 (sourced)
+  rahaMall:     { x: -181.73, z:  94.19 },   // w:182.7 d:86.8  rot: 0.2950
+  rahaResortA:  { x: -203.27, z: 101.76 },   // w:197.7 d:95.1  rot: 0.3210
+  rahaResortB:  { x: -218.53, z:  95.47 },   // w:120.8 d:34.8  rot:-1.2640
 };
 
 /* THE ANCHORS COME FROM THE MAP WHEN THERE IS ONE, and v79 showed why they must.
@@ -3645,6 +3680,23 @@ const DISTRICTS = [
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
       { label:'SeaWorld',      osm:'SeaWorld Abu Dhabi',      x: 22, z: 14, h: 8, r:38 },
     ] },
+  /* AL RAHA. Not an island — data/isle-raha.json says so via noCoastline in the bake, and the
+     outline here is a traced canal strip (Khor Al Raha) rather than a surveyed shoreline. r and
+     x/z below are placeholder-scale fallbacks; the real values come from BASE[d.id] the same way
+     every baked island's do, once the basemap transform runs.
+
+     built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
+  { id:'raha', name:'Al Raha', x:2080, z:-860, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+    built:false, places:[
+      /* None of these four resolve against the bake's own landmarks table — it came back empty
+         for this island, since the Overpass "wanted" list was never extended to ask for them by
+         name. All four x/z below are LM_RAHA's hand-identified coordinates directly, the same
+         fallback the mosque anchor uses on Corniche: pl.baked stays false, and that is honest
+         rather than a bug, since nothing here was actually confirmed by a name match. */
+      { label:'Aldar HQ', x:LM_RAHA.aldar.x, z:LM_RAHA.aldar.z, h:14, r:18 },
+      { label:'Al Raha Mall', x:LM_RAHA.rahaMall.x, z:LM_RAHA.rahaMall.z, h:6, r:24 },
+      { label:'Al Raha Beach Resort', x:LM_RAHA.rahaResortA.x, z:LM_RAHA.rahaResortA.z, h:5, r:26 },
+    ] },
 ];
 
 /* SIZE AND PLACE THE ISLANDS FROM THE DATA, before anything reads either.
@@ -5677,6 +5729,51 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
    skyline in the city to one number and look instantly wrong next to the 3,807 that are right.
    Which is which is recorded and shown, since a modelled height and a surveyed one are otherwise
    indistinguishable and only one of them is evidence. */
+
+/* AL RAHA'S KIT_ZONES, RESERVED AHEAD OF THE GEOMETRY THAT WILL FILL THEM.
+   Every other island's zones are measured from a built mesh (see corniche and yas above) —
+   "MEASURED FROM THE OBJECTS, NOT WRITTEN DOWN" is the rule there, and it is the right rule once
+   an object exists. None of the four Al Raha landmarks are built yet. Reserving nothing until
+   they are would leave the generic fabric free to fill Aldar HQ's real footprint with an ordinary
+   box in the meantime — exactly the ADNOC/Ferrari World fault the comment above this one warns
+   about, just arriving from the opposite direction: not a landmark without a zone, but a zone
+   without a landmark yet to justify it.
+
+   So these four are computed straight from the SURVEYED footprint (w, d, rot from
+   data/isle-raha.json), the same real numbers LM_RAHA's own coordinates were read off, with the
+   same 2-unit margin every other zone in this file uses. When each landmark is actually built,
+   its zone should be re-measured from the finished mesh and this block replaced — a survey
+   footprint and a modelled one are not guaranteed to agree to the metre, and the object is always
+   the better source once it exists. Until then, this is real data, not a placeholder guess. */
+const raha = DISTRICTS.find(d => d.id === 'raha');
+KIT_ZONES[raha.id] = [
+  /* ALDAR HQ, MEASURED FROM THE REAL MESH — but not with Box3.setFromObject, which every other
+     zone in this file uses safely. Checked directly on this object and it is NOT safe here:
+     THREE r128's Box3.setFromObject transforms the geometry's LOCAL AABB CORNERS through the
+     world matrix rather than the actual vertices. For an axis-aligned box that is exact — a
+     box's own corners already are its extremes. For a ROTATED CIRCULAR shape it is a real
+     overestimate, because a square's corner sits further from centre than a circle's edge ever
+     does. Measured on this exact mesh: Box3 reported a 62.7 m radius; walking every vertex
+     through the real world matrix by hand gives 51.98 — Box3 was 21% too generous, entirely from
+     rotating a square that was never the building's true outline. Every other zone in this file
+     is a rectangle, where the two methods agree, which is exactly why this had never come up
+     before Aldar HQ — the first rotated circular footprint this codebase has built. */
+  { x0:-175.4, x1:-154.2, z0: 52.4, z1: 69.4 },   // Aldar HQ — real mesh, vertex-precise
+  { x0:-196.6, x1:-166.9, z0: 83.5, z1:104.9 },   // Al Raha Mall     — 182.7 x 86.8 m, rot  16.9°
+  { x0:-219.2, x1:-187.3, z0: 90.0, z1:113.5 },   // Beach Resort, A  — 197.7 x 95.1 m, rot  18.4°
+  { x0:-225.0, x1:-212.1, z0: 85.4, z1:105.5 },   // Beach Resort, B  — 120.8 x 34.8 m, rot -72.4°
+];
+
+/* ALDAR HQ, BUILT AND ADDED. The first of Al Raha's four landmarks with actual geometry rather
+   than a reserved footprint — see w2h-city.js's aldarHQ() for the shape itself and the sourcing
+   behind it. Al Raha Mall and the two Beach Resort wings stay reserved-but-empty in KIT_ZONES
+   above until they get the same treatment. */
+if (!NO_KIT && kit.aldarHQ){
+  const aldar = kit.aldarHQ(LM_RAHA.aldar.x, LM_RAHA.aldar.z);
+  aldar.position.y = GROUND;
+  raha.detail.add(aldar);
+}
+
 /* ===========================================================================
    GROUND FEATURES — THE GOLF COURSE AND THE RACE CIRCUIT.
 
