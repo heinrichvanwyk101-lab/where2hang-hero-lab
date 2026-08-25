@@ -1513,7 +1513,18 @@ async function main(){
   if (only){
     try {
       const prev = JSON.parse(await fs.readFile('data/index.json', 'utf8'));
-      const kept = (prev.islands || []).filter(i => i.id !== only);
+      /* CASE-INSENSITIVE HERE TOO, AND MISSING THIS WAS A REAL BUG, NOT A HYPOTHETICAL ONE.
+         The island SELECTION filter (`list`, above) was made case-insensitive already, but this
+         is a SEPARATE comparison — which old index entry to drop before appending the fresh one
+         — and it still compared case-sensitively. Typing the island as "Raha" across three
+         separate runs meant `i.id !== only` was true for the real lowercase 'raha' entry every
+         time, so nothing was ever excluded and each run appended a new entry instead of
+         replacing the old one. Confirmed on the committed index.json: three 'raha' entries,
+         one correct pair from the fixed outline logic and one stale one from before it, with
+         whatever reads "the" raha entry picking the first — the stale one — regardless of how
+         correct the other two were. Lower-casing both sides here is what actually de-duplicates
+         on the next run, self-healing the three back down to one without a manual edit. */
+      const kept = (prev.islands || []).filter(i => i.id.toLowerCase() !== only.toLowerCase());
       index.islands = kept.concat(index.islands)
         .sort((a, b) => ISLANDS.findIndex(i => i.id === a.id) - ISLANDS.findIndex(i => i.id === b.id));
     } catch { /* no previous index; the single entry stands alone */ }
