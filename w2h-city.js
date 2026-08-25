@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v60';
+export const BUILD = 'city v61';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -256,8 +256,9 @@ function cityMaterial(tex, repX, repY, emissive, colour){
      shear  — the slanted crown, applied only near the top so the base stays plumb
      ell    — elliptical footprint                                                            */
 function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
-  const g = new THREE.CylinderGeometry(rTop, rBot, h, segs || 44, 24, false);
-  const pos = g.attributes.position;
+  const radial = segs || 44, heightSegs = 24;
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, radial, heightSegs, false);
+  const pos = g.attributes.position, uv = g.attributes.uv;
   for (let i = 0; i < pos.count; i++){
     let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     // CLAMPED, and the clamp is load-bearing. Vertex positions are Float32; for a height whose
@@ -274,6 +275,44 @@ function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
     pos.setXYZ(i, x, y, z);
   }
   g.computeVertexNormals();
+
+  /* THE WINDOWS THAT LOOKED CARVED FROM ROCK, POINTY, RIGHT AT THE CROWN — this is why. The lean
+     is uniform per height-ring (same t, same offset for every vertex around it), so it never
+     touches the UVs; the SHEAR is not — it scales with (x / rBot), which is different at every
+     point AROUND a ring, so vertices that started at the identical height end up at different
+     actual Y once shear runs. And shear scales with t^7: nearly flat for most of the tower, then
+     rising fast in roughly the top fifth — so ADJACENT height rings near the crown can end up
+     with substantially different shear amounts, while the texture's V coordinate still assumes
+     the original, perfectly even ring spacing from before any of this ran. The rows of windows
+     get crowded together unevenly exactly where the shear is steepest, which is the crown — a
+     jagged, hand-cut look on the one feature (window rhythm) that most needs to read as machined.
+
+     The slant itself is not the bug — "slanted crowns" is the documented, correct, intentional
+     shape for this tower. Only the texture's ignorance of that shape is being fixed here.
+
+     Recomputed PER COLUMN, not globally: CylinderGeometry's torso is a (radial+1) x (heightSegs+1)
+     grid, indexed row-major, so column c's vertices sit at c, c+(radial+1), c+2(radial+1)... Each
+     column traces one continuous vertical strip up the tower — exactly the strip a single line of
+     windows runs up — so restretching V within that column's own real Y range (not the whole
+     tower's) is what actually matches a real vertical window-line's real, individual length. Cap
+     vertices sit past the torso grid's own vertex count and are left alone; they already fold to
+     the texture's centre and were never the problem. */
+  const cols = radial + 1, rows = heightSegs + 1, torsoCount = cols * rows;
+  for (let c = 0; c < cols; c++){
+    let ymin = Infinity, ymax = -Infinity;
+    for (let r = 0; r < rows; r++){
+      const y = pos.getY(r * cols + c);
+      if (y < ymin) ymin = y;
+      if (y > ymax) ymax = y;
+    }
+    const span = Math.max(1e-6, ymax - ymin);
+    for (let r = 0; r < rows; r++){
+      const idx = r * cols + c;
+      if (idx >= torsoCount) continue;
+      uv.setY(idx, (pos.getY(idx) - ymin) / span);
+    }
+  }
+  uv.needsUpdate = true;
   return g;
 }
 
@@ -1615,16 +1654,53 @@ function yasMall(x0, z0, facing){
 function adnocHQ(x0, z0){
   const g = new THREE.Group();
   const rot = 0.20;
-  // Graphite glazing: denser and less blue than Etihad, so the two towers no longer read as the
-  // same building at different sizes. Emissive third in the hierarchy, behind palace and Etihad.
-  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 44, 1.7, 16),
+  /* THE OPENING NEAR THE TOP — ABSENT ENTIRELY BEFORE THIS, AND NOT A MINOR OMISSION. Checked
+     directly rather than assumed: the real tower has a large square-topped-arch opening built
+     into the upper shaft, deliberately framing views of the Gulf — the single most-mentioned
+     feature of this building in every writeup of it, and this model had a plain solid slab where
+     that opening belongs.
+
+     Modelled as two legs with a gap between them, not a hole punched through one shape — a hole
+     needs a shape-with-hole extrusion, which the arc-length UV mapper above only walks the OUTER
+     contour of, so the inner reveal would texture wrong. Two legs reuse roundedSlab/writeSlabUVs
+     exactly as already proven correct on the main shaft, no new UV code, no new failure mode.
+
+     THE FIRST VERSION OF THIS HAD THE LEGS 0.35 UNITS WIDER THAN THE WAIST THEY MEET, AND A
+     CORNER RADIUS NEARLY DOUBLE THE PROPORTION USED EVERYWHERE ELSE ON THIS TOWER (0.38 vs the
+     body's 0.22) — never shipped, caught in bench render before it went out, but worth recording
+     why these specific numbers are what they are. Legs now span exactly the waist's own 6.9-unit
+     width and use a corner radius matched to the same ~0.22 ratio as the rest of the tower, so
+     the leg-to-waist join is flush and the tower's proportions stay consistent top to bottom.
+
+     Their offset has to be rotated with the tower, not just added to x0 in world space — a
+     mesh's own rotation.y turns its geometry around ITS OWN position, it does not move that
+     position, so an unrotated offset would misalign the gap against the shaft's own rotated
+     face. */
+  const legOff = 2.15;
+  const legWX =  legOff * Math.cos(rot), legWZ = -legOff * Math.sin(rot);
+
+  // Main shaft, shortened to stop where the opening begins rather than running the old full 44.
+  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 34, 1.7, 16),
     /* REPEAT (1, 1). The tiling is baked into the geometry's UVs in metres now, so a repeat here
        would multiply a scale that is already correct — which is precisely how this went wrong. */
     cityMaterial(TEX_TOWER, 1, 1, 0.60, 0x14161A));
   body.position.set(x0, 0, z0); body.rotation.y = rot;
   body.userData.hero = true; g.add(body);
 
-  // Step one: a narrow dark waist. Reads as a shadow line and separates shaft from cap.
+  // The two legs framing the opening — width now matches the waist (6.9) they meet, corner
+  // radius matched to the tower's own ~0.22 ratio (1.5 on a 6.9-unit reference, scaled down for
+  // the legs' own 3.45-unit half-width) rather than the disproportionate 1.0 the first pass used.
+  const legMat = cityMaterial(TEX_TOWER, 1, 1, 0.60, 0x14161A);
+  [1, -1].forEach(s => {
+    const leg = new THREE.Mesh(roundedSlab(2.6, 4.8, 9.2, 0.55, 16), legMat);
+    leg.position.set(x0 + s * legWX, 34, z0 + s * legWZ);
+    leg.rotation.y = rot;
+    leg.userData.hero = true;
+    g.add(leg);
+  });
+
+  // Step one: a narrow dark waist. Reads as a shadow line and separates shaft from cap. Now also
+  // doubles as the lintel that closes the top of the opening — legs meet it flush at 43.2.
   /* THE WAIST IS NOT GLASS, whatever its hex says. 0x080C10 is blue-over-red 2.0, so the lift's
      classifier has been treating this as curtain wall and giving it DUSK_GLASS at metalness
      0.62 — turning the one element on the tower whose entire job is to be a dark shadow line
