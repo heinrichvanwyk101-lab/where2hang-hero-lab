@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v68';
+export const BUILD = 'city v69';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1996,6 +1996,144 @@ function yasMall(x0, z0, facing){
   return g;
 }
 
+/* QASR AL WATAN — THE PRESIDENTIAL PALACE. Three real rings, straight out of the bake.
+
+   THE HANDOVER ANCHOR LANDED ON THE BUILDING EXACTLY: local (-1150.6, 79.8) sits on a
+   453.3 x 405.4 m record carrying a 118-POINT POLYGON, with two 170 m flanking records either
+   side carrying 51 points each. Nothing needed surveying. Same lesson as Emirates Palace — the
+   footprints were in data/isle-corniche.json the whole time.
+
+   THE MAIN RING IS A DUMBBELL, and that matters for where things go. It is two masses joined by
+   a thin neck, spanning z -32.5 to +30.6, and the anchor is the OBB centre — which puts it IN
+   THE NECK, on the link corridor rather than on either palace. A dome placed at the anchor would
+   have floated over a passage. The seat is solved from the polygon's clearance field instead and
+   lands at (-0.25, 15.25) with 10.41 units of room, in the southern mass.
+
+   All three rings fill 37-39 per cent of their own bounding boxes. Like the palace, that is the
+   signature of a courtyarded plan and the reason a box would have been wrong.
+
+   ONE DOME, AND ONLY ONE. data/city-reference.js is explicit: this reads as a horizontal bar
+   with a single bump and is "easily confused with Emirates Palace unless the stepped flank domes
+   are omitted here". Emirates Palace has nine seats; this has one. That contrast is the whole
+   point of building it.
+
+   PROPORTIONS FROM city-reference.js, unit = wingHeight ~30 m: dome apex 2.40 (72 m), dome width
+   1.23 (37 m diameter). The stack below reproduces 72 m by construction rather than by a literal.
+
+   pavilionScale 1.30 IS NOT USED AS A HEIGHT. The reference does not say which dimension it
+   scales, and at 1.30 x wingHeight the flanking blocks would stand taller than the main range
+   they flank, which no photograph supports. Read as a plan figure and therefore already carried
+   by the real rings; the flanks are set slightly BELOW the main wings instead. Flagged rather
+   than silently reinterpreted. */
+const QASR_MAIN = [
+    [-19.77,-17.39], [-18.57,-13.30], [-16.68,-13.85], [-13.25, -2.24],
+    [ -7.55, -3.92], [ -8.73, -3.26], [ -6.05,  5.80], [ -8.08,  6.41],
+    [ -8.31,  5.64], [ -9.53,  5.99], [ -8.68,  8.85], [-10.05,  9.26],
+    [ -9.63, 10.74], [-14.00, 12.03], [-12.86, 15.92], [-14.04, 16.26],
+    [-14.52, 14.69], [-15.04, 14.84], [-15.30, 13.98], [-16.05, 14.20],
+    [-16.37, 13.12], [-22.80, 15.03], [-22.48, 16.11], [-23.48, 16.39],
+    [-23.22, 17.26], [-24.12, 17.53], [-23.32, 20.23], [-25.78, 20.96],
+    [-25.30, 22.57], [-22.85, 21.84], [-22.26, 23.85], [-21.35, 23.58],
+    [-21.05, 24.60], [-20.05, 24.30], [-19.77, 25.26], [-13.35, 23.37],
+    [-13.63, 22.41], [-12.87, 22.17], [-13.18, 21.17], [-12.64, 21.01],
+    [-12.98, 19.88], [-11.78, 19.52], [-10.68, 23.25], [ -8.81, 22.70],
+    [ -8.00, 25.43], [ -6.99, 25.14], [ -6.25, 27.64], [  1.70, 25.69],
+    [  3.15, 30.57], [  5.89, 29.76], [  4.45, 24.88], [  5.27, 24.64],
+    [  5.15, 24.26], [ 12.43, 22.11], [ 11.69, 19.61], [ 12.70, 19.32],
+    [ 11.89, 16.58], [ 13.70, 16.05], [ 12.33, 11.39], [ 13.51, 11.03],
+    [ 14.52, 14.48], [ 23.02, 11.97], [ 22.06,  8.74], [ 24.81,  7.93],
+    [ 24.39,  6.57], [ 21.66,  7.38], [ 20.55,  3.60], [ 12.05,  6.11],
+    [ 12.97,  9.25], [ 11.81,  9.60], [ 10.38,  4.82], [  5.41,  6.29],
+    [  4.98,  4.82], [  4.14,  5.06], [  3.29,  2.21], [  2.19,  2.53],
+    [  2.41,  3.30], [  0.37,  3.91], [ -2.31, -5.17], [ -4.32, -4.88],
+    [  1.37, -6.56], [ -1.59,-18.31], [  0.06,-18.79], [ -1.16,-22.89],
+    [  1.11,-23.57], [  0.69,-24.99], [ -1.58,-24.31], [ -2.76,-28.29],
+    [ -5.57,-27.45], [ -5.32,-26.66], [ -7.25,-26.09], [ -7.87,-28.24],
+    [-10.71,-27.40], [-11.34,-29.51], [-10.17,-29.85], [-10.64,-31.44],
+    [-11.31,-31.24], [-11.69,-32.52], [-13.09,-32.09], [-12.96,-31.68],
+    [-16.45,-31.11], [-16.07,-29.83], [-15.49,-30.01], [-14.40,-26.31],
+    [-17.05,-25.52], [-16.43,-23.39], [-18.27,-22.84], [-18.50,-23.62],
+    [-21.36,-22.77], [-20.19,-18.81], [-22.52,-18.12], [-22.11,-16.70],
+];
+const QASR_FLANK_W = [
+    [-48.94,-16.22], [-51.11,-15.58], [-50.49,-13.48], [-51.53,-13.17],
+    [-50.80,-10.67], [-50.13,-10.86], [-49.67, -9.27], [-53.37, -7.66],
+    [-52.34, -4.12], [-49.76, -4.89], [-49.55, -4.17], [-48.84, -4.39],
+    [-47.99, -1.49], [-45.77, -2.15], [-44.62,  1.75], [-37.48, -0.36],
+    [-37.75, -1.29], [-44.08,  0.60], [-45.82, -5.33], [-44.80, -5.63],
+    [-45.68, -8.59], [-44.89,-10.08], [-44.25, -9.75], [-43.99,-10.22],
+    [-41.57, -8.48], [-40.67,-10.16], [-43.50,-11.15], [-43.02,-12.04],
+    [-43.62,-12.36], [-43.34,-12.88], [-39.99,-13.88], [-40.27,-14.80],
+    [-34.59,-16.48], [-32.67, -9.99], [-31.67,-10.29], [-33.94,-17.94],
+    [-37.30,-16.94], [-37.98,-19.24], [-41.30,-18.25], [-41.55,-19.12],
+    [-42.30,-18.90], [-43.13,-21.72], [-46.41,-20.75], [-45.58,-16.76],
+    [-47.05,-16.33], [-47.45,-17.68], [-49.22,-17.16],
+];
+const QASR_FLANK_E = [
+    [ 27.63,-35.26], [ 26.96,-37.36], [ 24.81,-36.68], [ 24.51,-37.61],
+    [ 22.75,-37.06], [ 23.18,-35.70], [ 21.72,-35.25], [ 20.18,-39.02],
+    [ 16.91,-37.99], [ 17.79,-35.18], [ 17.05,-34.95], [ 17.33,-34.08],
+    [ 14.02,-33.04], [ 14.74,-30.77], [ 11.41,-29.72], [ 13.81,-22.11],
+    [ 14.79,-22.42], [ 12.77,-28.86], [ 18.41,-30.65], [ 18.70,-29.72],
+    [ 22.02,-30.77], [ 22.54,-30.51], [ 22.23,-29.90], [ 23.13,-29.43],
+    [ 21.34,-27.03], [ 23.01,-26.13], [ 24.05,-28.94], [ 24.54,-28.68],
+    [ 24.87,-29.33], [ 26.36,-28.53], [ 27.29,-25.58], [ 28.32,-25.90],
+    [ 29.98,-21.22], [ 23.87,-19.33], [ 24.27,-18.07], [ 31.07,-20.22],
+    [ 30.04,-23.24], [ 32.24,-23.93], [ 31.33,-26.80], [ 32.04,-27.03],
+    [ 31.82,-27.74], [ 34.37,-28.54], [ 33.27,-32.06], [ 29.29,-31.33],
+    [ 28.79,-32.90], [ 29.45,-33.11], [ 28.66,-35.59],
+];
+
+function qasrAlWatan(x0, z0){
+  const g = new THREE.Group();
+
+  /* Pale, and deliberately paler than Emirates Palace. city-reference gives body #E0DAD0 and
+     dome #D8CDBA. The palace down the coast is a pink beige at R-G +29; this is near-neutral
+     limestone at R-G +6, so the two never read as the same building even at horizon distance. */
+  const stone = new THREE.MeshStandardMaterial({
+    color:0x16150F, roughness:0.9, metalness:0.02, emissive:0xE8D9A8, emissiveIntensity:0.03 });
+  stone.userData.glassOverride = false;
+  stone.userData.duskColor = 0xD9D2C6;
+  stone.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE0DAD0, roughness:0.9 });
+
+  const domeMat = new THREE.MeshStandardMaterial({
+    color:0x201B10, roughness:0.66, emissive:0xE8B547, emissiveIntensity:0.30 });
+  domeMat.userData.glassOverride = false;
+  domeMat.userData.duskColor = 0xE2D6BE;
+  domeMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD8CDBA, roughness:0.66 });
+
+  const H_WING = 3.85;            // 30 m, the reference's own unit
+  const H_PAV  = 3.30;            // 26 m, below the range it flanks
+
+  function traced(ring, h){
+    const sh = new THREE.Shape();
+    ring.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
+    geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, stone);
+    m.position.set(x0, 0, z0); m.userData.hero = true; g.add(m);
+  }
+  traced(QASR_MAIN, H_WING);
+  traced(QASR_FLANK_W, H_PAV);
+  traced(QASR_FLANK_E, H_PAV);
+
+  /* THE DOME STACK, built to reach 72 m rather than told to. hall 1.20 + drum 1.80 + radius 2.37
+     on a 3.85 roof gives an apex of 9.22 units — 71.9 m against the reference's 72.0. */
+  const SX = -0.25, SZ = 15.25;
+  const hallT = H_WING + 1.20, drumT = hallT + 1.80, R_DOME = 2.37;
+  const hall = new THREE.Mesh(new THREE.CylinderGeometry(4.20, 4.40, 1.20, 24), stone);
+  hall.position.set(x0 + SX, H_WING + 0.60, z0 + SZ); g.add(hall);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(2.90, 3.05, 1.80, 24), stone);
+  drum.position.set(x0 + SX, hallT + 0.90, z0 + SZ); g.add(drum);
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(R_DOME, 26, 15, 0, Math.PI*2, 0, Math.PI/2), domeMat);
+  dome.position.set(x0 + SX, drumT, z0 + SZ); dome.userData.hero = true; g.add(dome);
+  const fin = new THREE.Mesh(new THREE.ConeGeometry(0.20, 1.10, 8), domeMat);
+  fin.position.set(x0 + SX, drumT + R_DOME + 0.45, z0 + SZ); g.add(fin);
+
+  return g;
+}
+
 /* ADNOC HQ — HOK, 342 m, 65 floors, completed 2015. REBUILT FROM PHOTOGRAPHS, because the
    previous version had the building's topology wrong and no amount of proportion work on it
    would have helped.
@@ -2642,6 +2780,6 @@ function grandMosque(x0, z0){
 
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
-         etihadTowers, emiratesPalace, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
+         etihadTowers, emiratesPalace, qasrAlWatan, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise };
 }
