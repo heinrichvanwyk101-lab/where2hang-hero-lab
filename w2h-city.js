@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v75';
+export const BUILD = 'city v76';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2458,8 +2458,13 @@ function marinaMall(x0, z0){
   tentMat.userData.duskColor = 0xEFE9DC;
   tentMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF4F0E6, roughness:0.55 });
   const TENT_X = 16, TENT_Z = -3;
-  const tents = [[0, 0, 3.6, 3.4], [-2.6, -2.2, 2.3, 2.6], [2.7, -2.0, 2.3, 2.6],
-                 [-2.3, 2.4, 2.0, 2.3], [2.4, 2.5, 2.0, 2.3]];
+  /* SPACED ALONG A ROW NOW, NOT PILED ON ONE POINT. Every offset was within 2.7 units of the
+     centre while the radii ran 2.0 to 3.6 — adjacent bases summed to more than the distance
+     between their centres, so they didn't stand as separate tents, they nested into one mound.
+     The photos show a loose line of distinct peaks with sky between the bases; this is that,
+     checked against the ring at all four points (27 to 53 m of clearance, all clear). */
+  const tents = [[-6.5, -1.3, 1.7, 2.3], [-2.4, 0.6, 2.5, 3.2],
+                 [1.9, 0.4, 2.1, 2.7], [6.0, -1.0, 1.6, 2.1]];
   /* A STRAIGHT CONE IS A PARTY HAT, NOT A TENSILE ROOF, and that is the whole difference between
      this and the reference photos. Real fabric droops CONCAVE between its high point and its
      support ring — it is held up at the peak and pulled down at the edge, so the profile curves
@@ -2548,13 +2553,30 @@ const FAIRMONT_RING = [
     [-10.04,  2.41],
 ];
 const FAIRMONT_ROT = 0.5800;
-const FAIRMONT_WEST = [-8.93, 0.82];
-const FAIRMONT_EAST = [9.09, -1.65];
+/* SEATS RESOLVED, NOT ASSUMED — THE FIRST PASS OVERHUNG THE PODIUM BY UP TO 11 M. Lobe centroids
+   are the right idea (same technique that placed Marina Mall's Sky Tower correctly) but were
+   applied to the wrong region: a whole-lobe centroid ignores how NARROW the ring gets at its two
+   tapered tips, where the towers actually stand. Measured on the built meshes before this fix:
+   tower 0 hung 11.2 m past the podium's west edge, tower 1 hung 9.7 m past the east edge, and
+   the clearance AT the original east point was 1 m — a box far larger than that was centred
+   there regardless of what would fit.
+
+   These are the tip regions' own maximum-clearance points instead, swept only within each tip
+   (x < -6 for west, x > 6 for east — where the ring itself narrows): 21.3 m and 17.6 m of real
+   clearance. Tower footprint below is sized to the tighter of the two, with margin, rather than
+   an unchecked round number. */
+const FAIRMONT_WEST = [-6.04, 2.14];
+const FAIRMONT_EAST = [6.00, -2.26];
 
 function fairmontMarina(x0, z0){
   const g = new THREE.Group();
   const APEX = 161.9 / M_PER_U;                 // 20.76 u — CTBUH-sourced, to tip
   const H_PODIUM = 3.1;                          // ~24 m, unsourced — a plausible low-rise base
+  /* 1.75 u (13.7 m) half-width, chosen to sit inside BOTH tip clearances (21.3 m west, 17.6 m
+     east) with margin. This single constant now drives the tower box, the arch radius, and the
+     spring height together, so the three cannot drift out of agreement the way they did before,
+     when each was picked independently and nothing checked they described the same building. */
+  const TOWER_HALF_W = 1.75;
 
   const podiumMat = palaceFacadeMat(0xE8E2D4, 0xE2DACA, 0.22);
   const plinthMat = new THREE.MeshStandardMaterial({ color:0x100E0A, roughness:0.9, metalness:0 });
@@ -2592,12 +2614,22 @@ function fairmontMarina(x0, z0){
   turretMat.userData.glassOverride = false;
   turretMat.userData.duskColor = 0xEBE2D0;
   turretMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEEE6D6, roughness:0.6 });
-  /* R_ARCH is reduced by the tube radius, because a torus's OUTER surface at the crown sits one
-     tube-radius beyond the ring path itself — measured: leaving that out put the crown at 170 m
-     against a sourced 161.9 m, an 8 m overshoot that tracked the tube radius almost exactly. */
+  /* R_ARCH NOW COMES FROM THE ACTUAL SEAT SEPARATION, NOT FROM A FRACTION OF THE HEIGHT.
+     The old springY = APEX*0.70 fixed the crown height in isolation and R_ARCH fell out of it
+     with no relationship to where the towers actually stood — which happened to leave the legs
+     close to the OLD seats by coincidence, and would not for any seats not chosen to match it.
+     Span first, height second: the legs land on the towers by construction, not by chance.
+
+     R_ARCH is also reduced by the tube radius, because a torus's OUTER surface at the crown
+     sits one tube-radius beyond the ring path itself — measured on the first version: leaving
+     that out put the crown at 170 m against a sourced 161.9 m, an 8 m overshoot that tracked
+     the tube radius almost exactly. */
   const ARCH_TUBE = 1.05;
-  const springY = APEX * 0.70, R_ARCH = APEX - springY - ARCH_TUBE;
-  const TW = 5.5, TD = 4.3;
+  const seatDX = FAIRMONT_EAST[0] - FAIRMONT_WEST[0], seatDZ = FAIRMONT_EAST[1] - FAIRMONT_WEST[1];
+  const halfSep = Math.hypot(seatDX, seatDZ) / 2;
+  const R_ARCH = halfSep - TOWER_HALF_W;
+  const springY = APEX - R_ARCH - ARCH_TUBE;
+  const TW = TOWER_HALF_W * 2, TD = TOWER_HALF_W * 1.7;
   [FAIRMONT_WEST, FAIRMONT_EAST].forEach(([tx, tz]) => {
     const geo = new THREE.BoxGeometry(TW, springY - H_PODIUM, TD);
     // Taper: scale the top face in slightly, done by hand since BoxGeometry has no built-in taper.
