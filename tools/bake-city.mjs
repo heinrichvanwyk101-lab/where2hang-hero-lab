@@ -1291,8 +1291,16 @@ async function main(){
      been as argv[2]. */
   const args = process.argv.slice(2).filter(a => a && a[0] !== '-');
   const only = args[0];
-  const list = only ? ISLANDS.filter(i => i.id === only) : ISLANDS;
-  if (!list.length) throw new Error(`no island called "${only}"`);
+  /* CASE-INSENSITIVE, BECAUSE THE FAILURE MODE WAS EXACTLY THIS. The workflow dropdown offers
+     lowercase ids, but mobile GitHub's dispatch UI can render that field as free text with the
+     phone's own keyboard autocapitalizing the first letter — "raha" typed, "Raha" sent, and
+     `i.id === only` rejected a real island over a single letter's case. Comparing lowercase on
+     both sides means a capital first letter, or any other casing a keyboard invents, still finds
+     the island it obviously meant. */
+  const list = only ? ISLANDS.filter(i => i.id.toLowerCase() === only.toLowerCase()) : ISLANDS;
+  if (!list.length){
+    throw new Error(`no island called "${only}" — choices are ${ISLANDS.map(i => i.id).join(', ')}`);
+  }
 
   const proj = projector(ORIGIN.lat, ORIGIN.lon);
 
