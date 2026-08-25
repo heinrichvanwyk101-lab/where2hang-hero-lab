@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v61';
+export const BUILD = 'city v62';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -133,7 +133,17 @@ const DUSK_BY_NIGHT = {
      blue-grey city — brighter than anything near it and reading as bare stone rather than as the
      bronze-glass tower it is. The real building is markedly DARKER than the concrete around it,
      which is the whole reason it stands out on the Corniche. */
-  0x14161A: 0x8E7B60,   // ADNOC HQ: dark bronze, deliberately below the fabric's stone
+  /* THE BRONZE PREMISE WAS WRONG, AND EVERY COLOUR DECISION ABOVE WAS DOWNSTREAM OF IT. Checked
+     against photographs rather than remembered: ADNOC HQ's frame is BETHEL WHITE GRANITE, a pale
+     grey-white dimension stone, and the only glass on the building is the curtain wall recessed
+     between the two granite end walls. There is no bronze anywhere on it.
+
+     The old note here is still right about the failure it describes — a pale warm tan on the
+     WHOLE tower did make it a beacon. That is no longer the risk, because pale stone is now only
+     the frame: two end blades and a lintel, roughly a third of the visible face, with dark blue
+     glass filling the rest. A pale frame around a dark field is the real building's actual
+     contrast and cannot read as one large unbroken light surface, which is what went wrong. */
+  0x121A24: 0xA9B6BE,   // ADNOC curtain wall: blue-grey glass, cooler and darker than Etihad's
   0x151A1F: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
   0x111C22: 0xB9BCC0,   // Etihad's solar glass reads as brushed metal against a low sun
   /* T1, THE JUMEIRAH HOTEL TOWER, IS NOT THE SAME GLASS AS THE OTHER FOUR — checked against
@@ -153,7 +163,7 @@ const DUSK_BY_NIGHT = {
    fabric that now has glazing, floor lines and five distinct wall colours. The landmarks look
    less resolved than the background city, which is precisely backwards. */
 const DAY_BY_NIGHT = {
-  0x14161A: 0x9C8F79,   // ADNOC: bronze, and darker than the sand it stands on
+  0x121A24: 0x8FA6B4,   // ADNOC glass: deep blue-grey, plainly darker than its own stone frame
   0x151A1F: 0xD2CBBE,   // generic mass: matches the fabric's precast
   0x111C22: 0xA8BAC4,   // Etihad: the same blue-green glass the fabric's towers use
   0x1C140C: 0xB8794E,   // Etihad T1: bronze/copper in daylight, same photographed distinction
@@ -1651,79 +1661,131 @@ function yasMall(x0, z0, facing){
   return g;
 }
 
+/* ADNOC HQ — HOK, 342 m, 65 floors, completed 2015. REBUILT FROM PHOTOGRAPHS, because the
+   previous version had the building's topology wrong and no amount of proportion work on it
+   would have helped.
+
+   WHAT WAS BUILT: a shaft that stopped at 34, two separate legs standing on it with a gap
+   between them, a waist and a stepped cap — 49 units of tuning fork. Rendered on the island it
+   read as two chimneys with a slab balanced on top.
+
+   WHAT IS ACTUALLY THERE: ONE SLAB, WITH A HOLE PUNCHED NEAR THE TOP. That is the whole
+   correction and it is a topology error, not a dimension error. The building is a single
+   continuous rectangular slab from ground to roof. Two solid granite END WALLS form its short
+   edges and run the full height. A glass curtain wall fills the span between them and stops
+   about eight storeys short of the roof. A granite LINTEL spans the two end walls at roof
+   level. The opening is the void left between the top of the glass and the underside of that
+   lintel — framed on three sides, floored by the glass volume's own roof.
+
+   THE OLD MODEL MADE THE GAP RUN ALL THE WAY DOWN. The previous session's note reasoned that
+   two legs were safer than a shape-with-hole extrusion because the arc-length UV mapper only
+   walks the outer contour. That reasoning was sound and the conclusion still holds — there is
+   no hole-in-a-shape here either. But two legs solved the UV problem by building a different
+   building. Four solid pieces solve it as well and build the right one.
+
+   MATERIAL. Bethel White granite on the frame, blue-grey glass between. The old model was
+   bronze glass everywhere, with the window texture wrapped over surfaces that are blank stone
+   in reality — which is why the close shot reads as a woven basket rather than as a building.
+   The frame carries no window map at all, deliberately: the real end walls are unbroken.
+
+   HEIGHT IS BACK TO 44 UNITS. w2h-world.js states ADNOC at 44 in three separate places and
+   sizes other things against that figure; the legs had grown it to 49 without those comments
+   being touched. 44 x 7.8 = 343 m against a real 342.
+
+   VERIFIED NUMERICALLY, not by eye: blade outer face and lintel outer face both land at local
+   x 3.800, and the glass outer face and the blade inner face both land at local x 2.450, so
+   frame and infill are flush by construction rather than by two constants happening to agree. */
 function adnocHQ(x0, z0){
   const g = new THREE.Group();
   const rot = 0.20;
-  /* THE OPENING NEAR THE TOP — ABSENT ENTIRELY BEFORE THIS, AND NOT A MINOR OMISSION. Checked
-     directly rather than assumed: the real tower has a large square-topped-arch opening built
-     into the upper shaft, deliberately framing views of the Gulf — the single most-mentioned
-     feature of this building in every writeup of it, and this model had a plain solid slab where
-     that opening belongs.
 
-     Modelled as two legs with a gap between them, not a hole punched through one shape — a hole
-     needs a shape-with-hole extrusion, which the arc-length UV mapper above only walks the OUTER
-     contour of, so the inner reveal would texture wrong. Two legs reuse roundedSlab/writeSlabUVs
-     exactly as already proven correct on the main shaft, no new UV code, no new failure mode.
+  /* THE FIVE CONSTANTS, ALL IN UNITS, ALL DERIVED FROM THE REAL BUILDING AT 7.8 m PER UNIT.
+       H_TOP    44.0  = 343 m, the architectural top
+       H_GLASS  35.6  = 278 m, where the curtain wall stops
+       H_BEAM   41.4  = 323 m, the lintel soffit — so the void is 45 m, the lintel 20 m
 
-     THE FIRST VERSION OF THIS HAD THE LEGS 0.35 UNITS WIDER THAN THE WAIST THEY MEET, AND A
-     CORNER RADIUS NEARLY DOUBLE THE PROPORTION USED EVERYWHERE ELSE ON THIS TOWER (0.38 vs the
-     body's 0.22) — never shipped, caught in bench render before it went out, but worth recording
-     why these specific numbers are what they are. Legs now span exactly the waist's own 6.9-unit
-     width and use a corner radius matched to the same ~0.22 ratio as the rest of the tower, so
-     the leg-to-waist join is flush and the tower's proportions stay consistent top to bottom.
+     THE VOID AND LINTEL WERE BOTH TOO SHALLOW ON THE FIRST PASS and the bench render is what
+     caught it. 29 m and 18 m put the opening at 8.4 per cent of the height against roughly 12
+     measured off the CTBUH elevation, and at horizon distance — the view that decides whether a
+     landmark earns its cost — it shrank to a pinhole and the tower read as a plain slab again.
+     45 m is about nine storeys at this building's 5.3 m floor-to-floor, which is what the
+     photographs show.
+       W / D   7.6 / 4.8 = 59 x 37 m slab, unchanged from the old shaft and about right
+       BLADE    1.35  = 10.5 m, the granite end wall thickness in plan  */
+  const H_TOP = 44.0, H_GLASS = 35.6, H_BEAM = 41.4;
+  const W = 7.6, D = 4.8, BLADE = 1.35, INSET = 0.28;
 
-     Their offset has to be rotated with the tower, not just added to x0 in world space — a
-     mesh's own rotation.y turns its geometry around ITS OWN position, it does not move that
-     position, so an unrotated offset would misalign the gap against the shaft's own rotated
-     face. */
-  const legOff = 2.15;
-  const legWX =  legOff * Math.cos(rot), legWZ = -legOff * Math.sin(rot);
+  /* Offsets are rotated with the tower rather than added to x0 in world space. A mesh's own
+     rotation.y turns its geometry about ITS OWN position and does not move that position, so an
+     unrotated offset would slide the blades off the slab's rotated face. Same reasoning, and the
+     same two lines, as the version this replaces — that part was correct. */
+  const bladeOff = (W - BLADE) / 2;
+  const bx = bladeOff * Math.cos(rot), bz = -bladeOff * Math.sin(rot);
 
-  // Main shaft, shortened to stop where the opening begins rather than running the old full 44.
-  const body = new THREE.Mesh(roundedSlab(7.6, 4.8, 34, 1.7, 16),
-    /* REPEAT (1, 1). The tiling is baked into the geometry's UVs in metres now, so a repeat here
-       would multiply a scale that is already correct — which is precisely how this went wrong. */
-    cityMaterial(TEX_TOWER, 1, 1, 0.60, 0x14161A));
-  body.position.set(x0, 0, z0); body.rotation.y = rot;
-  body.userData.hero = true; g.add(body);
+  /* BETHEL WHITE GRANITE, AND IT IS WHITE. The first pass hedged at 0xCFC6B6 / 0xDCD8CE — a warm
+     grey-tan, chosen out of caution about the old beacon failure — and on the bench it read as
+     weathered concrete. Every photograph of this building shows a bright near-white stone that
+     is plainly lighter than the precast around it. Hedging the colour to avoid an old mistake
+     reproduced a different one.
 
-  // The two legs framing the opening — width now matches the waist (6.9) they meet, corner
-  // radius matched to the tower's own ~0.22 ratio (1.5 on a 6.9-unit reference, scaled down for
-  // the legs' own 3.45-unit half-width) rather than the disproportionate 1.0 the first pass used.
-  const legMat = cityMaterial(TEX_TOWER, 1, 1, 0.60, 0x14161A);
+     WHY THE BEACON FAILURE DOES NOT RETURN. The note in DUSK_BY_NIGHT records a pale tan making
+     ADNOC the brightest thing on the Corniche. That was a pale tone on the WHOLE tower. Here it
+     is the frame only — two end walls and a lintel, roughly a third of the visible face, with
+     dark blue glass filling the rest. A bright frame around a dark field is this building's real
+     contrast and cannot become one large unbroken light surface, which is what actually failed.
+
+     SITED AGAINST THE FABRIC RATHER THAN PICKED. w2h-world.js's DAY_FAMILY puts painted white
+     render at 0xEDEBE6 and precast at 0xD2CBBE; matStoneWhite carries dusk 0xE9E4DA. The values
+     below sit just inside the file's existing white, so this is the brightest stone on the
+     island by a small margin rather than a new extreme — which is the relationship the real
+     building has to its neighbours.
+
+     No map: the end walls and the lintel are blank stone, and putting the tower window texture
+     on them is what made the previous model read as woven.
+
+     Lit at night rather than dark. The frame is what is floodlit on the real building after
+     dark, and it is the frame — not the glass — that carries the silhouette, so the emissive
+     goes here, and it is raised with the albedo so the two agree. */
+  const graniteMat = new THREE.MeshStandardMaterial({
+    color: 0x24272B, roughness: 0.74, metalness: 0.0,
+    emissive: 0xD4DFE6, emissiveIntensity: 0.13 });
+  graniteMat.userData.glassOverride = false;
+  graniteMat.userData.duskColor = 0xE7E3DA;
+  graniteMat.userData.dayMats = new THREE.MeshStandardMaterial({
+    color: 0xECEAE4, roughness: 0.74, metalness: 0.0 });
+
+  /* THE TWO END WALLS, full height, one at each end of the long axis. Corner radius 0.25 rather
+     than the old shaft's 1.7: the real building is crisply orthogonal in every photograph, and
+     1.7 on a 1.35-wide blade would have rounded it into a column. Kept off zero only so the
+     vertical arrises do not alias into a hard line at distance. */
   [1, -1].forEach(s => {
-    const leg = new THREE.Mesh(roundedSlab(2.6, 4.8, 9.2, 0.55, 16), legMat);
-    leg.position.set(x0 + s * legWX, 34, z0 + s * legWZ);
-    leg.rotation.y = rot;
-    leg.userData.hero = true;
-    g.add(leg);
+    const blade = new THREE.Mesh(roundedSlab(BLADE, D, H_TOP, 0.25, 10), graniteMat);
+    blade.position.set(x0 + s * bx, 0, z0 + s * bz);
+    blade.rotation.y = rot;
+    blade.userData.hero = true;
+    g.add(blade);
   });
 
-  // Step one: a narrow dark waist. Reads as a shadow line and separates shaft from cap. Now also
-  // doubles as the lintel that closes the top of the opening — legs meet it flush at 43.2.
-  /* THE WAIST IS NOT GLASS, whatever its hex says. 0x080C10 is blue-over-red 2.0, so the lift's
-     classifier has been treating this as curtain wall and giving it DUSK_GLASS at metalness
-     0.62 — turning the one element on the tower whose entire job is to be a dark shadow line
-     into a bright blue-grey stripe. nav v24 added the override for exactly this case. */
-  const waistMat = new THREE.MeshStandardMaterial({ color:0x080C10, roughness:0.9, metalness:0 });
-  waistMat.userData.glassOverride = false;
-  waistMat.userData.duskColor = 0x6B6659;
-  // Dark in every mode, because the waist is a shadow line and its whole job is to separate the
-  // shaft from the cap. Without this it takes the flat pale fallback in Day and the separation —
-  // the only thing that stops ADNOC reading as one extruded stick — disappears at noon.
-  waistMat.userData.dayMats = new THREE.MeshStandardMaterial({
-    color:0x5E574A, roughness:0.9, metalness:0 });
-  const waist = new THREE.Mesh(roundedSlab(6.9, 4.2, 1.6, 1.5, 16), waistMat);
-  waist.position.set(x0, 44, z0); waist.rotation.y = rot; g.add(waist);
+  /* THE CURTAIN WALL, spanning the gap between the blades and stopping short of the roof. Inset
+     0.28 in depth on both faces so the granite reads as a frame standing proud of the glass —
+     that shadow reveal is what stops the slab flattening into one plane at midday. */
+  const glass = new THREE.Mesh(
+    roundedSlab(W - 2 * BLADE, D - 2 * INSET, H_GLASS, 0.18, 8),
+    cityMaterial(TEX_TOWER, 1, 1, 0.55, 0x121A24));
+  glass.position.set(x0, 0, z0);
+  glass.rotation.y = rot;
+  glass.userData.hero = true;
+  g.add(glass);
 
-  // Step two: the lit cap, WIDER than the shaft so the overhang shows in pure black.
-  const capMat = new THREE.MeshStandardMaterial({ color:0x101519, roughness:0.55,
-    emissive:0x9FBDC8, emissiveIntensity:0.14 });
-  // Cooler and paler than the shaft: the overhang catches sky rather than sun.
-  capMat.userData.duskColor = 0xD6DADC;
-  capMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCBD1D4, roughness:0.55 });
-  const cap = new THREE.Mesh(roundedSlab(9.0, 5.4, 3.4, 1.9, 16), capMat);
-  cap.position.set(x0, 45.6, z0); cap.rotation.y = rot; g.add(cap);
+  /* THE LINTEL. Full slab width and depth, so it lands flush on both blades and closes the
+     opening. This is the single most recognisable thing about the building and the one element
+     the old model had, in effect, floating on stilts. */
+  const lintel = new THREE.Mesh(roundedSlab(W, D, H_TOP - H_BEAM, 0.25, 10), graniteMat);
+  lintel.position.set(x0, H_BEAM, z0);
+  lintel.rotation.y = rot;
+  lintel.userData.hero = true;
+  g.add(lintel);
+
   return g;
 }
 
