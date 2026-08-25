@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v69';
+export const BUILD = 'city v70';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -28,6 +28,39 @@ export const BUILD = 'city v69';
    traced footprint measures 64.3 x 49.3 units, so the estate reservation and the lawn in
    w2h-world.js were sized against a building four times shallower than the one that is there.
    dz goes to 0 because the ring is symmetric about the anchor in both axes. */
+/* MASS-LOD HINTS, EXPORTED, BECAUSE THE PROXY LAYER KEPT DRIFTING OFF THE DETAIL LAYER.
+
+   w2h-world.js builds a low-detail proxy for each landmark and its own note states the contract:
+   "tapping must ADD, never move." It was broken on two of four. Measured:
+
+       Etihad   towers jump up to 122 m and grow up to 69 m between the layers
+       Palace   mass 25 x 11 against a detail footprint of 64.3 x 49.3
+       ADNOC    matches
+       Qasr     no proxy at all — it simply vanishes at mass range
+
+   The Etihad case is the instructive one. w2h-world carries its own ETIHAD_SPEC with a comment
+   saying it is "the SAME dx and dz as w2h-city.js's etihadTowers spec", and it has not been since
+   city v63 moved those towers onto surveyed positions. Two tables, one of them asserting it
+   agrees with the other, and nothing checking. That is not a mistake anyone made; it is what
+   duplicated constants do.
+
+   So the layout leaves this module as data. One table, consumed by both layers. */
+export const ETIHAD_LAYOUT = [
+  { dx: -5.83, dz: -7.87, h: 35.59, r: 2.65 },   // T1, 277.6 m
+  { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52 },   // T4, 234.0 m
+  { dx:  0.58, dz:  0.75, h: 33.37, r: 2.92 },   // T3, 260.3 m
+  { dx: -2.02, dz:  8.86, h: 39.14, r: 3.08 },   // T2, 305.3 m
+  { dx:  5.45, dz:  7.48, h: 27.88, r: 2.38 },   // T5, 217.5 m
+];
+
+/* The palace ring's rotation and its grand dome, for the proxy to stand a box and a bump on. */
+export const PALACE_MASS = { rot: 0.524, domeDx: 2.70, domeDz: 7.90, domeApex: 9.22 };
+
+/* Qasr Al Watan. The bbox is NOT centred on the anchor — the flanking palaces sit unevenly
+   either side — so the proxy needs the offset or it lands 74 m west of the building. */
+export const QASR_FOOT = { w: 87.7, d: 69.6, dx: -9.50, dz: -4.23 };
+export const QASR_MASS = { wing: 3.85, domeDx: -0.25, domeDz: 15.25, domeApex: 9.22 };
+
 export const PALACE_FOOT = { w:64.3, d:49.3, dz:0.0 };
 
 export const C = {
@@ -206,6 +239,119 @@ function facadeDayTexture(cols, rows){
 // for the day map without a second set of arithmetic.
 const DAY_TOWER = facadeDayTexture(14, 46);
 const DAY_BLOCK = facadeDayTexture(18, 14);
+
+/* ARCH FACADE — for the two traced palaces, which had no window rhythm at all. Their walls used
+   the same flat "stone" material as their domes, so at any distance closer than the horizon shot
+   they read as smooth blocks: correct silhouette, no architecture. TEX_TOWER and TEX_BLOCK are
+   both a curtain-wall grid — square panes on a skyscraper rhythm — and putting either on a
+   classical stone facade would read as a glass building wearing a palace's proportions.
+
+   HIGHER RESOLUTION THAN THE TOWER TEXTURES, DELIBERATELY. Those are 4 px per cell because a
+   tower is seen from 1.5 km and a texel is already sub-pixel at that range. These buildings sit
+   in their own place camera at a few hundred units, close enough that an arched window is worth
+   more than four pixels: 10 px per cell draws a recognisable pointed arch rather than a blur.
+
+   ONE WINDOW PER CELL, NOT A RANDOM RUN. windowTexture's lit-run logic makes sense for an office
+   tower where floors light unevenly; a palace facade is a fixed masonry rhythm, arch after arch,
+   with only WHICH ones are lit varying at night. Position and shape are identical between the
+   day and night versions for that reason — only fill and glow differ. */
+function archTexture(cols, rows, litChance){
+  const cv = document.createElement('canvas');
+  const CW = 10;
+  cv.width = cols * CW; cv.height = rows * CW;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#050403'; g.fillRect(0, 0, cv.width, cv.height);
+  let h = 0x9E3779B9;
+  const rnd = () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
+  for (let y = 0; y < rows; y++){
+    for (let x = 0; x < cols; x++){
+      const cx = x * CW + CW/2, top = y * CW + CW*0.30, bot = y * CW + CW*0.92;
+      const hw = CW * 0.26, lit = rnd() < litChance;
+      g.fillStyle = lit ? 'rgba(232,190,110,' + (0.55 + rnd()*0.35).toFixed(2) + ')'
+                         : 'rgba(150,165,175,0.05)';
+      g.beginPath();
+      g.moveTo(cx - hw, bot);
+      g.lineTo(cx - hw, top + hw);
+      g.quadraticCurveTo(cx - hw, top, cx, top);
+      g.quadraticCurveTo(cx + hw, top, cx + hw, top + hw);
+      g.lineTo(cx + hw, bot);
+      g.closePath(); g.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = MAX_ANISO;
+  return t;
+}
+function archDayTexture(cols, rows){
+  const cv = document.createElement('canvas');
+  const CW = 10;
+  cv.width = cols * CW; cv.height = rows * CW;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+  // A thin string-course at the foot of every row — the cue that this is coursed stone, not a
+  // single poured surface.
+  g.fillStyle = 'rgba(120,110,96,0.35)';
+  for (let y = 0; y < rows; y++) g.fillRect(0, y * CW + CW - 1, cv.width, 1);
+  let h = 0x9E3779B9;
+  const rnd = () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
+  for (let y = 0; y < rows; y++){
+    for (let x = 0; x < cols; x++){
+      const cx = x * CW + CW/2, top = y * CW + CW*0.30, bot = y * CW + CW*0.92;
+      const hw = CW * 0.26;
+      // The recess: darker in the middle of the opening, a paler rim either side standing in
+      // for the moulded surround real arched windows are cut with.
+      g.fillStyle = 'rgba(150,140,124,0.55)';
+      g.beginPath();
+      g.moveTo(cx - hw - 1, bot); g.lineTo(cx - hw - 1, top + hw);
+      g.quadraticCurveTo(cx - hw - 1, top - 1, cx, top - 1);
+      g.quadraticCurveTo(cx + hw + 1, top - 1, cx + hw + 1, top + hw);
+      g.lineTo(cx + hw + 1, bot);
+      g.closePath(); g.fill();
+      g.fillStyle = 'rgba(60,58,52,' + (0.55 + rnd()*0.15).toFixed(2) + ')';
+      g.beginPath();
+      g.moveTo(cx - hw, bot); g.lineTo(cx - hw, top + hw);
+      g.quadraticCurveTo(cx - hw, top, cx, top);
+      g.quadraticCurveTo(cx + hw, top, cx + hw, top + hw);
+      g.lineTo(cx + hw, bot);
+      g.closePath(); g.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = MAX_ANISO;
+  return t;
+}
+/* 14 x 46, matching TEX_TOWER's own dimensions exactly, on purpose: writeSlabUVs computes its
+   tile size from SLAB_BAY_M and a HARDCODED 14 x 46 cell count, not from whatever texture is
+   bound. Any other cell count would still be metre-correct in the UVs but would tile the wrong
+   number of window cells into that space — matching the count is what keeps one window per
+   4-metre bay rather than a fraction of one. */
+const TEX_ARCH = archTexture(14, 46, 0.16);
+const DAY_ARCH = archDayTexture(14, 46);
+
+/* One helper, used by both traced palaces, so the facade treatment cannot drift between them.
+   Hand-built rather than routed through cityMaterial: that function's TEX_TOWER/TEX_BLOCK
+   ternary picks the day map by identity, and a third texture would silently fall through to the
+   wrong one. Mirrors cityMaterial's day/dusk wiring by hand instead. */
+function palaceFacadeMat(colourDay, colourDusk, emissiveIntensity){
+  const m = new THREE.MeshStandardMaterial({
+    color: 0x120F0A, roughness: 0.82, metalness: 0.02,
+    emissive: 0xffffff, emissiveMap: TEX_ARCH, emissiveIntensity });
+  m.userData.glassOverride = false;
+  m.userData.duskColor = colourDusk;
+  m.userData.dayMats = new THREE.MeshStandardMaterial({
+    color: colourDay, roughness: 0.82, metalness: 0.0, map: DAY_ARCH });
+  return m;
+}
 
 const matCache = new Map();
 function cityMaterial(tex, repX, repY, emissive, colour){
@@ -564,7 +710,14 @@ function etihadTowers(x0, z0){
      between towers was a deliberate silhouette choice and is preserved exactly; only the overall
      magnitude has changed, because the old one produced no visible slant at all. */
   const GLASS = 0x111C22;
-  const spec = [
+  /* SOURCED FROM THE EXPORTED TABLE, so the mass proxy in w2h-world.js and the geometry here
+     cannot disagree again. colour and floors are joined on here because they are this layer's
+     business and the proxy has no use for either. */
+  const FLOORS = [69, 66, 60, 80, 61];
+  const spec = ETIHAD_LAYOUT.map((t, i) =>
+    ({ dx:t.dx, dz:t.dz, h:t.h, r:t.r, lean:[0.9,0.7,0.8,1.0,0.6][i],
+       shear:[2.04,1.67,1.85,2.41,1.48][i], colour:GLASS, floors:FLOORS[i] }));
+  const _retired = [
     { dx: -5.83, dz: -7.87, h: 35.59, r: 2.65, lean: 0.9, shear: 2.04, floors: 69, colour: GLASS },   // T1, 277.6 m real -- the hotel tower
     { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52, lean: 0.7, shear: 1.67, floors: 66, colour: GLASS },   // T4, 234.0 m real
     { dx:  0.58, dz:  0.75, h: 33.37, r: 2.92, lean: 0.8, shear: 1.85, floors: 60, colour: GLASS },   // T3, 260.3 m real
@@ -751,14 +904,44 @@ function emiratesPalace(x0, z0){
   const CX = 4.44, CZ = 4.57;          // area centroid of the ring
   const AX = Math.cos(PALACE_ROT), AZ = -Math.sin(PALACE_ROT);   // along the long axis
 
-  /* The traced mass. Shape y maps to world -z on extrude, the same convention roundedSlab uses,
-     so the ring's z is negated going in and comes back out correct. */
+  /* THE WALL WAS A SINGLE FLAT EXTRUSION AND READ AS A BLOCK. Correct silhouette, no
+     architecture — the traced ring gave the right SHAPE, and shape was never what made this
+     look unfinished. A base course, a window rhythm and a cornice are what separate a footprint
+     from a facade, and none of the three were here.
+
+     PLINTH — BODY — CORNICE, the same three-part composition the arcade and the domes already
+     use in miniature. All three share the traced ring exactly, so nothing can drift out of
+     alignment with the wall it dresses; only the extrude depth and the y offset differ. */
+  const PLINTH_H = 0.42, CORNICE_H = 0.20;
+  const plinthMat = new THREE.MeshStandardMaterial({ color:0x100D09, roughness:0.94, metalness:0 });
+  plinthMat.userData.glassOverride = false;
+  plinthMat.userData.duskColor = 0xB39C88;
+  plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xBFA890, roughness:0.94 });
+  const corniceMat = new THREE.MeshStandardMaterial({
+    color:0x1C1812, roughness:0.7, emissive:0xE8D9A8, emissiveIntensity:0.05 });
+  corniceMat.userData.glassOverride = false;
+  corniceMat.userData.duskColor = 0xE9E2D6;
+  corniceMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEDE7DC, roughness:0.7 });
+  const facadeMat = palaceFacadeMat(0xD6B9AB, 0xD3B4A4, 0.30);
+
+  /* Shape y maps to world -z on extrude, the same convention roundedSlab uses, so the ring's z
+     is negated going in and comes back out correct. Built once and reused for all three bands —
+     writeSlabUVs needs the exact Shape a geometry was extruded from, not a copy of its points. */
   const sh = new THREE.Shape();
   PALACE_RING.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
-  const geo = new THREE.ExtrudeGeometry(sh, { depth: H_WING, bevelEnabled: false });
-  geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
-  const body = new THREE.Mesh(geo, stone);
-  body.position.set(x0, 0, z0); body.userData.hero = true; g.add(body);
+
+  function tracedBand(h, mat, yOff, withUV){
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
+    geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+    if (withUV) writeSlabUVs(geo, sh, 12, h);
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x0, yOff, z0); g.add(m);
+    return m;
+  }
+  tracedBand(PLINTH_H, plinthMat, 0);
+  const body = tracedBand(H_WING - PLINTH_H - CORNICE_H, facadeMat, PLINTH_H, true);
+  body.userData.hero = true;
+  tracedBand(CORNICE_H, corniceMat, H_WING - CORNICE_H);
 
   /* The domed centre, and the ONE piece that carries the rotation explicitly. Sized to sit
      clear inside the ring — checked, all four corners land at least 1.5 units in. */
@@ -2105,13 +2288,41 @@ function qasrAlWatan(x0, z0){
   const H_WING = 3.85;            // 30 m, the reference's own unit
   const H_PAV  = 3.30;            // 26 m, below the range it flanks
 
+  /* THE THREE RINGS WERE ONE FLAT COLOUR EACH AND READ AS BLOCKS, the identical fault Emirates
+     Palace had and the identical fix: plinth, textured facade, cornice, stacked on the same
+     traced footprint so nothing can drift off the wall it dresses.
+
+     THE SAME ARCH TEXTURE AS THE PALACE, on purpose. city-reference.js calls this building "long
+     colonnaded wings" — the same architectural language as Emirates Palace, paler and plainer —
+     not a different style. A second, invented facade pattern here would assert a distinction
+     between the two buildings that nothing in the reference supports. */
+  const PLINTH_H = 0.38, CORNICE_H = 0.18;
+  const plinthMat = new THREE.MeshStandardMaterial({ color:0x0E0C08, roughness:0.94, metalness:0 });
+  plinthMat.userData.glassOverride = false;
+  plinthMat.userData.duskColor = 0xC2B5A2;
+  plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCABDA8, roughness:0.94 });
+  const corniceMat = new THREE.MeshStandardMaterial({
+    color:0x1A160F, roughness:0.68, emissive:0xE8D9A8, emissiveIntensity:0.04 });
+  corniceMat.userData.glassOverride = false;
+  corniceMat.userData.duskColor = 0xEDE7DC;
+  corniceMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF0EBE1, roughness:0.68 });
+  const facadeMat = palaceFacadeMat(0xE0DAD0, 0xD9D2C6, 0.24);
+
   function traced(ring, h){
     const sh = new THREE.Shape();
     ring.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
-    const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false });
-    geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, stone);
-    m.position.set(x0, 0, z0); m.userData.hero = true; g.add(m);
+    function band(bh, mat, yOff, withUV){
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: bh, bevelEnabled: false });
+      geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
+      if (withUV) writeSlabUVs(geo, sh, 12, bh);
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x0, yOff, z0); g.add(m);
+      return m;
+    }
+    band(PLINTH_H, plinthMat, 0);
+    const body = band(h - PLINTH_H - CORNICE_H, facadeMat, PLINTH_H, true);
+    body.userData.hero = true;
+    band(CORNICE_H, corniceMat, h - CORNICE_H);
   }
   traced(QASR_MAIN, H_WING);
   traced(QASR_FLANK_W, H_PAV);
