@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v183';
+export const BUILD = 'world v184';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3366,7 +3366,15 @@ const DISTRICTS = [
       /* DERIVED, like the ADNOC entry. These were literals, so moving a landmark would have left
          its place camera aimed at the ground it used to stand on — the same five-copies fault
          that put ADNOC in the road, one edit from happening again. */
-      { label:'Emirates Palace', osm:'Emirates Palace',    x:LM.palace.x, z:LM.palace.z, h: 7, r:32 },
+      /* r WAS 32, SIZED TO THE OLD 49.2-UNIT BAR, AND NEVER MOVED WHEN THE FOOTPRINT DID.
+         city v66 rebuilt the palace on its real ring at 64.3 units wide — a 31 per cent
+         increase this radius was never told about, so the place camera has been framing the
+         current building at the old bar's proportions since that deploy: dist = r/tan(hFov/2)
+         moves with r, so the camera sits closer than the building now needs, which crops the
+         wings at the frame edge rather than showing the composition Qasr's r:46 was sized
+         against a moment ago in this same table. 42 keeps the same r-to-width ratio the old
+         32:49.2 pairing had. */
+      { label:'Emirates Palace', osm:'Emirates Palace',    x:LM.palace.x, z:LM.palace.z, h: 7, r:42 },
       /* r 46 rather than the palace's 32: this complex is 87.7 units across against the palace's
          64.3, so the same framing wants a proportionally larger radius. h 9 aims the camera at
          the dome rather than at the wings. */
