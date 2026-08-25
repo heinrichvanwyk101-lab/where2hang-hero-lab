@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v58';
+export const BUILD = 'city v60';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -136,6 +136,12 @@ const DUSK_BY_NIGHT = {
   0x14161A: 0x8E7B60,   // ADNOC HQ: dark bronze, deliberately below the fabric's stone
   0x151A1F: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
   0x111C22: 0xB9BCC0,   // Etihad's solar glass reads as brushed metal against a low sun
+  /* T1, THE JUMEIRAH HOTEL TOWER, IS NOT THE SAME GLASS AS THE OTHER FOUR — checked against
+     photos, not assumed: every reference shot of this cluster shows one warm bronze/copper tower
+     standing apart from four cooler blue-black ones, consistently, in daylight, sunset, and dusk
+     alike. All five sharing 0x111C22 was flattening a real, photographed material difference into
+     one glass. This is that tower's own colour, not a variant of Etihad's shared one. */
+  0x1C140C: 0xC98A5C,   // Etihad T1: warm bronze/copper glass, distinct from the other four
 };
 
 /* DAY COLOURS, WHICH DID NOT EXIST AND SHOULD HAVE.
@@ -150,6 +156,7 @@ const DAY_BY_NIGHT = {
   0x14161A: 0x9C8F79,   // ADNOC: bronze, and darker than the sand it stands on
   0x151A1F: 0xD2CBBE,   // generic mass: matches the fabric's precast
   0x111C22: 0xA8BAC4,   // Etihad: the same blue-green glass the fabric's towers use
+  0x1C140C: 0xB8794E,   // Etihad T1: bronze/copper in daylight, same photographed distinction
 };
 
 /* The daylight counterpart of the window texture: a pale wall with DARK glazing, because in
@@ -381,19 +388,35 @@ function writeSlabUVs(g, sh, seg, h){
    and randomised z was making near ones eclipse far ones from half the orbit. */
 function etihadTowers(x0, z0){
   const g = new THREE.Group();
-  /* WIDER, THIRD TIME. The comment above fixed the taper and the spacing and still left these
-     too slim: at r 1.95 with ell 0.62 the footprint is 3.9 by 2.4 units, which against a 7.8
-     metre unit is a tower 30 m by 19 m. The real ones are nearer 45 by 30, and at dusk — with
-     the window emissive dimmed and the profile lit as pale glass — the difference is the whole
-     read. They were coming out as smooth grey pipes standing in a field of chunky blocks.
-     Centres are unchanged, so the gaps drop to about 2.6 units of sky. That is still enough to
-     count five, which is the constraint that governs this cluster. */
+  /* REPLACED A GUESSED LINE-UP WITH THE FIVE TOWERS' OWN VERIFIED POSITIONS.
+     The old spec spread five towers evenly along a straight line, 32.5 units end to end, heights
+     stepping down monotonically from one end to the other. Neither part was measured: this
+     cluster's real footprints were already found and matched individually earlier — five untagged
+     bake records whose heights (218, 234, 260, 305, 277 m) land within a metre or two of the five
+     real tower heights (217.5, 234.0, 260.3, 305.3, 277.6 m), each near the tower's own real GPS
+     position, not one shared guess. Using their actual relative positions instead of the eyeballed
+     line: the real spread is 11-18 units, not 32, and it is genuinely two-dimensional — a loose
+     arc, not a row — with T2 (the real tallest, 305 m) the one that reads as set apart in a
+     photograph, which turns out to be perspective more than an actual gap this size.
+
+     THE OLD HEIGHTS WERE ALSO WRONG, ON TOP OF THE ARRANGEMENT. The tallest tower topped out at
+     30.5 units (238 m); the real tallest is 305 m, 39.1 units — under-scaled by a third at the
+     top of the range, which is the number that sets how this cluster reads against everything
+     else on the skyline. Both the position and the height data came from the same verified match,
+     so fixing one without the other would have left a real tower's identity attached to a made-up
+     number.
+
+     Radii from each tower's own real width (w/7.8/2), not a shared guess either. Lean and shear
+     keep the ORIGINAL relationship — taller gets more of both — just remapped onto the real
+     height order (T2 tallest through T1 shortest) instead of the old position-based order, since
+     that pattern read as a genuine artistic choice about the skyline's silhouette, not survey
+     data, and is worth keeping on its own terms. */
   const spec = [
-    { dx:-17.0, dz: 3.0, h:27.7, r:2.85, lean: 0.9, shear: 1.1 },
-    { dx: -8.5, dz: 0.8, h:30.5, r:3.00, lean: 1.0, shear: 1.3 },
-    { dx:  0.0, dz: 0.0, h:26.0, r:2.80, lean: 0.8, shear: 1.0 },
-    { dx:  8.0, dz: 0.8, h:23.4, r:2.65, lean: 0.7, shear: 0.9 },
-    { dx: 15.5, dz: 3.0, h:21.8, r:2.50, lean: 0.6, shear: 0.8 },
+    { dx: -5.83, dz: -7.87, h: 27.95, r: 2.38, lean: 0.6, shear: 0.8, colour: 0x1C140C },   // T1, 277.6 m real -- the hotel tower, bronze glass
+    { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52, lean: 0.7, shear: 0.9, colour: 0x111C22 },   // T4, 234.0 m real
+    { dx:  0.58, dz:  0.75, h: 33.33, r: 2.92, lean: 0.8, shear: 1.0, colour: 0x111C22 },   // T3, 260.3 m real
+    { dx: -2.02, dz:  8.86, h: 39.10, r: 3.08, lean: 1.0, shear: 1.3, colour: 0x111C22 },   // T2, 305.3 m real -- the actual tallest
+    { dx:  5.45, dz:  7.48, h: 35.51, r: 2.65, lean: 0.9, shear: 1.1, colour: 0x111C22 },   // T5, 217.5 m real
   ];
   spec.forEach((s, i) => {
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
@@ -404,12 +427,12 @@ function etihadTowers(x0, z0){
        exactly the edges that read against the sky. 44 segments and 24 height rings; these are
        five meshes in the whole scene, and they are the five the eye goes to first. */
     const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 44);
-    // MATERIAL IDENTITY. Every landmark previously shared one near-black mass tone, so the only
-    // thing separating them was outline. Etihad is blue-green curtain glass and now reads that
-    // way — cool and slightly reflective against the warm haze behind it.
+    // MATERIAL IDENTITY, PER TOWER NOW, NOT SHARED ACROSS ALL FIVE. T1 gets its own bronze glass
+    // (s.colour), the other four keep the blue-green curtain wall — see the DUSK_BY_NIGHT comment
+    // for why: it's a photographed difference, not a stylistic one.
     // Emissive stepped 0.90 -> 0.78 so the warm palace holds the eye FIRST and the cluster
     // second. Light hierarchy is about relative order, not absolute brightness.
-    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/24)), 0.78, 0x111C22));
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/24)), 0.78, s.colour));
     m.position.set(x0 + s.dx, s.h/2, z0 + s.dz);
     m.rotation.y = 0.10 + i * 0.06;
     m.userData.hero = true;
