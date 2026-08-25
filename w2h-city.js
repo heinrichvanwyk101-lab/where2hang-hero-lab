@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v70';
+export const BUILD = 'city v71';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -343,8 +343,20 @@ const DAY_ARCH = archDayTexture(14, 46);
    ternary picks the day map by identity, and a third texture would silently fall through to the
    wrong one. Mirrors cityMaterial's day/dusk wiring by hand instead. */
 function palaceFacadeMat(colourDay, colourDusk, emissiveIntensity){
+  /* DUSK AND NIGHT HAD NO ARCHES AT ALL, ONLY GLOW DOTS — because this base material carried
+     emissiveMap and nothing else, which is the SAME pattern cityMaterial() uses for every tower
+     on the island (checked: ADNOC and Etihad's base materials are emissiveMap-only too). Windows
+     appearing only as sparse night glints and vanishing to a flat colour at dusk is a city-wide
+     trait, not something specific to this building — it was simply invisible here before because
+     the palace had no facade detail in ANY mode to lose.
+
+     DAY_ARCH ADDED AS THE BASE map TOO, not a new texture. It is already built to sit on white
+     and multiply toward its own colour, which is exactly what a base material needs: at dusk the
+     recesses shade against colourDusk under the dusk sun, at night applyLift's albedo boost
+     (x5 for stone) lifts the same recesses to a readable dark relief, and the emissiveMap keeps
+     doing its own job of picking out which few windows are lit. Three renders, one relief. */
   const m = new THREE.MeshStandardMaterial({
-    color: 0x120F0A, roughness: 0.82, metalness: 0.02,
+    color: 0x120F0A, roughness: 0.82, metalness: 0.02, map: DAY_ARCH,
     emissive: 0xffffff, emissiveMap: TEX_ARCH, emissiveIntensity });
   m.userData.glassOverride = false;
   m.userData.duskColor = colourDusk;
