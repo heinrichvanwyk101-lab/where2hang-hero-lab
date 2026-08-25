@@ -1095,38 +1095,45 @@ async function bakeIsland(isle, proj){
     await new Promise(r => setTimeout(r, 2000));
   }
 
-  const chains = stitch(coastWays);
-  const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]));
-  let outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
-  process.stderr.write(`  ${isle.id}: ${chains.length} coast chains, took the ${picked.why}\n`);
-
   /* MAINLAND PATCHES HAVE NO CLOSED COASTLINE RING, BECAUSE THEY ARE NOT ISLANDS — and until now
      that meant `extent: null` and a renderer with nothing to paint. The Grand Mosque precinct hit
      this exact wall and was solved by hand-tracing a site polygon outside this pipeline entirely,
      which works for one precinct's worth of ground but does not scale, and does not pull real
      roads or real Overture buildings the way every island here does.
 
-     `noCoastline: true` says: skip pickIsland, do not wait for a ring that will never exist.
-     TWO FALLBACKS, IN ORDER — a traced shape if the island carries `outlineLL` (points in
-     [lon, lat], the order geojson.io exports), or the fetch bbox itself as a plain rectangle if
-     it does not. Everything downstream — the coastline pre-clip, the extent computation, the
-     renderer's ground shape — reads `outline` the same way regardless of which path produced it,
-     so nothing else in this file needs to know the difference. A traced shape costs someone
-     drawing it; a rectangle costs nothing and looks like one, cutting straight across whatever
-     canal or coastline the real place actually has — worth the difference when it exists. */
-  if (!outline.length && isle.noCoastline){
+     `noCoastline: true` NOW SKIPS pickIsland OUTRIGHT, rather than only falling back when it
+     found nothing — which is what the comment here always claimed and the code never actually
+     did. The first version ran pickIsland unconditionally and only checked afterward whether its
+     result was empty, so a REAL coastline ring anywhere near the centre point — a decorative
+     lagoon, a marina basin, any small closed loop OSM happens to tag as coastline — would win
+     outright, and the traced canal shape would never even be consulted. Confirmed on Raha's
+     first bake: pickIsland found a real 34-point ring 1.7 x 0.7 km near the centre point, used
+     it, and the traced 4.7 km canal strip in outlineLL was silently discarded. Right shape,
+     wrong reason it was ignored — "outline.length" is not the same test as "this is an island".
+
+     TWO PATHS NOW, CHECKED BEFORE pickIsland RUNS AT ALL — a traced shape if the island carries
+     `outlineLL` (points in [lon, lat], the order geojson.io exports), or the fetch bbox itself as
+     a plain rectangle if it does not. Everything downstream — the coastline pre-clip, the extent
+     computation, the renderer's ground shape — reads `outline` the same way regardless of which
+     path produced it, so nothing else in this file needs to know the difference. */
+  let outline, pickedWhy;
+  if (isle.noCoastline){
     if (isle.outlineLL && isle.outlineLL.length){
       outline = isle.outlineLL.map(([lo, la]) => rd1(proj.fwd(la, lo)));
-      process.stderr.write(`  ${isle.id}: no coastline ring (expected, noCoastline set) — ` +
-                           `using the traced outlineLL shape instead (${outline.length} pts)\n`);
+      pickedWhy = `traced outlineLL shape (${outline.length} pts) — pickIsland not run`;
     } else {
       const [s, w, n, e] = isle.bbox;
       const corners = [[s,w],[s,e],[n,e],[n,w]].map(([la,lo]) => proj.fwd(la, lo));
       outline = corners.map(rd1);
-      process.stderr.write(`  ${isle.id}: no coastline ring (expected, noCoastline set) — ` +
-                           `no outlineLL either, using the fetch bbox as a rectangle instead\n`);
+      pickedWhy = `fetch bbox as a rectangle (no outlineLL) — pickIsland not run`;
     }
+  } else {
+    const chains = stitch(coastWays);
+    const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]));
+    outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
+    pickedWhy = `${chains.length} coast chains, took the ${picked.why}`;
   }
+  process.stderr.write(`  ${isle.id}: ${pickedWhy}\n`);
 
   /* The first moment the coastline exists, which is the first moment a building can be told it is
      not on this island. Reported rather than silent: the number dropped here is the overlap
