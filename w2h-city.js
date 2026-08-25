@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v63';
+export const BUILD = 'city v64';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -263,7 +263,7 @@ function cityMaterial(tex, repX, repY, emissive, colour){
      lean   — lateral drift, weighted to the top so the tower curves rather than tilts
      shear  — the slanted crown, applied only near the top so the base stays plumb
      ell    — elliptical footprint                                                            */
-function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
+function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs, storeyM){
   const radial = segs || 44, heightSegs = 24;
   const g = new THREE.CylinderGeometry(rTop, rBot, h, radial, heightSegs, false);
   const pos = g.attributes.position, uv = g.attributes.uv;
@@ -276,8 +276,27 @@ function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
     // Silent for the old heights (30, 33, 28 — halves exact) and triggered the moment the real
     // Etihad ratios went in. Clamping costs nothing and removes a whole class of edge case.
     const t = Math.min(1, Math.max(0, (y + h/2) / h));   // 0 at base, 1 at crown
+    /* THE PLAN IS A LENS, NOT AN ELLIPSE, AND THAT IS MOST OF WHY THESE READ AS UNDER-MODELLED.
+
+       An ellipse meets its own long axis TANGENTIALLY: near the tip z falls off as the square
+       root of the distance from it, so the end is a smooth round nose. Every photograph of these
+       towers shows the opposite — two curved faces meeting in a hard vertical arris that catches
+       the sun as a bright line the full height of the building. That line is the single strongest
+       cue that the tower has two faces rather than being a fat cylinder, and a tangential ellipse
+       cannot produce it at any radius.
+
+       Multiplying z by |sin| of the original angle is the cheapest correction that does. It
+       leaves the widest point untouched — |sin| is 1 at 90 degrees — and takes the fall-off at
+       the tips from square-root to linear, which is a corner. LENS is the blend, so 0 restores
+       the old ellipse exactly if this is ever wrong.
+
+       Taken from the ORIGINAL cylinder angle, before swell and lean have touched anything. Lean
+       shifts x by a per-height constant, so an angle recovered afterwards would drift round the
+       tower as it rises and the arris would spiral. */
+    const ang = Math.atan2(z, x), sa = Math.abs(Math.sin(ang));
+    const LENS = 0.75;
     const k = 1 + swell * Math.sin(Math.PI * t);
-    x *= k; z *= k * ell;
+    x *= k; z *= k * ell * ((1 - LENS) + LENS * sa);
     x += lean * Math.pow(t, 1.7);
     /* THE CROWN IS THE WHOLE POINT OF THIS TOWER AND t^7 THREW IT AWAY. Measured on the built
        geometry: the slant was reaching a correct 19-23 degrees, but t^7 is still under 0.02 at
@@ -316,19 +335,60 @@ function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
      tower's) is what actually matches a real vertical window-line's real, individual length. Cap
      vertices sit past the torso grid's own vertex count and are left alone; they already fold to
      the texture's centre and were never the problem. */
+  /* AND THE UVs GO INTO METRES, WHICH IS THE FIX ROUNDEDSLAB ALREADY HAS AND THIS NEVER GOT.
+
+     writeSlabUVs was written because ADNOC's windows came out eight centimetres apart, and its
+     conclusion was that bay and storey are REAL QUANTITIES and must be sized in world units
+     rather than by a tile count guessed at the call site. That fix was applied to the slab and
+     the cylinder was left on the old scheme, so Etihad kept a repeat of (2, round(h/24)).
+
+     MEASURED, ON THE FIVE TOWERS AS SHIPPED:
+
+         T1  46 rows over 279 m  =  6.06 m per storey
+         T4  46 rows over 234 m  =  5.09
+         T3  46 rows over 260 m  =  5.66
+         T2  92 rows over 307 m  =  3.33
+         T5  46 rows over 217 m  =  4.73
+
+     round(h/24) is 1 for four towers and 2 for T2, so T2 alone gets twice the rows and its
+     windows come out at little over half the size of its neighbour's. Five buildings standing
+     together with an 82 per cent spread in storey height between them, and a 6 m storey on a
+     residential tower. No colour work could have fixed that and none of it was ever the problem.
+
+     STOREY IS PER TOWER AND REAL. Each tower's published height over its published floor count:
+     T1 277.6/69, T2 305.3/80, T3 260.3/60, T4 234.0/66, T5 217.5/61 — between 3.55 and 4.34 m,
+     and the office tower genuinely does have the tallest floors. That is a real difference
+     between these buildings and it costs nothing to carry.
+
+     U IS ARC LENGTH, NOT ANGLE, for the same reason the slab's is. CylinderGeometry's u is
+     uniform in ANGLE, and at ell 0.62 the pointed ends of the lens occupy a large share of the
+     angle and almost none of the length — so an angular u crushes the glazing into the two
+     vertical arrises, which are exactly the edges that read against the sky.
+
+     V IS STILL PER COLUMN, and that part was already right — see the note above on shear. What
+     changes is that a column now measures its own length in metres instead of normalising to
+     0..1, so a tall column and a short one get the same storey rather than the same row count. */
   const cols = radial + 1, rows = heightSegs + 1, torsoCount = cols * rows;
+  const TW = 14 * (SLAB_BAY_M / M_PER_U);                       // one tile across, in units
+  const TH = 46 * ((storeyM || SLAB_BAY_M) / M_PER_U);          // one tile up, in units
+
+  /* Arc length round the widest ring. One reference contour for the whole tower: swell is 0.16,
+     so ring perimeters vary by a few per cent and a per-ring contour would buy nothing. */
+  const midRow = Math.round(rows / 2);
+  const cum = new Float64Array(cols);
+  for (let c = 1; c < cols; c++){
+    const a = midRow * cols + c - 1, b = midRow * cols + c;
+    cum[c] = cum[c-1] + Math.hypot(pos.getX(b) - pos.getX(a), pos.getZ(b) - pos.getZ(a));
+  }
+
   for (let c = 0; c < cols; c++){
-    let ymin = Infinity, ymax = -Infinity;
-    for (let r = 0; r < rows; r++){
-      const y = pos.getY(r * cols + c);
-      if (y < ymin) ymin = y;
-      if (y > ymax) ymax = y;
-    }
-    const span = Math.max(1e-6, ymax - ymin);
+    let ymin = Infinity;
+    for (let r = 0; r < rows; r++) ymin = Math.min(ymin, pos.getY(r * cols + c));
     for (let r = 0; r < rows; r++){
       const idx = r * cols + c;
       if (idx >= torsoCount) continue;
-      uv.setY(idx, (pos.getY(idx) - ymin) / span);
+      uv.setX(idx, cum[c] / TW);
+      uv.setY(idx, (pos.getY(idx) - ymin) / TH);
     }
   }
   uv.needsUpdate = true;
@@ -501,11 +561,11 @@ function etihadTowers(x0, z0){
      magnitude has changed, because the old one produced no visible slant at all. */
   const GLASS = 0x111C22;
   const spec = [
-    { dx: -5.83, dz: -7.87, h: 35.59, r: 2.65, lean: 0.9, shear: 2.04, colour: GLASS },   // T1, 277.6 m real -- the hotel tower
-    { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52, lean: 0.7, shear: 1.67, colour: GLASS },   // T4, 234.0 m real
-    { dx:  0.58, dz:  0.75, h: 33.37, r: 2.92, lean: 0.8, shear: 1.85, colour: GLASS },   // T3, 260.3 m real
-    { dx: -2.02, dz:  8.86, h: 39.14, r: 3.08, lean: 1.0, shear: 2.41, colour: GLASS },   // T2, 305.3 m real -- the actual tallest
-    { dx:  5.45, dz:  7.48, h: 27.88, r: 2.38, lean: 0.6, shear: 1.48, colour: GLASS },   // T5, 217.5 m real
+    { dx: -5.83, dz: -7.87, h: 35.59, r: 2.65, lean: 0.9, shear: 2.04, floors: 69, colour: GLASS },   // T1, 277.6 m real -- the hotel tower
+    { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52, lean: 0.7, shear: 1.67, floors: 66, colour: GLASS },   // T4, 234.0 m real
+    { dx:  0.58, dz:  0.75, h: 33.37, r: 2.92, lean: 0.8, shear: 1.85, floors: 60, colour: GLASS },   // T3, 260.3 m real
+    { dx: -2.02, dz:  8.86, h: 39.14, r: 3.08, lean: 1.0, shear: 2.41, floors: 80, colour: GLASS },   // T2, 305.3 m real -- the actual tallest
+    { dx:  5.45, dz:  7.48, h: 27.88, r: 2.38, lean: 0.6, shear: 1.48, floors: 61, colour: GLASS },   // T5, 217.5 m real
   ];
   spec.forEach((s, i) => {
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
@@ -528,7 +588,10 @@ function etihadTowers(x0, z0){
        answer they expect instead of a number that needs a correction applied in their head.
        That readability is precisely what caught the T1/T5 swap. */
     const shaft = s.h - s.shear;
-    const geo = curvedTower(shaft, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 44);
+    /* Storey from the tower's own published floor count, so the glazing rhythm differs between
+       these five the way it really does. */
+    const geo = curvedTower(shaft, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 44,
+                            (s.h * M_PER_U) / s.floors);
     /* THERE IS NO BRONZE TOWER, AND T1 WAS GIVEN ONE. The retired note claimed every reference
        shot of this cluster shows a warm bronze tower standing apart from four cooler ones, and
        that observation was real — but the bronze building in those shots is a NEIGHBOUR, not one
@@ -543,7 +606,9 @@ function etihadTowers(x0, z0){
        then tuned to be consistent with it. */
     // Emissive stepped 0.90 -> 0.78 so the warm palace holds the eye FIRST and the cluster
     // second. Light hierarchy is about relative order, not absolute brightness.
-    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/24)), 0.78, s.colour));
+    /* REPEAT (1, 1). The tiling is baked into the geometry's UVs in metres now, exactly as on
+       ADNOC — a repeat here would multiply a scale that is already correct. */
+    const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 1, 1, 0.78, s.colour));
     m.position.set(x0 + s.dx, shaft/2, z0 + s.dz);
     m.rotation.y = 0.10 + i * 0.06;
     m.userData.hero = true;
