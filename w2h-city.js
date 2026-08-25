@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v67';
+export const BUILD = 'city v68';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -668,6 +668,36 @@ const PALACE_RING = [
     [-25.15,  9.58], [-25.74,  9.94], [-26.62,  8.45],
 ];
 
+/* THE ESTATE ROUTES, TRACED BY HAND IN geojson.io AND CONVERTED HERE.
+
+   THEY ARE NOT IN ANY DATA SET AND THAT IS THE POINT. The bake carries the palace's footprint and
+   the greenspace around it, but the estate's own drives and axes are absent from the road records
+   entirely — which is why w2h-props plants ZERO palms here. Palms are placed by walking
+   plan.ring and plan.arterials; with no road inside the estate the placer never walks it, and the
+   aerial's most recognisable landscape feature — formal allees, hundreds of trees in strict rows
+   — could not appear at any setting. These lines are what the placer was missing.
+
+   PROJECTED WITH THE BAKE'S OWN PROJECTOR so they land in the same frame as everything else:
+   equirectangular about 24.49 N / 54.42 E scaled by cos(lat0), minus the Corniche centre, over
+   7.8, z = -y. Checked by plotting against the traced building ring before use.
+
+   ELEVEN FEATURES CAME IN AND EIGHT SURVIVED. Two were duplicate two-point lines, one was a
+   single point, and the two features exported as Polygons carry only two distinct vertices each,
+   so they are lines wearing a polygon's type. Nothing here is a closed area — there is still no
+   forecourt fill, and the paving below is therefore ribbons along routes rather than a plaza.
+
+   SIMPLIFIED AT 0.30 UNITS. 528 units of route, 4.1 km at true scale. */
+const PALACE_PATHS = [
+  [[  1.55, 18.86], [ -5.66, 49.51],],
+  [[ 15.89,  8.78], [ 48.62, 17.71],],
+  [[ 50.53,-11.60], [ 36.98, -0.96], [ 34.91,  6.62], [ 32.62, 18.79], [ 27.14, 27.46], [ 19.90, 33.06], [ 11.66, 37.34], [  3.00, 36.70], [ -7.11, 36.70], [-11.70, 32.57], [-19.50, 32.57], [-26.39, 35.78], [-34.27, 41.06], [-42.01, 39.00], [-46.14, 30.27],],
+  [[ 28.61,  2.85], [ 29.97,  9.87], [ 28.06, 17.79], [ 23.94, 24.81], [ 18.79, 29.38], [ 12.80, 31.67], [ -0.33, 33.06], [ -5.52, 30.40], [ -7.79, 24.30],],
+  [[ 28.46, 16.89], [ 20.91, 16.49], [ 13.33, 19.02], [  7.82, 24.53], [  3.46, 31.42],],
+  [[ 36.19,  5.83], [ 48.98, 14.69], [ 47.77, 20.63], [ 51.90, 22.69], [ 53.25, 25.67], [ 25.73, 50.48],],
+  [[ 16.88, 28.32], [ 21.14, 29.12], [ 22.28, 33.03], [ 25.04, 37.85], [ 24.42, 42.89], [ 22.73, 48.08], [ 24.38, 53.10], [ 20.89, 56.61], [ 19.05, 52.69], [ 18.61, 47.72], [ 20.30, 44.00], [ 21.00, 38.81], [ 16.31, 28.66],],
+  [[-10.92, 34.81], [ -8.48, 49.10], [-11.93, 56.91], [ -8.48, 59.21], [ -5.04, 48.18],],
+];
+
 function emiratesPalace(x0, z0){
   const g = new THREE.Group();
 
@@ -797,6 +827,99 @@ function emiratesPalace(x0, z0){
     fin.position.set(x0 + px, base + r + 0.35, z0 + pz); g.add(fin);
   }
   PALACE_DOMES.forEach(([px, pz, r]) => dome(px, pz, r));
+
+  /* PAVING AND PALMS ALONG THE TRACED ROUTES.
+
+     ONE MESH FOR ALL THE PAVING and TWO INSTANCED MESHES FOR ALL THE PLANTING, which is the only
+     reason this is affordable. 528 units of route at 2.4-unit spacing on both sides comes to
+     roughly 440 trees; as individual meshes that is 880 draw calls on one landmark, against a
+     scene that runs about 1,300 in total. Instanced, it is two.
+
+     THE PALM IS DUPLICATED FROM w2h-props AND THAT IS A KNOWN COST. The props kit owns the real
+     one, but it places trees by walking roads and has no hook for "plant along this polyline", so
+     either this file grows a palm or the props kit grows an API. This is the smaller change and
+     the note is here so the drift is visible when the registry lands. */
+  const paveMat = new THREE.MeshStandardMaterial({ color:0x141210, roughness:0.94, metalness:0 });
+  paveMat.userData.glassOverride = false;
+  paveMat.userData.duskColor = 0xCBBDB2;
+  paveMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD3C6BC, roughness:0.94 });
+
+  const HALF = 0.8;                       // 6.2 m each side of the centreline
+  const pv = [], pi = [];
+  PALACE_PATHS.forEach(path => {
+    for (let i = 0; i + 1 < path.length; i++){
+      const [ax, az] = path[i], [bx, bz] = path[i + 1];
+      const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      if (L < 1e-4) continue;
+      const nx = -dz / L * HALF, nz = dx / L * HALF, b = pv.length / 3;
+      pv.push(x0 + ax + nx, 0.03, z0 + az + nz,  x0 + ax - nx, 0.03, z0 + az - nz,
+              x0 + bx + nx, 0.03, z0 + bz + nz,  x0 + bx - nx, 0.03, z0 + bz - nz);
+      pi.push(b, b+1, b+2, b+1, b+3, b+2);
+    }
+  });
+  if (pv.length){
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(pv, 3));
+    pg.setIndex(pi); pg.computeVertexNormals();
+    const pave = new THREE.Mesh(pg, paveMat);
+    /* The ribbons are coplanar with the island's top face and 3 cm will not separate them at this
+       frustum — the same depth-precision trap w2h-world's flatSet documents. Bias the test. */
+    paveMat.polygonOffset = true; paveMat.polygonOffsetFactor = -2; paveMat.polygonOffsetUnits = -2;
+    g.add(pave);
+  }
+
+  /* Seats walked at a fixed spacing on both verges, skipped where they would fall inside the
+     building — a palm through a wall is worse than a gap in an avenue. */
+  const seats = [];
+  PALACE_PATHS.forEach(path => {
+    let carry = 0;
+    for (let i = 0; i + 1 < path.length; i++){
+      const [ax, az] = path[i], [bx, bz] = path[i + 1];
+      const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      if (L < 1e-4) continue;
+      const ux = dx / L, uz = dz / L, nx = -uz, nz = ux;
+      for (let t = carry; t < L; t += 2.4){
+        const cxp = ax + ux * t, czp = az + uz * t;
+        [1, -1].forEach(sg => {
+          const px = cxp + nx * 1.45 * sg, pz = czp + nz * 1.45 * sg;
+          if (inRing(px, pz)) return;
+          seats.push([px, pz]);
+        });
+      }
+      carry = (carry - L) % 2.4; if (carry < 0) carry += 2.4;
+    }
+  });
+
+  if (seats.length){
+    const trunkMat = new THREE.MeshStandardMaterial({ color:0x14110C, roughness:0.95 });
+    trunkMat.userData.glassOverride = false;
+    trunkMat.userData.duskColor = 0x9C8A70;
+    trunkMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xA89478, roughness:0.95 });
+    const crownMat = new THREE.MeshStandardMaterial({ color:0x0E1408, roughness:0.9 });
+    crownMat.userData.glassOverride = false;
+    crownMat.userData.duskColor = 0x5F6A36;
+    crownMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x6E7A3E, roughness:0.9 });
+
+    const trunkG = new THREE.CylinderGeometry(0.055, 0.085, 1.15, 5);
+    trunkG.translate(0, 0.575, 0);
+    const crownG = new THREE.IcosahedronGeometry(0.42, 0);
+    crownG.scale(1, 0.55, 1); crownG.translate(0, 1.28, 0);
+    const trunks = new THREE.InstancedMesh(trunkG, trunkMat, seats.length);
+    const crowns = new THREE.InstancedMesh(crownG, crownMat, seats.length);
+    const m4 = new THREE.Matrix4();
+    seats.forEach(([px, pz], i) => {
+      /* Deterministic jitter. A perfectly periodic row of identical trees is the comb the props
+         kit already warns about; hashing the seat keeps two screenshots comparable. */
+      const h = Math.sin(px * 12.9898 + pz * 78.233) * 43758.5453;
+      const j = h - Math.floor(h), sc = 0.86 + j * 0.32;
+      m4.makeRotationY(j * Math.PI * 2);
+      m4.scale(new THREE.Vector3(sc, sc, sc));
+      m4.setPosition(x0 + px, 0, z0 + pz);
+      trunks.setMatrixAt(i, m4); crowns.setMatrixAt(i, m4);
+    });
+    trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
+    g.add(trunks); g.add(crowns);
+  }
 
   /* THE ARCADE FOLLOWS THE RING NOW. It used to be a straight row of 26 posts on a straight
      building; there is no straight face left to put them on. Walked along the ring's own
