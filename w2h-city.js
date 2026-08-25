@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v62';
+export const BUILD = 'city v63';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -146,12 +146,11 @@ const DUSK_BY_NIGHT = {
   0x121A24: 0xA9B6BE,   // ADNOC curtain wall: blue-grey glass, cooler and darker than Etihad's
   0x151A1F: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
   0x111C22: 0xB9BCC0,   // Etihad's solar glass reads as brushed metal against a low sun
-  /* T1, THE JUMEIRAH HOTEL TOWER, IS NOT THE SAME GLASS AS THE OTHER FOUR — checked against
-     photos, not assumed: every reference shot of this cluster shows one warm bronze/copper tower
-     standing apart from four cooler blue-black ones, consistently, in daylight, sunset, and dusk
-     alike. All five sharing 0x111C22 was flattening a real, photographed material difference into
-     one glass. This is that tower's own colour, not a variant of Etihad's shared one. */
-  0x1C140C: 0xC98A5C,   // Etihad T1: warm bronze/copper glass, distinct from the other four
+  /* THE BRONZE ETIHAD TOWER IS GONE, and it never existed. The entry here reasoned from real
+     photographs — one warm tower does stand apart from four cool ones in shot after shot — but
+     the warm building is a neighbour of the complex, not a member of it. All five Etihad towers
+     carry the same grey-blue coated curtain wall, specified for uniformity. Second time in one
+     session that a photographed observation was recorded as a fact about the wrong building. */
 };
 
 /* DAY COLOURS, WHICH DID NOT EXIST AND SHOULD HAVE.
@@ -166,7 +165,6 @@ const DAY_BY_NIGHT = {
   0x121A24: 0x8FA6B4,   // ADNOC glass: deep blue-grey, plainly darker than its own stone frame
   0x151A1F: 0xD2CBBE,   // generic mass: matches the fabric's precast
   0x111C22: 0xA8BAC4,   // Etihad: the same blue-green glass the fabric's towers use
-  0x1C140C: 0xB8794E,   // Etihad T1: bronze/copper in daylight, same photographed distinction
 };
 
 /* The daylight counterpart of the window texture: a pale wall with DARK glazing, because in
@@ -281,7 +279,18 @@ function curvedTower(h, rBot, rTop, swell, lean, shear, ell, segs){
     const k = 1 + swell * Math.sin(Math.PI * t);
     x *= k; z *= k * ell;
     x += lean * Math.pow(t, 1.7);
-    y += shear * (x / Math.max(rBot, 0.001)) * Math.pow(t, 7);
+    /* THE CROWN IS THE WHOLE POINT OF THIS TOWER AND t^7 THREW IT AWAY. Measured on the built
+       geometry: the slant was reaching a correct 19-23 degrees, but t^7 is still under 0.02 at
+       t = 0.6 and under 0.21 at t = 0.8, so the entire cut lived in the top two per cent of the
+       height. Total drop across the crown came to 0.5-0.7 units on towers 28 to 39 units tall.
+       At any camera in this scene that is a rounded-off flat cap, which is what the bench render
+       shows and what the reference photographs plainly are not.
+
+       t^5 spreads the same cut over roughly the top fifth. Combined with the 1.85x on the shear
+       constants, the tallest tower's crown now drops about 4.8 units across its width — a real
+       blade against the sky rather than a chamfered edge. The angle is unchanged in kind; what
+       changes is how much of the tower participates in it. */
+    y += shear * (x / Math.max(rBot, 0.001)) * Math.pow(t, 5);
     pos.setXYZ(i, x, y, z);
   }
   g.computeVertexNormals();
@@ -460,12 +469,43 @@ function etihadTowers(x0, z0){
      height order (T2 tallest through T1 shortest) instead of the old position-based order, since
      that pattern read as a genuine artistic choice about the skyline's silhouette, not survey
      data, and is worth keeping on its own terms. */
+  /* T1 AND T5 WERE BUILT AT EACH OTHER'S SIZE, AND THE FILE SAID SO ALL ALONG. Every row carries
+     the real height in its own comment, and two of them disagreed with the number beside them:
+     T1 was labelled 277.6 m and built at 27.95 u = 218 m; T5 was labelled 217.5 m and built at
+     35.51 u = 277 m. The other three land within half a metre. Two rows, crossed.
+
+     THE RADII WERE CROSSED WITH THEM, which is what identifies this as one transcription fault
+     rather than two. Checked independently against published floor areas — divide gross area by
+     floor count and you get each tower's real plate:
+
+         T1  1028 m2   T2 1047   T3 1237   T4 755   T5 739
+
+     Against the lens footprint each radius implies (pi.r^2.ell at 7.8 m/u), T4 came out 2 m2 off
+     its real plate — so the radius data is sound — while T1 sat 356 m2 under and T5 94 m2 over,
+     in opposite directions. T1's real plate is LARGER than T5's and the model had it smaller.
+     Height and radius sit on the same row, so both moved together and both move back together.
+
+     STILL OPEN, DELIBERATELY NOT TOUCHED: T2 and T3 are crossed by the same test, though far
+     less severely — T3 has the largest real plate of the five (it is the office tower, 60 floors
+     and 74,198 m2) and the model gives the biggest radius to T2. Swapping them improves the fit.
+     It is not being done here, because the test assumes a lens with ell exactly 0.62 and a
+     uniform core, and a 113 m2 residual is well inside what that assumption can invent. A number
+     changed on a hunch is exactly what produced the fault above. Resolve it against the bake
+     records, not against this arithmetic.
+
+     dx AND dz COME FROM THE SAME ROWS AND ARE THEREFORE ALSO SUSPECT. They are left alone because
+     nothing here can check them — that needs the pick tool against real GPS. Worth doing.
+
+     SHEAR IS SCALED 1.85x FROM THE OLD LADDER. See the crown note in curvedTower: the ratio
+     between towers was a deliberate silhouette choice and is preserved exactly; only the overall
+     magnitude has changed, because the old one produced no visible slant at all. */
+  const GLASS = 0x111C22;
   const spec = [
-    { dx: -5.83, dz: -7.87, h: 27.95, r: 2.38, lean: 0.6, shear: 0.8, colour: 0x1C140C },   // T1, 277.6 m real -- the hotel tower, bronze glass
-    { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52, lean: 0.7, shear: 0.9, colour: 0x111C22 },   // T4, 234.0 m real
-    { dx:  0.58, dz:  0.75, h: 33.33, r: 2.92, lean: 0.8, shear: 1.0, colour: 0x111C22 },   // T3, 260.3 m real
-    { dx: -2.02, dz:  8.86, h: 39.10, r: 3.08, lean: 1.0, shear: 1.3, colour: 0x111C22 },   // T2, 305.3 m real -- the actual tallest
-    { dx:  5.45, dz:  7.48, h: 35.51, r: 2.65, lean: 0.9, shear: 1.1, colour: 0x111C22 },   // T5, 217.5 m real
+    { dx: -5.83, dz: -7.87, h: 35.59, r: 2.65, lean: 0.9, shear: 2.04, colour: GLASS },   // T1, 277.6 m real -- the hotel tower
+    { dx:  1.82, dz: -9.22, h: 30.00, r: 2.52, lean: 0.7, shear: 1.67, colour: GLASS },   // T4, 234.0 m real
+    { dx:  0.58, dz:  0.75, h: 33.37, r: 2.92, lean: 0.8, shear: 1.85, colour: GLASS },   // T3, 260.3 m real
+    { dx: -2.02, dz:  8.86, h: 39.14, r: 3.08, lean: 1.0, shear: 2.41, colour: GLASS },   // T2, 305.3 m real -- the actual tallest
+    { dx:  5.45, dz:  7.48, h: 27.88, r: 2.38, lean: 0.6, shear: 1.48, colour: GLASS },   // T5, 217.5 m real
   ];
   spec.forEach((s, i) => {
     // rTop at 0.42 of the base turned these into obelisks. The real towers barely narrow —
@@ -475,14 +515,36 @@ function etihadTowers(x0, z0){
        spacing as the broad flanks and are where the faceting shows — and the tight ends are
        exactly the edges that read against the sky. 44 segments and 24 height rings; these are
        five meshes in the whole scene, and they are the five the eye goes to first. */
-    const geo = curvedTower(s.h, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 44);
-    // MATERIAL IDENTITY, PER TOWER NOW, NOT SHARED ACROSS ALL FIVE. T1 gets its own bronze glass
-    // (s.colour), the other four keep the blue-green curtain wall — see the DUSK_BY_NIGHT comment
-    // for why: it's a photographed difference, not a stylistic one.
+    /* h IS THE ARCHITECTURAL HEIGHT, AND THE SHAFT IS BUILT SHORTER BY THE SHEAR TO REACH IT.
+
+       The shear raises one side of the crown and lowers the other, so a cylinder of height h
+       ends up with a TIP at h + shear. The table has always been read as real heights — every
+       row carries the metre figure in its comment — and every row has quietly built that much
+       too tall. It was 11 m on the old constants and went to 20 m the moment the crown was made
+       visible, which is what surfaced it.
+
+       Subtracting here rather than pre-subtracting in the table keeps the rows readable as the
+       real published heights, so the next person to check a row against Wikipedia gets the
+       answer they expect instead of a number that needs a correction applied in their head.
+       That readability is precisely what caught the T1/T5 swap. */
+    const shaft = s.h - s.shear;
+    const geo = curvedTower(shaft, s.r, s.r * 0.74, 0.16, s.lean, s.shear, 0.62, 44);
+    /* THERE IS NO BRONZE TOWER, AND T1 WAS GIVEN ONE. The retired note claimed every reference
+       shot of this cluster shows a warm bronze tower standing apart from four cooler ones, and
+       that observation was real — but the bronze building in those shots is a NEIGHBOUR, not one
+       of the five. It is rounder, differently massed, and stands clear of the group in every
+       frame. Published description of the complex is a grey-blue coated curtain wall on each
+       tower, specified for uniformity across all five. So s.colour is one constant now. The
+       field is kept rather than removed: a per-tower hook is the right shape for this table, it
+       was simply filled with a wrong value.
+
+       The lesson is the one the ADNOC bronze taught in the same session — an observation about
+       a photograph was written down as a fact about a building, and everything downstream was
+       then tuned to be consistent with it. */
     // Emissive stepped 0.90 -> 0.78 so the warm palace holds the eye FIRST and the cluster
     // second. Light hierarchy is about relative order, not absolute brightness.
     const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 2, Math.max(1, Math.round(s.h/24)), 0.78, s.colour));
-    m.position.set(x0 + s.dx, s.h/2, z0 + s.dz);
+    m.position.set(x0 + s.dx, shaft/2, z0 + s.dz);
     m.rotation.y = 0.10 + i * 0.06;
     m.userData.hero = true;
     g.add(m);
