@@ -29,7 +29,7 @@ on:
         options: [probe, bake]
         default: probe
       island:
-        description: 'One island only (corniche, maryah, reem, saadiyat, yas) — blank for all'
+        description: 'One island only (corniche, maryah, reem, saadiyat, yas, raha) — blank for all'
         required: false
         default: ''
       source:
