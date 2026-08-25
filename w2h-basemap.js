@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v11';
+export const BUILD = 'basemap v12';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -127,7 +127,23 @@ export const DIORAMA = {
      Composed close to Yas for exactly that reason: this is the one pair where "near" is honest
      rather than a compression artefact, so the diorama gap is deliberately tighter than the
      others rather than forced to match their spacing. */
-  raha:     [2080, -860 ],
+  /* AL RAHA. The first position here — [2080,-860], "close to Yas because that's honestly how
+     close it is" — was wrong, and not by a small amount: it never accounted for DAMPING. Raha's
+     real span (4,692 m) is not that much smaller than Yas's (7,335 m), so the compression this
+     file applies to make small islands visible barely shrinks the gap between them — Raha's own
+     damped display radius comes out to 765 units, nearly as large as Yas's own 888. Two islands
+     that size, placed 565 and 388 units from their respective centres, overlap by construction;
+     checked against the real damping() output rather than guessed a second time. That is what
+     "mashed into Al Reem and Yas" actually was — not a rendering bug, a placement that put two
+     large damped circles on top of two others.
+
+     [3900,-2300] is the closest point to Yas that clears EVERY island's real damped radius with
+     at least 300 units to spare — found by search against damping()'s actual output, not by
+     eye. The true bearing (Raha sits west of Yas) is lost here; every other island in this table
+     already makes that same trade for the sake of a composition that doesn't collide, and this
+     is the same trade, just forced by the numbers to sit some distance further round than "next
+     door" actually allows in a compressed diorama. */
+  raha:     [3900, -2300],
 };
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.

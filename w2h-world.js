@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v187';
+export const BUILD = 'world v188';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3686,8 +3686,15 @@ const DISTRICTS = [
      every baked island's do, once the basemap transform runs.
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
-  { id:'raha', name:'Al Raha', x:2080, z:-860, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
-    built:false, places:[
+  { id:'raha', name:'Al Raha', x:3900, z:-2300, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+    /* coreN WAS MISSING ENTIRELY, AND THAT IS WHAT CRASHED THE APP — not a deep bug, a plain
+       omission. Every other district declares it (corniche 0.10/0.02, saadiyat 0.15/0.10, and so
+       on); buildFabricFor reads d.coreN[0] and d.coreN[1] unconditionally with no fallback, so a
+       district missing it throws the moment its fabric is built rather than degrading quietly.
+       -0.5, 0.2 biases the generated stock toward where the real landmarks actually sit — all
+       four of LM_RAHA's x values fall between -165 and -220, well over on the shape's western
+       side — rather than centring density on the whole elongated canal strip uniformly. */
+    built:false, coreN:[-0.5, 0.2], places:[
       /* None of these four resolve against the bake's own landmarks table — it came back empty
          for this island, since the Overpass "wanted" list was never extended to ask for them by
          name. All four x/z below are LM_RAHA's hand-identified coordinates directly, the same
