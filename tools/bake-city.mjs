@@ -1324,8 +1324,27 @@ async function bakeIsland(isle, proj){
     handWater = JSON.parse(raw);
     process.stderr.write(`  ${isle.id}: hand-traced water found (${wpath}) — ` +
       `${handWater.water.length} body, ${handWater.waterIslands.length} islands, merged in\n`);
-  } catch { /* no hand-traced file for this island — water stays whatever Overpass found, if
-                anything, which is the correct behaviour for every island other than Raha. */ }
+  } catch (e) {
+    /* WAS A BARE catch {}, SWALLOWING WHATEVER WENT WRONG WITHOUT SAYING WHAT. Two live bakes
+       against a repo where the file, the code, the commit and the timing all check out clean
+       from the git side still produced zero islands, with no way to tell from here whether that
+       was ENOENT, a JSON parse failure, a permissions issue, or something about the runner's
+       working directory this file's own reasoning never considered. Rather than guess a third
+       time, log everything a real diagnosis needs — but only for islands that actually HAVE a
+       hand-traced file to find, which today is Raha alone. For every other island, ENOENT here
+       is the ordinary, correct, silent case — five islands' worth of expected "no file" would
+       otherwise bury the one line that matters under noise nobody asked for. */
+    if (isle.id === 'raha'){
+      process.stderr.write(`  ${isle.id}: hand-traced water NOT merged — ${e.code || e.name}: ${e.message}\n`);
+      process.stderr.write(`    cwd: ${process.cwd()}\n`);
+      try {
+        const listing = await fs.readdir('data');
+        process.stderr.write(`    data/ contains: ${listing.join(', ')}\n`);
+      } catch (e2) {
+        process.stderr.write(`    could not even list data/: ${e2.code || e2.name}: ${e2.message}\n`);
+      }
+    }
+  }
 
   const finalWater = handWater ? water.concat(handWater.water) : water;
   const waterIslands = handWater ? handWater.waterIslands : [];
