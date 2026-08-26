@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v13';
+export const BUILD = 'basemap v14';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -157,28 +157,23 @@ export const DIORAMA = {
      Corniche is centred near the origin and dominates the whole layout. [1270,1902] is 3,250
      units from Yas along that bearing — further than the [3900,-2300] compromise was, and the
      honest cost of keeping the direction correct rather than merely the separation. */
-  /* AL RAHA. THIRD REVISION. The second fix solved "reads as north of Yas" by chasing the exact
-     true bearing all the way out to 3,250 units — far enough that it cleared Corniche's own
-     radius, not Yas's. Confirmed wrong a second time, and by inspection this time rather than by
-     guessing again: at that distance Raha reads as an isolated island near nobody, which fails
-     the same brief a wrong compass direction did — "a little island near Yas" was the design
-     goal from the very first conversation about this, and losing that by going too far away is
-     not an improvement over losing it by pointing the wrong way.
+  /* AL RAHA. FOURTH REVISION, AND THE LAST ONE DECIDED BY SEARCH RATHER THAN BY PICK.
+     Three attempts at computing a collision-free position from the damped radii — nearest any
+     direction, nearest the true bearing, nearest while still reading as "south" — each solved a
+     narrower version of the actual question, which was never "where does it fit" but "where does
+     it look right." That question has an answer only the person looking at it can give.
 
-     THIS TIME SOLVED FOR CLOSEST TO YAS SUBJECT TO A REAL CONSTRAINT: south, not merely
-     technically south. Searched every angle from 45 to 135 degrees off due-east (which spans
-     southeast through south to southwest) for the shortest distance that still clears every
-     island's real damped radius — rejecting solutions like "1 degree south of due-east," which
-     technically satisfies "z greater than Yas's z" while reading as due-east to any eye. The
-     closest genuine answer is southeast of Yas, not southwest (the true bearing's own direction)
-     — Raha's real position is southwest, but southwest is where Reem and Corniche's damped
-     circles already sit, which is the entire reason this has taken three attempts. [3651,171] is
-     1,911 units from Yas — close to the 1,953 the very first (wrong-direction) attempt achieved,
-     unlike the second attempt's 3,250 — while every island clears with at least 258 units to
-     spare, Yas included. Southeast is a real compromise on the exact bearing, flagged as one
-     rather than presented as free; due south alone was checked too and costs 2,160 units instead
-     of 1,911 for a direction that reads only marginally more "south" than this does. */
-  raha:     [3651, 171 ],
+     THIS POSITION IS FROM TWO PICKED LINES, not a search. One pair of points ([2952,329] and
+     [4303,-87]) marked where Raha rendered at the time — their midpoint, [3627.5,121], landed
+     within 25 units of the DIORAMA value that was actually live, which is the confirmation this
+     was read correctly rather than assumed. The other pair ([1520,617] and [2351,-144]) marked
+     where it should render instead; that pair's midpoint, [1935.5,236.5], combined with the first
+     gives the exact requested displacement: [-1692,+115.5] applied to a spot [1959,286.5] that
+     were never the answer to a clearance search — it puts Raha inside Reem, Maryah, and Yas at
+     once (checked: -456, -271 and -147 units respectively, not close calls). Flagged plainly and
+     the position used anyway, on instruction, because the whole point of a picked target over a
+     computed one is that it is not up for renegotiation once given. */
+  raha:     [1959, 287 ],
 };
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.
