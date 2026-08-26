@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v193';
+export const BUILD = 'world v194';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1134,11 +1134,28 @@ function waterIslandGeometry(id, r){
    this codebase already proven to run for every visited island regardless of how the visit
    happened — tour leg or direct tap, first visit or the fifth. Guarded to do nothing once the
    real shape is in, so revisiting an already-correct island costs one property check. */
+/* RETURNS A VERDICT NOW, AND THAT IS THE WHOLE FIX FOR A LATCH THAT SHIPPED WITH IT.
+
+   Every early exit below used to be a bare `return`, indistinguishable from the outside. The
+   caller in world-nav.html marks the island attempted BEFORE it awaits the payload, so a single
+   call arriving while d.isleMeshes was still unpopulated set that flag permanently and no later
+   visit ever tried again — the island kept its solid platform for the rest of the session with
+   nothing reporting a failure.
+
+   The symptom that identified it is specific: the fabric DOES avoid the creek, because
+   insideWaterHole reads BASE water live at fabric-build time, long after the payload lands. So
+   the exclusion is correct and the geometry is stale, and those two disagreeing is exactly what
+   an empty unbuilt channel through still-painted ground looks like.
+
+     'built'    — geometry rebuilt, holes and water islands are in
+     'none'     — this island has no water and never will; the caller should stop asking
+     'notready' — real water exists but the platform is not built yet; ASK AGAIN NEXT VISIT */
 function refreshIslandWater(d){
-  if (!d || !d.isleMeshes || !d.isleMeshes.length) return;
+  if (!d || !d.isleMeshes || !d.isleMeshes.length) return 'notready';
   const b = BASE && BASE[d.id];
-  if (!b || (!b.water.length && !b.waterIslands.length)) return;   // nothing to add, ever, for this island
-  if (d._waterBuilt) return;                                        // already rebuilt once — do not repeat
+  if (!b) return 'notready';
+  if (!b.water.length && !b.waterIslands.length) return 'none';    // nothing to add, ever, for this island
+  if (d._waterBuilt) return 'built';                                // already rebuilt once — do not repeat
   d._waterBuilt = true;
 
   /* THE MAIN PLATFORM, REBUILT IN PLACE. mass and detail share one geometry object in the
@@ -1168,6 +1185,7 @@ function refreshIslandWater(d){
       d.isleMeshes.push(wIsle);
     });
   });
+  return 'built';
 }
 
 // Rejection sampling, so buildings land ON the island rather than in the sea.
@@ -3954,8 +3972,23 @@ urbanFabric  = timed('urbanFabric',  urbanFabric);
   let far = 0;
   for (const d of DISTRICTS) far = Math.max(far, Math.hypot(d.x, d.z) + d.r * (d.dispScale || 1));
   const k = Math.max(1, (far * 2.6) / 3200);
-  water.scale.set(k, 1, k);
-  farSea.scale.set(Math.max(1, k * 0.6), 1, Math.max(1, k * 0.6));
+  /* (k, k, 1), NOT (k, 1, k), AND THE OLD TRIPLE SCALED THE WRONG TWO AXES.
+
+     Both planes are PlaneGeometry in local XY, rotated -PI/2 about X. That rotation maps local
+     +y to world -z and local +z to world +y — which is precisely why the wave loop in
+     world-nav.html writes its displacement into array[i*3+2], the local z component, to move the
+     surface up and down. Scale is applied in local space, before the rotation, so:
+
+       scale.x = k   stretches world X          correct, and the only part that ever worked
+       scale.y = 1   leaves world Z at 3200     the sea stayed +/-1600 north to south
+       scale.z = k   multiplies world HEIGHT    every wave was k times too tall
+
+     At the present layout k is about 2.82, so the swell has been running near three times its
+     intended amplitude while the ocean ended 1,600 units south of centre — which puts Saadiyat
+     (z -2521..-599) and Yas (z -2068..-292) partly over the edge of the animated surface and
+     onto the flat farSea behind it. */
+  water.scale.set(k, k, 1);
+  farSea.scale.set(Math.max(1, k * 0.6), Math.max(1, k * 0.6), 1);
 }
 
 /* THE OPENING SHOT, WHICH IS NOT THE DISTRICT SHOT.
