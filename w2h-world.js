@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v188';
+export const BUILD = 'world v189';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3686,7 +3686,7 @@ const DISTRICTS = [
      every baked island's do, once the basemap transform runs.
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
-  { id:'raha', name:'Al Raha', x:1270, z:1902, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+  { id:'raha', name:'Al Raha', x:3651, z:171, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
     /* coreN WAS MISSING ENTIRELY, AND THAT IS WHAT CRASHED THE APP — not a deep bug, a plain
        omission. Every other district declares it (corniche 0.10/0.02, saadiyat 0.15/0.10, and so
        on); buildFabricFor reads d.coreN[0] and d.coreN[1] unconditionally with no fallback, so a
