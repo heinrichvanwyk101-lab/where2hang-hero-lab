@@ -143,7 +143,21 @@ export const DIORAMA = {
      already makes that same trade for the sake of a composition that doesn't collide, and this
      is the same trade, just forced by the numbers to sit some distance further round than "next
      door" actually allows in a compressed diorama. */
-  raha:     [3900, -2300],
+  /* AL RAHA. SECOND REVISION — the first fix ([3900,-2300]) solved the overlap but broke
+     something else: it put Raha NORTH of Yas, when the real building is south. Checked and
+     confirmed wrong, not a matter of taste — Al Raha's true position is south-southwest of Yas,
+     and a diorama position that reads as north is a worse error than tight compression, since it
+     actively misinforms rather than merely compresses.
+
+     THIS TIME SOLVED ALONG THE EXACT TRUE BEARING, not the nearest clear direction regardless of
+     angle. Walked the real vector from Yas's true position to Raha's true position (from the
+     baked extents, not eyeballed) outward from Yas's diorama position until every island's real
+     damped radius cleared with 300 units to spare. That point turned out to be gated by CORNICHE,
+     not Yas — heading southwest from Yas curves toward Corniche's own southern extent, since
+     Corniche is centred near the origin and dominates the whole layout. [1270,1902] is 3,250
+     units from Yas along that bearing — further than the [3900,-2300] compromise was, and the
+     honest cost of keeping the direction correct rather than merely the separation. */
+  raha:     [1270, 1902],
 };
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.

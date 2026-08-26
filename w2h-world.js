@@ -3686,7 +3686,7 @@ const DISTRICTS = [
      every baked island's do, once the basemap transform runs.
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
-  { id:'raha', name:'Al Raha', x:3900, z:-2300, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+  { id:'raha', name:'Al Raha', x:1270, z:1902, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
     /* coreN WAS MISSING ENTIRELY, AND THAT IS WHAT CRASHED THE APP — not a deep bug, a plain
        omission. Every other district declares it (corniche 0.10/0.02, saadiyat 0.15/0.10, and so
        on); buildFabricFor reads d.coreN[0] and d.coreN[1] unconditionally with no fallback, so a

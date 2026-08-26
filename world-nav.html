@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v124', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v125', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1093,9 +1093,10 @@ function applyLOD(){
     d.mass.visible   = !on && !swapped;
     if (d.glow) d.glow.intensity = !on ? 0 : view === 'night' ? 70 : view === 'dusk' ? 22 : 0;
   });
-  // applyLOD is the one function every state change and every view change already calls, so it
-  // is the only place the shadow fit needs hooking. setPlace does not call it, and does not need
-  // to: it keeps the district its parent set, so the fit is already right.
+  // applyLOD is the one function every state change and every view change calls, so it is the
+  // only place the shadow fit needs hooking. setPlace calls it too now — it used to skip this on
+  // the assumption that it always ran right after setDistrict for the same district, which the
+  // attract tour's direct island-to-place legs disproved; see setPlace's own comment.
   fitShadow();
 }
 
@@ -1462,6 +1463,24 @@ async function setPlace(d, anchor){
   goal.elev = goal.dist * PITCH_PLACE + anchor.h * s * 1.2;
   goal.fov  = 38;
   goal.angle = sunSafe(Math.atan2(wx - d.x, wz - d.z + 60));
+  /* applyLOD() WAS MISSING HERE, AND THAT IS THE ACTUAL BUG BEHIND "old build shows after a
+     fly-by lands back at Corniche." The comment this replaces argued setPlace never needs it
+     because "it keeps the district its parent set, so the fit is already right" — true only when
+     setPlace is called right after setDistrict for the SAME district, which is the click-driven
+     path this was written for. The attract tour breaks that assumption outright: a leg can jump
+     straight from a DIFFERENT island into a named place inside Corniche via setPlace alone, with
+     no setDistrict call between them. activeDistrict updates correctly two lines above, but
+     nothing then re-runs the visibility toggle — so corniche.detail stays hidden from whenever
+     the tour last had some other island active, and corniche.mass (the deliberate low-poly
+     silhouette — "ADNOC HQ: one tall slim slab" — built for distant world-view rendering, not a
+     stale build) is what's left showing, permanently, even with the camera framed tight on
+     Emirates Palace. Confirmed against the screenshot that reported this: the breadcrumb read
+     "Corniche > Emirates Palace" — a place-level view — and the geometry shown was the plain
+     slab and boxes applyLOD's own comment names as corniche.mass's content, not a version that
+     ever existed as a real "old build." Cheap to call unconditionally — a visibility loop over
+     six districts — so there is no real cost to removing the assumption instead of patching
+     around it. */
+  applyLOD();
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
      'Back to ' + d.name);
 }
