@@ -1318,6 +1318,15 @@ async function bakeIsland(isle, proj){
      rather than resolving them cleanly. Two flat lists, checked against each other by area
      before this shipped, avoid the whole class of problem. */
   let handWater = null;
+  /* fs IS NOT A MODULE-LEVEL IMPORT IN THIS FILE — every function that touches the filesystem
+     does its own `const fs = await import('node:fs/promises')`, on purpose (see the comment near
+     line 499). bakeIsland never needed file I/O before this water merge, so it never had one, and
+     a bare `fs.readFile` threw ReferenceError: fs is not defined — confirmed directly from a live
+     bake's own diagnostic output, not guessed. Declared here, above the try, rather than inside
+     it — a `const` declared inside try{} is not visible to its own catch{} block, and the catch
+     below needs fs too (for the directory listing), so importing only in the try left the catch's
+     own diagnostic broken by the exact same scoping mistake this whole fix exists to correct. */
+  const fs = await import('node:fs/promises');
   try {
     const wpath = `data/water-${isle.id}.json`;
     const raw = await fs.readFile(wpath, 'utf8');
