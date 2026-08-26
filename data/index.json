@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-26T04:33:12.985Z",
+ "generated": "2026-08-26T04:50:11.379Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -12809,7 +12809,7 @@
     ]
    ],
    "landmarks": {},
-   "bytes": 245313,
+   "bytes": 244186,
    "counts": {
     "outline": 21,
     "roads": 1153,
@@ -12819,7 +12819,7 @@
     "parks": 40,
     "golf": 0,
     "raceway": 0,
-    "water": 17,
+    "water": 9,
     "withVenues": 9
    }
   }
