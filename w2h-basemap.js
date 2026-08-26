@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v14';
+export const BUILD = 'basemap v16';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -157,23 +157,25 @@ export const DIORAMA = {
      Corniche is centred near the origin and dominates the whole layout. [1270,1902] is 3,250
      units from Yas along that bearing — further than the [3900,-2300] compromise was, and the
      honest cost of keeping the direction correct rather than merely the separation. */
-  /* AL RAHA. FOURTH REVISION, AND THE LAST ONE DECIDED BY SEARCH RATHER THAN BY PICK.
-     Three attempts at computing a collision-free position from the damped radii — nearest any
-     direction, nearest the true bearing, nearest while still reading as "south" — each solved a
-     narrower version of the actual question, which was never "where does it fit" but "where does
-     it look right." That question has an answer only the person looking at it can give.
+  /* AL RAHA. FIFTH REVISION — a fine-alignment against Reem, not another repositioning.
+     Confirmed against the ACTUAL coastline polygons (shapely, not the circle-radius model every
+     earlier revision here used) that [1959,287] never collided with anything — the "-456, -271,
+     -147" overlaps the fourth revision flagged were an artefact of treating every irregular
+     island as its own bounding circle, which overstates real islands' footprint by a wide margin
+     (Corniche alone: circle area ~4.7M unit², real coastline area 1.5M). That correction stands;
+     this revision is a separate, smaller adjustment on top of it.
 
-     THIS POSITION IS FROM TWO PICKED LINES, not a search. One pair of points ([2952,329] and
-     [4303,-87]) marked where Raha rendered at the time — their midpoint, [3627.5,121], landed
-     within 25 units of the DIORAMA value that was actually live, which is the confirmation this
-     was read correctly rather than assumed. The other pair ([1520,617] and [2351,-144]) marked
-     where it should render instead; that pair's midpoint, [1935.5,236.5], combined with the first
-     gives the exact requested displacement: [-1692,+115.5] applied to a spot [1959,286.5] that
-     were never the answer to a clearance search — it puts Raha inside Reem, Maryah, and Yas at
-     once (checked: -456, -271 and -147 units respectively, not close calls). Flagged plainly and
-     the position used anyway, on instruction, because the whole point of a picked target over a
-     computed one is that it is not up for renegotiation once given. */
-  raha:     [1959, 287 ],
+     TWO PICKED POINTS were given as "the Reem side edge of Raha" — [2324,-246] and [1295,504].
+     Raha's own actual Reem-facing edge was found the same way, not assumed: projected every
+     outline vertex onto the raha-to-reem centroid direction and took the ones with the highest
+     projection, which cluster into two corners at roughly (1195,390) and (1527,271), 353 units
+     apart. The picked pair is 1,273 units apart — this transform has no rotation or scale for an
+     individual island, only translation, so the real edge cannot be stretched to span both
+     points exactly. Centred instead: translated so the real edge's midpoint (1361,330.5) lands
+     on the picked pair's midpoint (1809.5,129), a delta of [+448.5,-201.5]. Reverified against
+     every real coastline polygon at the new position — clear of all five, Reem included at 136
+     units, not a circle-model number this time. */
+  raha:     [2408, 86 ],
 };
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.
@@ -269,6 +271,22 @@ export function shapeOf(entry){
   return entry.outline.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
 }
 
+/* WATER AND WATER-ISLANDS, NORMALISED THE SAME WAY AS shapeOf ABOVE — same cx/cy, same half-span,
+   same division. Deliberately not folded into shapeOf itself: the outline is always present and
+   always exactly one ring, water and waterIslands are each a LIST that is usually empty, and
+   giving them their own small function keeps "no water" a plain empty array rather than a shapeOf
+   caller having to guess whether null means "no outline" or "no water" from one shared return. */
+export function waterShapesOf(entry){
+  if (!entry.extent) return { water: [], waterIslands: [] };
+  const { cx, cy } = entry.extent;
+  const half = Math.max(entry.extent.w, entry.extent.d) / 2;
+  const norm = ring => ring.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+  return {
+    water: (entry.water || []).map(norm),
+    waterIslands: (entry.waterIslands || []).map(norm),
+  };
+}
+
 /* ONE CALL, EVERYTHING THE WORLD FILE NEEDS. It is handed a finished table rather than the index,
    so the damping exponent, the projection and the axis conventions all stay in this file and
    w2h-world.js keeps importing nothing. */
@@ -279,8 +297,10 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
     const shape = shapeOf(entry);
     if (!shape) continue;
     const tf = transform(idx, entry.id, t, p);
+    const { water, waterIslands } = waterShapesOf(entry);
     out[entry.id] = {
       shape,
+      water, waterIslands,
       /* LAZY, BECAUSE THIS TABLE IS BUILT ONCE AND THE ROADS ARRIVE FIVE TIMES.
          sceneIslands is called immediately after Corniche's roads are awaited; the other four
          islands are still in flight. A plain property captured null for all of them and kept it
@@ -309,6 +329,8 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
          all. The real polygons arrive asynchronously, long after the ground texture is painted, so
          the count is the only thing available early enough to make that call. */
       nParks: (entry.counts && entry.counts.parks) || 0,
+      nWater: (entry.counts && entry.counts.water) || 0,
+      nWaterIslands: (entry.counts && entry.counts.waterIslands) || 0,
     };
   }
   return out;

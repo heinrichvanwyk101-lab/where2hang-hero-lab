@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v190';
+export const BUILD = 'world v192';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -854,6 +854,29 @@ function isleShape(id, r){
   shape.moveTo(pts[0][0]*r, pts[0][1]*r);
   for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0]*r, pts[i][1]*r);
   shape.closePath();
+
+  /* WATER AS REAL HOLES IN THE ISLAND'S OWN EXTRUSION, not a colour painted on top of flat
+     ground. Every island already drops to the sea through a genuine bevelled cliff at its outer
+     coastline (see islandGeometry below) — an internal creek that only changed the ground
+     TEXTURE would look like a lake painted onto dry land, missing the one visual cue that makes
+     the real coastline read as a coastline at all. A hole here means the same animated sea plane
+     that shows through everywhere outside the island also shows through here, for free, with
+     identical material and motion — nothing new to build or keep in sync.
+
+     NOT run through isleCoast's Chaikin/Catmull-Rom smoothing, deliberately: that pipeline exists
+     for the seventeen-to-thirty-two-point hand-drawn ISLE_SHAPES, and the same reasoning that
+     keeps a surveyed coastline unsmoothed applies just as hard to a hand-traced one — Al Dana's
+     spiral is a real feature, not a corner to round off. Raw BASE water rings, straight through. */
+  if (BASE && BASE[id] && BASE[id].water && BASE[id].water.length){
+    for (const ring of BASE[id].water){
+      if (ring.length < 3) continue;
+      const hole = new THREE.Path();
+      hole.moveTo(ring[0][0]*r, ring[0][1]*r);
+      for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i][0]*r, ring[i][1]*r);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+  }
   return shape;
 }
 
@@ -1043,6 +1066,57 @@ function islandGeometry(id, r){
   return g;
 }
 
+/* THE MINI-ISLANDS SITTING INSIDE THE WATER HOLE, built the same way the main platform is —
+   same depth, same bevel, same cliff-and-slope treatment — so a small island inside the creek
+   reads as the same KIND of object as the big one it sits inside, not a different material
+   pasted on top of a hole.
+
+   SAME UV FORMULA, DELIBERATELY, and this is what makes a second texture unnecessary. The main
+   island's UVGenerator maps a vertex's texture coordinate from its own ABSOLUTE position in the
+   shape's local space — vertices[i*3]/spanX + 0.5 — not from anything specific to being part of
+   that one mesh. A water-island vertex sitting at the same coordinates the main canvas was
+   painted at samples the SAME pixel the main island would have shown there, which for these
+   islands is the plain sand the ground painter lays everywhere before roads and parks go on top.
+   Free consistency, not a coincidence: reusing the formula is what earns it.
+
+   Returns one geometry per island rather than a merged one — there are at most a handful, this
+   is not the fabric's thousands of plots, and keeping them separate means a future change to any
+   one island's shape or count never has to touch a shared buffer. */
+function waterIslandGeometry(id, r){
+  if (!BASE || !BASE[id] || !BASE[id].waterIslands || !BASE[id].waterIslands.length) return [];
+  const h = isleHalf(id);
+  const spanX = r * 2 * h.x * GROUND_PAD;
+  const spanY = r * 2 * h.y * GROUND_PAD;
+  const UVGen = {
+    generateTopUV(geometry, vertices, iA, iB, iC){
+      return [iA, iB, iC].map(i => new THREE.Vector2(
+        vertices[i*3]     / spanX + 0.5,
+        vertices[i*3 + 1] / spanY + 0.5));
+    },
+    generateSideWallUV(){
+      return [new THREE.Vector2(0,0), new THREE.Vector2(1,0),
+              new THREE.Vector2(1,1), new THREE.Vector2(0,1)];
+    },
+  };
+  const geos = [];
+  for (const ring of BASE[id].waterIslands){
+    if (ring.length < 3) continue;
+    const shape = new THREE.Shape();
+    shape.moveTo(ring[0][0]*r, ring[0][1]*r);
+    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0]*r, ring[i][1]*r);
+    shape.closePath();
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: ISLE_DEPTH, curveSegments: 10,
+      bevelEnabled: true, bevelThickness: ISLE_BEVEL_T, bevelSize: ISLE_BEVEL_S, bevelSegments: 2,
+      UVGenerator: UVGen,
+    });
+    g.rotateX(-Math.PI/2);
+    g.computeVertexNormals();
+    geos.push(g);
+  }
+  return geos;
+}
+
 // Rejection sampling, so buildings land ON the island rather than in the sea.
 /* A UNIFORM GRID OVER THE COASTLINE, because both tests below are called per plot candidate and
    both were linear in the number of coastline segments.
@@ -1115,7 +1189,38 @@ function insideIsle(id, nx, ny){
     const xi = P[i][0], yi = P[i][1], xj = P[i+1][0], yj = P[i+1][1];
     if (((yi > ny) !== (yj > ny)) && (nx < (xj - xi) * (ny - yi) / (yj - yi) + xi)) inside = !inside;
   }
+  if (inside && insideWaterHole(id, nx, ny)) return false;
   return inside;
+}
+
+/* WATER, THE SAME EXCLUSION isleGridOf's OWN GRID DOES NOT KNOW ABOUT — that grid indexes the
+   OUTER coastline only, built long before this file had any idea Al Raha's interior was not
+   solid ground. Extending the grid itself to also index water rings would be the "proper" fix,
+   but it is not the cheap one: the grid exists because the coastline can be a thousand points
+   and a naive test against all of them, run for every fabric candidate, was the actual cost it
+   was built to remove. Water rings are nothing like that — a handful of them, five to thirty
+   points each, checked plainly. On every island but Raha this array is empty and the loop below
+   costs one iteration of nothing; the grid's own expense is not worth paying twice for a case
+   that is free everywhere else.
+
+   NOT DISTINGUISHING WATER ISLANDS FROM THE WATER THEY SIT IN, on purpose. A stricter version
+   would re-admit points inside a waterIsland ring even though they are inside a water ring too —
+   correct in principle, since Al Dana's own island IS buildable ground. But these are small,
+   currently-undetailed platforms with no landmark or fabric plan of their own yet; treating the
+   whole water region as one exclusion is the conservative choice while that is true, and revisiting
+   it is cheap the day a real building actually needs to stand on one of them. */
+function insideWaterHole(id, nx, ny){
+  const b = BASE && BASE[id];
+  if (!b || !b.water || !b.water.length) return false;
+  for (const ring of b.water){
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if (((yi > ny) !== (yj > ny)) && (nx < (xj - xi) * (ny - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    if (inside) return true;
+  }
+  return false;
 }
 
 /* Distance to the coast, searched outward one ring of cells at a time. The loop stops as soon as
@@ -3686,7 +3791,7 @@ const DISTRICTS = [
      every baked island's do, once the basemap transform runs.
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
-  { id:'raha', name:'Al Raha', x:1959, z:287, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+  { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
     /* coreN WAS MISSING ENTIRELY, AND THAT IS WHAT CRASHED THE APP — not a deep bug, a plain
        omission. Every other district declares it (corniche 0.10/0.02, saadiyat 0.15/0.10, and so
        on); buildFabricFor reads d.coreN[0] and d.coreN[1] unconditionally with no fallback, so a
@@ -3971,6 +4076,23 @@ DISTRICTS.forEach(d => {
     isle.castShadow = true;
     layer.add(isle);
     d.isleMeshes.push(isle);
+  });
+
+  /* THE ISLANDS INSIDE THE WATER HOLE, if this island has any — currently only Al Raha does.
+     Same two material slots as the main platform above, same reasoning: cap on top, beach on
+     the bevelled sides, both layers so LOD swaps do not make them vanish. Pushed onto the same
+     d.isleMeshes list the main platform uses, since nothing downstream that walks that list
+     needs to know a mesh is a small island rather than the main one — shadows, lift snapshots
+     and material swaps all treat every entry the same way already. */
+  const waterIsleGeos = waterIslandGeometry(d.id, d.r);
+  waterIsleGeos.forEach(g => {
+    [mass, detail].forEach(layer => {
+      const wIsle = new THREE.Mesh(g, [matLandFlat, matBeach]);
+      wIsle.receiveShadow = true;
+      wIsle.castShadow = true;
+      layer.add(wIsle);
+      d.isleMeshes.push(wIsle);
+    });
   });
 
   /* THE BEACH, WHICH EXISTS TO STOP THE ISLAND LOOKING LIKE A CAKE STAND.
