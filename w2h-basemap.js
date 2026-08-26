@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v16';
+export const BUILD = 'basemap v17';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -272,18 +272,32 @@ export function shapeOf(entry){
 }
 
 /* WATER AND WATER-ISLANDS, NORMALISED THE SAME WAY AS shapeOf ABOVE — same cx/cy, same half-span,
-   same division. Deliberately not folded into shapeOf itself: the outline is always present and
-   always exactly one ring, water and waterIslands are each a LIST that is usually empty, and
-   giving them their own small function keeps "no water" a plain empty array rather than a shapeOf
-   caller having to guess whether null means "no outline" or "no water" from one shared return. */
-export function waterShapesOf(entry){
-  if (!entry.extent) return { water: [], waterIslands: [] };
+   same division.
+
+   READS entry._data, NOT entry ITSELF, and that difference is the whole fix for a real bug this
+   function shipped with. entry here is an idx.islands member — the lightweight data/index.json
+   summary, which carries outline directly (the bake writes it there on purpose, specifically so
+   the world overview can draw real island shapes without fetching every island's full file) but
+   only ever carried water and waterIslands as COUNTS, under entry.counts — the arrays themselves
+   have only ever lived in data/isle-<id>.json, fetched separately by loadIsland and cached on
+   entry._data once it lands. The first version of this function read entry.water directly, which
+   is undefined on every index entry for every island including Raha, so (entry.water || [])
+   silently became [] every time — correct code, wrong input, and the failure was invisible
+   because an empty array is exactly what "no water" also looks like. Confirmed live: the bake's
+   own data plainly had water:10, waterIslands:8, and still nothing rendered.
+
+   So this now takes the loaded payload directly rather than the index entry — see sceneIslands
+   below, which is the one caller and now passes entry._data through a lazy getter the same way
+   it already does for roads, for the same reason: this table is built before the full island
+   file has necessarily arrived. */
+export function waterShapesOf(entry, data){
+  if (!entry.extent || !data) return { water: [], waterIslands: [] };
   const { cx, cy } = entry.extent;
   const half = Math.max(entry.extent.w, entry.extent.d) / 2;
   const norm = ring => ring.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
   return {
-    water: (entry.water || []).map(norm),
-    waterIslands: (entry.waterIslands || []).map(norm),
+    water: (data.water || []).map(norm),
+    waterIslands: (data.waterIslands || []).map(norm),
   };
 }
 
@@ -297,10 +311,25 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
     const shape = shapeOf(entry);
     if (!shape) continue;
     const tf = transform(idx, entry.id, t, p);
-    const { water, waterIslands } = waterShapesOf(entry);
     out[entry.id] = {
       shape,
-      water, waterIslands,
+      /* LAZY, THE SAME REASON roads IS AND FOR THE SAME REASON THE FIRST VERSION OF THIS BROKE:
+         entry._data is not populated until loadIsland's fetch of data/isle-<id>.json lands, which
+         is well after sceneIslands runs. A plain value computed here would permanently capture
+         "not loaded yet" — exactly the roads bug this file already solved once, reintroduced by
+         building water and waterIslands as ordinary properties instead of copying the pattern
+         that was sitting right above them. Memoised on the entry for the same reason _roadsN is:
+         the normalisation is cheap once, not free to repeat on every ground-hole or fabric query. */
+      get water(){
+        if (!entry._data) return [];
+        if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
+        return entry._waterN.water;
+      },
+      get waterIslands(){
+        if (!entry._data) return [];
+        if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
+        return entry._waterN.waterIslands;
+      },
       /* LAZY, BECAUSE THIS TABLE IS BUILT ONCE AND THE ROADS ARRIVE FIVE TIMES.
          sceneIslands is called immediately after Corniche's roads are awaited; the other four
          islands are still in flight. A plain property captured null for all of them and kept it

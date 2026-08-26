@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v127', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v128', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3408,6 +3408,22 @@ function attractPrefetch(n){
      Nothing here blocks a frame: the build still happens synchronously when it happens, this only
      moves WHEN. And a user tap still builds immediately through setDistrict, because a stall
      during a committed move is worse than a generated lattice. */
+  /* THE ISLAND'S FULL FILE, PREFETCHED THE SAME LEG AHEAD ROADS ALREADY GETS — this is the same
+     race whenRoads exists to close below, just for a different fetch. islandGeometry (built
+     inside buildAndRegister, synchronously) reads BASE[id].water off entry._data, which
+     loadIsland only populates once data/isle-<id>.json has actually landed. Roads getting a head
+     start does nothing for water or the mini-islands sitting in it — those live in the FULL
+     file, not the roads-only one — so without this, an island's water holes are exactly as
+     network-weather-dependent as roads used to be before whenRoads existed, just quieter about
+     it: a missed fetch does not fall back to a generated lattice the way roads does, it falls
+     back to no water at all, indistinguishable from an island that was never supposed to have
+     any. Placed BEFORE the roadsIn check below and not inside either branch of it, because the
+     early-return branch (roads already in) would otherwise skip this entirely — this needs to
+     fire on every leg regardless of which path the roads check takes. Fired and forgotten, not
+     awaited — the geometry build already tolerates data arriving late (the lazy getter just
+     returns empty until it does), this only improves the odds it does not have to. */
+  const idx = window.__basemapIndex;
+  if (idx && BMAP.loadIsland) BMAP.loadIsland(idx, leg.id).catch(() => {});
   if (roadsIn(leg.id)){ buildAndRegister(d); return; }
   whenRoads(leg.id).then(() => { if (d.pending) buildAndRegister(d); });
 }
