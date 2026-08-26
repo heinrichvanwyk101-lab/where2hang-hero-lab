@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v128', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v129', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -854,7 +854,7 @@ phase('propKit');
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor,
-        groundFeaturesFor, KIT_ZONES } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater } =
   buildWorld(scene, kit, {
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -1282,7 +1282,7 @@ function setDistrict(d){
     fitClip();
     applyView(view);
   }
-  if (d){ addFootprints(d); addGroundFeatures(d); }
+  if (d){ addFootprints(d); addGroundFeatures(d); addWaterGeometry(d); }
 
   /* Every state change composes a shot, so a leftover angle from the last one would arrive as a
      camera that lands somewhere the transition did not intend. orbit.on stays as it is: once the
@@ -2867,6 +2867,7 @@ function fillCorniche(){
      the overlay read `corn -` — never ran, as opposed to ran and found nothing. It is the island
      with 1,321 park polygons, so it is the one that most needed to. */
   addGroundFeatures(corniche);
+  addWaterGeometry(corniche);
   applyView(view);
 }
 if (window.requestIdleCallback) requestIdleCallback(fillCorniche, { timeout:2000 });
@@ -3104,6 +3105,43 @@ async function addGroundFeatures(d){
   } catch (e){
     gfState.set(d.id, 'fail');
     console.warn('groundFeatures ' + d.id + ': ' + e.message);
+  }
+}
+
+/* THE WATER REBUILD'S OWN CALLER — refreshIslandWater itself just swaps geometry and adds meshes;
+   something still has to fetch the data it needs and know when to ask.
+
+   Reuses loadIsland's own cache rather than adding a new fetch: footprintsFrom and
+   groundFeaturesFrom both already await BMAP.loadIsland(idx, d.id) for this exact island, so by
+   the time any of the three resolves the underlying promise is very often already settled from
+   one of the others — this call either joins that same promise or starts it, never duplicates
+   the network request.
+
+   d._waterAttempted guards the ATTEMPT, separately from refreshIslandWater's own d._waterBuilt
+   guard on the RESULT — an island with no water at all (five out of six) would otherwise retry
+   loadIsland on every single visit for the rest of the session, forever confirming the same
+   "nothing to do" it already confirmed the first time. */
+async function addWaterGeometry(d){
+  if (!refreshIslandWater || d._waterAttempted) return;
+  d._waterAttempted = true;
+  try {
+    const idx = window.__basemapIndex;
+    if (!idx || !BMAP.loadIsland) return;
+    await BMAP.loadIsland(idx, d.id);
+    const before = d.isleMeshes ? d.isleMeshes.length : 0;
+    refreshIslandWater(d);
+    /* Only the NEW water-island meshes need this — the main platform's own mesh objects are
+       reused as-is by refreshIslandWater, materials untouched, so they are exactly as
+       snapshotted and registered as they were at the original build. Only brand-new objects
+       need the treatment addGroundFeatures's own comment above explains the ordering for. */
+    if (d.isleMeshes && d.isleMeshes.length > before){
+      for (let i = before; i < d.isleMeshes.length; i++){
+        snapshotMats(d.isleMeshes[i]); registerLift(d.isleMeshes[i]);
+      }
+      applyView(view);
+    }
+  } catch (e){
+    console.warn('waterGeometry ' + d.id + ': ' + e.message);
   }
 }
 

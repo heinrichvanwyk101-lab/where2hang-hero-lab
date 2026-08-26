@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v192';
+export const BUILD = 'world v193';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1115,6 +1115,59 @@ function waterIslandGeometry(id, r){
     geos.push(g);
   }
   return geos;
+}
+
+/* THE REBUILD, AND WHY IT HAS TO EXIST AT ALL.
+
+   Every island's mass platform is built once, synchronously, inside the DISTRICTS.forEach loop
+   that runs at module load — before Corniche's own roads have arrived, let alone Al Raha's full
+   payload. That loop cannot wait for network data; six islands' worth of geometry has to exist
+   before the first frame does. So for the five islands with no water this was never a problem —
+   an empty BASE[id].water at build time is the correct, permanent answer. For Raha it produced a
+   solid platform with no holes and no islands, and unlike roads — which get repainted onto a
+   texture the moment real data lands, via attachRealRoads running again inside buildGroundFor —
+   nothing about a static ExtrudeGeometry updates itself once BASE[id].water later becomes real.
+   The prefetch added to attractPrefetch makes that data arrive sooner; it does not make the
+   geometry that was already built notice.
+
+   Called from setDistrict's own addFootprints/addGroundFeatures line, which is the one place in
+   this codebase already proven to run for every visited island regardless of how the visit
+   happened — tour leg or direct tap, first visit or the fifth. Guarded to do nothing once the
+   real shape is in, so revisiting an already-correct island costs one property check. */
+function refreshIslandWater(d){
+  if (!d || !d.isleMeshes || !d.isleMeshes.length) return;
+  const b = BASE && BASE[d.id];
+  if (!b || (!b.water.length && !b.waterIslands.length)) return;   // nothing to add, ever, for this island
+  if (d._waterBuilt) return;                                        // already rebuilt once — do not repeat
+  d._waterBuilt = true;
+
+  /* THE MAIN PLATFORM, REBUILT IN PLACE. mass and detail share one geometry object in the
+     original construction (islandGeometry called once, both meshes handed the same result), so
+     disposing and reassigning geometry on isleMeshes[0]/[1] updates both without touching
+     anything else about those two meshes — materials, shadow flags, parent groups, all untouched. */
+  const oldMainGeo = d.isleMeshes[0].geometry;
+  const newMainGeo = islandGeometry(d.id, d.r);
+  d.isleMeshes[0].geometry = newMainGeo;
+  if (d.isleMeshes[1]) d.isleMeshes[1].geometry = newMainGeo;
+  oldMainGeo.dispose();
+
+  /* THE WATER ISLANDS, WHICH DID NOT EXIST AT ALL UNTIL NOW — waterIslandGeometry returned []
+     at the original build time for the same reason the main platform had no holes, so there is
+     nothing to swap here, only meshes to create for the first time. Same two material slots and
+     same shadow flags as the main platform's own construction, on purpose: a small island inside
+     the creek should read as the same kind of object as the big one, not a different one that
+     happens to share a texture. */
+  const newIslandGeos = waterIslandGeometry(d.id, d.r);
+  newIslandGeos.forEach(g => {
+    [d.mass, d.detail].forEach(layer => {
+      if (!layer) return;
+      const wIsle = new THREE.Mesh(g, [matLandFlat, matBeach]);
+      wIsle.receiveShadow = true;
+      wIsle.castShadow = true;
+      layer.add(wIsle);
+      d.isleMeshes.push(wIsle);
+    });
+  });
 }
 
 // Rejection sampling, so buildings land ON the island rather than in the sea.
@@ -7323,7 +7376,7 @@ function buildIsland(id){
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
          buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,
-         corniche, GROUND, propCount, KIT_ZONES,
+         corniche, GROUND, propCount, KIT_ZONES, refreshIslandWater,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
             of them have junctions. */
