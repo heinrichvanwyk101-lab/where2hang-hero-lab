@@ -645,6 +645,17 @@ function query(bbox){
   way["leisure"="golf_course"](${b});
   relation["leisure"="golf_course"](${b});
   way["highway"="raceway"](${b});
+  /* INLAND WATER — canals, marina basins, lagoons — never queried at all until now. Al Raha's
+     own canal network (Khor Al Raha and the internal loops through Al Dana, Al Seef, Al Muneera,
+     Al Zeina) sits entirely INSIDE the traced outer outline, which only ever said where the whole
+     patch's shoreline runs, never where the water cuts back in. Everything inside that outline
+     has been treated as plain buildable land because nothing told this query to look for water
+     there — the ground painter cannot punch a hole it was never handed. */
+  way["natural"="water"](${b});
+  relation["natural"="water"](${b});
+  way["water"~"^(lagoon|basin|canal)$"](${b});
+  relation["water"~"^(lagoon|basin|canal)$"](${b});
+  way["waterway"="canal"](${b});
 );
 out geom;`;
 }
@@ -942,7 +953,7 @@ async function bakeIsland(isle, proj){
 
   /* osmBuildings, not buildings. It is now the FALLBACK — used only when the Overture extract is
      absent — and naming it for what it is stops the two paths reading as one. */
-  const coastWays = [], roads = [], osmBuildings = [], parks = [], golf = [], raceway = [];
+  const coastWays = [], roads = [], osmBuildings = [], parks = [], golf = [], raceway = [], water = [];
   for (const el of els){
     const t = el.tags || {};
     if (!el.geometry && !el.members) continue;
@@ -970,6 +981,22 @@ async function bakeIsland(isle, proj){
       if (geom && geom.length >= 4){
         const ring = toXY(geom);
         if (area(ring) > 20000) golf.push(simplify(ring, SIMPLIFY_M * 2).map(rd1));
+      }
+      continue;
+    }
+
+    /* WATER BEFORE PARKS TOO, and checked first among the tag types this element could carry —
+       `natural=water` and `landuse=grass` are not mutually exclusive in how OSM contributors tag
+       things, and a lagoon mistakenly also carrying a landuse tag must not be filed as a lawn.
+       No area floor the way golf has one: a real internal canal can be narrow, and a floor tuned
+       for a golf course would silently drop every one of them. Relations are multipolygons;
+       outer ring only, as with buildings and parks. */
+    if (t.natural === 'water' || t.water || t.waterway === 'canal'){
+      const geom = el.geometry ||
+        (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
+      if (geom && geom.length >= 3){
+        const ring = toXY(geom);
+        water.push(simplify(ring, SIMPLIFY_M).map(rd1));
       }
       continue;
     }
@@ -1167,7 +1194,7 @@ async function bakeIsland(isle, proj){
   process.stderr.write(`  ${isle.id}: outline ${outline.length}pt, roads ${roads.length}, ` +
                        `buildings ${buildings.length} (${buildings.filter(b => b.h).length} with height), ` +
                        `parks ${parks.length} (max ${Math.round(Math.max(0, ...parks.map(p => p.a))/1e4)}ha), ` +
-                       `golf ${golf.length}, raceway ${raceway.length}` +
+                       `golf ${golf.length}, raceway ${raceway.length}, water ${water.length}` +
                        (extent ? `, extent ${(extent.w/1000).toFixed(2)} x ${(extent.d/1000).toFixed(2)} km` : '') +
                        `\n`);
 
@@ -1179,7 +1206,7 @@ async function bakeIsland(isle, proj){
   await attachVenues(buildings, proj, isle.id);
 
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
-           golf, raceway,
+           golf, raceway, water,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
@@ -1482,6 +1509,7 @@ async function main(){
                                   parks:baked.parks.length,
                                   golf:baked.golf.length,
                                   raceway:baked.raceway.length,
+                                  water:baked.water.length,
                                   withVenues:baked.buildings.filter(b => b.v).length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
 
