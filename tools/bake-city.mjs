@@ -236,6 +236,11 @@ const AREA_FLOOR = 20;
    anything visible at this scale and removes most of OSM's surveyed detail. */
 const SIMPLIFY_M = 2.0;
 
+/* AN ESTIMATE, NOT A MEASUREMENT — no source gives Khor Al Raha's own channel width. 120 m reads
+   plausibly against the reference photos' own proportions; if a real figure ever surfaces this is
+   the one number in the water pipeline that should change. */
+const WATERWAY_WIDTH_M = 120;
+
 /* THE POLYGON THRESHOLD, AND WHY THE OBB IS NO LONGER ENOUGH ON ITS OWN.
 
    The note at the top of this file argues that buildings are oriented boxes because the fabric
@@ -891,6 +896,73 @@ function clipToOutline(buildings, outline, margin){
   return out;
 }
 
+/* WATER GETS ITS OWN CLIP, NOT clipToOutline ABOVE — that function tests a single point per
+   building; a water body is the shape itself, and a naive point test on one polygon's centroid
+   would happily pass something the size of the open Gulf if its centroid landed anywhere near
+   Raha. Confirmed this actually happens: the first live water query returned a 13.5 km polygon
+   alongside sixteen genuinely small ones, and by centroid alone the huge one would have looked
+   exactly as valid as the small ones did.
+
+   Two independent tests, either one enough to keep a candidate: does any of its own vertices
+   fall inside the outline, or does the outline's own centre fall inside the candidate (the case
+   where a small island sits entirely within a larger lagoon, which a vertex-only test would
+   miss). Real overlap, checked geometrically, not assumed from proximity.
+
+   THE SPAN CAP IS THE SECOND, SEPARATE GUARD. A feature can genuinely overlap an island's outline
+   at one edge while still being, in truth, something else entirely — the same 13.5 km polygon
+   very likely clips through Raha's own bbox somewhere along its edge. maxSpan rejects anything
+   whose own bounding box is more than three times the outline's, which a real internal canal
+   never approaches — Khor Al Raha's own traced outline is itself only 4.7 km at its longest, so a
+   feature meant to sit inside that has no legitimate reason to span 15+. */
+function clipWaterToOutline(water, outline, maxSpanRatio = 3){
+  if (!outline || outline.length < 4) return water;
+  let ox0=Infinity, ox1=-Infinity, oy0=Infinity, oy1=-Infinity;
+  for (const [x,y] of outline){
+    if (x<ox0) ox0=x; if (x>ox1) ox1=x; if (y<oy0) oy0=y; if (y>oy1) oy1=y;
+  }
+  const outlineSpan = Math.max(ox1-ox0, oy1-oy0);
+  const centre = [(ox0+ox1)/2, (oy0+oy1)/2];
+  const out = [];
+  for (const ring of water){
+    if (!ring || ring.length < 3) continue;
+    let wx0=Infinity, wx1=-Infinity, wy0=Infinity, wy1=-Infinity;
+    for (const [x,y] of ring){
+      if (x<wx0) wx0=x; if (x>wx1) wx1=x; if (y<wy0) wy0=y; if (y>wy1) wy1=y;
+    }
+    const waterSpan = Math.max(wx1-wx0, wy1-wy0);
+    if (waterSpan > outlineSpan * maxSpanRatio) continue;   // the sea-polygon guard
+    const overlaps = ring.some(p => contains(outline, p)) || contains(ring, centre);
+    if (overlaps) out.push(ring);
+  }
+  return out;
+}
+
+/* A waterway MAPPED AS A LINE, NOT AN AREA — which is how OSM usually carries a canal: one
+   centreline way, no enclosed polygon either side of it. The ring-based parsing everything else
+   in this file uses would take that line's own points and treat first-to-last as if they closed
+   a shape, which encloses no real area at all — a canal traced this way would bake as an
+   invisible sliver, not the substantial waterway every reference photo shows.
+
+   WIDTH IS AN ESTIMATE, FLAGGED AS ONE. No source gives Khor Al Raha's own channel width; 120 m
+   is a plausible reading against the reference photos' own proportions, not a measurement. Offset
+   left and right of the centreline by half that, per segment, and close the two offset chains
+   into one ring — the standard flat-buffer construction, with no attempt at mitring sharp turns
+   cleanly, which is a fair trade for a channel this gently curved. */
+function bufferLineToRing(pts, width){
+  if (!pts || pts.length < 2) return null;
+  const half = width / 2;
+  const left = [], right = [];
+  for (let i = 0; i < pts.length; i++){
+    const a = pts[Math.max(0, i-1)], b = pts[Math.min(pts.length-1, i+1)];
+    const dx = b[0]-a[0], dy = b[1]-a[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy/len, ny = dx/len;   // unit normal
+    left.push([pts[i][0] + nx*half, pts[i][1] + ny*half]);
+    right.push([pts[i][0] - nx*half, pts[i][1] - ny*half]);
+  }
+  return left.concat(right.reverse());
+}
+
 function pickIsland(chains, centre){
   const CLOSE_M = 60;   // a ring closes when its ends meet within a way's own node spacing
   const closed = chains.filter(c => c.length > 3 &&
@@ -953,7 +1025,10 @@ async function bakeIsland(isle, proj){
 
   /* osmBuildings, not buildings. It is now the FALLBACK — used only when the Overture extract is
      absent — and naming it for what it is stops the two paths reading as one. */
-  const coastWays = [], roads = [], osmBuildings = [], parks = [], golf = [], raceway = [], water = [];
+  const coastWays = [], roads = [], osmBuildings = [], parks = [], golf = [], raceway = [];
+  /* let, not const — clipWaterToOutline reassigns this below, the same way `buildings` (further
+     down) gets reassigned by clipToOutline rather than filtered in place. */
+  let water = [];
   for (const el of els){
     const t = el.tags || {};
     if (!el.geometry && !el.members) continue;
@@ -985,13 +1060,27 @@ async function bakeIsland(isle, proj){
       continue;
     }
 
+    /* CANAL AS A LINE, CHECKED FIRST AND SEPARATELY — waterway=canal is how OSM usually maps one
+       of these, a single centreline way with no enclosed area either side. Treating it through
+       the ring branch below (which the first version of this did) would take the line's own
+       points and implicitly close first-to-last into a shape enclosing no real area — an
+       invisible sliver, not the channel every reference photo shows. Buffered to a real ring
+       instead; see bufferLineToRing for the width and why it is an estimate. Relations do not
+       apply here — a waterway is a single way, never a multipolygon. */
+    if (t.waterway === 'canal' && el.geometry){
+      const pts = toXY(el.geometry);
+      const ring = bufferLineToRing(pts, WATERWAY_WIDTH_M);
+      if (ring) water.push(simplify(ring, SIMPLIFY_M).map(rd1));
+      continue;
+    }
+
     /* WATER BEFORE PARKS TOO, and checked first among the tag types this element could carry —
        `natural=water` and `landuse=grass` are not mutually exclusive in how OSM contributors tag
        things, and a lagoon mistakenly also carrying a landuse tag must not be filed as a lawn.
        No area floor the way golf has one: a real internal canal can be narrow, and a floor tuned
        for a golf course would silently drop every one of them. Relations are multipolygons;
        outer ring only, as with buildings and parks. */
-    if (t.natural === 'water' || t.water || t.waterway === 'canal'){
+    if (t.natural === 'water' || t.water){
       const geom = el.geometry ||
         (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
       if (geom && geom.length >= 3){
@@ -1174,6 +1263,10 @@ async function bakeIsland(isle, proj){
     buildings = clipToOutline(buildings, outline, CLIP_MARGIN_M);
     process.stderr.write(`  ${isle.id}: coast pre-clip ${before} -> ${buildings.length} ` +
       `(dropped ${before - buildings.length} beyond ${CLIP_MARGIN_M} m of the shore)\n`);
+    const waterBefore = water.length;
+    water = clipWaterToOutline(water, outline);
+    process.stderr.write(`  ${isle.id}: water pre-clip ${waterBefore} -> ${water.length} ` +
+      `(dropped ${waterBefore - water.length} with no real overlap or an implausible span)\n`);
   }
 
   /* THE ISLAND'S TRUE EXTENT, measured from the outline rather than from the bounding box that
