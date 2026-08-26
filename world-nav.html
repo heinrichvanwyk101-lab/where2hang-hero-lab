@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v125', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v126', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2364,6 +2364,25 @@ canvas.addEventListener('pointerup', e => {
   ray.setFromCamera(ndc, camera);
 
   if (state === STATE.WORLD){
+    /* PICK.mode WAS NEVER CHECKED HERE, AND THAT IS THE BUG. Every tap in world view raycast
+       pickTargets and navigated into whatever it hit, unconditionally — the district/place branch
+       below has its own `if (PICK.mode !== 'off')` gate, this one never did, so picking a point at
+       the world level was never actually possible: the tap always won and dropped you into an
+       island before a point could be recorded.
+
+       Fixed by checking pick mode FIRST, against a plain world-space ground plane rather than a
+       district's own tilted/scaled one — there is no single active district at this state, and
+       there does not need to be: world view already shows every island in the raw diorama frame,
+       so the ray-plane hit IS the coordinate a DIORAMA.<id> entry wants, with no district offset,
+       scale, or rotation to invert. Passed through pickRecord with an identity transform
+       (x:0, z:0, rot:0, scale 1) rather than a second code path, so the existing marker and
+       readout logic keeps working unchanged. */
+    if (PICK.mode !== 'off'){
+      const plane = new THREE.Plane(new THREE.Vector3(0,1,0), -(GROUND + 0.4));
+      const p = new THREE.Vector3();
+      if (ray.ray.intersectPlane(plane, p)) pickRecord({ x:0, z:0, rot:0 }, 1, p);
+      return;
+    }
     const hit = ray.intersectObjects(pickTargets, false)[0];
     if (hit) setDistrict(hit.object.userData.district);
     return;
