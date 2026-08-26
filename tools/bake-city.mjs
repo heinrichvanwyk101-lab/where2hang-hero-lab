@@ -1298,8 +1298,47 @@ async function bakeIsland(isle, proj){
      that ship rather than against everything the box returned. */
   await attachVenues(buildings, proj, isle.id);
 
+  /* HAND-TRACED WATER, MERGED HERE SO A RE-BAKE CANNOT SILENTLY LOSE IT. Al Raha's real canal
+     network — Khor Al Raha itself plus the individual islands through Al Dana, Al Seef, Al
+     Muneera and Al Zeina — turned out not to exist as extractable OSM tags at all; confirmed
+     across two live bakes, not assumed. The Overpass water query stays in this file because it is
+     correct and still useful for whatever small ponds ARE tagged, but for Raha specifically the
+     real shape came from tracing satellite imagery by hand, point by point, against the actual
+     coastline, verified visually against reference photos before being accepted.
+
+     data/water-<id>.json is optional and only Raha has one today. Reading it here, inside
+     bakeIsland, rather than patching data/isle-raha.json directly after the fact, is what makes
+     it survive the NEXT bake — a hand-edit to the output file would be silently overwritten the
+     moment anyone re-baked Raha for a roads or buildings refresh, and there would be no error to
+     say so, just a quietly regressed canal. waterIslands is a new field, not folded into water
+     itself: a creek with islands inside it needs the renderer to draw solid ground where the
+     islands are, which is a different operation from painting a hole, and conflating the two
+     into one polygon-with-holes was tried and abandoned — two of the eight islands sat close
+     enough to the creek's own traced edge that a strict polygon difference silently dropped them
+     rather than resolving them cleanly. Two flat lists, checked against each other by area
+     before this shipped, avoid the whole class of problem. */
+  let handWater = null;
+  try {
+    const wpath = `data/water-${isle.id}.json`;
+    const raw = await fs.readFile(wpath, 'utf8');
+    handWater = JSON.parse(raw);
+    process.stderr.write(`  ${isle.id}: hand-traced water found (${wpath}) — ` +
+      `${handWater.water.length} body, ${handWater.waterIslands.length} islands, merged in\n`);
+  } catch { /* no hand-traced file for this island — water stays whatever Overpass found, if
+                anything, which is the correct behaviour for every island other than Raha. */ }
+
+  const finalWater = handWater ? water.concat(handWater.water) : water;
+  const waterIslands = handWater ? handWater.waterIslands : [];
+  /* A SEPARATE, EXPLICIT LINE, not folded into the summary above — that line runs before this
+     merge even happens (it is built from the pre-merge `water`, not finalWater), so it could
+     never have reflected hand-traced data landing even if the wording implied it. Whoever reads
+     this log to confirm a bake actually worked deserves the real final count, not the earlier
+     one. */
+  process.stderr.write(`  ${isle.id}: water final — ${finalWater.length} body(ies), ` +
+    `${waterIslands.length} island(s)\n`);
+
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
-           golf, raceway, water,
+           golf, raceway, water:finalWater, waterIslands,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
@@ -1603,6 +1642,7 @@ async function main(){
                                   golf:baked.golf.length,
                                   raceway:baked.raceway.length,
                                   water:baked.water.length,
+                                  waterIslands:baked.waterIslands.length,
                                   withVenues:baked.buildings.filter(b => b.v).length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
 
