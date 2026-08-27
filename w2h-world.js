@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v197';
+export const BUILD = 'world v198';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7438,6 +7438,38 @@ function buildCornicheRest(){
 function buildIsland(id){
   const d = DISTRICTS.find(x => x.id === id);
   if (!d || !d.pending) return false;
+  /* WAIT FOR THE REAL ROAD NETWORK, ON THE ISLANDS THAT HAVE NOTHING ELSE TO FALL BACK ON.
+
+     buildGroundFor runs exactly once — from here, behind d.pending — and the first thing it does
+     is claim the real network via attachRealRoads. Its own comment says a miss "paints generated
+     roads, which is the documented degradation", and a note over refreshIslandWater says roads
+     "get repainted the moment real data lands, via attachRealRoads running again inside
+     buildGroundFor". That second claim is not true and never was: nothing calls buildGroundFor a
+     second time. Whether an island gets its real streets is decided once, by whether the payload
+     happened to arrive first — which is why the correct version has been seen on some loads and
+     the invented grid on others. A race, not a broken painter.
+
+     REPAINTING AFTERWARDS IS NOT THE FIX. buildGroundFor paints one canvas and places props on
+     the way through; running it twice doubles the props and orphans the old texture. So the race
+     is avoided rather than repaired.
+
+     ONLY WHERE THE FALLBACK IS WRONG. An island with generated stock looks right either way —
+     invented roads under invented buildings are consistent. Raha has genFabric:false precisely
+     because its real payload is the whole content, so generated streets there contradict the
+     buildings standing on them. That is the same evidence the flag already encodes, so it is
+     reused rather than duplicated as a second near-identical property.
+
+     BOUNDED, because a deferred island that never builds is worse than one built from generated
+     roads. After the deadline it builds regardless and takes the degradation, which is the
+     behaviour every island had before this. The idle prefetch in world-nav already pulls this
+     payload, so in practice the wait is one already-in-flight fetch, not a new one. */
+  if (d.genFabric === false && !(BASE && BASE[id] && BASE[id].roads)){
+    if (d._roadWaitFrom === undefined) d._roadWaitFrom = performance.now();
+    if (performance.now() - d._roadWaitFrom < 8000){
+      return false;                     // pending stays set: the next visit or attract leg retries
+    }
+    console.warn('buildIsland ' + id + ': road payload never arrived, building generated');
+  }
   d.pending = false;
   const t = performance.now();
   buildFabricFor(d);

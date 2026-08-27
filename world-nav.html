@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v133', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v134', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3159,6 +3159,23 @@ async function addWaterGeometry(d){
     const idx = window.__basemapIndex;
     if (!idx || !BMAP.loadIsland) return;
     await BMAP.loadIsland(idx, d.id);
+    /* THE MOMENT A DEFERRED ISLAND CAN FINALLY BE BUILT PROPERLY. buildIsland now refuses to run
+       for an island with genFabric:false until its road payload exists, because buildGroundFor
+       gets exactly one attempt at claiming the real network and a miss is permanent. That refusal
+       leaves d.pending set, so something has to come back — and this is the one place that knows
+       the payload has just landed. Without it the island would sit unbuilt until the next visit,
+       trading an intermittent wrong grid for an intermittent missing city. */
+    if (buildIsland && d.pending && buildIsland(d.id)){
+      /* THE SAME FOUR CALLS setDistrict MAKES, because a late build is still a build. They sit
+         inside setDistrict's `if (buildIsland(...))` block, which already returned false for this
+         island on the visit that deferred it — so without repeating them here the new geometry
+         would never be snapshotted and Raha would lose day/dusk/plan switching entirely, which is
+         a worse fault than the wrong roads this defers for. */
+      snapshotMats(d.group);
+      registerLift(d.group);
+      fitClip();
+      applyView(view);
+    }
     const before = d.isleMeshes ? d.isleMeshes.length : 0;
     const verdict = refreshIslandWater(d);
     if (verdict === 'built' || verdict === 'none') d._waterAttempted = true;
