@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v196';
+export const BUILD = 'world v197';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1284,17 +1284,34 @@ function insideIsle(id, nx, ny){
    currently-undetailed platforms with no landmark or fabric plan of their own yet; treating the
    whole water region as one exclusion is the conservative choice while that is true, and revisiting
    it is cheap the day a real building actually needs to stand on one of them. */
+
+/* NOT DISTINGUISHING WATER ISLANDS FROM THE WATER THEY SIT IN — NO LONGER TRUE, AND THIS IS THE
+   REVISIT THE PARAGRAPH ABOVE PROMISED. It said the conservative lump was right "while these are
+   small, currently-undetailed platforms with no landmark or fabric plan of their own", and that
+   stopped being true the moment the rings started coming from OSM coastline instead of a hand
+   trace. They are not anonymous platforms now: they are Al Dana, Al Muneera and Al Bandar, eight
+   closed `natural=coastline` ways carrying 331 of Raha's 584 real footprints between them. Under
+   the old test every one of those buildings was discarded — they stand inside a water ring, and
+   nothing looked any further. The islands rendered as bare ground in the middle of the channel.
+
+   ORDER MATTERS AND IS THE WHOLE FIX. A point on Al Dana is inside the water ring AND inside an
+   island ring; both are true and the island is the more specific answer, so it is asked first and
+   wins. Ask them the other way round and nothing changes, because the water ring already returned
+   true and the caller never got here. */
 function insideWaterHole(id, nx, ny){
   const b = BASE && BASE[id];
   if (!b || !b.water || !b.water.length) return false;
-  for (const ring of b.water){
+  const hit = (ring) => {
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
       const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
       if (((yi > ny) !== (yj > ny)) && (nx < (xj - xi) * (ny - yi) / (yj - yi) + xi)) inside = !inside;
     }
-    if (inside) return true;
-  }
+    return inside;
+  };
+  /* Land first. Standing on an island is standing on ground, whatever the channel around it says. */
+  if (b.waterIslands) for (const ring of b.waterIslands) if (hit(ring)) return false;
+  for (const ring of b.water) if (hit(ring)) return true;
   return false;
 }
 
