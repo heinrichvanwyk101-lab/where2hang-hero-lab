@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v135', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v136', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3159,6 +3159,22 @@ async function addWaterGeometry(d){
     const idx = window.__basemapIndex;
     if (!idx || !BMAP.loadIsland) return;
     await BMAP.loadIsland(idx, d.id);
+    /* THE ROADS ARE A DIFFERENT FILE, AND THAT IS WHY THE v198 WAIT NEVER ENDED WELL. buildIsland
+       holds an island with genFabric:false until BASE[id].roads exists — but that getter reads
+       entry._roads, and only loadRoads populates it, from data/roads-<id>.json. loadIsland fetches
+       isle-<id>.json and sets _data. So the deferral was waiting on a payload that does not contain
+       the thing it was waiting for: the deadline always expired and the island always built
+       generated, which is exactly what the overlay reported — `raha GENERATED`.
+
+       attractPrefetch does call whenRoads('raha'), but only as a tour leg. buildAndRegister's own
+       comment says a direct tap deliberately skips that await, "because a stall during a committed
+       move is worse than a generated lattice" — which was true while the fallback was cosmetic and
+       is not true now that the fallback is the fault being removed. Tapping straight into Raha was
+       the one path that could never get real streets, however many times it was revisited.
+
+       whenRoads races its own timeout, so a file that never settles still leaves buildIsland's
+       8-second deadline to do its job rather than stalling the island forever. */
+    if (d.genFabric === false && typeof whenRoads === 'function') await whenRoads(d.id, 6000);
     /* THE MOMENT A DEFERRED ISLAND CAN FINALLY BE BUILT PROPERLY. buildIsland now refuses to run
        for an island with genFabric:false until its road payload exists, because buildGroundFor
        gets exactly one attempt at claiming the real network and a miss is permanent. That refusal
