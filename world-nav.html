@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v131', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v132', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -4220,17 +4220,19 @@ function frame(){
          Expected on Raha once correct: raha aB 10/8 m18. Read a- as refreshIslandWater bailing
          at its own guard, -/- as the payload never reaching the getter, and aB … m2 as the
          rebuild running against rings it did not consider real. */
-      'water  ' + DISTRICTS.map(d => {
+      /* ONE ISLAND PER LINE, BECAUSE THE SINGLE-ROW VERSION RAN OFF THE RIGHT EDGE and the entry
+         that fell off was Raha — the only island the row exists to report on. Same shape the fp
+         block above already uses for the same reason. */
+      'water  ' + DISTRICTS.map((d, i) => {
         const idxW = window.__basemapIndex;
-        const e = idxW && (idxW.islands || []).find(i => i.id === d.id);
+        const e = idxW && (idxW.islands || []).find(i2 => i2.id === d.id);
         const dat = e && e._data;
-        return d.id.slice(0,4) + ' ' +
-          (d._waterVerdict ? d._waterVerdict.slice(0,1) : '-') +
-          (d._waterBuilt ? 'B' : '-') + ' ' +
+        return (i ? '       ' : '') + d.id.slice(0,4).padEnd(5) + ' ' +
+          (d._waterVerdict || '-').padEnd(9) +
           (dat && dat.water ? dat.water.length : '-') + '/' +
           (dat && dat.waterIslands ? dat.waterIslands.length : '-') +
           ' m' + (d.isleMeshes ? d.isleMeshes.length : 0);
-      }).join('  ') + '\n' +
+      }).join('\n') + '\n' +
       /* HOW MANY ANCHORS THE BAKE NAMED, per island, and whether the shot is framing them or
          falling back to the coastline. An anchor the bake missed keeps a stale authored position
          near the island centre and looks like a landmark that happens to be central. */

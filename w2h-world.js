@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v194';
+export const BUILD = 'world v196';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1154,6 +1154,10 @@ function refreshIslandWater(d){
   if (!d || !d.isleMeshes || !d.isleMeshes.length) return 'notready';
   const b = BASE && BASE[d.id];
   if (!b) return 'notready';
+  /* LOADED FIRST, BECAUSE [] MEANS TWO DIFFERENT THINGS. b.water is an empty array both when the
+     island has no water and when its payload has not arrived, and treating the second as the
+     first is what latched Raha as permanently water-free on a call that merely arrived early. */
+  if (!b.loaded) return 'notready';
   if (!b.water.length && !b.waterIslands.length) return 'none';    // nothing to add, ever, for this island
   if (d._waterBuilt) return 'built';                                // already rebuilt once — do not repeat
   d._waterBuilt = true;
@@ -3863,6 +3867,21 @@ const DISTRICTS = [
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
   { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+    /* NO GENERATED BUILDING STOCK ON THIS ISLAND, and it is the only one carrying the flag.
+
+       Al Raha Beach is a single master-planned development on reclaimed ground, not a city that
+       grew. Its blocks are uniform mid-rise slabs on a designed grid, and the fabric generator —
+       tuned on Corniche, where organic density and a tall core are correct — invents a skyline
+       that is simply not there. The bake already returns the real stock, and unlike Saadiyat
+       (1,841 real against 18,782 generated, which needed the filler) Raha's payload covers the
+       island: the generator was not closing a gap, it was overwriting a correct answer with a
+       plausible one.
+
+       This is meshes:false, NOT a skipped urbanFabric call. That distinction cost an earlier
+       attempt: cells and blocks feed buildGroundFor and groundPlan, so the paving, the block
+       layout and the street grid all come out of the same arithmetic. Skipping the call takes
+       the ground with it. meshes:false keeps every number and builds no boxes. */
+    genFabric:false,
     /* coreN WAS MISSING ENTIRELY, AND THAT IS WHAT CRASHED THE APP — not a deep bug, a plain
        omission. Every other district declares it (corniche 0.10/0.02, saadiyat 0.15/0.10, and so
        on); buildFabricFor reads d.coreN[0] and d.coreN[1] unconditionally with no fallback, so a
@@ -7112,10 +7131,18 @@ function buildFabricFor(d){
 
      SAME DENSITY, SAME SEED, DIFFERENT FLOOR. The layers are the same city; mass simply omits
      anything under minH, so the world view holds the massing and zooming in fills the gaps. */
+  /* THE FLAG IS PER-ISLAND, which is the whole difference from v156. That version set
+     meshes:false wherever real footprints were expected and got it wrong in both directions at
+     once — Saadiyat went scarce because its payload does not cover the island, Yas barely
+     noticed because its does. The evidence was never about "has footprints", it was about
+     whether the footprints COVER the ground, and that is a property of each island's bake, not
+     a rule. So it is declared on the district and nowhere else. */
+  const genMeshes = d.genFabric !== false;
   urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool,
-                             minH:5.4 });
+                             minH:5.4, meshes:genMeshes });
   const built = urbanFabric(d, d.detail,
-                           { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool });
+                           { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool,
+                             meshes:genMeshes });
   d.fabric = built;
 
 }

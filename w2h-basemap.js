@@ -338,6 +338,14 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
          island is built, which is the moment the answer is actually knowable.
          Memoised on the entry: the normalisation is ~1,500 polylines and the painter asks more
          than once. */
+      /* HAS THE PAYLOAD LANDED AT ALL, WHICH THE TWO GETTERS ABOVE CANNOT SAY.
+
+         Both return [] when entry._data is missing, which is the correct value to hand a caller
+         that just wants to draw water — but it is identical to the [] a genuinely water-free
+         island returns forever. A caller deciding whether to STOP ASKING needs those two cases
+         apart: "no water" is permanent, "not loaded" is a retry. Without this, refreshIslandWater
+         reported 'none' for an island whose fetch had not resolved and was never asked again. */
+      get loaded(){ return !!entry._data; },
       get roads(){
         if (!entry._roads) return null;
         if (!entry._roadsN) entry._roadsN = roadsNormalised(entry, entry._roads);
