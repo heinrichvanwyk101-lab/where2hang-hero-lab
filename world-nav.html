@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v132', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v133', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2868,6 +2868,27 @@ function fillCorniche(){
      with 1,321 park polygons, so it is the one that most needed to. */
   addGroundFeatures(corniche);
   addWaterGeometry(corniche);
+  /* AND EVERY OTHER ISLAND THE INDEX SAYS HAS WATER, because until now only the island you had
+     actually WALKED INTO ever got its channel cut. addWaterGeometry hangs off setDistrict's
+     per-visit hook, and the world overview never calls that — so Al Raha sat in the archipelago
+     as a solid slab, its creek and eight islands appearing only once you tapped in. The overlay
+     said so plainly: `raha - -/- m2` from out here, `raha built 1/8 m18` from inside.
+
+     THE INDEX ALREADY KNOWS, which is what makes this cheap rather than a payload storm. Every
+     entry carries counts, and Raha's is the only one with a water key at all — so the six-island
+     loop below fetches exactly one payload and skips the rest without touching the network. Doing
+     it blind would mean loading all six in full just to learn that five have nothing to cut.
+
+     Idle-time, after Corniche, and addWaterGeometry's own latch means entering the district later
+     finds the work already done rather than repeating it. */
+  const idxW = window.__basemapIndex;
+  if (idxW) for (const d of DISTRICTS){
+    if (d === corniche) continue;
+    const ent = (idxW.islands || []).find(i => i.id === d.id);
+    const c = ent && ent.counts;
+    if (!c || !((c.water > 0) || (c.waterIslands > 0))) continue;
+    addWaterGeometry(d);
+  }
   applyView(view);
 }
 if (window.requestIdleCallback) requestIdleCallback(fillCorniche, { timeout:2000 });
@@ -3435,6 +3456,18 @@ function buildAndRegister(d){
   snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   addFootprints(d);
   addGroundFeatures(d);
+  /* THE THIRD CALL, MISSING SINCE THE DAY WATER WAS ADDED, and the reason Al Raha reads as a bare
+     block until you tap it. setDistrict runs addFootprints / addGroundFeatures / addWaterGeometry
+     together; this path — every island built at world level, by the attract prefetch — ran the
+     first two and stopped. So the channel and its eight islands did not exist in the overview at
+     all. The HUD said so plainly once the water row could be read: `raha -  -/- m2` from the world
+     camera against `raha built 1/8 m18` from inside the district. Two meshes is a bare platform.
+
+     The prefetch already fetches the full island file a leg ahead for exactly this geometry, so
+     the data was usually sitting there unused. And when it is not, addWaterGeometry awaits
+     loadIsland itself and refreshIslandWater answers 'notready' rather than latching, so a build
+     that runs early costs one retry on the next visit instead of a permanently solid island. */
+  addWaterGeometry(d);
 }
 
 
