@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v198';
+export const BUILD = 'world v199';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2412,28 +2412,41 @@ function paintGround(d, plan){
         — and then each PLOT is laid on top of it, rotated to its street. What is left between the
         blocks is the carriageway, and it is a street because nothing was painted over it. */
   const kerbW = Math.max(1, U * 0.0045);
-  g.fillStyle = SURF.street;
-  (plan.blocks || []).forEach(q => {
-    g.beginPath();
-    g.moveTo(PX(q[0][0]), PY(q[0][1]));
-    for (let i = 1; i < q.length; i++) g.lineTo(PX(q[i][0]), PY(q[i][1]));
-    g.closePath(); g.fill();
-  });
-  plan.cells.forEach(c => {
-    /* PY negates, so a rotation that is anticlockwise in world space is clockwise on the canvas.
-       Getting this sign wrong lays every plot across its own frontage instead of along it, and it
-       is invisible on a square plot — which is exactly the kind of thing the old lattice hid. */
-    const w = (c.wN || 0) * U, h = (c.dN || 0) * U;
-    if (!w || !h) return;
-    g.save();
-    g.translate(PX(c.jx), PY(c.jy));
-    g.rotate(-(c.rot || 0));
-    g.fillStyle = shade(SURF.paving, 0.90 + R() * 0.20);
-    g.fillRect(-w/2, -h/2, w, h);
-    g.strokeStyle = SURF.kerb; g.lineWidth = kerbW;
-    g.strokeRect(-w/2 + kerbW/2, -h/2 + kerbW/2, w - kerbW, h - kerbW);
-    g.restore();
-  });
+  /* NOT ON AN ISLAND THAT DECLARED ITS STOCK REAL, and this is the half of genFabric:false that
+     was missed. That flag stopped urbanFabric BUILDING boxes, but the cells and blocks it still
+     returns are exactly what these two passes paint — a superblock apron, then one rotated,
+     kerbed rectangle per generated plot. So Raha lost its invented buildings and kept the
+     invented plot grid they had stood on: the criss-cross pattern, drawn under real streets.
+
+     The real network is unaffected. Arterials, ring, crossings, parks, coast and the hand-placed
+     district patches are all painted elsewhere in this function from their own sources; only the
+     generated parcel layout is skipped. What is left is ground with the real road network on it,
+     which is honest about how much of this island is actually known rather than dressing the gap
+     with plausible geometry — the same argument the flag itself was added for. */
+  if (d.genFabric !== false){
+    g.fillStyle = SURF.street;
+    (plan.blocks || []).forEach(q => {
+      g.beginPath();
+      g.moveTo(PX(q[0][0]), PY(q[0][1]));
+      for (let i = 1; i < q.length; i++) g.lineTo(PX(q[i][0]), PY(q[i][1]));
+      g.closePath(); g.fill();
+    });
+    plan.cells.forEach(c => {
+      /* PY negates, so a rotation that is anticlockwise in world space is clockwise on the canvas.
+         Getting this sign wrong lays every plot across its own frontage instead of along it, and it
+         is invisible on a square plot — which is exactly the kind of thing the old lattice hid. */
+      const w = (c.wN || 0) * U, h = (c.dN || 0) * U;
+      if (!w || !h) return;
+      g.save();
+      g.translate(PX(c.jx), PY(c.jy));
+      g.rotate(-(c.rot || 0));
+      g.fillStyle = shade(SURF.paving, 0.90 + R() * 0.20);
+      g.fillRect(-w/2, -h/2, w, h);
+      g.strokeStyle = SURF.kerb; g.lineWidth = kerbW;
+      g.strokeRect(-w/2 + kerbW/2, -h/2 + kerbW/2, w - kerbW, h - kerbW);
+      g.restore();
+    });
+  }
 
   /* 6. DISTRICT PATCHES. Ground under the hand-built landmarks, where there are no fabric cells
         to paint from. Written in LOCAL UNITS in the district table, next to the landmark they
