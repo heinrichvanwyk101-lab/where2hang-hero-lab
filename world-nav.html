@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v134', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v135', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -4250,10 +4250,15 @@ function frame(){
          able to answer about itself. One line: per island, real or generated, with the centreline
          count when it is real. dispScale is here for the same reason. It is the number three
          separate bugs came out of and it was visible nowhere. */
-      'roads  ' + DISTRICTS.map(d => d.id.slice(0,4) + ' ' +
-        (!d.built ? '-' : d.roadsReal ? String(d.roads.drawArterials.length) : 'gen') +
+      /* ONE ISLAND PER LINE, for the reason the water row already wraps: the single-row version
+         runs off the right edge of a phone and the entry that falls off is the last one, which is
+         raha — the only island whose road source is in question. Four rounds have now been spent
+         arguing about whether Al Raha is painting real or generated streets while the field that
+         answers it sat one character beyond the screen. */
+      'roads  ' + DISTRICTS.map((d, i) => (i ? '       ' : '') + d.id.slice(0,4).padEnd(5) + ' ' +
+        (!d.built ? '-' : d.roadsReal ? String(d.roads.drawArterials.length) + ' real' : 'GENERATED') +
         (d.dispScale && Math.abs(d.dispScale - 1) > 0.01
-          ? ' x' + d.dispScale.toFixed(1) : '')).join('  ') + '\n' +
+          ? '  x' + d.dispScale.toFixed(1) : '')).join('\n') + '\n' +
       /* WATER PROBE. Al Raha's creek and its eight islands are in the bake and confirmed in the
          payload, and nothing renders. Every stage of that chain was readable in source and every
          stage looked correct, which means the answer is at runtime and the overlay is the only
