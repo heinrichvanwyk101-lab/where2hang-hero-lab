@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v86';
+export const BUILD = 'city v87';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3492,7 +3492,9 @@ function rahaMall(x0, z0){
      onto, so it is carried through all three views exactly as Aldar HQ's blue-green is. */
   const glassMat = new THREE.MeshStandardMaterial({
     color:0x0C2A2C, roughness:0.25, metalness:0.30, envMapIntensity:1.2 });
-  glassMat.userData.duskColor = 0x1B5457;
+  glassMat.userData.duskColor = 0x2E9296;
+  glassMat.userData.duskRough = 0.24; glassMat.userData.duskMetal = 0.26;
+  glassMat.userData.duskEnv = 1.5;
   glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0x2E9296, roughness:0.20, metalness:0.25, envMapIntensity:1.4 });
 
@@ -3586,8 +3588,20 @@ function aldarHQ(x0, z0){
      ever reading as the wrong glass, so this touches colour and nothing else. */
   const glassMat = new THREE.MeshStandardMaterial({
     color:0x08222A, roughness:0.18, metalness:0.35, envMapIntensity:1.4 });
-  glassMat.userData.duskColor = 0x14454E;
+  glassMat.userData.duskColor = 0x2E8B96;
   glassMat.userData.duskRough = 0.22; glassMat.userData.duskMetal = 0.30;
+  glassMat.userData.duskEnv = 1.7;
+  /* DUSK CARRIES THE FULL DAY TEAL, NOT A DARKENED ONE — 0x14454E was the first attempt and it
+     rendered as a black disc with a specular hotspot on it. The lift honours a material's own
+     duskColor over DUSK_GLASS, so the hue was reaching the render; it was simply at about 30%
+     value while keeping metalness 0.30, and a dark colour under metalness reads as black no
+     matter what its hue is. Value, not hue, was the thing that had to move.
+
+     Photographs of the building at dusk show it MORE saturated than at noon, not less: the glass
+     is lit from within and from the podium by then, so it holds its colour while the stone around
+     it goes warm and grey. Matching the day value is therefore the accurate answer as well as the
+     legible one, and duskEnv lifts the reflection a little to keep it reading as glass rather
+     than as flat paint. */
   glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0x2E8B96, roughness:0.15, metalness:0.25, envMapIntensity:1.6 });
 

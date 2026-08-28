@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v137', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v138', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -622,6 +622,36 @@ scene.add(moon);
 const rim = new THREE.DirectionalLight(C.teal, 0.46);
 rim.position.set(220, 60, 240);
 scene.add(rim);
+
+/* THE FILL, AND WHY IT IS AMBIENT RATHER THAN MORE OF ANYTHING ALREADY HERE.
+
+   Night has three sources and every one of them is directional in effect. The moon lights -x and
+   -z, the rim covers +x and +z at about half strength, and even the hemisphere is orientation
+   dependent — it interpolates sky to ground by the surface normal, so a vertical wall takes the
+   midpoint and a face turned away from both keys still lands near the ground colour. The result
+   is that most of the city reads and a minority of it collapses to silhouette, which is the
+   complaint: not that night is too dark overall, but that some geometry stops existing.
+
+   An AmbientLight is the only source here that does not care which way a surface points. It
+   raises exactly the faces that are currently black and adds almost nothing to the ones that are
+   already lit, which is what "fill" has to mean if the emissive is to stay dominant.
+
+   0.30 AGAINST A HEMISPHERE OF 1.55 — under a fifth, and deliberately at the bottom of the range
+   that does anything at all. The windows are what the night mode is for and they must not lose
+   their lead.
+
+   IT DOES NOT LIFT THE SEA, and that is the point the block above already argued: water's albedo
+   is 0.0029 against stone's 0.0112, so a uniform lift raises the city about four times as much as
+   the water it stands in. That separation is what makes the aerial-photography look survive extra
+   ambient — the same reasoning that justified raising the hemisphere in v28 justifies this, and
+   it is why the fix is more ambient rather than a higher exposure, which would lift both equally
+   and flatten the very contrast being protected.
+
+   COOLER THAN THE HEMISPHERE'S SKY, not neutral: a white fill would grey the shadowed faces and
+   fight the cyan the render is built around. This sits just blue of the sky colour so the faces
+   it rescues read as moonlit rather than as washed out. */
+const fillNight = new THREE.AmbientLight(0x2C4658, 0.30);
+scene.add(fillNight);
 
 /* THE KEY LIGHT, shared by Day and Dusk rather than one each. Both want a low raking sun and
    both want shadows; two directional lights would mean two 2048 shadow maps resident for the
@@ -1841,6 +1871,11 @@ function applyView(next){
   moon.visible = night;
   rim.visible  = night;
   hemiNight.visible = night;
+  /* WITH THE REST OF THE NIGHT RIG, and only with it. An ambient light is invisible in Silhouette
+     and Plan, which swap in unlit materials, but Day, Dusk and Check are all lit — leaving it on
+     there would raise their shadows by a flat amount and quietly undo the contrast each of those
+     views is tuned for. It is a night instrument, so it lives and dies with night. */
+  fillNight.visible = night;
   /* CHECK IS LIT, AND LIT FROM STRAIGHT OVERHEAD.
 
      Without this it renders black: the sun, the sky hemisphere and the environment map are all
