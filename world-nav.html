@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v138', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v140', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1562,7 +1562,19 @@ document.getElementById('back').addEventListener('click', () => {
    It also unlocks the camera: pan on two fingers, and the tilt clamp opens up to true overhead. */
 const MODES = ['dusk', 'day', 'night', 'sil', 'plan', 'check'];
 const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette', plan:'Plan', check:'Check' };
-let view = 'dusk';
+/* ?view= PICKS THE OPENING MODE, so a link can be aimed rather than landing wherever the default
+   sits. Dusk remains that default and nothing about the cycle changes — this only decides where
+   the cycle starts.
+
+   It exists for shared links. A URL handed to someone who will look at it once, in a feed, on a
+   phone, gets exactly one frame to be worth stopping for, and which of the six modes that frame
+   uses is a presentation decision that should not have to be made by whoever taps first.
+
+   VALIDATED AGAINST MODES rather than trusted: an unknown value falls back to dusk instead of
+   setting view to a string nothing matches, which would leave every branch in applyView false and
+   render an unlit scene with no way to tell why from the URL. */
+const VIEW_Q = (location.search.match(/[?&]view=([a-z]+)/i) || [])[1];
+let view = MODES.includes((VIEW_Q || '').toLowerCase()) ? VIEW_Q.toLowerCase() : 'dusk';
 
 const silMat    = new THREE.MeshBasicMaterial({ color:0x000000 });
 const silWater  = new THREE.MeshBasicMaterial({ color:0xB9CBD4 });
@@ -1791,8 +1803,42 @@ registerLift(world);
 
    AND THE WINDOWS COME BACK DOWN, 1.8 to 1.2. They were raised to compensate for buildings that
    were not there. Now that the buildings are, the boost over-corrects the other way. */
-const NIGHT_ALBEDO = 5.0, NIGHT_ALBEDO_GLASS = 2.4;
-const NIGHT_EMI = 1.2;
+/* THE NIGHT RIG, TUNABLE FROM THE URL — six numbers, because night is a balance between them and
+   not one of them alone.
+
+   This exists because the loop for finding these values was wrong. Each candidate was a code
+   edit, a deploy and a screenshot, and a screenshot cannot separate "the fill is too low" from
+   "the albedo is too high" from "the emissive is dominating" — every one of those looks like a
+   dark picture. Six deploys to move three numbers is a bad trade when the same three can be
+   turned live and read off in one session.
+
+     ?nfill=   ambient fill        default 0.30   raises faces pointing away from every key
+     ?nhemi=   sky hemisphere      default 1.55   the broad wash, orientation dependent
+     ?nmoon=   moon key            default 0.92   lights -x and -z, casts the shadows
+     ?nrim=    teal counter-key    default 0.46   covers +x and +z
+     ?nalb=    stone albedo mult   default 5.0    how much unlit masonry is worth
+     ?nemi=    emissive mult       default 1.2    how far the windows lead
+
+   THE TWO GROUPS PULL AGAINST EACH OTHER, which is the whole difficulty. The four lights raise
+   geometry; the last two decide how much of what is raised is surface versus window. Lifting the
+   lights alone eventually greys the scene and the windows stop leading; lifting the albedo alone
+   brings the sea up with the city. The fill is the only one that raises the collapsed faces
+   without touching either balance, which is why it was the first thing tried — but it is a fill,
+   not a rebalance, and if the ratio between the other five is wrong no amount of it will help.
+
+   NOT A PERMANENT INTERFACE. When the numbers are settled they belong in the defaults above and
+   this can go, or stay as the way the next palette question gets answered in an afternoon rather
+   than over six rounds. */
+const nq = (k, d) => {
+  const m = location.search.match(new RegExp('[?&]' + k + '=(-?\\d*\\.?\\d+)'));
+  return m ? parseFloat(m[1]) : d;
+};
+const NIGHT_ALBEDO = nq('nalb', 5.0), NIGHT_ALBEDO_GLASS = 2.4;
+const NIGHT_EMI = nq('nemi', 1.2);
+hemiNight.intensity = nq('nhemi', 1.55);
+moon.intensity      = nq('nmoon', 0.92);
+rim.intensity       = nq('nrim',  0.46);
+fillNight.intensity = nq('nfill', 0.30);
 
 function applyLift(on, night){
   liftReg.forEach(e => {
