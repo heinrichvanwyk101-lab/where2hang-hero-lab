@@ -268,7 +268,43 @@ export function shapeOf(entry){
   if (!entry.outline || !entry.outline.length || !entry.extent) return null;
   const { cx, cy } = entry.extent;
   const half = Math.max(entry.extent.w, entry.extent.d) / 2;
-  return entry.outline.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+  const rings = ringsOf(entry.outline);
+  /* THE LARGEST RING, so an island that has become several landmasses still answers the old
+     question sensibly. Every existing caller — isleSmooth, the road inset, the label anchor —
+     wants one representative ring and gets the mainland, which is the right answer for all of
+     them. Only the geometry builder needs the whole set, and it asks shapesOf instead. */
+  let best = rings[0], bestA = -1;
+  for (const r of rings){
+    let s = 0;
+    for (let i = 0; i < r.length; i++){
+      const q = r[(i + 1) % r.length];
+      s += r[i][0] * q[1] - q[0] * r[i][1];
+    }
+    const a = Math.abs(s / 2);
+    if (a > bestA){ bestA = a; best = r; }
+  }
+  return best.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+}
+
+/* EVERY RING, NORMALISED IDENTICALLY — same cx/cy, same half-span, so they stay in register with
+   each other and with water and roads. An island whose outline is a single ring returns a list of
+   one, so the caller never needs to know which kind it is.
+
+   ADDITIVE ON PURPOSE. outline has always been a flat [[x,y],...] and five of the six islands
+   still are; only a landmass that OSM coastline splits into separate bodies needs the nested
+   form. Detecting the shape of the data rather than adding a flag means a re-bake can start
+   emitting either without a coordinated code change, and an island that never splits is byte for
+   byte the same file it was. */
+function ringsOf(outline){
+  if (!outline || !outline.length) return [];
+  return Array.isArray(outline[0][0]) ? outline : [outline];
+}
+
+export function shapesOf(entry){
+  if (!entry.outline || !entry.outline.length || !entry.extent) return null;
+  const { cx, cy } = entry.extent;
+  const half = Math.max(entry.extent.w, entry.extent.d) / 2;
+  return ringsOf(entry.outline).map(r => r.map(([x, y]) => [(x - cx) / half, (y - cy) / half]));
 }
 
 /* WATER AND WATER-ISLANDS, NORMALISED THE SAME WAY AS shapeOf ABOVE — same cx/cy, same half-span,
@@ -313,6 +349,11 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
     const tf = transform(idx, entry.id, t, p);
     out[entry.id] = {
       shape,
+      /* THE WHOLE SET, WHERE shape IS ONLY THE BIGGEST OF THEM. Computed eagerly like shape and
+         from the same source: outline lives on the index entry, not in the island payload, so
+         unlike water this is available the moment the table is built. An island with one ring
+         gives a list of one, so the geometry builder can iterate unconditionally. */
+      shapes: shapesOf(entry) || [shape],
       /* LAZY, THE SAME REASON roads IS AND FOR THE SAME REASON THE FIRST VERSION OF THIS BROKE:
          entry._data is not populated until loadIsland's fetch of data/isle-<id>.json lands, which
          is well after sceneIslands runs. A plain value computed here would permanently capture

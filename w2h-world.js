@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v199';
+export const BUILD = 'world v200';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -837,6 +837,39 @@ const smoothCache = new Map();
    mouth of the Bateen creek, the marina entrances — by a quarter of its depth, twice.
 
    Smoothing invented geometry is defensible. Smoothing surveyed geometry is discarding it. */
+/* isleCoast FOR EVERY RING, cached as a set.
+
+   Each ring is resampled independently and at its own density: the sample count comes from that
+   ring's own perimeter, so Al Dana at 220,000 m2 is not given the mainland strip's budget and the
+   mainland is not starved to match an islet. Sharing one count across nine bodies of wildly
+   different size would either round the small ones into polygons or blow the segment count that
+   COAST_SEG_M's cap exists to hold down.
+
+   The closing-duplicate contract from isleCoast holds per ring, because closedSpline is doing the
+   same work here and every consumer that counts segments as `length - 1` still needs it. */
+const coastsCache = new Map();
+function isleCoasts(id){
+  let cs = coastsCache.get(id);
+  if (!cs){
+    const rings = (BASE && BASE[id] && BASE[id].shapes) ? BASE[id].shapes : [isleSmooth(id)];
+    const R = (DISTRICTS.find(x => x.id === id) || {}).r || 60;
+    cs = rings.map(sm => {
+      if (!sm || sm.length < 3) return null;
+      let per = 0;
+      for (let i = 0; i < sm.length; i++){
+        const a = sm[i], b = sm[(i+1) % sm.length];
+        per += Math.hypot(b[0]-a[0], b[1]-a[1]);
+      }
+      const n = Math.min(2400, Math.max(48, Math.ceil(per * R * 7.8 / COAST_SEG_M)));
+      const c = closedSpline(sm, n);
+      c.push([c[0][0], c[0][1]]);
+      return c;
+    }).filter(Boolean);
+    coastsCache.set(id, cs);
+  }
+  return cs;
+}
+
 function isleSmooth(id){
   let sm = smoothCache.get(id);
   if (!sm){
@@ -846,14 +879,33 @@ function isleSmooth(id){
   return sm;
 }
 
+/* RETURNS AN ARRAY OF SHAPES, because an island is not always one landmass.
+
+   THREE.ExtrudeGeometry accepts an array of Shapes and triangulates each with its own holes, so
+   the caller passes the result straight through unchanged — verified against r160 with two
+   disjoint squares, one holed: exact area, correct material groups. That is what makes this a
+   contained change rather than a rewrite.
+
+   FIVE ISLANDS RETURN A LIST OF ONE and are byte-identical to before. Only Al Raha splits, and it
+   splits because real OSM coastline says so: the mainland strip plus eight closed islet ways.
+   Every single-ring approach tried before this — clip, trim, morphological close, corridor bridge
+   — lost something real to keep the pretence of one ring: buildings, channel, or coastline
+   fidelity. Nine shapes lose nothing.
+
+   HOLES GO TO THE RING THAT CONTAINS THEM. With one shape it did not matter; with nine, a creek
+   handed to the wrong landmass is a hole punched through unrelated ground on the far side of the
+   channel. Containment is tested against the drawn coastline rather than the raw ring for the
+   same reason the note below gives: the spline is the shape that actually exists. */
 function isleShape(id, r){
-  // The SAME points the inside-test and the road inset use. Drawing one coastline and reasoning
-  // about another is the fault this file has already paid for once.
-  const pts = isleCoast(id);
-  const shape = new THREE.Shape();
-  shape.moveTo(pts[0][0]*r, pts[0][1]*r);
-  for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0]*r, pts[i][1]*r);
-  shape.closePath();
+  const ringsN = (BASE && BASE[id] && BASE[id].shapes && BASE[id].shapes.length > 1)
+    ? isleCoasts(id) : [isleCoast(id)];
+  const shapes = ringsN.map(pts => {
+    const s = new THREE.Shape();
+    s.moveTo(pts[0][0]*r, pts[0][1]*r);
+    for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0]*r, pts[i][1]*r);
+    s.closePath();
+    return s;
+  });
 
   /* WATER AS REAL HOLES IN THE ISLAND'S OWN EXTRUSION, not a colour painted on top of flat
      ground. Every island already drops to the sea through a genuine bevelled cliff at its outer
@@ -874,10 +926,29 @@ function isleShape(id, r){
       hole.moveTo(ring[0][0]*r, ring[0][1]*r);
       for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i][0]*r, ring[i][1]*r);
       hole.closePath();
-      shape.holes.push(hole);
+      let host = 0;
+      if (ringsN.length > 1){
+        const cxr = ring.reduce((a,p) => a + p[0], 0) / ring.length;
+        const cyr = ring.reduce((a,p) => a + p[1], 0) / ring.length;
+        host = -1;
+        for (let k = 0; k < ringsN.length; k++){
+          if (pointInRing(ringsN[k], cxr, cyr)){ host = k; break; }
+        }
+        if (host < 0) continue;          // a hole inside no landmass is not a hole, it is open sea
+      }
+      shapes[host].holes.push(hole);
     }
   }
-  return shape;
+  return shapes.length === 1 ? shapes[0] : shapes;
+}
+
+function pointInRing(ring, x, y){
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
 }
 
 /* THE OUTLINE, SAMPLED ONCE, AND EVERYTHING USES THE SAME ONE.
