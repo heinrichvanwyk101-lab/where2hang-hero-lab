@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v84';
+export const BUILD = 'city v85';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3468,12 +3468,28 @@ function aldarHQ(x0, z0){
      construction, which is the one thing a flat-capped primitive cannot do without a second,
      separate curved cap — matching "two convex circular facades" directly instead of
      approximating it. */
+  /* THE GLASS IS BLUE-GREEN, AND IT WAS NEUTRAL GREY. Every colour here was a value of lightness
+     with almost no hue in it — 0x0A0E14 is near-black with a blue cast, 0x8BA4B8 is a grey-blue
+     that any glass tower in the scene could wear. Aldar HQ does not read as a grey disc from any
+     angle: its curtain wall is a saturated blue-green, and it is the single most recognisable
+     thing about the building after the circle itself. A correct silhouette in the wrong colour
+     still fails to be identifiable, which is the whole point of hand-building a landmark instead
+     of letting the fabric generate a box.
+
+     HUE CARRIES ACROSS ALL THREE VIEWS rather than only the lit one. The day material is the
+     saturated teal the building actually is; dusk keeps the hue and drops the value so it reads
+     as the same glass under warmer, lower light; the base stays very dark, because at night this
+     facade is mostly reflection and interior spill, but it is now a dark TEAL rather than a dark
+     grey — a night material with the hue removed makes the building change identity after sunset.
+
+     Roughness and metalness are unchanged. The facade was already reading as glass; it was only
+     ever reading as the wrong glass, so this touches colour and nothing else. */
   const glassMat = new THREE.MeshStandardMaterial({
-    color:0x0A0E14, roughness:0.18, metalness:0.35, envMapIntensity:1.4 });
-  glassMat.userData.duskColor = 0x1C2430;
+    color:0x08222A, roughness:0.18, metalness:0.35, envMapIntensity:1.4 });
+  glassMat.userData.duskColor = 0x14454E;
   glassMat.userData.duskRough = 0.22; glassMat.userData.duskMetal = 0.30;
   glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
-    color:0x8BA4B8, roughness:0.15, metalness:0.25, envMapIntensity:1.6 });
+    color:0x2E8B96, roughness:0.15, metalness:0.25, envMapIntensity:1.6 });
 
   const geo = new THREE.SphereGeometry(1, 40, 28);
   geo.scale(R_THICK, R_TALL, R_WIDE);
