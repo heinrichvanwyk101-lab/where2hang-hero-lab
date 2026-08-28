@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v136', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v137', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3191,6 +3191,15 @@ async function addWaterGeometry(d){
       registerLift(d.group);
       fitClip();
       applyView(view);
+      /* AND REDRAW THE BREADCRUMB, which setDistrict already wrote before this island existed.
+         It reads d.built to choose between "Tap a place, or Back" and "Placeholder island —
+         Back"; buildIsland sets that flag, and deferring the build now means the label is written
+         while it is still false and never revisited. Al Raha said "Placeholder island" while
+         standing there fully built with 1,153 real streets on it. */
+      if (state === STATE.DISTRICT && activeDistrict === d){
+        ui('Abu Dhabi <span>&rsaquo; ' + d.name + '</span>',
+           d.built ? 'Tap a place, or Back' : 'Placeholder island — Back');
+      }
     }
     const before = d.isleMeshes ? d.isleMeshes.length : 0;
     const verdict = refreshIslandWater(d);

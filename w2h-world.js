@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v200';
+export const BUILD = 'world v201';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1288,13 +1288,36 @@ function isleGridOf(id){
   /* Timed here rather than by the wrapper, so only the build is measured. See the note where the
      stages are wrapped for why this one cannot go through timed(). */
   const _t = performance.now();
-  const pts = outlineClosed(id);
+  /* EVERY RING, NOT JUST THE BIGGEST. outlineClosed returns the mainland alone, which is correct
+     for a one-body island and silently wrong for nine: every building, prop and fabric candidate
+     on Al Dana, Al Muneera or Al Bandar failed insideIsle and was discarded. The overlay counted
+     it exactly — 532 footprints fell to 226 the moment Raha became nine landmasses.
+
+     CONCATENATED INTO ONE grid rather than one grid per ring. A crossing count is already parity
+     over whatever segments the ray meets, so disjoint rings need no special handling and both
+     consumers keep reading g.pts[i] -> g.pts[i+1] unchanged.
+
+     THE ONE HAZARD IS THE JOIN. Each ring ends with a duplicate of its own first point, so the
+     index one past a ring's end addresses a segment running from that ring's start to the NEXT
+     ring's start — a phantom edge across open water that would flip the parity of everything
+     beyond it. Those indices are simply never put into the grid, so no lookup can return them. */
+  const rings = (BASE && BASE[id] && BASE[id].shapes && BASE[id].shapes.length > 1)
+    ? isleCoasts(id).map(r => r.map(p => [p[0], p[1]]))
+    : [outlineClosed(id)];
+  const pts = [];
+  const segStarts = [];
+  for (const r of rings){
+    const base = pts.length;
+    for (const p of r) pts.push(p);
+    // every index except the last, which would bridge to whatever ring comes next
+    for (let i = 0; i < r.length - 1; i++) segStarts.push(base + i);
+  }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of pts){
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  const n = pts.length - 1;
+  const n = segStarts.length;
   /* Aim for about four segments a cell. Fewer and the grid itself dominates; more and the query
      degenerates towards the linear scan it replaced. */
   const nc   = Math.max(8, Math.min(160, Math.round(Math.sqrt(n / 4))));
@@ -1304,7 +1327,8 @@ function isleGridOf(id){
   const put = (arr, k, v) => { (arr[k] || (arr[k] = [])).push(v); };
   const ci = v => v < 0 ? 0 : v >= nc ? nc - 1 : v;
 
-  for (let i = 0; i < n; i++){
+  for (let s = 0; s < segStarts.length; s++){
+    const i = segStarts[s];
     const ax = pts[i][0], ay = pts[i][1], bx = pts[i+1][0], by = pts[i+1][1];
     const gx0 = ci(Math.floor((Math.min(ax, bx) - x0) / cw));
     const gx1 = ci(Math.floor((Math.max(ax, bx) - x0) / cw));
