@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v85';
+export const BUILD = 'city v86';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3456,6 +3456,106 @@ function grandMosque(x0, z0){
    once the numbers are read rather than assumed. The 39 m depth is the lens's own thickness at
    its fattest point — the "narrow strip" the sources describe, narrow only relative to a
    140-metre span. */
+/* AL RAHA MALL — built from photographs, and every number below is read off them rather than
+   sourced, which is the opposite of aldarHQ above and is said plainly here so nobody later mistakes
+   one for the other. Footprint and rotation ARE surveyed (182.7 x 86.8 m, rot 0.2950, from
+   LM_RAHA.rahaMall); heights and the bay rhythm are proportion taken from elevation photos.
+
+   WHAT MAKES IT RECOGNISABLE, in the order a person actually identifies it:
+     1. a long, low, pale-pink mass — it is wider than it is tall by a factor of eight
+     2. a repeating rank of tall pointed arches glazed in teal, the one strong colour on it
+     3. pale crescent spandrels flanking each arch, which is why the arches read as leaf shapes
+     4. small pointed finials standing above the parapet at the pier between bays
+     5. a raised central entrance pavilion carrying the signage
+
+   Without the arches and the finials this is a beige box, and a beige box is exactly what the
+   generic fabric already produced. The whole reason to hand-build it is items 2 to 4. */
+function rahaMall(x0, z0){
+  const g = new THREE.Group();
+  const W   = 182.7 / M_PER_U;          // surveyed
+  const D   =  86.8 / M_PER_U;          // surveyed
+  const ROT = 0.2950;                   // surveyed
+  const H   =  19.0 / M_PER_U;          // parapet, proportion off the elevation
+  const HE  =  26.0 / M_PER_U;          // entrance pavilion ridge
+
+  const stoneMat = new THREE.MeshStandardMaterial({ color:0x6E5A55, roughness:0.9 });
+  stoneMat.userData.glassOverride = false;
+  stoneMat.userData.duskColor = 0xC9A79C;
+  stoneMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE0BDB2, roughness:0.9 });
+
+  const paleMat = new THREE.MeshStandardMaterial({ color:0x7A6A62, roughness:0.85 });
+  paleMat.userData.glassOverride = false;
+  paleMat.userData.duskColor = 0xE4D3C8;
+  paleMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF0E2D6, roughness:0.85 });
+
+  /* THE TEAL. This is the only saturated colour on the building and it is what the eye locks
+     onto, so it is carried through all three views exactly as Aldar HQ's blue-green is. */
+  const glassMat = new THREE.MeshStandardMaterial({
+    color:0x0C2A2C, roughness:0.25, metalness:0.30, envMapIntensity:1.2 });
+  glassMat.userData.duskColor = 0x1B5457;
+  glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0x2E9296, roughness:0.20, metalness:0.25, envMapIntensity:1.4 });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), stoneMat);
+  body.position.set(x0, H/2, z0);
+  body.rotation.y = ROT;
+  body.userData.hero = true;
+  g.add(body);
+
+  /* THE BAYS. Nine across the long frontage, which is the count the elevation photo reads at and
+     gives a pier width close to the arch width — the rhythm in the photograph is near enough to
+     one-to-one. Each bay is a teal panel with a cone above it for the pointed head, sat a hair
+     proud of the wall so it never z-fights the mass it is applied to. */
+  const BAYS = 9;
+  const bayW = (W * 0.86) / BAYS;
+  const archW = bayW * 0.52;
+  const archH = H * 0.62;
+  const eps = 0.04;
+  const cos = Math.cos(ROT), sin = Math.sin(ROT);
+  const place = (m, ax, az, ay) => {
+    m.position.set(x0 + ax*cos + az*sin, ay, z0 - ax*sin + az*cos);
+    m.rotation.y = ROT;
+    g.add(m);
+  };
+  for (let i = 0; i < BAYS; i++){
+    const ax = (i - (BAYS-1)/2) * bayW;
+    for (const side of [1, -1]){
+      const az = side * (D/2 + eps);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(archW, archH, 0.02), glassMat);
+      place(panel, ax, az, archH/2);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(archW/2, archW*0.75, 3), glassMat);
+      head.rotation.x = Math.PI/2 * (side > 0 ? 1 : -1);
+      place(head, ax, az, archH + archW*0.30);
+      head.rotation.y = ROT;
+    }
+    /* FINIALS on the pier between bays, not above the bay centre — in the photographs they stand
+       over the solid masonry, which is what makes them read as buttress caps rather than spires. */
+    if (i < BAYS - 1){
+      const px = ax + bayW/2;
+      for (const side of [1, -1]){
+        const cap = new THREE.Mesh(new THREE.ConeGeometry(bayW*0.10, bayW*0.42, 4), paleMat);
+        place(cap, px, side * (D/2 - 0.3), H + bayW*0.21);
+      }
+    }
+  }
+
+  /* THE ENTRANCE PAVILION — taller, pushed slightly forward, and gabled. It carries the signage
+     in every photograph and is the only place the long horizontal line is broken. */
+  const eW = W * 0.15, eD = D * 0.16;
+  const ent = new THREE.Mesh(new THREE.BoxGeometry(eW, HE, eD), paleMat);
+  place(ent, 0, D/2 - eD/2 + 0.5, HE/2);
+  const gable = new THREE.Mesh(new THREE.ConeGeometry(eW*0.62, eW*0.34, 4), stoneMat);
+  gable.rotation.y = Math.PI/4;
+  place(gable, 0, D/2 - eD/2 + 0.5, HE + eW*0.17);
+  gable.rotation.y = ROT + Math.PI/4;
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(eW*0.7, HE*0.45, 0.02), glassMat);
+  place(door, 0, D/2 + 0.55, HE*0.24);
+
+  return g;
+}
+
+
 function aldarHQ(x0, z0){
   const g = new THREE.Group();
   const R_THICK = (39.0 / 2) / M_PER_U;    // the lens's own thickness — "the narrow strip"
@@ -3536,7 +3636,7 @@ function aldarHQ(x0, z0){
 
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
-         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ };
+         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall };
 }
 
 

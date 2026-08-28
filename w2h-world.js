@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v201';
+export const BUILD = 'world v202';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6125,12 +6125,27 @@ KIT_ZONES[raha.id] = [
 
 /* ALDAR HQ, BUILT AND ADDED. The first of Al Raha's four landmarks with actual geometry rather
    than a reserved footprint — see w2h-city.js's aldarHQ() for the shape itself and the sourcing
-   behind it. Al Raha Mall and the two Beach Resort wings stay reserved-but-empty in KIT_ZONES
-   above until they get the same treatment. */
+   behind it. The two Beach Resort wings stay reserved-but-empty in KIT_ZONES above until they get
+   the same treatment. */
 if (!NO_KIT && kit.aldarHQ){
   const aldar = kit.aldarHQ(LM_RAHA.aldar.x, LM_RAHA.aldar.z);
   aldar.position.y = GROUND;
   raha.detail.add(aldar);
+}
+
+/* AL RAHA MALL, NOW THE SECOND. Its zone was already reserved above, so the generic fabric has
+   been leaving a hole here all along and something had to fill it — until now that was whatever
+   the footprint payload produced, which is the flat slab. rahaMall() builds the arcade, the teal
+   arches and the finials that actually make it identifiable.
+
+   NOT sourced the way aldarHQ is, and w2h-city.js says so at the function: the footprint and
+   rotation come from the survey, everything vertical is proportion read off elevation photos.
+   Worth keeping straight, because the two sit forty metres apart and will be read as equally
+   authoritative unless the difference is written down. */
+if (!NO_KIT && kit.rahaMall){
+  const mall = kit.rahaMall(LM_RAHA.rahaMall.x, LM_RAHA.rahaMall.z);
+  mall.position.y = GROUND;
+  raha.detail.add(mall);
 }
 
 /* ===========================================================================
