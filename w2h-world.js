@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v202';
+export const BUILD = 'world v203';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3369,6 +3369,15 @@ const beachSand = {
   dusk:  stdMat({ color:0xB8A582, roughness:1, metalness:0, vertexColors:true }),
 };
 const matLandFlat = stdMat({ color:0x424E58, roughness:1, metalness:0 });
+/* THE GROUND'S OWN NIGHT MULTIPLIER, against the city's 5.0. Applies to the painted island floor
+   and to the untextured platform an island wears before it has been built — which is the version
+   visible from the world overview, and the one that reads as a flat bright slab. Both are large
+   pale horizontal planes and both were being lifted as hard as a tower wall. */
+const GROUND_NIGHT_ALB = (typeof location !== 'undefined' &&
+  (location.search.match(/[?&]ngnd=(\d*\.?\d+)/) || [])[1] !== undefined)
+  ? parseFloat(location.search.match(/[?&]ngnd=(\d*\.?\d+)/)[1]) : 0.9;
+matLandFlat.userData.nightAlbedo = GROUND_NIGHT_ALB;
+matBeach.userData.nightAlbedo    = GROUND_NIGHT_ALB;
 
 /* FOUR SURFACES, AND NOW THEY CAN ACTUALLY BE FOUR COLOURS.
 
@@ -7479,6 +7488,11 @@ function buildGroundFor(d){
   }
   const night = stdMat({
     color:0x68737E, roughness:1, metalness:0, map:tex });
+  /* THE GROUND DOES NOT TAKE THE CITY'S MULTIPLIER. See the note in world-nav's applyLift: at the
+     global x5 this plane comes out brighter than the buildings on it and everything lit — street
+     lamps, park lights, windows — loses its contrast against the sand it is standing on. Tunable
+     live with ?ngnd= while the value is being found. */
+  night.userData.nightAlbedo = GROUND_NIGHT_ALB;
   const day  = dayGround.clone();  day.map  = tex;
   const dusk = duskGround.clone(); dusk.map = tex;
   /* PLAN MODE MATERIALS. MeshBasic, so no light, no shadow, no material tint and no exposure —

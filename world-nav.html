@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v140', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v141', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1759,6 +1759,8 @@ function registerLift(root){
          override for the tenth. */
       liftReg.push({ m, glass: (m.userData && m.userData.glassOverride != null)
                                ? m.userData.glassOverride : b > r * 1.75, nightHex:hex,
+                     nAlb: (m.userData && m.userData.nightAlbedo != null)
+                           ? m.userData.nightAlbedo : null,
                      duskHex: m.userData && m.userData.duskColor,
                      nightEmi: m.emissiveIntensity, nightRough: m.roughness,
                      nightMetal: m.metalness, nightEnv: m.envMapIntensity });
@@ -1865,7 +1867,20 @@ function applyLift(on, night){
     } else {
       e.m.color.setHex(e.nightHex);
       // setHex decodes sRGB into the linear working space, so this scales radiance directly.
-      if (night) e.m.color.multiplyScalar(e.glass ? NIGHT_ALBEDO_GLASS : NIGHT_ALBEDO);
+      /* A MATERIAL'S OWN NIGHT ALBEDO WINS, and the ground is why it exists.
+
+         One multiplier was being asked to serve two things that behave nothing alike. City stock
+         is small, vertical and interrupted by windows, so x5 makes it read. The island ground is a
+         single enormous horizontal plane in a pale sand-grey, and x5 turns it into a lit surface
+         brighter than most of the buildings standing on it — streets, street lights, parks and
+         park lights all wash out against their own ground. The complaint was that the sand shines;
+         the material is roughness 1 and metalness 0, so nothing is reflecting. It is simply being
+         multiplied as hard as the city while starting from a much lighter colour.
+
+         Lowering NIGHT_ALBEDO globally would take the city down with it, which is the trap the
+         previous two attempts fell into. This separates them. */
+      if (night) e.m.color.multiplyScalar(e.nAlb != null ? e.nAlb
+                                        : (e.glass ? NIGHT_ALBEDO_GLASS : NIGHT_ALBEDO));
       e.m.emissiveIntensity = e.nightEmi * (night ? NIGHT_EMI : 1);
       e.m.roughness = e.nightRough;
       e.m.metalness = e.nightMetal;
