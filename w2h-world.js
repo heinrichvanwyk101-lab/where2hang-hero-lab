@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v205';
+export const BUILD = 'world v206';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6328,6 +6328,21 @@ function tagGround(mesh, set){
    the parkland went to a hole in the island. Vertex alpha has no such problem — it fades toward
    whatever is actually underneath, in all six views, with no second colour to keep in step. */
 
+/* METRES, CONVERTED ONCE, and the first version of this block did not convert at all.
+
+   Everything below reasons in metres because that is the only way the numbers can be argued
+   about — a 4.5 m verge, a 34 m grass patch, a 400 m2 traffic island. But parksUnits has already
+   divided every coordinate by M_PER_UNIT before any of it arrives, so the rings are in ISLAND
+   UNITS at 7.8 metres each and a threshold written as a bare number is out by 7.8 linear and
+   60.8 in area.
+
+   That shipped. `A < 400`, meant to skip a traffic island, skipped anything under 2.4 hectares —
+   most of Corniche's parkland — and the chaikin gates at 3,000 and 20,000 m2 became 18 and 122
+   hectares, which on Corniche is the mangrove reserve and nothing else. Triangles went up by
+   3,453 against a predicted 46,000, which is the number that gave it away. */
+const U_PER_M   = 1 / M_PER_UNIT;
+const U2_PER_M2 = U_PER_M * U_PER_M;
+
 function ringArea2(P){
   let s = 0;
   for (let i = 0; i < P.length; i++){
@@ -6403,12 +6418,12 @@ function vergeRing(P){
   const sgn = A0 >= 0 ? 1 : -1;
   const A = Math.abs(A0);
   const per = ringPerim(P);
-  if (A < 400 || per <= 0) return { core:null, sgn };
+  if (A < 400 * U2_PER_M2 || per <= 0) return { core:null, sgn };
   /* A/perimeter is the inradius of a convex shape and a fair proxy otherwise, so it is the
      honest cap on how wide a verge this ring can hold. 4.5 m is a verge; wider is a field. */
   const compact = A / per;
-  if (compact < 2.5) return { core:null, sgn };     // a sliver has no inside to inset to
-  const w0 = Math.min(4.5, 0.35 * compact);
+  if (compact < 2.5 * U_PER_M) return { core:null, sgn };   // a sliver has no inside to inset to
+  const w0 = Math.min(4.5 * U_PER_M, 0.35 * compact);
   const N = P.length;
   const W = new Array(N).fill(w0);
   let Q = offsetRing(P, W, sgn);
@@ -6446,7 +6461,7 @@ function prepGreenRing(raw, kind){
      shape space HERE, once, and everything downstream — area, winding, inset — is consistent
      with the triangles that come out the other end. Getting the sign wrong mirrors the parkland
      north to south, which still looks plausible and is therefore the failure worth naming. */
-  let P = dedupeRing(raw.map(p => [p[0], -p[1]]), 0.35);
+  let P = dedupeRing(raw.map(p => [p[0], -p[1]]), 0.35 * U_PER_M);
   if (P.length < 4) return null;
   const A = Math.abs(ringArea2(P));
   /* DENSITY IS ALSO A GATE, and it is the one that pays for the rest. Chaikin quadruples the
@@ -6454,17 +6469,17 @@ function prepGreenRing(raw, kind){
      that OSM already traced at 64 points buys nothing visible and costs the most. Rings arrive
      smooth or angular, not both: 64 points on a park boundary IS the curve. */
   const n = P.length;
-  const passes = kind === 'pitch' ? 0
-               : n >= 64          ? 0
-               : A >= 20000       ? (n >= 24 ? 1 : 2)
-               : A >= 3000        ? 1 : 0;
+  const passes = kind === 'pitch'          ? 0
+               : n >= 64                    ? 0
+               : A >= 20000 * U2_PER_M2     ? (n >= 24 ? 1 : 2)
+               : A >= 3000  * U2_PER_M2     ? 1 : 0;
   return passes ? chaikin(P, passes) : P;
 }
 /* Deterministic on the ring's own first coordinate: the same island renders the same twice, and
    no seed has to be threaded down here to make that true. */
 function ringJitter(x, y){
-  let h = Math.imul(Math.round(x * 8) ^ 0x9E3779B9, 0x85EBCA6B);
-  h = Math.imul(h ^ Math.round(y * 8) ^ (h >>> 13), 0xC2B2AE35);
+  let h = Math.imul(Math.round(x * 64) ^ 0x9E3779B9, 0x85EBCA6B);
+  h = Math.imul(h ^ Math.round(y * 64) ^ (h >>> 13), 0xC2B2AE35);
   return ((h ^ (h >>> 16)) >>> 8) / 16777216;
 }
 /* ========================================================================================== */
