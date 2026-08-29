@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v204';
+export const BUILD = 'world v205';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6622,9 +6622,17 @@ function groundFeaturesFor(d, feats){
     pg.computeVertexNormals();
     const pm = new THREE.Mesh(pg, greenMat[t].base);
     pm.receiveShadow = true;
-    /* Negative, so the parkland draws ahead of every other transparent thing in the scene —
-       the water above all — rather than after it. */
-    pm.renderOrder = -3 + t;
+    /* NEGATIVE so the parkland draws ahead of every other transparent thing in the scene — the
+       water above all — rather than after it. DESCENDING IN t because that is the priority the
+       y offsets used to carry and no longer can: with depthWrite off, nothing arbitrates two
+       overlapping tones except the order they are drawn in.
+
+       The first version had this ascending and it was visibly wrong within a minute of
+       deploying. Canopy drew last, so every forest and nature_reserve polygon painted over the
+       mown green under it — and Corniche's largest ring by a factor of twenty is the 986 ha
+       mangrove reserve, whose dusk tone is 0x445E30 against mown's 0x667B42. Half the corniche
+       went dark in hard-edged patches. Mown on top, canopy underneath, same as the offsets. */
+    pm.renderOrder = -1 - t;
     g.add(tagGround(pm, greenMat[t]));
   }
 
