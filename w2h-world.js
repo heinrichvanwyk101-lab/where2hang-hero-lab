@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v207';
+export const BUILD = 'world v208';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2484,7 +2484,7 @@ function paintGround(d, plan){
         the seams between them would read as a rendering fault rather than as landscaping. The
         count comes from the index because it is the only thing available this early: the real
         polygons load asynchronously, long after this texture is painted. */
-  const realParks = BASE && BASE[d.id] && BASE[d.id].nParks > 20;
+  const realParks = BASE && BASE[d.id] && BASE[d.id].counts && BASE[d.id].counts.parks > 20;
   if (!realParks) plan.parks.forEach(p => {
     const x = PX(p.x), y = PY(p.y), rr = U * p.r;
     const grd = g.createRadialGradient(x, y, rr*0.15, x, y, rr);

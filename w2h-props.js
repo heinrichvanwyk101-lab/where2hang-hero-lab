@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v23';
+export const BUILD = 'props v24';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -448,7 +448,7 @@ function pointInRing(ring, x, y){
    Sorted large to small, a fixed budget spends itself on the parks a person would actually
    notice and runs out on the slivers, which is the outcome that matters and not the total. */
 function addParkProps(d, plan, rings, budget = {}){
-  const B = Object.assign({ palms:700, shrubs:1100 }, budget);
+  const B = Object.assign({ palms:1800, shrubs:2800 }, budget);
   const R = plan.rndProps;
   const r = d.r;
   /* OWN GROUP, RETURNED RATHER THAN ADDED, matching groundFeaturesFor's own contract exactly.
@@ -507,7 +507,14 @@ function addParkProps(d, plan, rings, budget = {}){
   for (const rec of buckets.lawn){
     if (palms.length >= B.palms && shrubs.length >= B.shrubs) break;
     const { ring, bbox, areaM2 } = rec;
-    const nClusters = Math.min(6, 1 + Math.floor(areaM2 / 8000));
+    /* THE CAP WAS THE BUG. A flat "at most 6 clusters" regardless of area gave Corniche's
+       largest real park — 46.5 hectares, easily the most visually dominant lawn on the island —
+       at most 36 palms across half a million square metres: one tree per 13,000 m2, invisible
+       from any distance this scene is ever viewed at. Scaling with area and lifting the ceiling
+       well above what any single ring will actually reach is what makes "sorted largest first"
+       mean anything — the global budget below is the real backstop on total instance count, not
+       a per-ring cap that quietly punished the one park a camera would actually frame. */
+    const nClusters = Math.min(40, 1 + Math.floor(areaM2 / 2500));
     for (let c = 0; c < nClusters && palms.length < B.palms; c++){
       const seed = samplePoint(ring, bbox);
       if (!seed) continue;
@@ -519,7 +526,7 @@ function addParkProps(d, plan, rings, budget = {}){
           push(palms, px, py, { kind: R() < 0.34 ? 0 : (R() < 0.70 ? 1 : 2) });
       }
     }
-    const nBeds = Math.min(8, 1 + Math.floor(areaM2 / 6000));
+    const nBeds = Math.min(60, 1 + Math.floor(areaM2 / 3000));
     for (let b = 0; b < nBeds && shrubs.length < B.shrubs; b++){
       const seed = samplePoint(ring, bbox);
       if (!seed) continue;
@@ -536,7 +543,7 @@ function addParkProps(d, plan, rings, budget = {}){
   for (const rec of buckets.dry){
     if (shrubs.length >= B.shrubs) break;
     const { ring, bbox, areaM2 } = rec;
-    const nBeds = Math.min(4, Math.floor(areaM2 / 9000));
+    const nBeds = Math.min(20, Math.floor(areaM2 / 6000));
     for (let b = 0; b < nBeds && shrubs.length < B.shrubs; b++){
       const seed = samplePoint(ring, bbox);
       if (!seed) continue;
