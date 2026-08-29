@@ -3212,12 +3212,31 @@ async function addGroundFeatures(d){
     const feats = await groundFeaturesFrom(d);
     if (!feats){ gfState.set(d.id, 'none'); return; }
     const g = groundFeaturesFor(d, feats);
-    if (!g){ gfState.set(d.id, 'none'); return; }
-    d.detail.add(g);
-    /* Same order the deferred islands taught us: snapshot and register BEFORE any view touches
-       the new meshes, or applyView sets a material to undefined and the render loop dies inside
-       projectObject naming neither the mesh nor the island. */
-    snapshotMats(g); registerLift(g); applyView(view);
+    if (g){
+      d.detail.add(g);
+      /* Same order the deferred islands taught us: snapshot and register BEFORE any view
+         touches the new meshes, or applyView sets a material to undefined and the render loop
+         dies inside projectObject naming neither the mesh nor the island. */
+      snapshotMats(g); registerLift(g); applyView(view);
+    }
+    /* PLANTING FOLLOWS d.realParks, NOT feats.parks. groundFeaturesFor stashes it there — the
+       rings that survived its own majority-inside test, which is the one place that test is
+       done. Reading feats.parks directly here would plant into rings that test rejected as
+       belonging to a neighbouring island. addProps ran at buildIsland and only ever saw
+       plan.parks, the invented blobs, because these real rings did not exist yet; this is the
+       top-up, and it can run even where `g` came back null — golf and raceway can fail this
+       island's checks while real park rings still exist to plant into. */
+    const realParks = d.realParks || [];
+    if (propKit.addParkProps && realParks.length){
+      const pp = propKit.addParkProps(d, d.plan, realParks);
+      if (pp.group.children.length){
+        d.detail.add(pp.group);
+        snapshotMats(pp.group); registerLift(pp.group); applyView(view);
+        propCount.palms  = (propCount.palms  || 0) + pp.palms;
+        propCount.shrubs = (propCount.shrubs || 0) + pp.shrubs;
+      }
+    }
+    if (!g && !realParks.length){ gfState.set(d.id, 'none'); return; }
     gfState.set(d.id, 'on');
   } catch (e){
     gfState.set(d.id, 'fail');

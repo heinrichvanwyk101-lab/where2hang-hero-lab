@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v22';
+export const BUILD = 'props v23';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -380,6 +380,206 @@ function walk(pts, step, fn){
   }
 }
 
+/* Every InstancedMesh in this file is built the same way: one scratch Object3D, one scratch
+   Color, one function that fills the instance buffer and hands the mesh to its layer. It used
+   to be written out inside addProps because addProps was the only caller; addParkProps below is
+   the second, and two copies of the same fifteen lines is the wrong way to keep them in step. */
+function makeBuilder(layer){
+  const M = new THREE.Object3D();
+  const col = new THREE.Color();
+  function build(geo, mat, list, place, colourise){
+    if (!list.length) return null;
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    im.castShadow = true; im.receiveShadow = true;
+    im.userData.litMat = true;
+    list.forEach((it, i) => {
+      place(it, i);
+      M.updateMatrix();
+      im.setMatrixAt(i, M.matrix);
+      if (colourise) im.setColorAt(i, colourise(it, i));
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    layer.add(im);
+    return im;
+  }
+  return { build, M, col };
+}
+
+/* Ray-cast point-in-polygon, same test w2h-world.js already carries under the same name for the
+   ground meshes. Kept local rather than imported: one eight-line function is not worth a shared
+   module, and addParkProps needs it before the ground meshes exist on a fresh island. */
+function pointInRing(ring, x, y){
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+/* =============================================================================================
+   REAL PARKLAND, TOPPED UP.
+
+   addProps above only ever saw plan.parks — invented circular blobs from the ground-plan
+   painter, sized and counted by guesswork because nothing else existed yet. groundFeaturesFor in
+   w2h-world.js now draws the actual OSM park rings from the bake, and this is the planting pass
+   that follows them into the same shapes: same palm and shrub geometry, same shared materials,
+   scattered inside a real polygon by ray-casting instead of jittered inside a fake circle.
+
+   RUNS SEPARATELY FROM addProps, LATER, because it has to. addProps runs synchronously while an
+   island is first built, off plan.parks alone; the real rings only exist once addGroundFeatures
+   has awaited the basemap fetch, which on the calling side (world-nav.html) is unavoidably after
+   buildIsland has already returned. Same reason the ground meshes themselves are a top-up and
+   not part of the original build.
+
+   THREE OF THE FOUR REAL KINDS PLANT. `canopy` — forest and nature_reserve — does not: it is
+   mangrove and plantation, not municipal landscaping, and it is not a small category. Corniche's
+   canopy rings alone total 1,247 hectares, more than half of everything green on the island.
+   Treating that like a park and dropping a coconut palm every few hundred square metres would be
+   wrong to look at, and it would be the single largest instance count in the scene for the
+   privilege. groundFeaturesFor already gives canopy the correct mesh and the correct dark tone;
+   that is the whole of what it should get.
+
+   BUDGET IS GLOBAL AND RINGS ARE SORTED LARGEST FIRST within their kind, for the same reason:
+   Corniche's real `lawn` kind (park, garden, common, recreation_ground, village_green) is 624
+   hectares across 260 separate rings, and landscaping every one of them at a density that reads
+   as tended would be tens of thousands of instances before a single dry-ground ring is reached.
+   Sorted large to small, a fixed budget spends itself on the parks a person would actually
+   notice and runs out on the slivers, which is the outcome that matters and not the total. */
+function addParkProps(d, plan, rings, budget = {}){
+  const B = Object.assign({ palms:700, shrubs:1100 }, budget);
+  const R = plan.rndProps;
+  const r = d.r;
+  /* OWN GROUP, RETURNED RATHER THAN ADDED, matching groundFeaturesFor's own contract exactly.
+     This runs from addGroundFeatures, after an island's original snapshot/register/apply pass
+     has already happened — so whatever it builds needs to go through that pass a second time,
+     on its own, once these meshes exist. A group the caller can hand to snapshotMats and
+     registerLift is how the ground meshes solved the identical problem; new instanced meshes
+     dropped straight into d.detail with no group to name would solve it a second, different
+     way, and two solutions to one problem is how the ordering bug in the code comment above
+     addGroundFeatures happened the first time. */
+  const group = new THREE.Group();
+  group.name = 'parkProps';
+  const { build, M } = makeBuilder(group);
+
+  const palms = [], shrubs = [];
+  const LAWN = { park:1, garden:1, common:1, recreation_ground:1, village_green:1 };
+  const DRY  = { grass:1, meadow:1 };
+
+  /* METRES, LIKE EVERY OTHER PROP DIMENSION IN THIS FILE, converted once via U_PER_M and left
+     that way until the final push. A cluster spread written as a bare normalised number is
+     wrong the moment two islands are compared: Corniche's radius is four times Maryah's, so a
+     spread of 0.010 normalised units is a 12 m grove on one island and a 1.6 m knot of trunks
+     touching each other on the other. Working in metres and normalising only at the end, the way
+     the verge width in w2h-world.js already had to learn to, keeps a cluster the same real size
+     everywhere it is planted. */
+  const CLUSTER_R  = 6   * U_PER_M;   // spread of a palm cluster around its seed
+  const BED_R      = 4   * U_PER_M;   // spread of a shrub bed around its seed
+  const HEDGE_IN   = 2.5 * U_PER_M;   // how far inside the touchline the pitch hedge sits
+  const HEDGE_STEP = 6   * U_PER_M;   // spacing along a pitch's edge
+
+  function samplePoint(ring, bbox){
+    for (let t = 0; t < 24; t++){
+      const x = bbox[0] + R() * (bbox[2] - bbox[0]);
+      const y = bbox[1] + R() * (bbox[3] - bbox[1]);
+      if (pointInRing(ring, x, y)) return [x, y];
+    }
+    return null;                              // a ring too thin for its own bounding box to help
+  }
+  // ABSOLUTE island units in, NORMALISED units out — the one point every coordinate in this
+  // function crosses from "real metres, real shape" into what build()'s place() callbacks and
+  // every other list in this file already expect.
+  const push = (arr, ax, ay, extra) => arr.push(Object.assign({ x: ax / r, y: ay / r }, extra));
+
+  const buckets = { lawn:[], dry:[], pitch:[] };
+  for (const rec of rings){
+    const kind = rec.kind;
+    const bucket = LAWN[kind] ? 'lawn' : DRY[kind] ? 'dry' : kind === 'pitch' ? 'pitch' : null;
+    if (!bucket || rec.length < 4) continue;               // canopy, and anything unclassified
+    let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
+    for (const [x, y] of rec){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+    buckets[bucket].push({ ring: rec, bbox:[x0,y0,x1,y1], areaM2: rec.areaM2 || 0 });
+  }
+  for (const k in buckets) buckets[k].sort((a, b) => b.areaM2 - a.areaM2);
+
+  // ---- lawn: palm clusters and shrub beds, following the ring's own shape ----
+  for (const rec of buckets.lawn){
+    if (palms.length >= B.palms && shrubs.length >= B.shrubs) break;
+    const { ring, bbox, areaM2 } = rec;
+    const nClusters = Math.min(6, 1 + Math.floor(areaM2 / 8000));
+    for (let c = 0; c < nClusters && palms.length < B.palms; c++){
+      const seed = samplePoint(ring, bbox);
+      if (!seed) continue;
+      const n = 3 + Math.floor(R() * 4);
+      for (let i = 0; i < n && palms.length < B.palms; i++){
+        const a = R() * 6.2832, rr = R() * CLUSTER_R;
+        const px = seed[0] + Math.cos(a) * rr, py = seed[1] + Math.sin(a) * rr;
+        if (pointInRing(ring, px, py))
+          push(palms, px, py, { kind: R() < 0.34 ? 0 : (R() < 0.70 ? 1 : 2) });
+      }
+    }
+    const nBeds = Math.min(8, 1 + Math.floor(areaM2 / 6000));
+    for (let b = 0; b < nBeds && shrubs.length < B.shrubs; b++){
+      const seed = samplePoint(ring, bbox);
+      if (!seed) continue;
+      const n = 4 + Math.floor(R() * 6);
+      for (let i = 0; i < n && shrubs.length < B.shrubs; i++){
+        const a = R() * 6.2832, rr = R() * BED_R;
+        const px = seed[0] + Math.cos(a) * rr, py = seed[1] + Math.sin(a) * rr;
+        if (pointInRing(ring, px, py)) push(shrubs, px, py, { s: 0.6 + R() * 0.6 });
+      }
+    }
+  }
+
+  // ---- dry ground: sparse shrub clusters, no palms — a meadow is not a garden ----
+  for (const rec of buckets.dry){
+    if (shrubs.length >= B.shrubs) break;
+    const { ring, bbox, areaM2 } = rec;
+    const nBeds = Math.min(4, Math.floor(areaM2 / 9000));
+    for (let b = 0; b < nBeds && shrubs.length < B.shrubs; b++){
+      const seed = samplePoint(ring, bbox);
+      if (!seed) continue;
+      const n = 3 + Math.floor(R() * 4);
+      for (let i = 0; i < n && shrubs.length < B.shrubs; i++){
+        const a = R() * 6.2832, rr = R() * CLUSTER_R;
+        const px = seed[0] + Math.cos(a) * rr, py = seed[1] + Math.sin(a) * rr;
+        if (pointInRing(ring, px, py)) push(shrubs, px, py, { s: 0.55 + R() * 0.5 });
+      }
+    }
+  }
+
+  // ---- pitches: a hedge round the touchline, nothing standing on the field itself ----
+  for (const rec of buckets.pitch){
+    if (shrubs.length >= B.shrubs) break;
+    const loop = rec.ring.concat([rec.ring[0]]);
+    walk(loop, HEDGE_STEP, (x, y, tx, ty, i) => {
+      if (shrubs.length >= B.shrubs || i % 2) return;      // a hedge, not a wall
+      const nx = -ty, ny = tx;
+      const px = x - nx * HEDGE_IN, py = y - ny * HEDGE_IN;
+      if (pointInRing(rec.ring, px, py)) push(shrubs, px, py, { s: 0.5 + R() * 0.35 });
+    });
+  }
+
+  const Y = plan.ground;
+  build(shrubGeo, matShrub, shrubs, (p) => {
+    M.position.set(p.x * r, Y, -p.y * r);
+    M.rotation.set(0, R() * 6.2832, 0);
+    M.scale.set(p.s, p.s * (0.7 + R() * 0.6), p.s);
+  });
+  PALM_GEO.forEach((geo, k) => {
+    const list = palms.filter(p => (p.kind || 0) === k);
+    build(geo, [matBark, matFrond], list, (p) => {
+      const s = 0.88 + R() * 0.26;
+      M.position.set(p.x * r, Y, -p.y * r);
+      M.rotation.set((R() - 0.5) * 0.16, R() * 6.2832, (R() - 0.5) * 0.16);
+      M.scale.set(s * (0.94 + R() * 0.14), s * (0.88 + R() * 0.34), s * (0.94 + R() * 0.14));
+    });
+  });
+
+  return { group, palms: palms.length, shrubs: shrubs.length };
+}
+
 /* =============================================================================================
    THE PLACER
    ============================================================================================= */
@@ -632,26 +832,7 @@ function addProps(d, layer, plan, budget = {}){
   });
 
   /* ---------- build the instanced meshes ---------- */
-  const M = new THREE.Object3D();
-  const col = new THREE.Color();
-
-  function build(geo, mat, list, place, colourise){
-    if (!list.length) return null;
-    const im = new THREE.InstancedMesh(geo, mat, list.length);
-    im.castShadow = true; im.receiveShadow = true;
-    im.userData.litMat = true;
-    list.forEach((it, i) => {
-      place(it, i);
-      M.updateMatrix();
-      im.setMatrixAt(i, M.matrix);
-      if (colourise) im.setColorAt(i, colourise(it, i));
-    });
-    im.instanceMatrix.needsUpdate = true;
-    if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    layer.add(im);
-    return im;
-  }
-
+  const { build, M, col } = makeBuilder(layer);
   const Y = plan.ground;
 
   build(shrubGeo, matShrub, shrubs, (p) => {
@@ -784,5 +965,6 @@ function addProps(d, layer, plan, budget = {}){
            shrubs: shrubs.length, signals: signals.length, tickSignals };
 }
 
-return { addProps, materials: { matBark, matFrond, matPost, matGlow, matCar, matBoat, matShrub } };
+return { addProps, addParkProps,
+         materials: { matBark, matFrond, matPost, matGlow, matCar, matBoat, matShrub } };
 }

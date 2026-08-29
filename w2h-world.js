@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v206';
+export const BUILD = 'world v207';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6550,12 +6550,21 @@ function groundFeaturesFor(d, feats){
                      flatSet(0x243B27, 0x445E30, 0x4A6B3C, 0.9, 1, GRN) ]; // canopy
   const gv = [[], [], []], gc = [[], [], []], gi = [[], [], []];
   let parkN = 0, vergeN = 0;
+  /* STASHED FOR THE PROPS TOP-UP, RATHER THAN RE-FILTERED BY IT. addParkProps in w2h-props.js
+     plants into these same rings later, from addGroundFeatures, and it must see exactly the
+     rings this loop accepted — not feats.parks itself. The majority-inside test right below
+     exists to catch a ring the bake picked up from a NEIGHBOURING island's bounding box, and a
+     second, approximate copy of that test living in the props file would occasionally disagree
+     with this one and plant a cluster of palms on an island that does not own the ring. One
+     accepted list, read by both. */
+  d.realParks = [];
   for (const ring of (feats.parks || [])){
     const t = TONE[ring.kind];
     if (t === undefined || ring.length < 4) continue;
     let inside = 0;
     for (const p of ring) if (onIsle(p[0], p[1])) inside++;
     if (inside < ring.length * 0.5) continue;
+    d.realParks.push(ring);
     const P = prepGreenRing(ring, ring.kind);
     if (!P) continue;
     const y = GROUND + 0.006 - t * 0.001;
