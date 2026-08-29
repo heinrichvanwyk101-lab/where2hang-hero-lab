@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v203';
+export const BUILD = 'world v204';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6241,8 +6241,12 @@ function ribbon(pts, half, y, set){
    colour's per-channel ratio to the day ground, applied to the dusk and night ground. The
    relationship is then identical in all three, which is what makes the greenery read the same
    everywhere instead of only where it was eyeballed. */
-function flatSet(night, dusk, day, rough, bias){
+function flatSet(night, dusk, day, rough, bias, opts){
   const r = rough == null ? 0.9 : rough;
+  /* An OPTIONS BAG rather than four more positional arguments, because only the parkland wants
+     what it carries — vertexColors and transparency — and every other caller in this file would
+     otherwise have to grow two nulls it does not use. */
+  const ex = opts || {};
   /* POLYGON OFFSET, BECAUSE THE Y GAP IS FAR BELOW DEPTH PRECISION.
 
      These features were lifted 3 to 14 cm above the island's top face and that is nowhere near
@@ -6259,17 +6263,17 @@ function flatSet(night, dusk, day, rough, bias){
      y offsets alone can no longer be trusted to do. */
   const po = { polygonOffset:true,
                polygonOffsetFactor:-(bias || 1), polygonOffsetUnits:-(bias || 1) * 2 };
-  const base = new THREE.MeshStandardMaterial({ color:night, roughness:r, ...po });
+  const base = new THREE.MeshStandardMaterial({ color:night, roughness:r, ...po, ...ex });
   base.userData.duskColor = dusk;
-  const duskM = new THREE.MeshStandardMaterial({ color:dusk, roughness:r, ...po });
+  const duskM = new THREE.MeshStandardMaterial({ color:dusk, roughness:r, ...po, ...ex });
   duskM.userData.duskColor = dusk;
   return {
     base,
-    dayM:  new THREE.MeshStandardMaterial({ color:day, roughness:r, ...po }),
+    dayM:  new THREE.MeshStandardMaterial({ color:day, roughness:r, ...po, ...ex }),
     duskM,
     /* MeshBasic for Plan and Check, matching what the island ground does: no light, no shadow, no
        exposure. A lit green polygon lying on an unlit plan texture reads as a different drawing. */
-    planM: new THREE.MeshBasicMaterial({ color:day, ...po }),
+    planM: new THREE.MeshBasicMaterial({ color:day, ...po, ...ex }),
   };
 }
 
@@ -6299,6 +6303,171 @@ function tagGround(mesh, set){
   mesh.userData.ground   = true;
   return mesh;
 }
+
+
+/* ================= PARKLAND RING GEOMETRY =================================================
+   WHY ANY OF THIS EXISTS. The bake hands back honest OSM polygons and the first version put
+   them straight into THREE.Shape: median EIGHT vertices, 445 of Corniche's 1,321 rings at six
+   or fewer. A six-vertex ring filled with one flat colour and meeting the sand at a razor is a
+   1989 flat-shaded polygon, and it read as exactly that from the air — the amount of green was
+   never the problem, the amount of DRAWING was.
+
+   Three faults, three fixes, none of which needs a re-bake:
+
+     angular silhouette   ->  chaikin, the same corner-cutting every coastline in this scene
+                              already gets, gated by ring size so a 34 m grass patch is not
+                              rounded into a circle
+     razor edge           ->  an inset ring, and the annulus between the two carried as a verge
+                              that fades out
+     one flat colour      ->  per-ring tone jitter, deterministic on the ring's own coordinates
+
+   THE VERGE FADES BY ALPHA, NOT BY COLOUR, and that is forced rather than chosen. The comment
+   on flatSet records what happened the last time a ground colour was picked by eye: the island
+   under these features is 0xD8D2C4 in Day, 0xC6B99E at dusk and 0x68737E at night, so a verge
+   tone blended toward "the ground" is only correct in the view it was blended for, and at dusk
+   the parkland went to a hole in the island. Vertex alpha has no such problem — it fades toward
+   whatever is actually underneath, in all six views, with no second colour to keep in step. */
+
+function ringArea2(P){
+  let s = 0;
+  for (let i = 0; i < P.length; i++){
+    const a = P[i], b = P[(i + 1) % P.length];
+    s += a[0] * b[1] - b[0] * a[1];
+  }
+  return s / 2;
+}
+function ringPerim(P){
+  let s = 0;
+  for (let i = 0; i < P.length; i++){
+    const a = P[i], b = P[(i + 1) % P.length];
+    s += Math.hypot(b[0] - a[0], b[1] - a[1]);
+  }
+  return s;
+}
+/* Duplicate and near-duplicate points are common in OSM and they are poison here: a zero-length
+   edge has no direction, so the bisector at that vertex is undefined and the inset spikes. */
+function dedupeRing(P, eps){
+  const out = [];
+  for (const p of P){
+    const q = out[out.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > eps) out.push(p);
+  }
+  while (out.length > 2 &&
+         Math.hypot(out[0][0] - out[out.length - 1][0],
+                    out[0][1] - out[out.length - 1][1]) <= eps) out.pop();
+  return out;
+}
+/* MITRED INSET, with the mitre CLAMPED. At an acute corner the offset distance along the
+   bisector goes as w/cos(half-angle), which runs away to infinity as the corner closes; 0.30
+   caps it at a little over three times the verge width, which is a blunted corner rather than a
+   spike across the park. W may be a per-vertex array — see vergeRing for why it has to be. */
+function offsetRing(P, W, sgn){
+  const N = P.length, out = new Array(N);
+  for (let i = 0; i < N; i++){
+    const w = Array.isArray(W) ? W[i] : W;
+    const a = P[(i - 1 + N) % N], b = P[i], c = P[(i + 1) % N];
+    let ux = b[0] - a[0], uy = b[1] - a[1];
+    const lu = Math.hypot(ux, uy) || 1; ux /= lu; uy /= lu;
+    let vx = c[0] - b[0], vy = c[1] - b[1];
+    const lv = Math.hypot(vx, vy) || 1; vx /= lv; vy /= lv;
+    /* Interior lies to the LEFT of each directed edge on a positively-wound ring; sgn carries
+       the winding so a clockwise ring insets inward too instead of ballooning outward. */
+    const n1x = -uy * sgn, n1y = ux * sgn;
+    const n2x = -vy * sgn, n2y = vx * sgn;
+    let bx = n1x + n2x, by = n1y + n2y;
+    const bl = Math.hypot(bx, by);
+    if (bl < 1e-6){ out[i] = [b[0] + n1x * w, b[1] + n1y * w]; continue; }
+    bx /= bl; by /= bl;
+    let k = bx * n1x + by * n1y;
+    if (k < 0.30) k = 0.30;
+    out[i] = [b[0] + bx * w / k, b[1] + by * w / k];
+  }
+  return out;
+}
+
+/* THE RELAXATION IS THE WHOLE TRICK, and the first version did not have it. A single uniform
+   inset is fine on a convex park and folds on a real one: at a thin neck the two sides cross,
+   the annulus turns inside out, and the verge draws as a bright bow-tie. Rejecting any ring
+   that folds anywhere was the first attempt and it cost the ones that matter most — measured on
+   Corniche, only 1,050 of 1,304 rings got a verge and the 47 ha park, the 28 ha park and the
+   20 ha grass all lost theirs to a single bad notch each.
+
+   So the width is PER VERTEX and the folds are annealed rather than fatal: any edge that has
+   shrunk below 15 per cent of its original length pulls both its endpoints in by 45 per cent,
+   six passes, which localises the damage to the neck that caused it. That took Corniche to
+   1,282 of 1,304 and Raha to 39 of 40, with every one of the ten largest rings on both islands
+   keeping a verge. Widths land between 1.36 m in the tight places and the full 4.50 m in the
+   open ones, which is what a verge does anyway. */
+function vergeRing(P){
+  const A0 = ringArea2(P);
+  const sgn = A0 >= 0 ? 1 : -1;
+  const A = Math.abs(A0);
+  const per = ringPerim(P);
+  if (A < 400 || per <= 0) return { core:null, sgn };
+  /* A/perimeter is the inradius of a convex shape and a fair proxy otherwise, so it is the
+     honest cap on how wide a verge this ring can hold. 4.5 m is a verge; wider is a field. */
+  const compact = A / per;
+  if (compact < 2.5) return { core:null, sgn };     // a sliver has no inside to inset to
+  const w0 = Math.min(4.5, 0.35 * compact);
+  const N = P.length;
+  const W = new Array(N).fill(w0);
+  let Q = offsetRing(P, W, sgn);
+  for (let pass = 0; pass < 6; pass++){
+    let bad = 0;
+    for (let i = 0; i < N; i++){
+      const j = (i + 1) % N;
+      const e1x = P[j][0] - P[i][0], e1y = P[j][1] - P[i][1];
+      const e2x = Q[j][0] - Q[i][0], e2y = Q[j][1] - Q[i][1];
+      const L1 = e1x * e1x + e1y * e1y;
+      if (e1x * e2x + e1y * e2y < 0.15 * L1){ W[i] *= 0.55; W[j] *= 0.55; bad++; }
+    }
+    if (!bad) break;
+    Q = offsetRing(P, W, sgn);
+  }
+  for (let i = 0; i < N; i++){
+    const j = (i + 1) % N;
+    const e1x = P[j][0] - P[i][0], e1y = P[j][1] - P[i][1];
+    const e2x = Q[j][0] - Q[i][0], e2y = Q[j][1] - Q[i][1];
+    if (e1x * e2x + e1y * e2y < 0.05 * (e1x * e1x + e1y * e1y)) return { core:null, sgn };
+  }
+  const AQ = ringArea2(Q);
+  if (Math.sign(AQ) !== sgn) return { core:null, sgn };
+  const r = Math.abs(AQ) / A;
+  if (r < 0.15 || r > 0.995) return { core:null, sgn };
+  return { core:Q, sgn };
+}
+
+/* CHAIKIN IS GATED, and `pitch` is exempt on purpose. A football pitch is a rectangle in life
+   and rounding its corners is not softening, it is an error you can name from the air. Below
+   3,000 m2 nothing is smoothed either: two passes cut corners by about a quarter of the
+   shortest edge, and on a 34 m patch that is the whole shape. */
+function prepGreenRing(raw, kind){
+  /* ShapeGeometry lays out in XY and this file reads shape-y as -z, so the ring is flipped into
+     shape space HERE, once, and everything downstream — area, winding, inset — is consistent
+     with the triangles that come out the other end. Getting the sign wrong mirrors the parkland
+     north to south, which still looks plausible and is therefore the failure worth naming. */
+  let P = dedupeRing(raw.map(p => [p[0], -p[1]]), 0.35);
+  if (P.length < 4) return null;
+  const A = Math.abs(ringArea2(P));
+  /* DENSITY IS ALSO A GATE, and it is the one that pays for the rest. Chaikin quadruples the
+     point count at two passes and the triangulator is superlinear in it, so smoothing a ring
+     that OSM already traced at 64 points buys nothing visible and costs the most. Rings arrive
+     smooth or angular, not both: 64 points on a park boundary IS the curve. */
+  const n = P.length;
+  const passes = kind === 'pitch' ? 0
+               : n >= 64          ? 0
+               : A >= 20000       ? (n >= 24 ? 1 : 2)
+               : A >= 3000        ? 1 : 0;
+  return passes ? chaikin(P, passes) : P;
+}
+/* Deterministic on the ring's own first coordinate: the same island renders the same twice, and
+   no seed has to be threaded down here to make that true. */
+function ringJitter(x, y){
+  let h = Math.imul(Math.round(x * 8) ^ 0x9E3779B9, 0x85EBCA6B);
+  h = Math.imul(h ^ Math.round(y * 8) ^ (h >>> 13), 0xC2B2AE35);
+  return ((h ^ (h >>> 16)) >>> 8) / 16777216;
+}
+/* ========================================================================================== */
 
 function groundFeaturesFor(d, feats){
   if (!feats) return null;
@@ -6354,43 +6523,108 @@ function groundFeaturesFor(d, feats){
   const TONE = { park:0, garden:0, common:0, recreation_ground:0, village_green:0, pitch:0,
                  grass:1, meadow:1,
                  forest:2, nature_reserve:2 };
-  const greenMat = [ flatSet(0x354D35, 0x667B42, 0x6F8C52, 0.9, 1),   // mown
-                     flatSet(0x414B3A, 0x7C7949, 0x87895A, 0.9, 1),   // dry
-                     flatSet(0x243B27, 0x445E30, 0x4A6B3C, 0.9, 1) ]; // canopy
-  const gv = [[], [], []], gi = [[], [], []];
-  let parkN = 0;
+  /* TRANSPARENT AND depthWrite OFF, which sounds like a cost and is not. These meshes are flat,
+     they lie on the ground, and nothing is ever drawn between them and it — so nothing needs
+     their depth. What it buys is the verge: alpha is the only channel that fades correctly in
+     six views at once. renderOrder is set below rather than left to distance sorting, because
+     the three tones are one millimetre apart and whichever drew last would otherwise win the
+     blend, which changes as the camera moves and shows up as flicker. */
+  const GRN = { vertexColors:true, transparent:true, depthWrite:false };
+  const greenMat = [ flatSet(0x354D35, 0x667B42, 0x6F8C52, 0.9, 1, GRN),   // mown
+                     flatSet(0x414B3A, 0x7C7949, 0x87895A, 0.9, 1, GRN),   // dry
+                     flatSet(0x243B27, 0x445E30, 0x4A6B3C, 0.9, 1, GRN) ]; // canopy
+  const gv = [[], [], []], gc = [[], [], []], gi = [[], [], []];
+  let parkN = 0, vergeN = 0;
   for (const ring of (feats.parks || [])){
     const t = TONE[ring.kind];
     if (t === undefined || ring.length < 4) continue;
     let inside = 0;
     for (const p of ring) if (onIsle(p[0], p[1])) inside++;
     if (inside < ring.length * 0.5) continue;
-    const shape = new THREE.Shape();
-    shape.moveTo(ring[0][0], -ring[0][1]);
-    for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1]);
-    shape.closePath();
-    let geo;
-    try { geo = new THREE.ShapeGeometry(shape); } catch (e){ continue; }
-    const pos = geo.attributes.position, ix = geo.index;
-    if (!pos || !ix){ geo.dispose(); continue; }
-    const base = gv[t].length / 3;
-    /* ShapeGeometry lays out in XY; this reads it straight into world XZ, so shape-y becomes -z.
-       Getting that sign wrong mirrors the parkland north to south, which still looks plausible
-       and is therefore the failure worth naming. */
-    for (let i = 0; i < pos.count; i++)
-      gv[t].push(pos.getX(i), GROUND + 0.006 - t * 0.001, -pos.getY(i));
-    for (let i = 0; i < ix.count; i++) gi[t].push(base + ix.getX(i));
-    geo.dispose();
+    const P = prepGreenRing(ring, ring.kind);
+    if (!P) continue;
+    const y = GROUND + 0.006 - t * 0.001;
+    const V = gv[t], C = gc[t], I = gi[t];
+    /* PER-RING TONE, +/- 6 PER CENT. Not noise for its own sake: adjacent parcels in this city
+       are mown, watered and planted by different people on different weeks and they do not
+       match. Centred on 1.0 so the average ring still carries the measured ratio to the ground
+       that flatSet's comment goes to such lengths to establish — this varies the parcels
+       against each other without moving the parkland as a whole. */
+    const j = 0.94 + 0.12 * ringJitter(P[0][0], P[0][1]);
+    const core = (geo) => {
+      const pos = geo.attributes.position, ix = geo.index;
+      if (!pos || !ix || !ix.count){ geo.dispose(); return false; }
+      const b = V.length / 3;
+      for (let i = 0; i < pos.count; i++){
+        V.push(pos.getX(i), y, -pos.getY(i)); C.push(j, j, j, 1);
+      }
+      for (let i = 0; i < ix.count; i++) I.push(b + ix.getX(i));
+      geo.dispose();
+      return true;
+    };
+    const shapeOf = (R) => {
+      const sh = new THREE.Shape();
+      sh.moveTo(R[0][0], R[0][1]);
+      for (let i = 1; i < R.length; i++) sh.lineTo(R[i][0], R[i][1]);
+      sh.closePath();
+      try { return new THREE.ShapeGeometry(sh); } catch (e){ return null; }
+    };
+    const v = vergeRing(P);
+    let built = false;
+    if (v.core){
+      const g0 = shapeOf(v.core);
+      if (g0 && core(g0)){
+        /* The annulus, one quad per segment: the outer vertex at alpha 0, its inset partner at
+           1. That is the entire verge — no second colour, no texture, no extra draw call, and
+           it rides in the same merged geometry as the core. */
+        const b = V.length / 3;
+        for (let i = 0; i < P.length; i++){
+          V.push(P[i][0], y, -P[i][1]);           C.push(j, j, j, 0);
+          V.push(v.core[i][0], y, -v.core[i][1]); C.push(j, j, j, 1);
+        }
+        /* THE QUAD IS SPLIT BY MEASUREMENT, NOT BY WINDING, and the first version split it by
+           winding and was wrong 39 times on Corniche. Relaxation leaves neighbouring vertices
+           with different verge widths, which makes some annulus quads non-convex, and a
+           non-convex quad cut on the wrong diagonal folds one of its two halves face-down. One
+           black triangle per affected ring, which is exactly the count that turned up. So all
+           four candidate cuts are tried and the first with both halves facing the sky wins. */
+        const ny = (p0, p1, p2) => {
+          const A = p0 * 3, B = p1 * 3, D = p2 * 3;
+          return (V[B+2] - V[A+2]) * (V[D] - V[A]) - (V[B] - V[A]) * (V[D+2] - V[A+2]);
+        };
+        for (let i = 0; i < P.length; i++){
+          const a = b + i * 2, q = a + 1;
+          const c = b + ((i + 1) % P.length) * 2, e = c + 1;
+          const cut = [[a,c,e, a,e,q], [a,e,c, a,q,e], [a,c,q, c,e,q], [a,q,c, c,q,e]];
+          let k = 0;
+          for (; k < 4; k++) if (ny(cut[k][0], cut[k][1], cut[k][2]) > 0 &&
+                                 ny(cut[k][3], cut[k][4], cut[k][5]) > 0) break;
+          I.push(...cut[k === 4 ? 0 : k]);
+        }
+        built = true; vergeN++;
+      }
+    }
+    if (!built){
+      /* No verge is a legitimate outcome, not a failure: a 300 m2 traffic island has no inside
+         to inset to. It draws as it always did, flat to its edge, and at that size nobody can
+         see the difference anyway. */
+      const g1 = shapeOf(P);
+      if (!g1 || !core(g1)) continue;
+    }
     parkN++;
   }
   for (let t = 0; t < 3; t++){
     if (!gv[t].length) continue;
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.Float32BufferAttribute(gv[t], 3));
+    pg.setAttribute('color', new THREE.Float32BufferAttribute(gc[t], 4));
     pg.setIndex(gi[t]);
     pg.computeVertexNormals();
     const pm = new THREE.Mesh(pg, greenMat[t].base);
     pm.receiveShadow = true;
+    /* Negative, so the parkland draws ahead of every other transparent thing in the scene —
+       the water above all — rather than after it. */
+    pm.renderOrder = -3 + t;
     g.add(tagGround(pm, greenMat[t]));
   }
 
@@ -6423,7 +6657,7 @@ function groundFeaturesFor(d, feats){
     trackN++;
   }
 
-  d.golfN = golfN; d.trackN = trackN; d.parkRealN = parkN;
+  d.golfN = golfN; d.trackN = trackN; d.parkRealN = parkN; d.parkVergeN = vergeN;
   /* ---- YAS BAY: LAND USE, AND IT LIVES HERE BECAUSE IT IS A GROUND FEATURE ----
 
      THE FIRST VERSION OF THIS WAS ATTACHED IN THE LANDMARK PASS AND DREW NOTHING. Not broken —
