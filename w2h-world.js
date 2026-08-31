@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v211';
+export const BUILD = 'world v212';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2330,6 +2330,72 @@ function mipBlur(srcCanvas, steps){
   }
   return cur;
 }
+/* A SECOND, INDEPENDENT NOISE FIELD, deliberately offset from fabricNoise's own sample points
+   (-500,+300 rather than the same origin) so the two do not visibly lock together where a
+   developed patch happens to sit near a bare one — two fields that shared an origin would rise
+   and fall in step, which reads as one pattern wearing two colours rather than two different
+   things. Same two-octave, same lattice hash, same reasoning: a district-scale wave so entire
+   stretches of desert are not one dead flat tan, and a smaller wave riding on it so the eye has
+   something at a nearer scale too. */
+/* TWO OCTAVES. freq 28 at 70 per cent weight fixed the close-range flatness but failed a check
+   the four-octave version never got to: downsampled properly (LANCZOS, not nearest-neighbour,
+   to approximate what a mipmapped GPU minification actually does) the wide view came out visibly
+   speckled — and this ground is explicitly viewed at a grazing angle, anisotropic filtering
+   turned on for exactly that reason, which is the one viewing condition most prone to a
+   regular lattice pattern shimmering as the camera moves rather than sitting still the way a
+   static PNG comparison shows it. A static render cannot test that directly; the honest response
+   to not being able to test it is to back away from the setting most likely to cause it, not to
+   assume it is fine. Halved the frequency and pulled back the weight a step short of where close
+   range stopped being flat, trading a smaller remaining flatness for a real reduction in shimmer
+   risk on a surface already known to be shown edge-on. */
+function macroNoise(x, y){
+  return fabricNoise2(x, y, 0.9) * 0.35 + fabricNoise2(x - 90, y + 60, 14.0) * 0.65;
+}
+/* THE SAND'S OWN BACKBONE. Measured against a rendered, pixel-inspected export: the existing
+   ground-variation blobs — 54 radial fills at five to eleven per cent alpha, scattered
+   independently across the whole canvas — do not fail loudly, they just do not accumulate into
+   anything. Sampled at full resolution the tan reads as flat as the single fillStyle it started
+   from, which is the opposite of the "very low-frequency variation... irregularity at multiple
+   scales" the ground was supposed to carry. This paints a real field underneath that: world-space
+   noise, sampled on a small offscreen grid and scaled up exactly the way the fabric feather
+   already relies on the browser's own bilinear filtering to blend, so the cost is one small
+   ImageData loop and a drawImage rather than anything per-pixel on the real canvas. The existing
+   blobs and haul routes are kept on top of this rather than replaced — they are the one piece of
+   ground grain with a direction, and losing that would trade one flatness for another. */
+function paintMacroTint(g, W, H, PX, PY, U, darkHex, lightHex, strength){
+  /* 320 — recomputed correctly this time. See macroNoise's own comment: the earlier 192 was
+     checked against a pixel wavelength instead of a normalised-space one and came out roughly
+     3x too coarse for the top octave to survive being sampled at all. */
+  const gw = 320, gh = Math.max(1, Math.round(gw * H / W));
+  const small = document.createElement('canvas');
+  small.width = gw; small.height = gh;
+  const sg = small.getContext('2d', { willReadFrequently: true });
+  const img = sg.createImageData(gw, gh);
+  const dc = parseInt(darkHex.slice(1), 16), lc = parseInt(lightHex.slice(1), 16);
+  const dr = (dc>>16)&255, dgc = (dc>>8)&255, db = dc&255;
+  const lr = (lc>>16)&255, lgc = (lc>>8)&255, lb = lc&255;
+  for (let gy = 0; gy < gh; gy++){
+    for (let gx = 0; gx < gw; gx++){
+      /* Small-grid pixel back to the SAME plan-space (x/U, -y/U from PX/PY's own inverse) every
+         other noise sample in this file already uses, so a patch of desert and a patch of fabric
+         that happen to sit near each other are sampling comparable coordinates, not two
+         unrelated grids that only coincidentally overlap. */
+      const px = gx / gw * W, py = gy / gh * H;
+      const nx = (px - W / 2) / U, ny = -(py - H / 2) / U;
+      const n = macroNoise(nx, ny);
+      const r = Math.round(dr + (lr - dr) * n), gg = Math.round(dgc + (lgc - dgc) * n),
+            b = Math.round(db + (lb - db) * n);
+      const i = (gy * gw + gx) * 4;
+      img.data[i] = r; img.data[i+1] = gg; img.data[i+2] = b; img.data[i+3] = Math.round(255 * strength);
+    }
+  }
+  sg.putImageData(img, 0, 0);
+  g.save();
+  g.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
+  g.drawImage(small, 0, 0, W, H);
+  g.restore();
+}
 function paintGround(d, plan){
   /* THE CANVAS IS CUT TO THE ISLAND, and this is where the ground plan gets its resolution back.
 
@@ -2437,6 +2503,13 @@ function paintGround(d, plan){
         correct order of operations for this city and reads that way. */
   g.fillStyle = SURF.sand;
   g.fillRect(0, 0, W, H);
+
+  /* THE BACKBONE, painted before the blobs below rather than after — see paintMacroTint's own
+     comment for why the blobs alone were not enough. World-space, so a stretch of desert that
+     happens to sit near a developed patch is sampling the same coordinate system fabricNoise
+     paints that patch from, not two independently-random systems that only coincidentally sit
+     next to each other. */
+  paintMacroTint(g, W, H, PX, PY, U, SURF.sandDk, SURF.sandLt, 0.46);
 
   /* GROUND VARIATION, AND IT IS ONE FILL THAT WAS DOING ALL THE WORK.
 
@@ -2588,7 +2661,13 @@ function paintGround(d, plan){
     fabCv.width = W; fabCv.height = H;
     const fg = fabCv.getContext('2d', { willReadFrequently: true });
 
-    const apronMix = mixHex(SURF.street, SURF.apron3, 0.42);
+    /* 0.60, UP FROM 0.42. Measured against a rendered export: even after five rounds of
+       mip-blurring, an apron mixed only 42 per cent toward the warm developed-ground tone still
+       reads as a cool grey stain against the sand around it — the blur smooths the edge but
+       cannot fix a base colour that was the wrong temperature to start with. Shifted warmer,
+       past the midpoint toward SURF.apron3, so developed ground reads as pavement sitting on the
+       same warm palette as the desert rather than a different, colder material dropped onto it. */
+    const apronMix = mixHex(SURF.street, SURF.apron3, 0.60);
     (plan.blocks || []).forEach(q => {
       let bx = 0, by = 0;
       for (const p of q){ bx += p[0]; by += p[1]; }
