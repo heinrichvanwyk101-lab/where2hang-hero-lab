@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v220';
+export const BUILD = 'world v221';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3146,14 +3146,33 @@ function paintGround(d, plan){
       g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(0.8, U * roadW(d, 1.2)); g.stroke();
     }
 
-    const cycW = Math.max(4.0, U * roadW(d, XSEC_M.cycleW));
+    /* THE FLOOR IS 2.4, NOT 4.0, AND THE FIRST VALUE BROKE THE HIERARCHY.
+
+       MIN_PX gives ring 10, major 9, minor 6 and local 3.5 pixels for corridors of 31, 28, 18 and
+       10 metres — about a third of a pixel per metre once exaggerated. A 3 m track at that same
+       ratio would be one pixel, which is why it needed a floor of its own; but 4.0 plus a 1.45
+       casing came out at 5.8 px against a residential street's 3.5, so a cycle track was painting
+       nearly twice the width of a road three classes above it.
+
+       2.4 with a 1.3 casing lands at 3.1 px — just under the local street, which is the correct
+       rung. Narrower than the narrowest road, still wide enough that the colour carries.
+
+       ?cyc=N OVERRIDES IT, the same way ?gpx=N overrides the ground resolution and for the same
+       reason: the only honest way to settle a width is to look at it, and doing that as a deploy
+       per attempt is three minutes a data point. From the URL it is a reload. */
+    const CYC_PX = (() => {
+      const m = typeof location !== 'undefined' && location.search.match(/[?&]cyc=(\d+(?:\.\d+)?)/);
+      const v = m ? parseFloat(m[1]) : 2.4;
+      return isFinite(v) && v >= 0.8 && v <= 12 ? v : 2.4;
+    })();
+    const cycW = Math.max(CYC_PX, U * roadW(d, XSEC_M.cycleW));
     for (const p of paths){
       if (!p || p.length < 2 || p.kind !== 'cycle') continue;
       const line = offsetPath(p, 0);
       /* A pale casing under the track, the same trick the roads use with their kerb: it separates
          the red-brown from whatever it is crossing so the track does not merge into a park or a
          plot the moment it leaves the tarmac. */
-      strokePx(line, SURF.kerb, cycW * 1.45);
+      strokePx(line, SURF.kerb, cycW * 1.30);
       strokePx(line, SURF.cycle, cycW);
     }
   }
