@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v141', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v143', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -374,7 +374,7 @@ const DEBUG = location.hash.indexOf('debug') >= 0;
    Emirates Palace because it is hand-built kit geometry: no payload dependency, present as soon as
    the world is built, and wide and low enough to fill a frame without the unfinished city behind
    it showing. */
-const OPENING_PLACE = 'Emirates Palace';
+const OPENING_PLACE = 'Palace District';
 
 const FP_ON = location.search.includes('fp');
 const fpState = new Map();          // id -> 'pending' | 'on' | 'none'
@@ -3099,19 +3099,15 @@ const ATTRACT = [
      parked on one building for good. */
   { id:'corniche', place:OPENING_PLACE, hold:true, ms:9000, maxMs:30000 },
   { id:'maryah',   ms:5000 },
-  { id:'reem',     ms:5500 },
-  { id:'saadiyat', ms:6000 },
-  { id:'yas',      ms:6500 },
-  /* AL RAHA WAS MISSING FROM THIS LIST ENTIRELY, and that is the actual cause of "generic roads
-     instead of Overture roads" — real road data was never a caching problem, it was never fetched
-     at all. attractPrefetch is the ONLY mechanism that calls whenRoads() for a non-Corniche
-     island (see buildAndRegister's own comment: a direct tap deliberately skips the await,
-     "because a stall during a committed move is worse than a generated lattice" — real roads for
-     every other outer island arrive because the tour prefetches them a leg ahead, not because the
-     tap itself waits). Raha, absent from this array, had no leg to be prefetched during and no
-     other path that ever calls loadRoads('raha') — permanently stuck on roadSkeleton's generated
-     grid regardless of how long anyone waited or how many times the island was revisited. */
+  /* RAHA THEN REEM, BACK TO BACK — requested explicitly, and it also happens to match how the
+     two sit on the map: adjacent islands, so the leg-to-leg flight between them is a short hop
+     rather than a flight across the archipelago the way maryah-to-yas would be. Durations kept
+     as each island's own tuned figure, not reset for the new position — a duration is a property
+     of what the leg is showing, not of where in the sequence it falls. */
   { id:'raha',     ms:6000 },
+  { id:'reem',     ms:5500 },
+  { id:'yas',      ms:6500 },
+  { id:'saadiyat', ms:6000 },
   { world:true,    ms:8000 },
 ];
 /* 45 SECONDS, UP FROM 22, AND A WAY TO TURN IT OFF ENTIRELY.

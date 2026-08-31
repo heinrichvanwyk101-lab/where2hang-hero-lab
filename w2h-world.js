@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v215';
+export const BUILD = 'world v216';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3895,6 +3895,16 @@ const DISTRICTS = [
          64.3, so the same framing wants a proportionally larger radius. h 9 aims the camera at
          the dome rather than at the wings. */
       { label:'Qasr Al Watan',  osm:'Qasr Al Watan', x:LM.qasr.x, z:LM.qasr.z, h: 9, r:46 },
+      /* SYNTHETIC — no osm match, deliberately, since nothing in the bake corresponds to "all
+         three together" and a stray match against real data would silently redefine what this
+         place frames. x/z/r derived from the same centroid-and-far-point formula the generic
+         per-district d.shot computation already uses (far * 2.1 — the exact figure that
+         reproduced Corniche's own original hand-tuned two-landmark shot when it was
+         generalised), extended here to Emirates Palace, Qasr Al Watan and ADNOC HQ's own real
+         anchors rather than just two. h taken from ADNOC's own entry below (26), the tallest of
+         the three, so the opening shot sits high enough to clear it rather than framed for the
+         palace's own low roofline. Used as the opening shot in place of Emirates Palace alone. */
+      { label:'Palace District', osm:null, x:-1020.96, z:89.68, h:26, r:273.04 },
       { label:'Marina Mall',   osm:'Marina Mall',    x:LM.marina.x, z:LM.marina.z, h: 6, r:30 },
       { label:'Fairmont Marina Residences', osm:'Fairmont Marina Residences', x:LM.fairmont.x, z:LM.fairmont.z, h: 10, r:16 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
