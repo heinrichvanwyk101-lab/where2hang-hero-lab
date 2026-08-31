@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v27';
+export const BUILD = 'props v28';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -689,11 +689,34 @@ function addProps(d, layer, plan, budget = {}){
      because a 10 km chain changes which way the sea lies several times over. */
   const chains = plan.cycleChains || [];
   if (chains.length && XS_){
-    const cap = Math.floor(B.lamps * 0.34);
+    /* SPACING IS DERIVED FROM THE LENGTH, NOT FIXED, and a fixed one is why the lighting stopped
+       half way along the promenade.
+
+       The first version took a third of the lamp budget as a hard count and walked at the nominal
+       25 m. Corniche's track is 10.2 km, which needs about four hundred columns; the count allowed
+       roughly ninety. So it lit the first two and a half kilometres perfectly and then simply
+       stopped, mid-run, which reads as a bug in the data rather than as a budget — and it is worse
+       than sparse lighting, because a line that ends in the middle of nowhere draws the eye
+       straight to it.
+
+       Measuring the whole run first and dividing gives continuous coverage at whatever spacing the
+       budget affords. Floored at the nominal so a short track on a small island is not lit tighter
+       than reality; unbounded above, because a thin, even line the full length of the seafront is
+       always better than a dense one that gives up. */
+    let totalLen = 0;
+    for (const c of chains)
+      for (let i = 1; i < c.length; i++)
+        totalLen += Math.hypot(c[i][0] - c[i-1][0], c[i][1] - c[i-1][1]);
+    const allotted = Math.max(24, Math.floor(B.lamps * 0.40));
+    const stepPath = Math.max(XS_.pathStepLamp, totalLen / allotted);
+    /* A ceiling well above the allotment rather than at it: the walk can overshoot slightly on the
+       last step of each chain, and cutting at exactly the allotment would reintroduce the same
+       mid-run stop it is here to prevent. */
+    const cap = Math.ceil(allotted * 1.35);
     let placed = 0;
     for (const chain of chains){
       if (placed >= cap) break;
-      walk(chain, XS_.pathStepLamp, (x, y, tx, ty) => {
+      walk(chain, stepPath, (x, y, tx, ty) => {
         if (placed >= cap) return;
         const nx = -ty, ny = tx;
         const off = XS_.pathLamp;
