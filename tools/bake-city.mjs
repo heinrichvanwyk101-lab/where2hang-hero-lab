@@ -210,6 +210,44 @@ const ROAD_CLASS = {
   secondary:'minor', secondary_link:'minor', tertiary:'minor', tertiary_link:'minor',
   residential:'local', unclassified:'local', living_street:'local',
 };
+
+/* PATHS ARE A SEPARATE CLASS FROM ROADS, and separate is the whole point rather than tidiness.
+   `way["highway"]` has always fetched cycleways and footways — they were being dropped here, by
+   ROAD_CLASS returning undefined and the branch below doing `continue`. So this costs no change
+   to the Overpass query and no new tracing.
+
+   They must not land in `roads`, because the road painter derives carriageways, kerb casings,
+   edge lines and medians from a class, and a 3 m cycle track is none of those things. Separate
+   array, separate paint pass.
+
+     cycle   cycleway                     - the red-brown segregated track
+     foot    footway, path                - promenade and pavement runs
+     plaza   pedestrian (closed ways)     - squares and paved precincts, kept as rings
+
+   STEPS ARE DROPPED. A staircase is under a unit long at diorama scale and there is no camera
+   position from which it is anything but a speck. */
+const PATH_CLASS = { cycleway:'cycle', footway:'foot', path:'foot', pedestrian:'plaza' };
+
+/* FIVE HUNDRED METRES, MEASURED AFTER STITCHING AND NEVER BEFORE IT.
+
+   OSM splits ways at every junction and every tag change, so length-per-way is not
+   length-per-facility. Measured on the roads this repository already ships, the MEDIAN way is
+   73 m on Corniche, 74 on Yas, 71 on Raha, 70 on Reem, and only 8.6 per cent of Corniche's ways
+   clear 500 m on their own. The Corniche cycle track is one continuous eight-kilometre facility
+   in reality and arrives here as dozens of fragments; a raw length filter would reject nearly
+   every one of them and keep almost nothing.
+
+   Stitching first was tested against the baked roads before this was written. Corniche's majors
+   go 1,743 ways to 531 chains, median 82 m to 143 m, longest 13,011 m. Al Raha's majors go 61 to
+   22, median 300 m to 634 m. So the threshold is applied to chains.
+
+   The number itself is the brief: continuous promenade and seafront runs, not the 40 m footpath
+   between a car park and a lobby door. */
+const MIN_PATH_M  = 500;
+/* Plazas are areas, so they are filtered by area rather than length. Two thousand square metres
+   is roughly a 45 m square — big enough to read as a precinct at flyover height, small enough to
+   keep a mosque forecourt or a marina square. */
+const MIN_PLAZA_M2 = 2000;
 /* SERVICE IS GONE, and it was most of the file. The first bake returned 12,790 road ways for
    Corniche alone against a real arterial-and-street network of maybe two thousand; the rest is
    car park aisles, petrol station forecourts and driveways. At 7.8 metres per unit a driveway is
@@ -1014,6 +1052,79 @@ function stitch(ways){
   return out;
 }
 
+/* ---------- PATH STITCHING -------------------------------------------------------------------
+
+   REBUILDS CONTINUOUS FACILITIES OUT OF THE FRAGMENTS OSM STORES. Ways are joined end to end
+   where they share an endpoint and carry the same kind.
+
+   THE CONTINUATION IS CHOSEN BY BEARING, not by whichever fragment happens to come first in the
+   array, and that matters at every junction where three or more ways meet. A greedy first-match
+   walk will happily turn a seafront promenade up a side path and leave the seafront itself as two
+   short stubs that both fail the 500 m test. Comparing the incoming heading against each
+   candidate's outgoing heading and taking the straightest keeps the through-route together, which
+   is the one the threshold is meant to protect.
+
+   TOLERANCE IS A TENTH OF A UNIT because that is the precision the projected coordinates are
+   rounded to downstream; an exact float compare would miss joins that are the same OSM node. */
+function pathLength(pts){
+  let s = 0;
+  for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]);
+  return s;
+}
+function ringArea(pts){
+  let s = 0;
+  for (let i = 0; i < pts.length; i++){
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    s += a[0] * b[1] - b[0] * a[1];
+  }
+  return Math.abs(s) / 2;
+}
+function headingOut(pts){  // bearing leaving the first point
+  return Math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]);
+}
+function stitchPaths(ways){
+  const K = p => `${Math.round(p[0]*10)},${Math.round(p[1]*10)}`;
+  const ends = new Map();
+  const push = (k, i) => { if (!ends.has(k)) ends.set(k, []); ends.get(k).push(i); };
+  ways.forEach((w, i) => { push(K(w[0]), i); push(K(w[w.length-1]), i); });
+
+  const used = new Array(ways.length).fill(false);
+  const out = [];
+  for (let i = 0; i < ways.length; i++){
+    if (used[i]) continue;
+    used[i] = true;
+    let chain = ways[i].slice();
+    /* Grow from the tail, then reverse and grow from what was the head, so a fragment picked up
+       in the middle of a route still recovers the whole of it in both directions. */
+    for (let pass = 0; pass < 2; pass++){
+      for (;;){
+        const tail = chain[chain.length - 1];
+        const inH  = Math.atan2(tail[1] - chain[chain.length-2][1], tail[0] - chain[chain.length-2][0]);
+        let best = -1, bestTurn = Infinity, bestRev = false;
+        for (const j of (ends.get(K(tail)) || [])){
+          if (used[j]) continue;
+          const w = ways[j];
+          const fwd = K(w[0]) === K(tail);
+          const rev = K(w[w.length-1]) === K(tail);
+          if (!fwd && !rev) continue;
+          const cand = fwd ? w : w.slice().reverse();
+          if (cand.length < 2) continue;
+          let turn = Math.abs(headingOut(cand) - inH);
+          while (turn > Math.PI) turn = Math.abs(turn - 2 * Math.PI);
+          if (turn < bestTurn){ bestTurn = turn; best = j; bestRev = rev && !fwd; }
+        }
+        if (best < 0) break;
+        const w = bestRev ? ways[best].slice().reverse() : ways[best];
+        used[best] = true;
+        chain = chain.concat(w.slice(1));
+      }
+      chain.reverse();
+    }
+    out.push(chain);
+  }
+  return out;
+}
+
 /* ---------- THE BAKE ----------------------------------------------------------------------- */
 
 async function bakeIsland(isle, proj){
@@ -1026,6 +1137,10 @@ async function bakeIsland(isle, proj){
   /* osmBuildings, not buildings. It is now the FALLBACK — used only when the Overture extract is
      absent — and naming it for what it is stops the two paths reading as one. */
   const coastWays = [], roads = [], osmBuildings = [], parks = [], golf = [], raceway = [];
+  /* Raw, unstitched, keyed by kind. Stitching needs the whole island's fragments in hand, so it
+     cannot happen inside the element loop — these fill here and are resolved after it. */
+  const rawPaths = { cycle: [], foot: [] };
+  const plazas = [];
   /* let, not const — clipWaterToOutline reassigns this below, the same way `buildings` (further
      down) gets reassigned by clipToOutline rather than filtered in place. */
   let water = [];
@@ -1091,6 +1206,24 @@ async function bakeIsland(isle, proj){
     }
 
     if (t.highway && el.geometry){
+      /* TESTED BEFORE THE ROAD BRANCH, the same way raceway is, and for the same reason: these
+         tags are not in ROAD_CLASS, so without this the `continue` below silently discards them
+         and always has. */
+      const pk = PATH_CLASS[t.highway];
+      if (pk){
+        const pts = simplify(toXY(el.geometry), SIMPLIFY_M);
+        if (pts.length >= 2){
+          const closed = pts.length >= 4 &&
+                         Math.hypot(pts[0][0] - pts[pts.length-1][0],
+                                    pts[0][1] - pts[pts.length-1][1]) < 1.0;
+          /* A pedestrian way that closes on itself is a square; one that does not is a shopping
+             street, and a street belongs with the lines rather than in the area layer. */
+          if (pk === 'plaza' && closed) plazas.push(pts.slice(0, -1).map(rd2));
+          else if (pk === 'plaza')      rawPaths.foot.push(pts);
+          else                          rawPaths[pk].push(pts);
+        }
+        continue;
+      }
       const cls = ROAD_CLASS[t.highway];
       if (!cls) continue;
       const pts = simplify(toXY(el.geometry), SIMPLIFY_M);
@@ -1365,7 +1498,35 @@ async function bakeIsland(isle, proj){
   process.stderr.write(`  ${isle.id}: water final — ${finalWater.length} body(ies), ` +
     `${waterIslands.length} island(s)\n`);
 
+  /* ---- paths: stitch, then threshold, then report ----
+     THE REPORT IS NOT DECORATION. The 500 m figure was chosen from the road length distribution
+     rather than from a count of the paths themselves, because Overpass is not reachable from the
+     environment this was written in. These four numbers per island are the missing measurement,
+     and they are printed loudly enough to read out of the Action log so the threshold can be
+     moved on evidence rather than on the guess it currently rests on. */
+  const paths = [];
+  for (const kind of ['cycle', 'foot']){
+    const raw = rawPaths[kind];
+    if (!raw.length){
+      process.stderr.write(`  ${isle.id}: paths ${kind} — none in box\n`);
+      continue;
+    }
+    const chains = stitchPaths(raw);
+    const lens = chains.map(pathLength).sort((a, b) => a - b);
+    const kept = chains.filter(c => pathLength(c) >= MIN_PATH_M);
+    for (const c of kept) paths.push({ kind, pts: c.map(rd2) });
+    const rawOver = raw.filter(w => pathLength(w) >= MIN_PATH_M).length;
+    process.stderr.write(
+      `  ${isle.id}: paths ${kind} — ${raw.length} ways (${rawOver} over ${MIN_PATH_M} m raw) ` +
+      `-> ${chains.length} chains, median ${Math.round(lens[lens.length >> 1] || 0)} m, ` +
+      `longest ${Math.round(lens[lens.length - 1] || 0)} m, kept ${kept.length}\n`);
+  }
+  const plazasKept = plazas.filter(r => r.length >= 3 && ringArea(r) >= MIN_PLAZA_M2);
+  process.stderr.write(`  ${isle.id}: plazas — ${plazas.length} closed pedestrian ways, ` +
+                       `kept ${plazasKept.length} over ${MIN_PLAZA_M2} m2\n`);
+
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
+           paths, plazas:plazasKept,
            golf, raceway, water:finalWater, waterIslands,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
@@ -1636,13 +1797,19 @@ async function main(){
 
        Written even when empty, so a consumer never has to distinguish "no roads" from "not baked
        yet". */
+    /* PATHS RIDE WITH THE ROADS, not with the island payload, because they are consumed by the
+       same top-up: the renderer already fetches this sidecar to get the real network onto an
+       island after the first frame, and a promenade that arrives on a different schedule to the
+       road it runs beside will paint over a ground texture that has already been uploaded. */
     const rd = { id:baked.id,
                  roads:(baked.roads || []).filter(r => r.cls === 'major' || r.cls === 'minor' ||
-                                                       r.cls === 'local') };
+                                                       r.cls === 'local'),
+                 paths:(baked.paths || []), plazas:(baked.plazas || []) };
     const rpath = `data/roads-${baked.id}.json`;
     await fs.writeFile(rpath, JSON.stringify(rd));
     const rbytes = (await fs.stat(rpath)).size;
     process.stderr.write(`  ${baked.id}: roads-only ${rd.roads.length} ways, ` +
+                         `${rd.paths.length} paths, ${rd.plazas.length} plazas, ` +
                          `${(rbytes/1048576).toFixed(2)} MB\n`);
     /* THE OUTLINE GOES IN THE INDEX AS WELL AS THE ISLAND FILE, and it is the only thing that
        does. The world view draws all five coastlines at once but needs no road or building from
@@ -1667,6 +1834,8 @@ async function main(){
                                   inBox:baked.inBox,
                                   withHeight:baked.buildings.filter(b => b.h).length,
                                   parks:baked.parks.length,
+                                  paths:baked.paths.length,
+                                  plazas:baked.plazas.length,
                                   golf:baked.golf.length,
                                   raceway:baked.raceway.length,
                                   water:baked.water.length,
