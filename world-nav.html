@@ -2922,6 +2922,20 @@ phase('compile');
 
    setTimeout where requestIdleCallback does not exist, which is Safari. */
 function fillCorniche(){
+  /* THE FOURTH INSTANCE OF THE SAME GAP. addGroundFeatures, then applyLOD, and now this: Corniche
+     bypasses setDistrict entirely, and setDistrict is the ONLY caller of addFootprints in the
+     whole file — buildAndRegister, the tour's own prefetch path, calls buildIsland first and
+     buildIsland bails immediately for Corniche, since it builds through this function instead. So
+     the real footprint payload — the actual ~20,000 buildings, not the generated fabric below —
+     never started loading until a visitor tapped the island by hand. Everything downstream of
+     this call was already written to expect it: the "either order is safe" reasoning a few lines
+     down exists precisely so addFootprints could be added here safely, whichever way its async
+     fetch happens to land against buildCornicheRest. It just never was.
+
+     Called first, before buildCornicheRest, so the fetch has the longest possible run before the
+     tour or a visitor next needs Corniche — not because order matters for correctness, the
+     comments below establish that it doesn't. */
+  addFootprints(corniche);
   if (!buildCornicheRest || !buildCornicheRest()) return;
   /* AND HIDE WHAT IT JUST ADDED, WHICH IS THE WHOLE POINT OF THIS LINE.
 
@@ -2954,8 +2968,10 @@ function fillCorniche(){
      footprints landed first the state is 'on' and this hides what the rest pass just added. If
      Corniche came back thin the state is 'thin', nothing is ever hidden, and the island stays
      generated end to end. */
-  /* Corniche's fp row reads `corn -` today, so this never fires; kept so that if Corniche ever
-     does get a payload it gap-fills like the rest rather than emptying itself. */
+  /* Corniche's fp row used to read `corn -` because addFootprints was never called for it. Now
+     that it is, called just above, this guard does real work: it hides whatever generated stock
+     buildCornicheRest added a moment ago that the earlier, now-resolved addFootprints call had
+     no way to know about yet. */
   if (fpState.get(corniche.id) === 'on' && corniche.fpList) cullFabric(corniche, corniche.fpList);
   snapshotMats(corniche.group);
   registerLift(corniche.group);
