@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v219';
+export const BUILD = 'world v220';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2079,6 +2079,48 @@ function distToPolyline(x, y, pts){
    free to stand in. */
 const ROAD_KERB = 1.20;                      // the casing the painter strokes under the tarmac
 
+/* ---------- THE CROSS-SECTION -----------------------------------------------------------------
+
+   ONE TABLE, IN METRES, MEASURED OUTWARD FROM THE KERB FACE. It exists because there were two
+   independent answers to "how wide is this road" and the props were reading the wrong one.
+
+   The painter derives width from corridor(), which applies the MIN_PX floors and therefore
+   EXAGGERATES — roughly double true width on Corniche at 6 m/px, almost nothing on Al Maryah,
+   which is already fine enough to paint a road at its real size. The prop placer in w2h-props.js
+   knew none of that: it walked with a hardcoded w of 0.040 for the ring and 0.034 for arterials
+   in normalised units, and put lamps at w * 1.45 and palms at w * 2.35. Two guesses at where the
+   kerb is, against a kerb that moves per island. On an island where paint exaggerates, the lamp
+   line lands inside the painted carriageway; where it does not, it stands out in the sand. No
+   value of those multipliers is right on more than one island at a time, which is why tuning them
+   never converged.
+
+   So the offsets live here once, and BOTH consumers scale them by the same exaggeration factor
+   the paint used. Whatever the painter did to the carriageway happens to the lamp line too.
+
+   ORDER OUTWARD, and each position is where it is for a reason rather than for spacing:
+
+     verge      2.2   LAMP COLUMNS. Inside the cycle track, not outside the footway. One column
+                      line then lights the carriageway and the track together, which is how a
+                      segregated corridor is actually lit, and it keeps the columns off the
+                      pedestrian route instead of standing in it.
+     cycle      5.0   the track itself, 3.0 m wide - the width already used by the painter.
+     buffer     7.4   HEDGE. The strip between track and footway is what segregates them; that is
+                      its entire function, so planting it is both correct and the thing that makes
+                      the separation legible from above.
+     foot       9.6   footway, 4.0 m - again the width the painter already used.
+     outer     12.6   PALMS. Outermost so a seven-metre crown is not hanging over the track.
+
+   STANDALONE PATHS GET THEIR OWN NUMBERS. Corniche's 10.2 km track runs the seafront with no
+   carriageway to hang off for most of its length, so there is no kerb face to measure from and
+   the offsets are taken from the track centreline instead. Lit on one side only, tighter than a
+   road: a promenade is lit at about 25 m against 30-35 for a carriageway, on shorter columns. */
+const XSEC_M = { verge: 2.2, cycle: 5.0, cycleW: 3.0, buffer: 7.4, bufferW: 1.6,
+                 foot: 9.6, footW: 4.0, outer: 12.6 };
+const XSEC_PATH_M = { lamp: 3.4, palm: 5.5, lampStep: 25, palmStep: 18 };
+/* Road spacing, also in metres, also shared. The old walk stepped 0.052 in normalised units for
+   both lamps and palms, which is a different real distance on every island. */
+const XSEC_STEP_M = { lamp: 32, palm: 20, hedge: 9 };
+
 /* THE SUPERBLOCK, IN METRES, because that is the only unit in which it means anything. Abu Dhabi's
    downtown blocks run roughly 200 by 130 metres between street centrelines, and holding that in
    metres rather than in normalised island units is what makes the grain the same on a 76-unit
@@ -3066,6 +3108,55 @@ function paintGround(d, plan){
   plan.arterials.forEach(a => { if (strokeFor(a) === roadLocal) roadLocal(a); });
   plan.arterials.forEach(a => { const f = strokeFor(a); if (f !== roadLocal) f(a); });
   plan.ring.forEach(seg => roadPrimary(seg));
+
+  /* ===========================================================================
+     REAL PATHS AND PLAZAS.
+
+     PAINTED LAST, OVER THE ROADS, and that order is the point rather than an accident. A
+     promenade running along a seafront arterial crosses every side street that meets it, and on
+     the ground it is the side street that stops - the footway and the track run through on a
+     raised table. Painting under the roads would put a strip of tarmac across the promenade at
+     every junction, which is the opposite of what is built.
+
+     THE CYCLE TRACKS ARE 52 CHAINS ACROSS SIX ISLANDS and the footways are 777. Only cycle and
+     plaza are drawn here: foot is held back deliberately until the length grading is written,
+     because 800 km of pale line at exaggerated width does to the ground exactly what the 6,217
+     local streets did before the MIN_PX work - the island goes uniformly grey instead of
+     detailed. The chains are baked and ready; this is a painter decision, not a data gap.
+
+     WIDTH IS EXAGGERATED THE SAME WAY THE ROADS ARE. A 3 m track is half a pixel on Corniche at
+     the default 6 m/px, so at true width the most recognisable line of colour on the island would
+     be invisible. The floor here is deliberately generous relative to the road floors: a cycle
+     track has no lane markings, no median and no kerb casing to help it read, so the colour is
+     doing all of the work and it needs the width to show it. */
+  {
+    const paths  = (d.roads && d.roads.drawPaths)  || [];
+    const plazas = (d.roads && d.roads.drawPlazas) || [];
+
+    /* Plazas first: a square is a surface, and any track crossing it runs over the top. Filled
+       rather than stroked, in the plot paving tone with a kerb line round the edge so it reads as
+       a made surface rather than a pale blotch. */
+    for (const ring of plazas){
+      if (!ring || ring.length < 3) continue;
+      g.beginPath();
+      g.moveTo(PX(ring[0][0]), PY(ring[0][1]));
+      for (let i = 1; i < ring.length; i++) g.lineTo(PX(ring[i][0]), PY(ring[i][1]));
+      g.closePath();
+      g.fillStyle = SURF.paving; g.fill();
+      g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(0.8, U * roadW(d, 1.2)); g.stroke();
+    }
+
+    const cycW = Math.max(4.0, U * roadW(d, XSEC_M.cycleW));
+    for (const p of paths){
+      if (!p || p.length < 2 || p.kind !== 'cycle') continue;
+      const line = offsetPath(p, 0);
+      /* A pale casing under the track, the same trick the roads use with their kerb: it separates
+         the red-brown from whatever it is crossing so the track does not merge into a park or a
+         plot the moment it leaves the tarmac. */
+      strokePx(line, SURF.kerb, cycW * 1.45);
+      strokePx(line, SURF.cycle, cycW);
+    }
+  }
 
   /* ===========================================================================
      SLIP LANES.
@@ -4431,6 +4522,10 @@ function attachRealRoads(d){
   if (!b || !b.roads || !d.roads) return false;
   d.roads.drawRing = [];                 // no separate ring: the real Corniche road is a major
   d.roads.drawArterials = b.roads;
+  /* Null means the sidecar has not landed; an empty array means this island genuinely has none.
+     Kept apart so a later call can still fill them rather than concluding there are none. */
+  if (b.paths)  d.roads.drawPaths  = b.paths;
+  if (b.plazas) d.roads.drawPlazas = b.plazas;
   /* Junction pads, signals and zebras were placed at generated crossings, which the real network
      does not have. Empty rather than left in place: a signalised junction drawn where two real
      roads do not meet is worse than no signal at all. Real junctions come with stage 3. */

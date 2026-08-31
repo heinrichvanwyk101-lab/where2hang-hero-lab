@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v17';
+export const BUILD = 'basemap v18';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -221,7 +221,34 @@ export async function loadRoads(idx, id){
   if (!res.ok) throw new Error(`basemap: roads-${id}.json -> HTTP ${res.status}`);
   const d = await res.json();
   entry._roads = d.roads || [];
+  /* PATHS AND PLAZAS RIDE IN THE SAME SIDECAR, and are stashed on the same fetch rather than
+     given one of their own. A promenade that arrived on a different schedule to the road it runs
+     beside would paint onto a ground texture already uploaded, which is the same class of bug the
+     lazy-roads getter below exists to prevent. One fetch, one arrival. */
+  entry._paths  = d.paths  || [];
+  entry._plazas = d.plazas || [];
   return entry._roads;
+}
+
+/* Paths carry a kind rather than a class, and no lanes or oneway — a cycle track has neither.
+   Same normalisation as roads: island-local, divided by the half-span, so a path and the road it
+   runs beside land in one coordinate space and an offset between them means something. */
+export function pathsNormalised(entry, paths){
+  if (!entry.extent || !paths) return null;
+  const { cx, cy } = entry.extent;
+  const half = Math.max(entry.extent.w, entry.extent.d) / 2;
+  return paths.map(p => {
+    const pts = p.pts.map(([x, y]) => [(x - cx) / half, (y - cy) / half]);
+    pts.kind = p.kind;
+    return pts;
+  });
+}
+
+export function plazasNormalised(entry, plazas){
+  if (!entry.extent || !plazas) return null;
+  const { cx, cy } = entry.extent;
+  const half = Math.max(entry.extent.w, entry.extent.d) / 2;
+  return plazas.map(r => r.map(([x, y]) => [(x - cx) / half, (y - cy) / half]));
 }
 
 export function roadsNormalised(entry, roads){
@@ -391,6 +418,20 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
         if (!entry._roads) return null;
         if (!entry._roadsN) entry._roadsN = roadsNormalised(entry, entry._roads);
         return entry._roadsN;
+      },
+      /* Same lazy-getter contract as roads, and for the same reason: null means "not fetched
+         yet, ask again", an empty array means "this island genuinely has none". An island baked
+         before paths existed returns the empty array, so nothing downstream has to special-case
+         an older artefact. */
+      get paths(){
+        if (!entry._roads) return null;
+        if (!entry._pathsN) entry._pathsN = pathsNormalised(entry, entry._paths || []);
+        return entry._pathsN;
+      },
+      get plazas(){
+        if (!entry._roads) return null;
+        if (!entry._plazasN) entry._plazasN = plazasNormalised(entry, entry._plazas || []);
+        return entry._plazasN;
       },
       /* Landmarks in island-local SCENE units, north flipped to -z. These are world positions like
          roads and buildings, not shape coordinates, so they take the flip — see the note on
