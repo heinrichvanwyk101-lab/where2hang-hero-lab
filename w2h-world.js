@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v210';
+export const BUILD = 'world v211';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5887,7 +5887,24 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
        agree on roughly where the building is and not on its exact edge, so a zone drawn tight to
        the kit leaves a sliver of the real one poking out of one side — which reads worse than
        either fault alone because it looks like a rendering error rather than a decision. */
-    KIT_ZONES[corniche.id].push({ x0:b.min.x - 2, x1:b.max.x + 2, z0:b.min.z - 2, z1:b.max.z + 2 });
+    /* SIX UNITS, UP FROM TWO — the two systems that reserve ground around a landmark disagreed
+       with each other, and addFootprints(corniche) never having run in practice (see fillCorniche)
+       is the only reason nobody had seen it. The generated-fabric avoid list keeps a landmark's
+       whole precinct clear on purpose — Qasr Al Watan's own comment says so outright, "nothing
+       generated may stand inside a presidential compound" — sized to roughly the kit's measured
+       extent plus six units of clearance each side, a hundred by eighty-two against a measured
+       87.7 by 69.6. This zone, protecting the same landmark from real footprints instead of
+       generated ones, was drawn at two units for a different and narrower reason — covering the
+       gap between where the authored model and the surveyed outline agree a building roughly is.
+       Two real buildings from the actual bake land in exactly the gap those two numbers leave
+       between them, both hugging Qasr Al Watan's north edge: real, surveyed, entirely legitimate
+       data, rendering for the first time now that the fetch that was supposed to bring it
+       actually runs, in the one strip of ground every other system on the island was already
+       treating as off-limits. Six units does not fully close the gap on every landmark — Qasr Al
+       Watan's own is closer to five to six by this same arithmetic — but it is a large, safe step
+       in the right direction without inventing a second per-landmark table that could go stale
+       exactly the way the object-measured box was written to avoid. */
+    KIT_ZONES[corniche.id].push({ x0:b.min.x - 6, x1:b.max.x + 6, z0:b.min.z - 6, z1:b.max.z + 6 });
   }
 
   // Low-rise seaward of the towers: the scale contrast that makes the cluster read as enormous.
@@ -6143,8 +6160,12 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
        exact edge, and a zone drawn tight leaves a sliver of the flat one poking out — which reads
        worse than either fault alone because it looks like a rendering error rather than a
        decision. */
+    /* SIX, MATCHING CORNICHE'S OWN KIT_ZONES FOR THE SAME REASON — see the comment there. Yas has
+       not yet shown the same symptom because its real footprint payload was already flowing
+       before this was diagnosed, but the two-unit margin was never the right number here either;
+       it was copied from the same reasoning, not derived separately, so it carries the same fix. */
     if (isFinite(b.min.x)){
-      KIT_ZONES[yas.id].push({ x0:b.min.x - 2, x1:b.max.x + 2, z0:b.min.z - 2, z1:b.max.z + 2 });
+      KIT_ZONES[yas.id].push({ x0:b.min.x - 6, x1:b.max.x + 6, z0:b.min.z - 6, z1:b.max.z + 6 });
     }
   }
 }
