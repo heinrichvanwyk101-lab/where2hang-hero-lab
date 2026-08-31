@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v218';
+export const BUILD = 'world v219';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3910,7 +3910,15 @@ const DISTRICTS = [
       /* r tightened again, 220 to 160 — the first cut (273 to 220, ~19 per cent) was reported
          still too far, so this step is bigger rather than another small nudge that might also
          fall short: roughly 27 per cent further, ~41 per cent below the original computed value. */
-      { label:'Palace District', osm:null, x:-1020.96, z:89.68, h:26, r:160 },
+      /* r cut again, 160 to 80, this time from a confirmed number rather than another guess:
+         the overlay's own cam line read dist 875 / goal 875 / anchor.r 160 — camera fully
+         settled, anchor correctly picked up, so the mechanism was never broken, 160 was simply
+         still too generous for this scene's scale. For reference, Emirates Palace's own
+         individual shot (r:42) frames from roughly 230 — the compound shot at r:160 was still
+         nearly 4x further out than a normal single-landmark shot. 80 targets a distance around
+         440, roughly half of 875 and much closer to that individual-shot scale while still wide
+         enough to hold all three landmarks. */
+      { label:'Palace District', osm:null, x:-1020.96, z:89.68, h:26, r:80 },
       { label:'Marina Mall',   osm:'Marina Mall',    x:LM.marina.x, z:LM.marina.z, h: 6, r:30 },
       { label:'Fairmont Marina Residences', osm:'Fairmont Marina Residences', x:LM.fairmont.x, z:LM.fairmont.z, h: 10, r:16 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
