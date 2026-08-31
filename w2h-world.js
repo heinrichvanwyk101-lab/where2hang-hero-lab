@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v208';
+export const BUILD = 'world v209';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7889,6 +7889,17 @@ function buildIsland(id){
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
          buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,
          corniche, GROUND, propCount, KIT_ZONES, refreshIslandWater,
+         /* EXPORTED FOR addParkProps, which groundFeaturesFor's own ring-acceptance loop does
+            not help with. That loop rejects a whole RING when fewer than half its points are on
+            land — right for the mesh, since a ring mostly on land should still draw — but it
+            passes the ENTIRE ring through once accepted, water-touching edge included. Measured
+            against Corniche's real park data: 176 of 1,320 rings have at least one vertex past
+            the true coastline, 14.6% of all park vertices island-wide. A scatter sampling inside
+            one of those 176 rings can land a palm in the sea, which is exactly what standing in
+            front of Qasr Al Hosn showed. insideIsle is the per-POINT version of the same test
+            the ring loop already trusts, and it is what a sampled point needs — not a coarser
+            copy of the ring-level check repeated in a second file. */
+         insideIsle,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
             of them have junctions. */

@@ -884,7 +884,7 @@ phase('propKit');
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, insideIsle } =
   buildWorld(scene, kit, {
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -3228,7 +3228,13 @@ async function addGroundFeatures(d){
        island's checks while real park rings still exist to plant into. */
     const realParks = d.realParks || [];
     if (propKit.addParkProps && realParks.length){
-      const pp = propKit.addParkProps(d, d.plan, realParks);
+      /* SAME CONVENTION groundFeaturesFor'S OWN onIsle USES two lines above this file's ring
+         loop — x/d.r, MINUS z/d.r — because a sampled point here is in the identical (mesh-X,
+         mesh-Z) space a ring vertex is, and insideIsle wants the normalised (nx,ny) space its
+         own coastline grid was built in. Getting this sign wrong doesn't error, it silently
+         inverts which half of the island counts as land. */
+      const onIsle = (x, y) => insideIsle(d.id, x / d.r, -y / d.r);
+      const pp = propKit.addParkProps(d, d.plan, realParks, {}, onIsle);
       if (pp.group.children.length){
         d.detail.add(pp.group);
         snapshotMats(pp.group); registerLift(pp.group); applyView(view);

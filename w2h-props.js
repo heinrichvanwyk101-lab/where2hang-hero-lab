@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v24';
+export const BUILD = 'props v26';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -447,10 +447,17 @@ function pointInRing(ring, x, y){
    as tended would be tens of thousands of instances before a single dry-ground ring is reached.
    Sorted large to small, a fixed budget spends itself on the parks a person would actually
    notice and runs out on the slivers, which is the outcome that matters and not the total. */
-function addParkProps(d, plan, rings, budget = {}){
+function addParkProps(d, plan, rings, budget = {}, onIsle){
   const B = Object.assign({ palms:1800, shrubs:2800 }, budget);
   const R = plan.rndProps;
   const r = d.r;
+  /* onIsle DEFAULTS TO "everywhere is land" rather than being required, so a caller — or a test
+     harness — that hasn't wired it through yet degrades to the old behaviour instead of
+     throwing. That silence is a real cost: the bug this parameter exists to fix (palms placed
+     inside a park ring that itself crosses the true coastline — 176 of Corniche's 1,320 real
+     park rings do, measured against the actual bake) comes back the moment this default is
+     what's actually running, with nothing telling you it happened. */
+  const onLand = onIsle || (() => true);
   /* OWN GROUP, RETURNED RATHER THAN ADDED, matching groundFeaturesFor's own contract exactly.
      This runs from addGroundFeatures, after an island's original snapshot/register/apply pass
      has already happened — so whatever it builds needs to go through that pass a second time,
@@ -490,7 +497,31 @@ function addParkProps(d, plan, rings, budget = {}){
   // ABSOLUTE island units in, NORMALISED units out — the one point every coordinate in this
   // function crosses from "real metres, real shape" into what build()'s place() callbacks and
   // every other list in this file already expect.
-  const push = (arr, ax, ay, extra) => arr.push(Object.assign({ x: ax / r, y: ay / r }, extra));
+  //
+  // THE STORED y IS NEGATED, AND THAT NEGATION IS LOAD-BEARING. Every build() callback below
+  // places with `M.position.set(p.x * r, Y, -p.y * r)` — the SAME formula addProps above uses
+  // for plan.parks, because that is where this function's first draft copied it from. But
+  // plan.parks coordinates and these ring coordinates are not in the same convention: a real
+  // ring's second coordinate IS the world Z already (traced through groundFeaturesFor: the
+  // flip in prepGreenRing and the flip on mesh push cancel, so ring[i][1] lands on screen
+  // exactly where it's written). Storing ay/r and letting the placement formula negate it a
+  // SECOND time put every real-park palm and shrub at the mirror of the point that had just
+  // been validated as being inside the ring and on land — confirmed by placing the SAME
+  // accepted point at its un-mirrored position and watching Corniche's water-landing rate on
+  // the real coastline drop from 61.6% to 16.3%. Negating here, once, before the placement
+  // formula negates again, is what makes the two cancel and put the palm where onLand said it
+  // was.
+  //
+  // onLand IS CHECKED HERE, NOT INSIDE pointInRing's callers — one choke point every placed
+  // point passes through, palm, shrub, or hedge, rather than four separate call sites that could
+  // individually drift out of sync. Ring membership says the point is inside the park; onLand
+  // says the park itself hasn't wandered past the coast at this particular corner. Both have to
+  // be true, and only onLand knows about the coastline. Checked BEFORE the negation, in the same
+  // (worldX, worldZ) convention groundFeaturesFor's own onIsle already uses on ring vertices.
+  const push = (arr, ax, ay, extra) => {
+    if (!onLand(ax, ay)) return;
+    arr.push(Object.assign({ x: ax / r, y: -ay / r }, extra));
+  };
 
   const buckets = { lawn:[], dry:[], pitch:[] };
   for (const rec of rings){
