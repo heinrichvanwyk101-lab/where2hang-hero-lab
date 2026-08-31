@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v217';
+export const BUILD = 'world v218';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3907,7 +3907,10 @@ const DISTRICTS = [
       /* r tightened from 273.04 to 220 after a live check: direction and centring were right,
          distance was a little too far. 220 is roughly a 19 per cent pull-in — a proportionate
          first adjustment for "a little too far" rather than a large, unverified guess. */
-      { label:'Palace District', osm:null, x:-1020.96, z:89.68, h:26, r:220 },
+      /* r tightened again, 220 to 160 — the first cut (273 to 220, ~19 per cent) was reported
+         still too far, so this step is bigger rather than another small nudge that might also
+         fall short: roughly 27 per cent further, ~41 per cent below the original computed value. */
+      { label:'Palace District', osm:null, x:-1020.96, z:89.68, h:26, r:160 },
       { label:'Marina Mall',   osm:'Marina Mall',    x:LM.marina.x, z:LM.marina.z, h: 6, r:30 },
       { label:'Fairmont Marina Residences', osm:'Fairmont Marina Residences', x:LM.fairmont.x, z:LM.fairmont.z, h: 10, r:16 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
