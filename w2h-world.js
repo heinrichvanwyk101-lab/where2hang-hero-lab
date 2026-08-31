@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v224';
+export const BUILD = 'world v225';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2955,6 +2955,15 @@ function paintGround(d, plan){
      mouth or a lagoon would otherwise put a promenade down a road that merely passes a hole in
      the land, and the failure is loud: eight metres of paving and a planted strip running through
      the middle of the city. Two thirds of coastal samples must agree on the same side. */
+  /* Read once for the whole canvas rather than per road: ?cyc=N is the track width floor in
+     pixels, ?cycol=RRGGBB its colour. Both used by roadPrimary's seafront section and by the real
+     baked chains, so the two stay identical whatever they are set to. */
+  const CYC_PX_R = (() => {
+    const m = typeof location !== 'undefined' && location.search.match(/[?&]cyc=(\d+(?:\.\d+)?)/);
+    const v = m ? parseFloat(m[1]) : 2.4;
+    return isFinite(v) && v >= 0.8 && v <= 12 ? v : 2.4;
+  })();
+
   function seawardSign(pts){
     if (pts.length < 2) return 0;
     const probe = 40 / Math.max(1, d.r * M_PER_UNIT);
@@ -3026,16 +3035,36 @@ function paintGround(d, plan){
        the edge of the one inside it, which is how they meet on the ground: the green strip laps
        the track's kerb, the promenade laps the strip. */
     if (sea){
+      /* THE EXAGGERATION HAS TO BE APPLIED TO THE OFFSETS TOO, and not applying it is why the
+         track ran over the carriageway.
+
+         W comes from corridor(), which floors at MIN_PX and therefore EXAGGERATES — a 31 m ring
+         is about 5 px at true scale on Corniche and is painted at 10. The offsets below were
+         written as U * roadW(d, m), which is true scale with no floor, so the whole section was
+         being measured in metres against a road drawn at twice its width. A track nominally 5 m
+         beyond the kerb face landed inside the painted carriageway, which is exactly what the
+         header of XSEC_M warns about and what this code then did anyway.
+
+         exag is the factor the carriageway actually got, measured rather than assumed, so the
+         section stretches by whatever the road stretched by and lands outside the paint on every
+         island regardless of how fine its canvas is. */
+      const trueW = U * roadW(d, ROAD_RING_M);
+      const exag  = trueW > 0.01 ? W / trueW : 1;
       const vergeO = W * ROAD_KERB * 0.5;
-      const cycW  = Math.max(2.4, U * roadW(d, XSEC_M.cycleW));
-      const grnW  = U * roadW(d, XSEC_M.greenW);
-      const promW = U * roadW(d, XSEC_M.promW);
-      const at = m => sea * (vergeO + U * roadW(d, m));
+      const cycW  = Math.max(CYC_PX_R, U * roadW(d, XSEC_M.cycleW) * exag);
+      const grnW  = U * roadW(d, XSEC_M.greenW) * exag;
+      const promW = U * roadW(d, XSEC_M.promW) * exag;
+      const at = m => sea * (vergeO + U * roadW(d, m) * exag);
       /* Promenade first and widest, then the strip over its inner edge, then the track over that.
          Outermost painted first means no surface has to be trimmed against the next. */
       strokePx(offsetPath(pts, at(XSEC_M.prom)),  SURF.paving,  promW);
       strokePx(offsetPath(pts, at(XSEC_M.green)), SURF.lawn + '0.94)', grnW);
-      strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.kerb,  cycW * 1.30);
+      /* CASING AS A FIXED PIXEL MARGIN, NOT A RATIO, and that is the whole of why the edge looked
+         muddy. At 1.30x of a 2.4 px track the casing showed 0.36 px either side — under a pixel,
+         so it never resolved into a line and instead half-tinted the track's own edge pixels. A
+         flat +1.6 px keeps a clean 0.8 px of pale either side at any track width, which is what
+         the real white edge lines do and what makes the band read as laid rather than smeared. */
+      strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.kerb,  cycW + 1.6);
       strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.cycle, cycW);
     }
   }
@@ -3246,12 +3275,7 @@ function paintGround(d, plan){
        ?cyc=N OVERRIDES IT, the same way ?gpx=N overrides the ground resolution and for the same
        reason: the only honest way to settle a width is to look at it, and doing that as a deploy
        per attempt is three minutes a data point. From the URL it is a reload. */
-    const CYC_PX = (() => {
-      const m = typeof location !== 'undefined' && location.search.match(/[?&]cyc=(\d+(?:\.\d+)?)/);
-      const v = m ? parseFloat(m[1]) : 2.4;
-      return isFinite(v) && v >= 0.8 && v <= 12 ? v : 2.4;
-    })();
-    const cycW = Math.max(CYC_PX, U * roadW(d, XSEC_M.cycleW));
+    const cycW = Math.max(CYC_PX_R, U * roadW(d, XSEC_M.cycleW));
     /* ?cycol=RRGGBB, no hash. Paired with ?cyc=N so width and colour can be settled in the same
        reload rather than one deploy each. Anything that is not six hex digits falls back. */
     const CYC_COL = (() => {
@@ -3264,7 +3288,7 @@ function paintGround(d, plan){
       /* A pale casing under the track, the same trick the roads use with their kerb: it separates
          the red-brown from whatever it is crossing so the track does not merge into a park or a
          plot the moment it leaves the tarmac. */
-      strokePx(line, SURF.kerb, cycW * 1.30);
+      strokePx(line, SURF.kerb, cycW + 1.6);
       strokePx(line, CYC_COL, cycW);
     }
   }
