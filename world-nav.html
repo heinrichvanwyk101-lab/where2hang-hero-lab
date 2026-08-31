@@ -2986,6 +2986,17 @@ function fillCorniche(){
     addWaterGeometry(d);
   }
   applyView(view);
+  /* APPLYLOD WAS MISSING HERE, THE SAME SHAPE AS THE OTHER TWO GAPS THIS FUNCTION ALREADY CLOSED.
+     addGroundFeatures and, before that, the visibility toggle itself were both found absent from
+     this exact bypass path — fillCorniche builds real geometry outside setDistrict/setPlace/
+     setWorld, so nothing else was going to call it. applyLOD is "the one function every state
+     change and every view change calls" per its own comment, and the only place fitShadow() is
+     hooked — so every idle-callback build of Corniche's other fifteen kilometres, roughly 18,776
+     buildings, was landing in the scene with the shadow camera still fit to whatever existed
+     before they arrived. Whether that alone explains buildings failing to render, or whether it
+     is the stale visibility state doing that and the shadow fit is a second symptom of the same
+     missing call, one line closes both: the same fix, for the same reason, a third time. */
+  applyLOD();
 }
 if (window.requestIdleCallback) requestIdleCallback(fillCorniche, { timeout:2000 });
 else setTimeout(fillCorniche, 800);
