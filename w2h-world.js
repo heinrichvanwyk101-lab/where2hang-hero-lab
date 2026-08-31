@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v214';
+export const BUILD = 'world v215';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3982,7 +3982,13 @@ const DISTRICTS = [
          41 stopped at real z 120.8, well short of the plaza's real z 158.8. Width was already
          wide enough (half 50 against the forecourt's own widest point at 33.5) and is unchanged;
          only depth, and only toward the side that needed it. */
-      { x: LM.qasr.x, z: LM.qasr.z + 22, w:100, d:114 },    // Qasr Al Watan and its forecourt
+      /* WIDENED AGAIN, FOR THE ROTATION. The forecourt itself was axis-aligned when this
+         rectangle was sized; it no longer is (see QASR_ROT in qasrAlWatan) — a rotated shape's
+         own axis-aligned bounding box is bigger than the unrotated version it replaced. Checked
+         by rotating every extreme point of the axis, plaza circle and garden strips: half-width
+         needed grew from 33.5 to 55.1, and the far z-edge from real 158.8 to 167.0. Regenerated
+         from those numbers with margin rather than nudged. */
+      { x: LM.qasr.x, z: LM.qasr.z + 26, w:114, d:128 },    // Qasr Al Watan and its forecourt
       { x: LM.marina.x, z: LM.marina.z, w:60, d:57 },     // Marina Mall, kit measures 47.8 x 45.2
       { x: LM.fairmont.x, z: LM.fairmont.z, w:32, d:24 },  // Fairmont Marina, kit measures 23.5 x 15.8
     ],

@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v91';
+export const BUILD = 'city v93';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1038,6 +1038,13 @@ function emiratesPalace(x0, z0){
   paveMat.userData.glassOverride = false;
   paveMat.userData.duskColor = 0xCBBDB2;
   paveMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD3C6BC, roughness:0.94 });
+  /* DoubleSide here too, not just on paveMat itself. Day and Check both swap the mesh's material
+     to this exact object — o.material = o.userData.dayMats — rather than tinting paveMat in
+     place, which is why setting .side on paveMat alone fixed Dusk (Dusk falls back to the
+     original material when no duskMats exists) and nothing else. Missed this the first time by
+     checking that the fix worked without checking which of the four view modes actually exercise
+     which material object. */
+  paveMat.userData.dayMats.side = THREE.DoubleSide;
 
   const HALF = 0.8;                       // 6.2 m each side of the centreline
   const pv = [], pi = [];
@@ -1109,6 +1116,7 @@ function emiratesPalace(x0, z0){
   fountainMat.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0x3F7A9C, roughness:0.3, metalness:0.05 });
   fountainMat.side = THREE.DoubleSide;
+  fountainMat.userData.dayMats.side = THREE.DoubleSide;
   closedTracedGround(PALACE_PATHS[4], fountainMat, 0.034);
   /* A rim, not a wall — the fountain island sits proud of the plaza by less than the shrub
      height used elsewhere on this landmark, matching how the ribbons themselves stay coplanar
@@ -2476,6 +2484,8 @@ function qasrAlWatan(x0, z0){
   paveMat.userData.glassOverride = false;
   paveMat.userData.duskColor = 0xCBBDB2;
   paveMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD3C6BC, roughness:0.94 });
+  // Same DoubleSide-on-dayMats fix as the palace forecourt — see its own comment for why.
+  paveMat.userData.dayMats.side = THREE.DoubleSide;
   function closedGround(offsets, mat, yOff){
     const shape = new THREE.Shape(offsets.map(([px, pz]) => new THREE.Vector2(px, -pz)));
     const geo = new THREE.ShapeGeometry(shape);
@@ -2490,9 +2500,24 @@ function qasrAlWatan(x0, z0){
   const FRONT_Z = 31.0;                    // just past QASR_MAIN's own deepest traced point
   const AXIS_HW = 14.0, PLAZA_R = 20.0;
   const plazaCz = FRONT_Z + 8 + PLAZA_R;
+  /* QASR_ROT — measured, not assumed, after the axis-aligned version reported as visibly off.
+     QASR_MAIN carries no named rotation constant the way PALACE_ROT exists for the palace, which
+     reads as "axis-aligned" but is not: found by taking every edge of QASR_MAIN, sorting by
+     length, and checking the angle of the longest ones. They cluster in two tight, genuinely
+     perpendicular groups (73.5-75.9 degrees and 163.5-166.2 degrees, 90.0 degrees apart) rather
+     than scattering, which is what a real rectilinear building's own long walls should do and a
+     coincidence would not. The dominant cluster averages 163.55 degrees against this shape's own
+     axis-aligned assumption of 180 — a -16.45 degree rotation, matching two independent live
+     pick-tool measurements (roughly -14 and -15.5 degrees) closely enough that three separate
+     measurements now agree rather than one guess standing alone. Checked as a 2D render against
+     QASR_MAIN's own outline before this went into real geometry: the paved axis lands directly
+     against the building's own protruding link to the dome block, not floating off at an angle. */
+  const QASR_ROT = -0.28713159522809534;
+  const qc = Math.cos(QASR_ROT), qs = Math.sin(QASR_ROT);
+  function qrot(dx, dz){ return [dx * qc - dz * qs, dx * qs + dz * qc]; }
   const axisPoly = [
     [-AXIS_HW, FRONT_Z], [AXIS_HW, FRONT_Z], [AXIS_HW, plazaCz], [-AXIS_HW, plazaCz],
-  ];
+  ].map(([dx, dz]) => qrot(dx, dz));
   /* DoubleSide for the same reason the palace forecourt needed it — checked, both axisPoly and
      plazaCircle come out clockwise in this exact coordinate space too, same invisible-from-above
      result via rotateX(-Math.PI/2). Set once, before either shape is built, since paveMat is
@@ -2503,7 +2528,7 @@ function qasrAlWatan(x0, z0){
   const plazaCircle = [];
   for (let i = 0; i < CIRC_N; i++){
     const a = (i / CIRC_N) * Math.PI * 2;
-    plazaCircle.push([Math.cos(a) * PLAZA_R, plazaCz + Math.sin(a) * PLAZA_R]);
+    plazaCircle.push(qrot(Math.cos(a) * PLAZA_R, plazaCz + Math.sin(a) * PLAZA_R));
   }
   closedGround(plazaCircle, paveMat, 0.028);
   const monumentMat = new THREE.MeshStandardMaterial({
@@ -2512,7 +2537,8 @@ function qasrAlWatan(x0, z0){
   monumentMat.userData.duskColor = 0xD9D2C6;
   monumentMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE0DAD0, roughness:0.5 });
   const monument = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 4.5, 12), monumentMat);
-  monument.position.set(x0, 2.25, z0 + plazaCz); g.add(monument);
+  const [monX, monZ] = qrot(0, plazaCz);
+  monument.position.set(x0 + monX, 2.25, z0 + monZ); g.add(monument);
 
   /* Diamond garden beds either side of the axis, between the building's own traced edge and the
      plaza — the same "bounded by two real-or-real-enough shapes rather than an invented
@@ -2531,12 +2557,14 @@ function qasrAlWatan(x0, z0){
         const czp = pz + cell / 2, cxp = side * (px2 + cell / 2);
         // Skip anything that would fall inside the circular plaza — the x-range above overlaps
         // the circle's own bounding box near its edge, so distance-from-centre is the real test,
-        // not just the rectangular bed strip's own bounds.
+        // not just the rectangular bed strip's own bounds. Local, unrotated coordinates here,
+        // matching plazaCz's own local frame — rotation is applied only at final placement below.
         const distToCircle = Math.hypot(cxp, czp - plazaCz);
         if (distToCircle < PLAZA_R + 1.5) continue;
+        const [wx, wz] = qrot(cxp, czp);
         const bed = new THREE.Mesh(bedG, gardenMat);
-        bed.position.set(x0 + cxp, 0.20, z0 + czp);
-        bed.rotation.y = Math.PI / 4;
+        bed.position.set(x0 + wx, 0.20, z0 + wz);
+        bed.rotation.y = Math.PI / 4 + QASR_ROT;
         g.add(bed);
       }
     }
