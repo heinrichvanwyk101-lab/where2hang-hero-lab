@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v225';
+export const BUILD = 'world v226';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2147,10 +2147,14 @@ const ROAD_KERB = 1.20;                      // the casing the painter strokes u
    carriageway to hang off for most of its length, so there is no kerb face to measure from and
    the offsets are taken from the track centreline instead. Lit on one side only, tighter than a
    road: a promenade is lit at about 25 m against 30-35 for a carriageway, on shorter columns. */
+/* MOVED OUTWARD. The section sat with the track 5 m off the kerb face, which put it visibly on
+   the carriageway's shoulder once the exaggeration factor was applied to the offsets as well as
+   the widths. Everything steps out: the track clears the road properly, and the strip and the
+   promenade follow it rather than being compressed against it. */
 const XSEC_M = { verge: 2.2, foot: 5.4, footW: 4.0,
-                 cycle: 5.0, cycleW: 3.0,
-                 green: 10.0, greenW: 6.0,
-                 prom: 18.0, promW: 8.0 };
+                 cycle: 8.0, cycleW: 3.0,
+                 green: 14.0, greenW: 6.0,
+                 prom: 22.0, promW: 8.0 };
 const XSEC_PATH_M = { lamp: 3.4, palm: 5.5, lampStep: 25, palmStep: 18 };
 /* Road spacing, also in metres, also shared. The old walk stepped 0.052 in normalised units for
    both lamps and palms, which is a different real distance on every island. */
@@ -3064,8 +3068,15 @@ function paintGround(d, plan){
          so it never resolved into a line and instead half-tinted the track's own edge pixels. A
          flat +1.6 px keeps a clean 0.8 px of pale either side at any track width, which is what
          the real white edge lines do and what makes the band read as laid rather than smeared. */
-      strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.kerb,  cycW + 1.6);
-      strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.cycle, cycW);
+      /* NOT PAINTED WHERE THE REAL CHAINS EXIST. Corniche, Yas, Raha, Reem, Maryah and Saadiyat
+         all bake real cycle geometry now, and drawing an invented track alongside the ring as
+         well would put two tracks on the same seafront a few metres apart. The painted one stays
+         only as the fallback for an island whose sidecar has not landed. */
+      const hasReal = (d.roads && d.roads.drawPaths || []).some(p => p && p.kind === 'cycle');
+      if (!hasReal){
+        strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.kerb,  cycW + 1.6);
+        strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.cycle, cycW);
+      }
     }
   }
 
@@ -6939,6 +6950,82 @@ function groundFeaturesFor(d, feats){
   const g = new THREE.Group();
   g.name = 'groundFeatures';
   const onIsle = (x, z) => insideIsle(d.id, x / d.r, -z / d.r);
+
+  /* ---- the cycle tracks, AS GEOMETRY RATHER THAN PAINT ----
+
+     PAINT CANNOT MAKE THIS CRISP, and that is a texel budget rather than a drawing fault. The
+     ground canvas clamps at 3,072 pixels, which is 6.2 metres to the pixel on Corniche; a 3 m
+     track is half a texel true and was being drawn at about two. Magnified at a district camera
+     that is guaranteed blur, and no stroke width, casing or filter setting changes it — the
+     texture is already at MAX_ANISO with a full mip chain. Three attempts at sharpening a painted
+     line were three attempts at the wrong problem.
+
+     Geometry has no such limit: the edge is an edge at any zoom. The cost is trivial — 52 chains
+     across six islands, a few thousand triangles — and flatSet's polygonOffset already solves the
+     co-planar fight that made the earlier hardscape layers need hand-tuned Y offsets.
+
+     THREE RIBBONS, NOT ONE. The track and a thin pale ribbon down each edge, which is what the
+     real surfacing has and what actually reads as a made lane rather than a coloured smear. The
+     edges are separate meshes rather than a texture so they stay one pixel of white at any
+     distance instead of dissolving into the fill. */
+  const cycMat  = flatSet(0x2E7A66, 0x3E9C82, 0x4CC0A2, 0.85, 3);
+  const cycEdge = flatSet(0xBFBCAF, 0xDCD8CA, 0xEFEBDF, 0.80, 4);
+  {
+    /* ?cycw=N overrides the width in SCENE UNITS (7.8 m each), replacing the old ?cyc=N which was
+       in canvas pixels and meaningless now the track is not painted. 1.35 units is about 10.5 m —
+       still a heavy exaggeration on a 3 m track, and deliberately so, because at district distance
+       a true-width lane is under two pixels of screen. */
+    const CW = (() => {
+      const m = typeof location !== 'undefined' && location.search.match(/[?&]cycw=(\d+(?:\.\d+)?)/);
+      const v = m ? parseFloat(m[1]) : 1.35;
+      return isFinite(v) && v >= 0.2 && v <= 8 ? v : 1.35;
+    })();
+    const EW = 0.26;                       // each pale edge ribbon, scene units
+
+    const ribbon = (chain, halfW, out) => {
+      const n = chain.length;
+      for (let i = 0; i < n - 1; i++){
+        const a = chain[i], b = chain[i + 1];
+        let tx = b[0] - a[0], tz = b[1] - a[1];
+        const L = Math.hypot(tx, tz);
+        if (L < 1e-6) continue;
+        tx /= L; tz /= L;
+        const nx = -tz * halfW, nz = tx * halfW;
+        const p = out.pos, y = GROUND + 0.010;
+        const base = p.length / 3;
+        p.push(a[0] - nx, y, a[1] - nz,  a[0] + nx, y, a[1] + nz,
+               b[0] - nx, y, b[1] - nz,  b[0] + nx, y, b[1] + nz);
+        out.idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+      }
+    };
+    const mk = (chains, halfW, off, matSet) => {
+      const out = { pos: [], idx: [] };
+      for (const c of chains) ribbon(c.map(p => [p[0] + off[0], p[1] + off[1]]), halfW, out);
+      if (!out.pos.length) return 0;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3));
+      geo.setIndex(out.idx);
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, matSet.base);
+      m.receiveShadow = true;
+      g.add(tagGround(m, matSet));
+      return out.idx.length / 3;
+    };
+
+    /* Normalised island coordinates to scene units. Same convention footprintsFor uses, and the
+       negation on the second component is the one that has bitten this file before. */
+    const chains = ((d.roads && d.roads.drawPaths) || [])
+      .filter(p => p && p.kind === 'cycle' && p.length >= 2)
+      .map(p => p.map(q => [q[0] * d.r, -q[1] * d.r]))
+      .filter(c => c.some(q => onIsle(q[0], q[1])));
+
+    if (chains.length){
+      /* Edges first and slightly wider, fill over the top: two draws instead of four, and the
+         pale shows as a margin either side rather than needing its own offset pair. */
+      mk(chains, (CW + EW * 2) * 0.5, [0, 0], cycEdge);
+      mk(chains, CW * 0.5,            [0, 0], cycMat);
+    }
+  }
 
   /* ---- the golf course ---- */
   const fairway = flatSet(0x354E32, 0x657E3F, 0x6E8F4E, 0.9, 2);
