@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v221';
+export const BUILD = 'world v224';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1642,11 +1642,29 @@ const SURF = {
   pavingLt: '#E6E0CE',
   kerb:     '#EFEBDF',
   line:     'rgba(250,246,236,0.92)',
-  /* THE CYCLE TRACK IS RED-BROWN, and that colour is doing recognition work rather than decoration:
-     coloured surfacing is how a segregated track is distinguished from a footway everywhere it is
-     built, and on the Corniche it is the strongest single line of colour on the island. Warm enough
-     to read against grey tarmac and pale paving, dark enough not to compete with the lit windows. */
-  cycle:    '#8A5340',
+  /* THE CYCLE TRACK IS GREEN, AND IT IS GREEN BECAUSE ABU DHABI'S ARE. This was red-brown, which
+     is the convention in most of Europe and is simply wrong here — the Corniche track is laid in
+     bright green surfacing, and getting that one colour right is a large part of whether the
+     island reads as this city or as a generic one.
+
+     THE HARD PART IS THAT IT RUNS THROUGH A PARK. SURF.lawn is rgba(74,104,52) and parkland
+     follows the seafront for the track's entire length, so a muted green track would disappear
+     into the ground it crosses — the exact failure the red never had. The real one does not
+     disappear, because it is vivid synthetic surfacing against dull irrigated grass, and the
+     answer here is the same: markedly brighter than the planting, not merely a different green.
+
+     IT IS TEAL-SHIFTED, NOT A GRASS GREEN, and that is from a photograph of the real surfacing
+     rather than from reasoning about it. The first attempt here was #2FA24F, a leaf green picked
+     to sit above SURF.lawn in saturation — the right instinct and the wrong hue. The real track is
+     a mint sea-green, lighter and cooler, and the cool shift is what actually separates it from
+     planting: a warm green competes with foliage on hue and has to win on brightness alone, while
+     this one is on the other side of the grass entirely and holds even where the two touch.
+
+     The white edge lines either side of the real track are already being drawn, by the pale casing
+     stroked underneath — a detail that arrived for a different reason and turns out to be correct.
+
+     ?cycol=RRGGBB overrides it, for the same reason ?cyc=N overrides the width. */
+  cycle:    '#4CC0A2',
   foot:     '#CFC7B2',          // a shade under the plot paving, so a footway is not a forecourt
 };
 
@@ -2097,25 +2115,42 @@ const ROAD_KERB = 1.20;                      // the casing the painter strokes u
    So the offsets live here once, and BOTH consumers scale them by the same exaggeration factor
    the paint used. Whatever the painter did to the carriageway happens to the lamp line too.
 
-   ORDER OUTWARD, and each position is where it is for a reason rather than for spacing:
+   THERE ARE TWO SECTIONS, NOT ONE, AND THAT IS THE CORRECTION THAT MATTERS MOST. The first
+   version of this table described a seafront and then applied it to both sides of every major
+   road in the scene, because roadPrimary strokes its verge treatment inside [-1, 1].forEach. So
+   every arterial in the middle of the city grew a promenade down both flanks, and the Corniche
+   itself grew a second seafront on its landward side, facing the shops.
 
-     verge      2.2   LAMP COLUMNS. Inside the cycle track, not outside the footway. One column
-                      line then lights the carriageway and the track together, which is how a
-                      segregated corridor is actually lit, and it keeps the columns off the
-                      pedestrian route instead of standing in it.
-     cycle      5.0   the track itself, 3.0 m wide - the width already used by the painter.
-     buffer     7.4   HEDGE. The strip between track and footway is what segregates them; that is
-                      its entire function, so planting it is both correct and the thing that makes
-                      the separation legible from above.
-     foot       9.6   footway, 4.0 m - again the width the painter already used.
-     outer     12.6   PALMS. Outermost so a seven-metre crown is not hanging over the track.
+   The real order on the Corniche, outward from the carriageway, is:
+
+     road -> cycle track -> green strip with trees and hedges -> promenade -> beach
+
+   and that sequence exists on the SEAWARD SIDE ONLY. Landward there is a kerb, a footway, and
+   then the city. So:
+
+   ROAD, both sides, everywhere:
+     verge      2.2   LAMP COLUMNS, between the carriageway and whatever is beyond it. One column
+                      line lights the road and the track together, which is how a segregated
+                      corridor is lit, and it keeps the columns off the pedestrian route.
+     foot       5.4   footway, 4.0 m. On the landward side this is the whole story.
+
+   SEAFRONT, seaward side only, replacing the plain footway above:
+     cycle      5.0   the track, 3.0 m. Nearest the road, not out by the water.
+     green     10.0   THE PLANTED STRIP, 6.0 m. Trees AND hedges, and it is a real strip rather
+                      than the 1.6 m hedge buffer the first version had - in the reference it is
+                      wide enough for staked trees with shrub beds between them. This is what
+                      separates the track from the promenade.
+     prom      18.0   the promenade, 8.0 m. Wide, paved, and the outermost made surface.
+     beach            beyond the promenade, and already painted by the coastline band.
 
    STANDALONE PATHS GET THEIR OWN NUMBERS. Corniche's 10.2 km track runs the seafront with no
    carriageway to hang off for most of its length, so there is no kerb face to measure from and
    the offsets are taken from the track centreline instead. Lit on one side only, tighter than a
    road: a promenade is lit at about 25 m against 30-35 for a carriageway, on shorter columns. */
-const XSEC_M = { verge: 2.2, cycle: 5.0, cycleW: 3.0, buffer: 7.4, bufferW: 1.6,
-                 foot: 9.6, footW: 4.0, outer: 12.6 };
+const XSEC_M = { verge: 2.2, foot: 5.4, footW: 4.0,
+                 cycle: 5.0, cycleW: 3.0,
+                 green: 10.0, greenW: 6.0,
+                 prom: 18.0, promW: 8.0 };
 const XSEC_PATH_M = { lamp: 3.4, palm: 5.5, lampStep: 25, palmStep: 18 };
 /* Road spacing, also in metres, also shared. The old walk stepped 0.052 in normalised units for
    both lamps and palms, which is a different real distance on every island. */
@@ -2908,12 +2943,48 @@ function paintGround(d, plan){
   const MIN_PX = { ring: 10, major: 9, minor: 6, local: 3.5 };
   const corridor = (m, minPx) => Math.max(minPx, U * roadW(d, m));
 
+  /* WHICH SIDE IS THE SEA ON, derived rather than declared.
+
+     A seafront section cannot be a property of the road, because the same polyline can run along
+     the coast for part of its length and inland for the rest, and because no artefact we bake
+     says "this road faces water". What we do have is the island shape, so: sample points along
+     the road, probe forty metres either side, and count how often one side is off the island and
+     the other on it. A road with no such samples is inland and gets nothing.
+
+     A CLEAR MAJORITY IS REQUIRED, not a single hit. One sample landing outside near a marina
+     mouth or a lagoon would otherwise put a promenade down a road that merely passes a hole in
+     the land, and the failure is loud: eight metres of paving and a planted strip running through
+     the middle of the city. Two thirds of coastal samples must agree on the same side. */
+  function seawardSign(pts){
+    if (pts.length < 2) return 0;
+    const probe = 40 / Math.max(1, d.r * M_PER_UNIT);
+    let plus = 0, minus = 0;
+    const step = Math.max(1, Math.floor(pts.length / 12));
+    for (let i = 0; i < pts.length; i += step){
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let tx = b[0] - a[0], ty = b[1] - a[1];
+      const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+      const nx = -ty, ny = tx;
+      const p = pts[i];
+      const inP = insideIsle(d.id, p[0] + nx * probe, p[1] + ny * probe);
+      const inM = insideIsle(d.id, p[0] - nx * probe, p[1] - ny * probe);
+      if (inP && !inM) minus++;
+      else if (inM && !inP) plus++;
+    }
+    const n = plus + minus;
+    if (!n || n < 2) return 0;
+    if (plus  >= n * 0.67) return  1;
+    if (minus >= n * 0.67) return -1;
+    return 0;
+  }
+
   function roadPrimary(pts){
     const W = corridor(ROAD_RING_M, MIN_PX.ring);   // full corridor, kerb to kerb
     const med = W * 0.16;                         // planted median
     const car = (W - med) / 2;                    // each carriageway
     const halfC = (med + car) / 2;                // centre of each carriageway from the axis
     g.lineCap = 'butt'; g.lineJoin = 'round';
+    const sea = seawardSign(pts);
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     [-1, 1].forEach(sgn => {
       /* THE SHOULDER, outside the carriageway and inside the kerb casing. It is the strip that
@@ -2922,17 +2993,15 @@ function paintGround(d, plan){
          line between black and sand. */
       strokePx(offsetPath(pts, sgn * (halfC + car * 0.56)), SURF.sandDk, car * 0.30);
 
-      /* FOOTWAY AND CYCLE TRACK. The Corniche's cycle track is one of the most recognisable
-         things about the road — an eight-kilometre red-brown ribbon running the whole seafront
-         with a pale paved footway beside it — and its absence is a large part of why the ring
-         reads as a carriageway rather than as the Corniche.
-
-         Both sit OUTSIDE the kerb casing, so they are on the verge where they belong rather than
-         eating carriageway. Widths in metres like everything else that is a real dimension. */
+      /* THE VERGE TREATMENT IS NO LONGER MIRRORED, and that was the fault. Everything in this
+         forEach applies to both flanks, so a cycle track and a footway stroked here gave every
+         major road in the scene a seafront on both sides — including the Corniche's landward
+         flank, which faces the city and has no such thing. Only the plain footway belongs on
+         both sides; the seafront section is applied once, below, on the seaward side alone. */
       const vergeO = W * ROAD_KERB * 0.5;
-      const cycW = U * roadW(d, 3.0), footW = U * roadW(d, 4.0);
-      strokePx(offsetPath(pts, sgn * (vergeO + cycW * 0.7)),  SURF.cycle, cycW);
-      strokePx(offsetPath(pts, sgn * (vergeO + cycW * 1.5 + footW * 0.6)), SURF.foot, footW);
+      const footW = U * roadW(d, XSEC_M.footW);
+      if (sgn !== sea)
+        strokePx(offsetPath(pts, sgn * (vergeO + footW * 0.6)), SURF.foot, footW);
       strokeAsphalt(offsetPath(pts, sgn * halfC), SURF.road, car);
       // Edge line hard against the kerb, dashed divider down the middle of the two lanes.
       strokePx(offsetPath(pts, sgn * (halfC + car * 0.40)), SURF.line, Math.max(1, W * 0.035));
@@ -2951,6 +3020,23 @@ function paintGround(d, plan){
         const run = mp.slice(i, Math.min(mp.length, i + Math.round(bed * 0.74)));
         if (run.length > 1) strokePx(run, SURF.lawn + '0.92)', med * 0.52);
       }
+    }
+
+    /* THE SEAFRONT SECTION, seaward side only. Painted outward in order so each surface sits over
+       the edge of the one inside it, which is how they meet on the ground: the green strip laps
+       the track's kerb, the promenade laps the strip. */
+    if (sea){
+      const vergeO = W * ROAD_KERB * 0.5;
+      const cycW  = Math.max(2.4, U * roadW(d, XSEC_M.cycleW));
+      const grnW  = U * roadW(d, XSEC_M.greenW);
+      const promW = U * roadW(d, XSEC_M.promW);
+      const at = m => sea * (vergeO + U * roadW(d, m));
+      /* Promenade first and widest, then the strip over its inner edge, then the track over that.
+         Outermost painted first means no surface has to be trimmed against the next. */
+      strokePx(offsetPath(pts, at(XSEC_M.prom)),  SURF.paving,  promW);
+      strokePx(offsetPath(pts, at(XSEC_M.green)), SURF.lawn + '0.94)', grnW);
+      strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.kerb,  cycW * 1.30);
+      strokePx(offsetPath(pts, at(XSEC_M.cycle)), SURF.cycle, cycW);
     }
   }
 
@@ -3166,6 +3252,12 @@ function paintGround(d, plan){
       return isFinite(v) && v >= 0.8 && v <= 12 ? v : 2.4;
     })();
     const cycW = Math.max(CYC_PX, U * roadW(d, XSEC_M.cycleW));
+    /* ?cycol=RRGGBB, no hash. Paired with ?cyc=N so width and colour can be settled in the same
+       reload rather than one deploy each. Anything that is not six hex digits falls back. */
+    const CYC_COL = (() => {
+      const m = typeof location !== 'undefined' && location.search.match(/[?&]cycol=([0-9a-fA-F]{6})/);
+      return m ? '#' + m[1] : SURF.cycle;
+    })();
     for (const p of paths){
       if (!p || p.length < 2 || p.kind !== 'cycle') continue;
       const line = offsetPath(p, 0);
@@ -3173,7 +3265,7 @@ function paintGround(d, plan){
          the red-brown from whatever it is crossing so the track does not merge into a park or a
          plot the moment it leaves the tarmac. */
       strokePx(line, SURF.kerb, cycW * 1.30);
-      strokePx(line, SURF.cycle, cycW);
+      strokePx(line, CYC_COL, cycW);
     }
   }
 
