@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v93';
+export const BUILD = 'city v94';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1067,6 +1067,17 @@ function emiratesPalace(x0, z0){
     /* The ribbons are coplanar with the island's top face and 3 cm will not separate them at this
        frustum — the same depth-precision trap w2h-world's flatSet documents. Bias the test. */
     paveMat.polygonOffset = true; paveMat.polygonOffsetFactor = -2; paveMat.polygonOffsetUnits = -2;
+    /* AND ON dayMats TOO — same gap as the DoubleSide fix, same root cause: Day and Check swap
+       to a wholly separate material object, so a property set only on paveMat itself never
+       reaches the one those two modes actually render with. Missed this the first time despite
+       having just fixed the identical class of bug for .side, because I checked "is DoubleSide
+       set on both objects" and stopped rather than asking what else the base material carries
+       that the swapped one does not. This is very likely the actual cause of "half shows at Day
+       and Check" — z-fighting against the ground plane reads as patchy, partial visibility
+       rather than a clean on/off, which fits that description better than a binary bug would. */
+    paveMat.userData.dayMats.polygonOffset = true;
+    paveMat.userData.dayMats.polygonOffsetFactor = -2;
+    paveMat.userData.dayMats.polygonOffsetUnits = -2;
     g.add(pave);
   }
 
@@ -1117,6 +1128,14 @@ function emiratesPalace(x0, z0){
     color:0x3F7A9C, roughness:0.3, metalness:0.05 });
   fountainMat.side = THREE.DoubleSide;
   fountainMat.userData.dayMats.side = THREE.DoubleSide;
+  /* Same polygonOffset gap as paveMat, applied preemptively here rather than waiting for a
+     second report — the fountain sits even closer to the ground plane (y 0.034) than the ribbon
+     paving this pattern was first written for. */
+  fountainMat.polygonOffset = true;
+  fountainMat.polygonOffsetFactor = -2; fountainMat.polygonOffsetUnits = -2;
+  fountainMat.userData.dayMats.polygonOffset = true;
+  fountainMat.userData.dayMats.polygonOffsetFactor = -2;
+  fountainMat.userData.dayMats.polygonOffsetUnits = -2;
   closedTracedGround(PALACE_PATHS[4], fountainMat, 0.034);
   /* A rim, not a wall — the fountain island sits proud of the plaza by less than the shrub
      height used elsewhere on this landmark, matching how the ribbons themselves stay coplanar
@@ -2484,8 +2503,6 @@ function qasrAlWatan(x0, z0){
   paveMat.userData.glassOverride = false;
   paveMat.userData.duskColor = 0xCBBDB2;
   paveMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD3C6BC, roughness:0.94 });
-  // Same DoubleSide-on-dayMats fix as the palace forecourt — see its own comment for why.
-  paveMat.userData.dayMats.side = THREE.DoubleSide;
   function closedGround(offsets, mat, yOff){
     const shape = new THREE.Shape(offsets.map(([px, pz]) => new THREE.Vector2(px, -pz)));
     const geo = new THREE.ShapeGeometry(shape);
@@ -2523,6 +2540,16 @@ function qasrAlWatan(x0, z0){
      result via rotateX(-Math.PI/2). Set once, before either shape is built, since paveMat is
      shared between them. */
   paveMat.side = THREE.DoubleSide;
+  paveMat.userData.dayMats.side = THREE.DoubleSide;
+  /* polygonOffset, applied proactively this time rather than after a second bug report — the
+     palace forecourt turned out to need this on both the base material and its dayMats variant
+     (Day and Check swap to dayMats entirely, so a property set only on the base never reaches
+     what those two modes actually render with), and this shape sits at the same y 0.028, close
+     enough to the ground plane to be exposed to the identical z-fighting. */
+  paveMat.polygonOffset = true; paveMat.polygonOffsetFactor = -2; paveMat.polygonOffsetUnits = -2;
+  paveMat.userData.dayMats.polygonOffset = true;
+  paveMat.userData.dayMats.polygonOffsetFactor = -2;
+  paveMat.userData.dayMats.polygonOffsetUnits = -2;
   closedGround(axisPoly, paveMat, 0.028);
   const CIRC_N = 28;
   const plazaCircle = [];
