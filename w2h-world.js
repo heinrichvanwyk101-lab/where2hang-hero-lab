@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v209';
+export const BUILD = 'world v210';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1637,6 +1637,7 @@ const SURF = {
   street:   '#454C53',
   road:     '#33383E',
   apron:    '196,188,168',      // the developed ground the whole city sits on
+  apron3:   '#C4BCA8',          // same tone as .apron, as a hex triple — mixHex needs one
   paving:   '#D7D1BE',
   pavingLt: '#E6E0CE',
   kerb:     '#EFEBDF',
@@ -2270,6 +2271,65 @@ function groundPlan(d, cells, blocks){
    offset = 0.5 maps the island into 0..1 with no custom UV generator, and because R is a fixed
    multiple of the island radius the canvas mapping is IDENTICAL for all five islands regardless
    of size. Everything below is therefore written in normalised island units. */
+/* WORLD-SPACE VALUE NOISE, one lattice hash, sampled at a chosen frequency. Pure function of
+   (x,y) in the same normalised plan space every block, cell and park ring already lives in — no
+   R(), no draw-order dependency, so two shapes that happen to sit near each other in the world
+   sample nearby lattice points and land close in tone. That correlation is the entire difference
+   between this and the R()-per-shape scheme it replaces, which had no idea two plots were
+   neighbours and painted them accordingly. */
+function fabricNoise2(x, y, freq){
+  const xs = x * freq, ys = y * freq;
+  const xi = Math.floor(xs), yi = Math.floor(ys);
+  const xf = xs - xi, yf = ys - yi;
+  const sx = xf*xf*(3-2*xf), sy = yf*yf*(3-2*yf);
+  const h = (ix, iy) => {
+    let n = ix * 374761393 + iy * 668265263;
+    n = (n ^ (n >>> 13)) * 1274126177;
+    return (((n ^ (n >>> 16)) >>> 0) % 100000) / 100000;
+  };
+  const a = h(xi,yi), b = h(xi+1,yi), c = h(xi,yi+1), dd = h(xi+1,yi+1);
+  const top = a + (b-a)*sx, bot = c + (dd-c)*sx;
+  return top + (bot-top)*sy;
+}
+/* TWO SCALES, ONE CALLER. A "district" octave at freq 1.6 — a handful of soft humps across the
+   whole island, so entire neighbourhoods do not all land on the same tone — and a "block" octave
+   at freq 7 so adjacent plots still vary a little against each other without the two scales
+   fighting for the same visual job. Both low-frequency by design: this is meant to break up a
+   flat fill, not to add texture. */
+function fabricNoise(x, y){
+  return fabricNoise2(x, y, 1.6) * 0.65 + fabricNoise2(x + 91.7, y - 33.1, 7.0) * 0.35;
+}
+function mixHex(hexA, hexB, t){
+  const na = parseInt(hexA.slice(1), 16), nb = parseInt(hexB.slice(1), 16);
+  const ar=(na>>16)&255, ag=(na>>8)&255, ab=na&255;
+  const br=(nb>>16)&255, bg=(nb>>8)&255, bb=nb&255;
+  const r = Math.round(ar+(br-ar)*t), g2 = Math.round(ag+(bg-ag)*t), b2 = Math.round(ab+(bb-ab)*t);
+  return '#' + [r,g2,b2].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+/* THE FEATHER, and colour alone does not buy it. A rendered, pixel-inspected comparison of the
+   colour-only version — noise-correlated fill, softened kerb, nothing else — still read as an
+   unmistakable grid at any normal viewing distance, because a vector rectangle is a hard edge
+   regardless of what colour sits on either side of it. This is what actually removes it: paint
+   the real shapes at real resolution onto their own canvas, then repeatedly halve it — bilinear
+   each time, so every step both shrinks AND softens — and draw the smallest version back up to
+   full size. The browser's own image scaling does the blending, so this costs one offscreen
+   canvas and a handful of drawImage calls, not a per-pixel convolution. Five halvings was the
+   number that actually stopped reading as a grid on a rendered, pixel-inspected test; four still
+   showed a faint plaid at normal zoom. */
+function mipBlur(srcCanvas, steps){
+  let cur = srcCanvas;
+  for (let i = 0; i < steps; i++){
+    const w = Math.max(1, Math.round(cur.width / 2)), h = Math.max(1, Math.round(cur.height / 2));
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const octx = out.getContext('2d', { willReadFrequently: true });
+    octx.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in octx) octx.imageSmoothingQuality = 'high';
+    octx.drawImage(cur, 0, 0, w, h);
+    cur = out;
+  }
+  return cur;
+}
 function paintGround(d, plan){
   /* THE CANVAS IS CUT TO THE ISLAND, and this is where the ground plan gets its resolution back.
 
@@ -2519,12 +2579,26 @@ function paintGround(d, plan){
      which is honest about how much of this island is actually known rather than dressing the gap
      with plausible geometry — the same argument the flag itself was added for. */
   if (d.genFabric !== false){
-    g.fillStyle = SURF.street;
+    /* PAINTED OFFSCREEN, THEN FED THROUGH mipBlur — see the comment on mipBlur itself for why
+       colour was not enough on its own. Kerb strokes are gone entirely: they were the highest-
+       contrast line on the island and the single biggest reason a block read as ruled paper, and
+       a stroke that thin cannot survive five halvings anyway — painting it here was wasted work
+       on top of being the wrong look. */
+    const fabCv = document.createElement('canvas');
+    fabCv.width = W; fabCv.height = H;
+    const fg = fabCv.getContext('2d', { willReadFrequently: true });
+
+    const apronMix = mixHex(SURF.street, SURF.apron3, 0.42);
     (plan.blocks || []).forEach(q => {
-      g.beginPath();
-      g.moveTo(PX(q[0][0]), PY(q[0][1]));
-      for (let i = 1; i < q.length; i++) g.lineTo(PX(q[i][0]), PY(q[i][1]));
-      g.closePath(); g.fill();
+      let bx = 0, by = 0;
+      for (const p of q){ bx += p[0]; by += p[1]; }
+      bx /= q.length; by /= q.length;
+      const n = fabricNoise(bx, by);
+      fg.fillStyle = shade(apronMix, 0.94 + n * 0.10);
+      fg.beginPath();
+      fg.moveTo(PX(q[0][0]), PY(q[0][1]));
+      for (let i = 1; i < q.length; i++) fg.lineTo(PX(q[i][0]), PY(q[i][1]));
+      fg.closePath(); fg.fill();
     });
     plan.cells.forEach(c => {
       /* PY negates, so a rotation that is anticlockwise in world space is clockwise on the canvas.
@@ -2532,15 +2606,21 @@ function paintGround(d, plan){
          is invisible on a square plot — which is exactly the kind of thing the old lattice hid. */
       const w = (c.wN || 0) * U, h = (c.dN || 0) * U;
       if (!w || !h) return;
-      g.save();
-      g.translate(PX(c.jx), PY(c.jy));
-      g.rotate(-(c.rot || 0));
-      g.fillStyle = shade(SURF.paving, 0.90 + R() * 0.20);
-      g.fillRect(-w/2, -h/2, w, h);
-      g.strokeStyle = SURF.kerb; g.lineWidth = kerbW;
-      g.strokeRect(-w/2 + kerbW/2, -h/2 + kerbW/2, w - kerbW, h - kerbW);
-      g.restore();
+      fg.save();
+      fg.translate(PX(c.jx), PY(c.jy));
+      fg.rotate(-(c.rot || 0));
+      const n = fabricNoise(c.jx, c.jy);
+      fg.fillStyle = shade(SURF.paving, 0.95 + n * 0.09);
+      fg.fillRect(-w/2, -h/2, w, h);
+      fg.restore();
     });
+
+    const blurred = mipBlur(fabCv, 5);
+    g.save();
+    g.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
+    g.drawImage(blurred, 0, 0, W, H);
+    g.restore();
   }
 
   /* 6. DISTRICT PATCHES. Ground under the hand-built landmarks, where there are no fabric cells
