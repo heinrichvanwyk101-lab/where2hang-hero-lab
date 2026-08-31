@@ -1,5 +1,5 @@
 {
- "generated": "2026-08-31T15:38:45.062Z",
+ "generated": "2026-08-31T15:43:34.518Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -7667,17 +7667,21 @@
      "y": -3491
     }
    },
-   "bytes": 5264948,
+   "bytes": 5468407,
    "counts": {
     "outline": 1905,
-    "roads": 10664,
-    "buildings": 20262,
-    "inBox": 32589,
+    "roads": 10670,
+    "buildings": 20258,
+    "inBox": 32583,
     "withHeight": 3468,
     "parks": 1321,
+    "paths": 402,
+    "plazas": 31,
     "golf": 2,
     "raceway": 0,
-    "withVenues": 1799
+    "water": 92,
+    "waterIslands": 0,
+    "withVenues": 1796
    }
   },
   {
@@ -7898,7 +7902,7 @@
      "y": 1272.9
     }
    },
-   "bytes": 91407,
+   "bytes": 100537,
    "counts": {
     "outline": 47,
     "roads": 661,
@@ -7906,9 +7910,13 @@
     "inBox": 401,
     "withHeight": 28,
     "parks": 10,
+    "paths": 27,
+    "plazas": 3,
     "golf": 0,
     "raceway": 0,
-    "withVenues": 17
+    "water": 0,
+    "waterIslands": 0,
+    "withVenues": 18
    }
   },
   {
@@ -9117,17 +9125,21 @@
      "y": 689.5
     }
    },
-   "bytes": 143816,
+   "bytes": 165347,
    "counts": {
     "outline": 296,
     "roads": 884,
-    "buildings": 179,
-    "inBox": 518,
+    "buildings": 180,
+    "inBox": 519,
     "withHeight": 56,
     "parks": 39,
+    "paths": 54,
+    "plazas": 1,
     "golf": 0,
     "raceway": 0,
-    "withVenues": 38
+    "water": 4,
+    "waterIslands": 0,
+    "withVenues": 39
    }
   },
   {
@@ -10778,31 +10790,22 @@
      4449.6
     ]
    ],
-   "landmarks": {
-    "Manarat Al Saadiyat": {
-     "x": -124.8,
-     "y": 4960.3
-    },
-    "Zayed National Museum": {
-     "x": -1350.8,
-     "y": 4845.5
-    },
-    "Berklee Abu Dhabi": {
-     "x": -208.8,
-     "y": 4815.5
-    }
-   },
-   "bytes": 561712,
+   "landmarks": {},
+   "bytes": 609027,
    "counts": {
     "outline": 408,
-    "roads": 1550,
-    "buildings": 1842,
-    "inBox": 2600,
+    "roads": 1556,
+    "buildings": 1839,
+    "inBox": 2597,
     "withHeight": 500,
     "parks": 94,
+    "paths": 87,
+    "plazas": 1,
     "golf": 1,
     "raceway": 0,
-    "withVenues": 60
+    "water": 8,
+    "waterIslands": 0,
+    "withVenues": 55
    }
   },
   {
@@ -12695,17 +12698,21 @@
      "y": -3306.2
     }
    },
-   "bytes": 1084624,
+   "bytes": 1163973,
    "counts": {
     "outline": 462,
-    "roads": 2526,
-    "buildings": 3938,
-    "inBox": 5674,
+    "roads": 2528,
+    "buildings": 3937,
+    "inBox": 5673,
     "withHeight": 32,
-    "parks": 353,
+    "parks": 351,
+    "paths": 170,
+    "plazas": 9,
     "golf": 2,
     "raceway": 38,
-    "withVenues": 83
+    "water": 20,
+    "waterIslands": 0,
+    "withVenues": 84
    }
   },
   {
