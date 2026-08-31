@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v212';
+export const BUILD = 'world v213';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2337,19 +2337,13 @@ function mipBlur(srcCanvas, steps){
    things. Same two-octave, same lattice hash, same reasoning: a district-scale wave so entire
    stretches of desert are not one dead flat tan, and a smaller wave riding on it so the eye has
    something at a nearer scale too. */
-/* TWO OCTAVES. freq 28 at 70 per cent weight fixed the close-range flatness but failed a check
-   the four-octave version never got to: downsampled properly (LANCZOS, not nearest-neighbour,
-   to approximate what a mipmapped GPU minification actually does) the wide view came out visibly
-   speckled — and this ground is explicitly viewed at a grazing angle, anisotropic filtering
-   turned on for exactly that reason, which is the one viewing condition most prone to a
-   regular lattice pattern shimmering as the camera moves rather than sitting still the way a
-   static PNG comparison shows it. A static render cannot test that directly; the honest response
-   to not being able to test it is to back away from the setting most likely to cause it, not to
-   assume it is fine. Halved the frequency and pulled back the weight a step short of where close
-   range stopped being flat, trading a smaller remaining flatness for a real reduction in shimmer
-   risk on a surface already known to be shown edge-on. */
+/* TWO OCTAVES. Rebalanced after the Day-mode check: freq 0.9 has a wavelength close to the
+   entire canvas width, which is closer to one slow fade across the whole island than the
+   several distinct patches "stop entire districts looking uniformly coloured" is asking for.
+   freq 2.2 gives a handful of separate humps instead of one gradient, while freq 14 still
+   carries the close-range grain the earlier close-crop check needed. */
 function macroNoise(x, y){
-  return fabricNoise2(x, y, 0.9) * 0.35 + fabricNoise2(x - 90, y + 60, 14.0) * 0.65;
+  return fabricNoise2(x, y, 2.2) * 0.45 + fabricNoise2(x - 90, y + 60, 14.0) * 0.55;
 }
 /* THE SAND'S OWN BACKBONE. Measured against a rendered, pixel-inspected export: the existing
    ground-variation blobs — 54 radial fills at five to eleven per cent alpha, scattered
@@ -2509,7 +2503,13 @@ function paintGround(d, plan){
      happens to sit near a developed patch is sampling the same coordinate system fabricNoise
      paints that patch from, not two independently-random systems that only coincidentally sit
      next to each other. */
-  paintMacroTint(g, W, H, PX, PY, U, SURF.sandDk, SURF.sandLt, 0.46);
+  /* PUSHED HARD, ON PURPOSE. Confirmed against Day-mode screenshots — no dusk grading to hide
+     behind — that the previous setting was genuinely too subtle, not just masked by warm light.
+     Wider colour range (#807461 to #f1dcb7, both well past SURF.sandDk/sandLt, which were tuned
+     for a different and subtler job elsewhere) and higher alpha. An invisible fix is worth
+     exactly as much as no fix, so this trades some of the earlier shimmer margin away
+     deliberately rather than staying "safe" and pointless. */
+  paintMacroTint(g, W, H, PX, PY, U, '#807461', '#f1dcb7', 0.62);
 
   /* GROUND VARIATION, AND IT IS ONE FILL THAT WAS DOING ALL THE WORK.
 
