@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v88';
+export const BUILD = 'city v90';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1075,7 +1075,15 @@ function emiratesPalace(x0, z0){
      and the ribbons already drawn above read as one continuous paved surface, not two abutting
      tones with a seam between them. */
   function closedTracedGround(offsets, mat, yOff){
-    const shape = new THREE.Shape(offsets.map(([px, pz]) => new THREE.Vector2(px, pz)));
+    /* -pz, NOT pz. Missed this the first time despite naming the function after the pattern it
+       was supposed to follow: tracedBand's own comment states it plainly — "Shape y maps to
+       world -z on extrude... so the ring's z is negated going in and comes back out correct."
+       Without the negation this still compiles, still renders a mesh, and still looks roughly
+       plausible on a quick check — which is exactly how it shipped wrong. A live pick confirmed
+       it: rendered near (-993,66) against a real target of (-990,111), off by a mirror flip on
+       z that reads to the eye as a rotation-and-shift on an asymmetric shape like this crescent,
+       not as the reflection it actually is. */
+    const shape = new THREE.Shape(offsets.map(([px, pz]) => new THREE.Vector2(px, -pz)));
     const geo = new THREE.ShapeGeometry(shape);
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, mat);
@@ -2435,6 +2443,88 @@ function qasrAlWatan(x0, z0){
   dome.position.set(x0 + SX, drumT, z0 + SZ); dome.userData.hero = true; g.add(dome);
   const fin = new THREE.Mesh(new THREE.ConeGeometry(0.20, 1.10, 8), domeMat);
   fin.position.set(x0 + SX, drumT + R_DOME + 0.45, z0 + SZ); g.add(fin);
+
+  /* THE FORECOURT — AND UNLIKE THE PALACE, THERE IS NO PALACE_PATHS TABLE HERE TO RECOVER.
+     Nothing traced this estate's own drives the way geojson.io traced the palace's, so this is
+     a genuine parametric construction sized off QASR_MAIN's own measured footprint, not a
+     rediscovery of hidden real data — a meaningfully lower-confidence piece of work than the
+     palace forecourt was, and worth saying so rather than presenting it with the same certainty.
+
+     THE ORIENTATION IS AN ASSUMPTION, NAMED AS ONE. QASR_MAIN's own traced ring reaches its
+     deepest point on the +z side (z=30.57), which is also where the dome sits (domeDz=15.25) —
+     consistent with the dome standing over the forecourt-facing side the way Emirates Palace's
+     does, but inferred from the building's own shape rather than confirmed against a second
+     independent source the way the palace forecourt's direction was. Built on the +z side on
+     that basis; if a live pick shows it facing the wrong way, the fix is a single sign flip on
+     every dz below, the same class of correction the palace forecourt itself needed.
+
+     SAME SIGN CONVENTION AS traced() ABOVE — Vector2(px, -pz) — copied deliberately this time
+     rather than re-derived, after getting exactly this wrong on the palace forecourt by writing
+     a comment that claimed the pattern without actually copying the line that makes it work. */
+  const paveMat = new THREE.MeshStandardMaterial({ color:0x141210, roughness:0.94, metalness:0 });
+  paveMat.userData.glassOverride = false;
+  paveMat.userData.duskColor = 0xCBBDB2;
+  paveMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD3C6BC, roughness:0.94 });
+  function closedGround(offsets, mat, yOff){
+    const shape = new THREE.Shape(offsets.map(([px, pz]) => new THREE.Vector2(px, -pz)));
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x0, yOff, z0);
+    g.add(mesh);
+  }
+  /* A wide axis plus a plaza circle, the same composition the palace forecourt uses, scaled to
+     this building's own larger footprint (87.7 wide against the palace's 64.3) rather than
+     copying the palace's absolute dimensions onto a different building. */
+  const FRONT_Z = 31.0;                    // just past QASR_MAIN's own deepest traced point
+  const AXIS_HW = 14.0, PLAZA_R = 20.0;
+  const plazaCz = FRONT_Z + 8 + PLAZA_R;
+  const axisPoly = [
+    [-AXIS_HW, FRONT_Z], [AXIS_HW, FRONT_Z], [AXIS_HW, plazaCz], [-AXIS_HW, plazaCz],
+  ];
+  closedGround(axisPoly, paveMat, 0.028);
+  const CIRC_N = 28;
+  const plazaCircle = [];
+  for (let i = 0; i < CIRC_N; i++){
+    const a = (i / CIRC_N) * Math.PI * 2;
+    plazaCircle.push([Math.cos(a) * PLAZA_R, plazaCz + Math.sin(a) * PLAZA_R]);
+  }
+  closedGround(plazaCircle, paveMat, 0.028);
+  const monumentMat = new THREE.MeshStandardMaterial({
+    color:0x1B1712, roughness:0.55, metalness:0.1 });
+  monumentMat.userData.glassOverride = false;
+  monumentMat.userData.duskColor = 0xD9D2C6;
+  monumentMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE0DAD0, roughness:0.5 });
+  const monument = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 4.5, 12), monumentMat);
+  monument.position.set(x0, 2.25, z0 + plazaCz); g.add(monument);
+
+  /* Diamond garden beds either side of the axis, between the building's own traced edge and the
+     plaza — the same "bounded by two real-or-real-enough shapes rather than an invented
+     rectangle" approach as the palace, though here one of those two shapes (the axis polygon
+     just built) is itself parametric rather than traced, so the bound is one step further from
+     real data than the palace's was. */
+  const gardenMat = new THREE.MeshStandardMaterial({ color:0x263A1E, roughness:0.85, metalness:0 });
+  gardenMat.userData.glassOverride = false;
+  gardenMat.userData.duskColor = 0x3C5A2E;
+  gardenMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x44662E, roughness:0.85 });
+  const cell = 3.4;
+  const bedG = new THREE.BoxGeometry(cell * 0.62, 0.36, cell * 0.62);
+  for (let side = -1; side <= 1; side += 2){
+    for (let pz = FRONT_Z + 2; pz < plazaCz + PLAZA_R + 2; pz += cell){
+      for (let px2 = AXIS_HW + 1.5; px2 < AXIS_HW + 1.5 + 18; px2 += cell){
+        const czp = pz + cell / 2, cxp = side * (px2 + cell / 2);
+        // Skip anything that would fall inside the circular plaza — the x-range above overlaps
+        // the circle's own bounding box near its edge, so distance-from-centre is the real test,
+        // not just the rectangular bed strip's own bounds.
+        const distToCircle = Math.hypot(cxp, czp - plazaCz);
+        if (distToCircle < PLAZA_R + 1.5) continue;
+        const bed = new THREE.Mesh(bedG, gardenMat);
+        bed.position.set(x0 + cxp, 0.20, z0 + czp);
+        bed.rotation.y = Math.PI / 4;
+        g.add(bed);
+      }
+    }
+  }
 
   return g;
 }
