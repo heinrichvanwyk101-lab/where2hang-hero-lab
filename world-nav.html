@@ -1932,6 +1932,20 @@ function applyView(next){
   moon.visible = night;
   rim.visible  = night;
   hemiNight.visible = night;
+  /* WATER, FLATTENED IN CHECK ALONE. Its whole look — 0x050A10 base, near black — depends on
+     envMapIntensity 0.95 reflecting something; every other mode supplies either that environment
+     map or enough fog to blend the difference away. Check supplies neither, by design, because
+     the mode exists to compare a street at the near edge of an island against the far edge
+     without fog in the way — and it also points the sun near-vertical for the same reason, which
+     is the one sun angle that reflects the water's fine ripple normal map straight back at the
+     camera across the whole surface. Roughness 0.58 was glossy enough to carry that as a field of
+     clipped-white specular points once NoToneMapping stopped softening them — the "static" the
+     screenshots showed. Water was never what Check exists to measure, so it does not need to
+     survive Check looking like water; roughness 1 removes the specular response causing this
+     while leaving the base colour and the normal map's diffuse shading alone. Set unconditionally
+     here, once, rather than inside the per-mode branches below, so every mode that is not Check —
+     not just the two or three this file happens to special-case — restores it correctly. */
+  water.material.roughness = check ? 1 : 0.58;
   /* WITH THE REST OF THE NIGHT RIG, and only with it. An ambient light is invisible in Silhouette
      and Plan, which swap in unlit materials, but Day, Dusk and Check are all lit — leaving it on
      there would raise their shadows by a flat amount and quietly undo the contrast each of those
