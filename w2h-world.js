@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v213';
+export const BUILD = 'world v214';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3963,16 +3963,26 @@ const DISTRICTS = [
          the west tip fall is 0, so anything the fabric puts down is 3.0 units against the
          palace's 6.5 and cannot compete with it. The rectangle was doing a second job that was
          already being done. */
-      /* 40 x 26, UP FROM 36 x 24, and only that. The rectangle is sized to the palace and its
-         forecourt, which is all a reservation should ever be; the clearance that makes it read as
-         a landmark is the skirt below, not a wider hole. */
-      { x:LM.palace.x + PALACE_ESTATE.dx, z:LM.palace.z + PALACE_FOOT.dz,
-        w:PALACE_ESTATE.w, d:PALACE_ESTATE.d },       // Emirates Palace and its estate
+      /* 104 x 74, UP FROM 76 x 60, AND RECENTRED. The rectangle protected the building and its
+         original estate reservation; it never grew when the forecourt did. Checked against the
+         actual traced shape now filling that forecourt, PALACE_PATHS[3]: its own x-range is
+         -46.14 to 50.53 (half-width 50.53, the old rectangle's half-width was 38) and its z-range
+         reaches 41 past the anchor (real z 132.78, the old rectangle's far edge was 121.78) —
+         both genuinely outside the old reservation, which is exactly where the reported stray
+         buildings were landing. Depth grown asymmetrically toward the forecourt rather than
+         doubled around the centre, since the building's own north side needed nothing extra. */
+      { x:LM.palace.x + PALACE_ESTATE.dx, z:LM.palace.z + PALACE_FOOT.dz + 7,
+        w:104, d:74 },       // Emirates Palace and its estate
       { x:LM.etihad.x, z:LM.etihad.z, w:48, d:20 },   // Etihad Towers and the plaza
       { x: LM.adnoc.x, z: LM.adnoc.z, w:20, d:20 },   // ADNOC HQ and its apron
-      /* Sized off the kit's own measured extent, 87.7 x 69.6, plus the same ~6 units of margin
-         the palace gets. Nothing generated may stand inside a presidential compound. */
-      { x: LM.qasr.x, z: LM.qasr.z, w:100, d:82 },    // Qasr Al Watan
+      /* 100 x 114, UP FROM 100 x 82, RECENTRED SOUTH. Same fault as the palace: sized to the
+         kit's own building extent, never grown for the forecourt added after it. The new
+         forecourt's own plaza circle reaches z = 79 past the anchor — 48 units past FRONT_Z,
+         itself already past the building's traced edge — while the old rectangle's half-depth of
+         41 stopped at real z 120.8, well short of the plaza's real z 158.8. Width was already
+         wide enough (half 50 against the forecourt's own widest point at 33.5) and is unchanged;
+         only depth, and only toward the side that needed it. */
+      { x: LM.qasr.x, z: LM.qasr.z + 22, w:100, d:114 },    // Qasr Al Watan and its forecourt
       { x: LM.marina.x, z: LM.marina.z, w:60, d:57 },     // Marina Mall, kit measures 47.8 x 45.2
       { x: LM.fairmont.x, z: LM.fairmont.z, w:32, d:24 },  // Fairmont Marina, kit measures 23.5 x 15.8
     ],

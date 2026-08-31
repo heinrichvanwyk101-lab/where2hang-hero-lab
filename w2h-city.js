@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v90';
+export const BUILD = 'city v91';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1091,6 +1091,16 @@ function emiratesPalace(x0, z0){
     g.add(mesh);
     return mesh;
   }
+  /* DoubleSide on both — a flat ShapeGeometry fill is winding-sensitive in a way the ribbon
+     paving above is not (ExtrudeGeometry gives it both a front and back cap regardless of
+     winding; ShapeGeometry gives only one face). Checked the actual winding of PALACE_PATHS[3]
+     and [4] in the exact (px,-pz) space fed to Vector2 above: both come out clockwise, negative
+     signed area, and tracing that through rotateX(-Math.PI/2) puts the front face pointing at
+     world -Y — straight down, invisible from any normal camera angle, which is exactly the
+     symptom reported: palms correctly tracing the real path shapes, no paved surface visible at
+     all. Reversing the point order per-shape would also fix it and was the other option; this is
+     the one that does not depend on getting a hand-derived winding correct a second time today. */
+  paveMat.side = THREE.DoubleSide;
   closedTracedGround(PALACE_PATHS[3], paveMat, 0.028);
   const fountainMat = new THREE.MeshStandardMaterial({
     color:0x1B3040, roughness:0.35, metalness:0.05, envMapIntensity:0.9 });
@@ -1098,6 +1108,7 @@ function emiratesPalace(x0, z0){
   fountainMat.userData.duskColor = 0x2E5A78;
   fountainMat.userData.dayMats = new THREE.MeshStandardMaterial({
     color:0x3F7A9C, roughness:0.3, metalness:0.05 });
+  fountainMat.side = THREE.DoubleSide;
   closedTracedGround(PALACE_PATHS[4], fountainMat, 0.034);
   /* A rim, not a wall — the fountain island sits proud of the plaza by less than the shrub
      height used elsewhere on this landmark, matching how the ribbons themselves stay coplanar
@@ -2482,6 +2493,11 @@ function qasrAlWatan(x0, z0){
   const axisPoly = [
     [-AXIS_HW, FRONT_Z], [AXIS_HW, FRONT_Z], [AXIS_HW, plazaCz], [-AXIS_HW, plazaCz],
   ];
+  /* DoubleSide for the same reason the palace forecourt needed it — checked, both axisPoly and
+     plazaCircle come out clockwise in this exact coordinate space too, same invisible-from-above
+     result via rotateX(-Math.PI/2). Set once, before either shape is built, since paveMat is
+     shared between them. */
+  paveMat.side = THREE.DoubleSide;
   closedGround(axisPoly, paveMat, 0.028);
   const CIRC_N = 28;
   const plazaCircle = [];
