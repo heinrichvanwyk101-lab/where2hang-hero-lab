@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v87';
+export const BUILD = 'city v88';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1061,6 +1061,88 @@ function emiratesPalace(x0, z0){
        frustum — the same depth-precision trap w2h-world's flatSet documents. Bias the test. */
     paveMat.polygonOffset = true; paveMat.polygonOffsetFactor = -2; paveMat.polygonOffsetUnits = -2;
     g.add(pave);
+  }
+
+  /* THE PLAZA FILL — the piece the ribbons-not-a-plaza comment above named as still missing.
+     PALACE_PATHS[3] and [4] are not decoration: plotted together they are the real motor-court
+     roundabout and its fountain island, traced the same way PALACE_RING was, and closing each as
+     a polygon (they are open route lines, not closed shapes, so the last point is joined straight
+     back to the first) turns out to need no correction to read as one — checked by rendering the
+     closed pair as a flat 2D fill before this went anywhere near a THREE.Shape: a clean crescent
+     plaza with a nested island, no self-intersection, sitting right at the entrance notch between
+     the building's two forward wings, which is where the real porte-cochère actually opens onto
+     the fountain in every aerial reference. Reuses paveMat rather than a new material so the fill
+     and the ribbons already drawn above read as one continuous paved surface, not two abutting
+     tones with a seam between them. */
+  function closedTracedGround(offsets, mat, yOff){
+    const shape = new THREE.Shape(offsets.map(([px, pz]) => new THREE.Vector2(px, pz)));
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x0, yOff, z0);
+    g.add(mesh);
+    return mesh;
+  }
+  closedTracedGround(PALACE_PATHS[3], paveMat, 0.028);
+  const fountainMat = new THREE.MeshStandardMaterial({
+    color:0x1B3040, roughness:0.35, metalness:0.05, envMapIntensity:0.9 });
+  fountainMat.userData.glassOverride = false;
+  fountainMat.userData.duskColor = 0x2E5A78;
+  fountainMat.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:0x3F7A9C, roughness:0.3, metalness:0.05 });
+  closedTracedGround(PALACE_PATHS[4], fountainMat, 0.034);
+  /* A rim, not a wall — the fountain island sits proud of the plaza by less than the shrub
+     height used elsewhere on this landmark, matching how the ribbons themselves stay coplanar
+     with the ground rather than kerbed. */
+
+  /* THE GARDEN STRIP — the gap between the building's own traced edge and the plaza's traced
+     edge, which the two real shapes above bound on both sides without any invented rectangle:
+     inside PALACE_PATHS[3]'s bounding box, outside both PALACE_RING and the plaza polygon
+     itself. Diamond beds rather than gardenPatches' round clusters, because Grand Mosque's
+     organic planting and the palace's formal parterre are different gardens on purpose — this
+     estate reads as clipped hedges in a grid in every aerial, not shrubs in circles. */
+  const gardenMat = new THREE.MeshStandardMaterial({ color:0x263A1E, roughness:0.85, metalness:0 });
+  gardenMat.userData.glassOverride = false;
+  gardenMat.userData.duskColor = 0x3C5A2E;
+  gardenMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x44662E, roughness:0.85 });
+  function pointInClosed(px, pz, poly){
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+      const [xi, zi] = poly[i], [xj, zj] = poly[j];
+      if ((zi > pz) !== (zj > pz) && px < (xj - xi) * (pz - zi) / (zj - zi) + xi) c = !c;
+    }
+    return c;
+  }
+  {
+    const plaza = PALACE_PATHS[3];
+    const xs = plaza.map(p => p[0]), zs = plaza.map(p => p[1]);
+    const gx0 = Math.min(...xs), gx1 = Math.max(...xs);
+    const gz0 = Math.min(...zs), gz1 = Math.max(...zs);
+    const cell = 3.2;
+    const bedG = new THREE.BoxGeometry(cell * 0.62, 0.36, cell * 0.62);
+    let placed = 0;
+    for (let pz = gz0; pz < gz1; pz += cell){
+      for (let px2 = gx0; px2 < gx1; px2 += cell){
+        const cxp = px2 + cell / 2, czp = pz + cell / 2;
+        if (inRing(cxp, czp)) continue;                        // never inside the building
+        if (pointInClosed(cxp, czp, plaza)) continue;           // never inside the plaza fill
+        if (!pointInClosed(cxp, czp, PALACE_RING)) {
+          // Only the narrow ring of ground actually between the two traced shapes, not the
+          // whole plaza bounding box — a diamond grid across all of that would bury the ribbons
+          // and the fountain in planting rather than framing them.
+          const nearBuilding = inRing(cxp + 2.5, czp) || inRing(cxp - 2.5, czp) ||
+                                inRing(cxp, czp + 2.5) || inRing(cxp, czp - 2.5);
+          if (!nearBuilding) continue;
+        }
+        const bed = new THREE.Mesh(bedG, gardenMat);
+        bed.position.set(x0 + cxp, 0.20, z0 + czp);
+        bed.rotation.y = Math.PI / 4;
+        g.add(bed);
+        placed++;
+        if (placed > 260) break;                                // a hard ceiling, not a tuned ideal
+      }
+      if (placed > 260) break;
+    }
   }
 
   /* Seats walked at a fixed spacing on both verges, skipped where they would fall inside the
