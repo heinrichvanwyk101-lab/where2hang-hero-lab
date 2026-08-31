@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v26';
+export const BUILD = 'props v27';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -649,16 +649,82 @@ function addProps(d, layer, plan, budget = {}){
      correct, since nothing drives across a marina. Every run is walked exactly as the single
      loop used to be, so lamps, palms and traffic simply stop at the water instead of marching
      across it. */
-  const roads = plan.ring.map(pts => ({ pts, w: 0.040 }))
-    .concat(plan.arterials.map(a => ({ pts: a, w: 0.034 })));
+  /* THE CROSS-SECTION COMES FROM THE PAINTER NOW, and the two hardcoded widths this replaced are
+     why lamps and palms have never sat where the road is drawn. `w: 0.040` for the ring and
+     `0.034` for an arterial were fixed numbers in normalised units, while paintGround floors every
+     road at MIN_PX and therefore draws it at a width that varies per island — about twice true
+     scale on Corniche, near true on Al Maryah. Two answers to one question, so the props landed in
+     the carriageway on one island and out in the sand on another, and no adjustment to those two
+     constants could be right on both.
+
+     plan.xsec carries the offsets already multiplied by the exaggeration the paint actually used.
+     Fallback to the old constants if an older world file is loaded, so this file does not require
+     them to move together. */
+  const XS_ = plan.xsec;
+  const roads = plan.ring.map(pts => ({ pts, w: 0.040, cls: 'major' }))
+    .concat(plan.arterials.map(a => ({ pts: a, w: 0.034, cls: a.cls || (a.major ? 'major' : 'minor') })));
+
+  /* MAJOR ROADS FIRST, AND THIS IS WHY THE CORNICHE HAD NO LIGHTING AT ALL.
+
+     The lamp budget is a few hundred per island. Corniche now carries 10,664 real centrelines and
+     this loop walked them in array order, so the budget was exhausted somewhere in the first few
+     hundred polylines the bake happened to emit — residential streets, mostly, scattered wherever
+     they fell. The seafront never got any because the loop never reached it, not because the
+     offsets were wrong.
+
+     Sorting by class spends the budget where lighting reads: arterials and the ring, then minor
+     roads, then locals if anything is left. */
+  /* ---- THE SEAFRONT TRACK IS LIT FIRST, BEFORE ANY ROAD ----
+
+     Placed ahead of the road walk rather than after it, because "after" is how the Corniche ended
+     up dark: whatever runs last gets whatever budget is left, and on this island there is never
+     any left. A share is taken off the top instead — a third of the lamps — so the one continuous
+     ten-kilometre run in the scene is lit whatever else happens.
+
+     ONE SIDE ONLY, landward, which is both what was asked for and what is built: a promenade lamp
+     stands between the track and the road, not out on the water side where it would light the sea.
+     The landward side is the one the road is on, and since these chains run along the coast the
+     normal pointing away from the water is the one whose neighbouring ground is inside the island
+     — the same test the painter's seawardSign uses, applied per column rather than per polyline
+     because a 10 km chain changes which way the sea lies several times over. */
+  const chains = plan.cycleChains || [];
+  if (chains.length && XS_){
+    const cap = Math.floor(B.lamps * 0.34);
+    let placed = 0;
+    for (const chain of chains){
+      if (placed >= cap) break;
+      walk(chain, XS_.pathStepLamp, (x, y, tx, ty) => {
+        if (placed >= cap) return;
+        const nx = -ty, ny = tx;
+        const off = XS_.pathLamp;
+        /* Try the side whose ground is on the island; if both or neither are, fall back to a
+           consistent side rather than skipping, so a run through a park still gets a column line
+           instead of a gap. */
+        const aIn = inside((x + nx * off) * 1.02, (y + ny * off) * 1.02);
+        const bIn = inside((x - nx * off) * 1.02, (y - ny * off) * 1.02);
+        const sgn = (aIn && !bIn) ? 1 : (bIn && !aIn) ? -1 : 1;
+        const lx = x + nx * off * sgn, ly = y + ny * off * sgn;
+        if (!inside(lx * 1.02, ly * 1.02)) return;
+        lamps.push({ x:lx, y:ly, rot: Math.atan2(tx, ty) });
+        placed++;
+      });
+    }
+  }
+
+  const RANK = { major: 0, minor: 1, local: 2 };
+  roads.sort((a, b) => (RANK[a.cls] ?? 1) - (RANK[b.cls] ?? 1));
 
   roads.forEach(rd => {
     // Lamps alternate sides; palms go in pairs on the verge outside them. Spacing is in
     // NORMALISED island units, so a small island gets proportionally fewer, not smaller.
-    walk(rd.pts, 0.052, (x, y, tx, ty, i) => {
+    const stepL = XS_ ? XS_.stepLamp : 0.052;
+    walk(rd.pts, stepL, (x, y, tx, ty, i) => {
       const nx = -ty, ny = tx;
       const s = (i % 2) ? 1 : -1;
-      const o1 = rd.w * 1.45, o2 = rd.w * 2.35;
+      /* Kerb face plus the verge offset, which is the table's own definition. The old o1/o2 were
+         multiples of a made-up corridor width and meant nothing in metres. */
+      const o1 = XS_ ? (XS_.halfRoad + XS_.verge) : rd.w * 1.45;
+      const o2 = XS_ ? (XS_.halfRoad + XS_.green) : rd.w * 2.35;
       const lx = x + nx * o1 * s, ly = y + ny * o1 * s;
       /* NOT IN THE JUNCTION. Lamps are walked along the road at a fixed spacing with no idea
          where the crossings are, so roughly one in eight landed inside an intersection — standing

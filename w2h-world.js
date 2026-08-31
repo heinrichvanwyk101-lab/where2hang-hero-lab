@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v226';
+export const BUILD = 'world v227';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3234,6 +3234,41 @@ function paintGround(d, plan){
   plan.arterials.forEach(a => { if (strokeFor(a) === roadLocal) roadLocal(a); });
   plan.arterials.forEach(a => { const f = strokeFor(a); if (f !== roadLocal) f(a); });
   plan.ring.forEach(seg => roadPrimary(seg));
+
+  /* ---------- HAND THE CROSS-SECTION TO THE PROP PLACER ----------
+
+     WRITTEN HERE RATHER THAN IN groundPlan, because only this function knows the exaggeration.
+     corridor() floors at MIN_PX and U is derived from the canvas width, neither of which exists
+     until the canvas is sized — so any offset computed earlier would be in true metres against a
+     road that is about to be drawn at twice that. That mismatch is the whole reason lamps and
+     palms have never lined up with the paint.
+
+     NORMALISED ISLAND UNITS, because that is what addProps walks in. Metres divide by the island
+     radius in metres; the exaggeration multiplies. */
+  {
+    const trueW = U * roadW(d, ROAD_RING_M);
+    const exag  = trueW > 0.01 ? corridor(ROAD_RING_M, MIN_PX.ring) / trueW : 1;
+    const perM  = 1 / Math.max(1, d.r * M_PER_UNIT);
+    const o = m => m * perM * exag;
+    plan.xsec = {
+      exag,
+      verge: o(XSEC_M.verge), foot: o(XSEC_M.foot),
+      cycle: o(XSEC_M.cycle), green: o(XSEC_M.green), greenW: o(XSEC_M.greenW),
+      prom:  o(XSEC_M.prom),
+      /* Half the painted corridor, so a prop offset is measured from the KERB FACE the way the
+         table says it is, rather than from the centreline it was accidentally measured from. */
+      halfRoad: corridor(ROAD_RING_M, MIN_PX.ring) * ROAD_KERB * 0.5 / U,
+      stepLamp: XSEC_STEP_M.lamp * perM,
+      stepPalm: XSEC_STEP_M.palm * perM,
+      stepHedge: XSEC_STEP_M.hedge * perM,
+      pathLamp: o(XSEC_PATH_M.lamp), pathPalm: o(XSEC_PATH_M.palm),
+      pathStepLamp: XSEC_PATH_M.lampStep * perM, pathStepPalm: XSEC_PATH_M.palmStep * perM,
+    };
+    /* The real cycle chains, in the same normalised space, so the placer can light the seafront
+       run itself rather than only the roads. This is the Corniche's 10.2 km track. */
+    plan.cycleChains = ((d.roads && d.roads.drawPaths) || [])
+      .filter(p => p && p.kind === 'cycle' && p.length >= 2);
+  }
 
   /* ===========================================================================
      REAL PATHS AND PLAZAS.
