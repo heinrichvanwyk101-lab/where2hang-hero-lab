@@ -111,13 +111,31 @@
   .isle.on{opacity:1}
   .isle i{display:block;width:5px;height:5px;border-radius:50%;background:#3DE9CD;
     margin:0 auto 5px;box-shadow:0 0 8px #3DE9CD}
-  /* THE RAIL BAND. The empty strip between the header and the skyline — dead space in every
-     district shot, and the place the hero's card rail belongs. Height in vh rather than px so it
-     tracks the fold's two form factors; pointer-events on, because the carousel needs the drag
-     and there is nothing behind this band but sky. z-index sits under the chrome and over #gl. */
-  #rail{position:fixed;left:0;right:0;top:64px;height:34vh;z-index:3;
-    display:block;touch-action:pan-y;pointer-events:auto}
+  /* THE ISLAND STRIP. A navigation bar, not a feature — it sits in the dead band above the
+     skyline and must never compete with the city behind it. Scroll-snap rather than a 3D rail:
+     the hero carousel was 2.5-unit cards with a light pool, cast shadows and a float, which is
+     right for a landing page and wrong for a chrome strip, and it cost a second WebGL context to
+     draw what CSS draws for nothing. */
+  #rail{position:fixed;left:0;right:0;top:76px;z-index:3;
+    display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
+    padding:2px 50vw 8px;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    touch-action:pan-x;pointer-events:auto}
+  #rail::-webkit-scrollbar{display:none}
   #rail.off{display:none}
+  .rt{flex:0 0 auto;scroll-snap-align:center;width:104px;
+    border:1px solid rgba(255,255,255,.14);border-radius:12px;overflow:hidden;
+    background:rgba(27,30,34,.55);backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);appearance:none;padding:0;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);opacity:.72;
+    transition:opacity .22s ease, transform .22s ease, border-color .22s ease}
+  .rt img{display:block;width:100%;height:52px;object-fit:cover;opacity:.85}
+  .rt span{display:block;font:600 11px/1.3 Inter,sans-serif;color:#E7EDF3;
+    padding:6px 8px 7px;text-align:center;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px}
+  .rt[aria-current="true"]{opacity:1;transform:translateY(-3px);
+    border-color:rgba(0,194,168,.65);box-shadow:0 8px 22px rgba(0,0,0,.45)}
+  .rt[aria-current="true"] span{color:#EAFFF9}
   .views{position:fixed;right:12px;bottom:18px;z-index:6;display:flex;gap:8px}
   .chip{appearance:none;border:1px solid rgba(255,255,255,.16);
     background:rgba(16,22,28,.85);color:#E7EDF3;font:600 13px Inter,sans-serif;
@@ -152,7 +170,7 @@
 <body>
 
 <canvas id="gl"></canvas>
-<canvas id="rail" class="off"></canvas>
+<div id="rail" class="off"></div>
 
 <div class="top">
   <div class="title">Where<b>2</b>Hang</div>
@@ -356,7 +374,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v147', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v148', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3836,83 +3854,75 @@ function attractTick(now){
    own route, which is correct: they are already deferred. */
 warmHideAll();
 
-/* ---------- THE HERO CARD RAIL, MOUNTED OVER THE SKY BAND ------------------------------------
+/* ---------- THE ISLAND STRIP -------------------------------------------------------------------
 
-   city-hero.js is not a city fly-through, which is worth stating because the name suggests one.
-   It is a card carousel on a rail in front of a STATIC skyline plate — the landing page hero. So
-   there is no camera path in it to lift; what it has is a rail, a swipe model and a select
-   callback, and those are exactly what turns the dead band above the skyline into the island
-   navigator.
+   A SOFT NAVIGATION BAR, AND THE HERO CAROUSEL WAS THE WRONG INSTRUMENT FOR IT. city-hero.js is
+   built to be the subject of a landing page — 2.5-unit cards, a pool of light, a cast shadow, a
+   float cycle — and shrinking that into chrome fights every decision in it. It also spent a second
+   WebGL context drawing what scroll-snap draws for free, and it framed itself off-centre because
+   its camera solve is aspect-driven rather than layout-driven.
 
-   AN OVERLAY, NOT A PORT. mountCityHero builds its own WebGLRenderer with alpha:true and a clear
-   alpha of zero — it is written to composite over something, so it gets its own canvas above #gl
-   rather than being rebuilt as a THREE.Group in this scene. That is a second WebGL context, which
-   is well inside any mobile limit, and the module already caps DPR at 2, throttles to 30fps when
-   idle and requests a low-power adapter. Porting it into the scene graph would be one context and
-   several days; this is the same behaviour tonight and reversible in one line.
+   So this is DOM. Tiles snap to centre, the strip is padded by half a viewport at each end so the
+   first and last can reach the middle, and the whole thing is translucent with a blur behind it so
+   the city reads through rather than being covered.
 
-   ISLANDS AS CARDS. The carousel wants { name, sub, img, fallback } and nothing else, so a
-   district maps straight onto it. Swiping the rail moves between islands and a tap flies there,
-   which is the island-to-island movement asked for — the rail drives the camera rather than the
-   camera driving itself.
+   ABU DHABI FIRST, THEN THE ISLANDS. The strip mirrors the navigation hierarchy exactly — the
+   whole city, then each island — so tapping a tile is the same action as tapping the island itself
+   and the camera move is triggered from here rather than from the tour.
 
-   DYNAMIC AND GUARDED. Imported after warm-up rather than at module top, so it never competes
-   with the first frame — which is the whole point of the progressive warm-up above — and wrapped
-   so that a missing or failing city-hero.js leaves the scene exactly as it is now. */
+   The active tile follows the camera rather than only the finger, because the attract tour moves
+   between islands on its own and a strip that disagreed with the view would be worse than none. */
 const RAIL_OFF = /[?&]rail=0/.test(location.search);
-if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
-  try {
-    const { mountCityHero } = await import('./city-hero.js');
-    const el = document.getElementById('rail');
-    if (!el) return;
-    /* IMAGES, BECAUSE THE CARD IS A WINDOW AND AN EMPTY ONE IS A GREY SLAB. Without img the
-       carousel falls back to placeholderTex — a flat gradient with the name on it — which is why
-       the off-centre cards read as cardboard rather than glass. These are the same paths the
-       landing page hero uses, so they are known to exist, and every card carries a fallback the
-       way that page does. */
-    const IMG = 'https://where2hang.ae/images/';
-    const ART = {
-      corniche: ['Hero-skyline.webp',       'The seafront city'],
-      maryah:   ['Venue-coya.webp',         'Business and dining'],
-      reem:     ['Hero-skyline.webp',       'Towers and marinas'],
-      saadiyat: ['Venue-louvre.webp',       'Culture and beaches'],
-      yas:      ['Venue-seaworld.webp',     'Entertainment island'],
-      raha:     ['Hero_activity.webp',      'Waterfront living'],
-    };
-    const items = DISTRICTS.map(d => {
-      const a = ART[d.id] || [];
-      return { name: d.name, sub: a[1] || '', img: a[0] ? IMG + a[0] : null,
-               fallback: IMG + 'Hero-skyline.webp', _d: d };
-    });
-    if (!items.length) return;
-    el.classList.remove('off');
-    /* MOUNTED A FRAME AFTER UNHIDING, and this is why the rail was off-centre.
+if (!RAIL_OFF) requestAnimationFrame(() => {
+  const el = document.getElementById('rail');
+  if (!el) return;
+  const IMG = 'https://where2hang.ae/images/';
+  const ART = { corniche:'Hero-skyline.webp', maryah:'Venue-coya.webp', reem:'Hero-skyline.webp',
+                saadiyat:'Venue-louvre.webp', yas:'Venue-seaworld.webp', raha:'Hero_activity.webp' };
+  const tiles = [{ id:'__world', name:'Abu Dhabi', img:'Hero-skyline.webp', d:null }]
+    .concat(DISTRICTS.map(d => ({ id:d.id, name:d.name, img:ART[d.id] || 'Hero-skyline.webp', d })));
 
-       mountCityHero reads canvas.clientWidth and clientHeight at construction and derives the
-       camera framing from them — fit() solves the z distance against the aspect. The canvas had
-       display:none until the line above, so at the moment of a synchronous call its client box is
-       still zero and the aspect is whatever the fallback produces. One frame lets layout flush, so
-       fit() sees the real band and the rail lands centred in it. */
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const rail = mountCityHero(el, {
-      venues: items,
-      /* The rail's own idea of time of day follows the scene's, so the two never disagree about
-         whether it is night. getCityState is not imported: this file already knows. */
-      getState: () => ({ tod: view, busyness: 0.4, hotIndex: -1 }),
-      onSelect: (i) => {
-        const d = items[i] && items[i]._d;
-        if (!d) return;
-        attractStop();                       // a deliberate choice stops the tour, as a tap does
-        setDistrict(d);
-      },
+  const nodes = tiles.map(t => {
+    const b = document.createElement('button');
+    b.className = 'rt'; b.type = 'button'; b.setAttribute('aria-current', 'false');
+    const im = document.createElement('img');
+    im.src = IMG + t.img; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async';
+    /* A tile that loses its image must still be a tile: hide the broken glyph and let the
+       translucent panel and the label carry it. */
+    im.onerror = () => { im.style.display = 'none'; };
+    const sp = document.createElement('span'); sp.textContent = t.name;
+    b.appendChild(im); b.appendChild(sp);
+    b.addEventListener('click', () => {
+      attractStop();                       // a deliberate choice stops the tour, as any tap does
+      if (t.d) setDistrict(t.d); else setWorld();
+      mark(t.id);
     });
-    /* Hidden below district level: once a place is chosen the rail is competing with the subject,
-       and the hierarchy is World -> district -> landmark, not a permanent chrome strip. */
-    window.__railSetVisible = on => { el.classList.toggle('off', !on); on ? rail.resume && rail.resume() : rail.pause && rail.pause(); };
-  } catch (e) {
-    console.warn('city-hero rail unavailable:', e && e.message);
+    el.appendChild(b);
+    return b;
+  });
+
+  function mark(id){
+    tiles.forEach((t, i) => {
+      const on = t.id === id;
+      nodes[i].setAttribute('aria-current', on ? 'true' : 'false');
+      if (on) nodes[i].scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' });
+    });
   }
-}, 0));
+
+  el.classList.remove('off');
+  mark('__world');
+
+  /* FOLLOWS THE CAMERA, NOT ONLY THE TAP. Half a second is far below anything a person notices
+     and costs one string compare, which is the right trade against wiring a callback into every
+     path that can change the view — setDistrict, setPlace, Back, and the tour all reach it. */
+  let lastId = '__world';
+  setInterval(() => {
+    const id = (typeof activeDistrict !== 'undefined' && activeDistrict) ? activeDistrict.id : '__world';
+    if (id !== lastId){ lastId = id; mark(id); }
+  }, 500);
+
+  window.__railSetVisible = on => el.classList.toggle('off', !on);
+});
 
 attract.on = !ATTRACT_OFF;
 attract.until = performance.now() + ATTRACT[0].ms;
