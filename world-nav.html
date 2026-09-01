@@ -1587,7 +1587,8 @@ function descend(steps){
    so the world has no use for them and the host page keeps every gesture — and listens for the
    four messages the host needs.
 
-     host -> world    setDistrict {id} · setPlace {id,label} · setResults {points,label}
+     host -> world    setDistrict {id} · setPlace {id,label} · setVenue {id,x,z,label,h?,r?}
+                      setResults {points,label}
                       setView {view} · setWorld
                       idle · wake
      world -> host    ready · district {id}
@@ -1636,6 +1637,30 @@ if (/[?&]embed=1/.test(location.search)){
           if (a) descend([() => setWorld(), () => setDistrict(d), () => setPlace(d, a)]);
           else console.warn('setPlace: no anchor named', m.label, 'on', m.id);
         }
+      }
+      /* setVenue IS setPlace FOR A REAL VENUE, not a hand-authored landmark. The host sends a
+         world-frame coordinate (its own venue lat/lng, projected through the shared origin in
+         data/index.json — the same projection this project settled on at the very start of the
+         embed integration) rather than a label to look up. worldToLocal converts it into a
+         synthetic local anchor and hands it straight to the existing, tested setPlace — same
+         descend() choreography as setPlace above (out to the world, then the island, then the
+         place), so a venue tap reads exactly like a landmark tap, not a different kind of jump.
+
+         h/r ARE GENERIC, NOT AUTHORED. A landmark's anchor carries a real building height and
+         footprint radius; a venue in the app's own database is just a point. 5/20 is a
+         street-level "step in close" default — deliberately tighter than a landmark shot, since
+         there is no building to fill the frame with. Worth tuning once this is seen live against
+         real venues rather than guessed twice. */
+      else if (m.type === 'setVenue'){
+        const d = DISTRICTS.find(x => x.id === m.id);
+        if (d && Number.isFinite(m.x) && Number.isFinite(m.z)){
+          attractStop();
+          if (d.pending || !d.placeAnchors) setDistrict(d);
+          const local = worldToLocal(d, m.x, m.z);
+          const anchor = { x: local.x, z: local.z, h: Number.isFinite(m.h) ? m.h : 5,
+                            r: Number.isFinite(m.r) ? m.r : 20, label: m.label || 'Venue' };
+          descend([() => setWorld(), () => setDistrict(d), () => setPlace(d, anchor)]);
+        } else console.warn('setVenue: unknown district or non-finite coords', m.id, m.x, m.z);
       }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
          ReferenceError the moment the branch runs, not a falsy value to fall through. */
@@ -1804,6 +1829,20 @@ function anchorWorld(d, a){
     z: d.z + (-a.x * n + a.z * c) * s,
     y: (GROUND + (a.h || 0)) * s,
   };
+}
+
+/* THE INVERSE OF anchorWorld — for a real venue, which arrives as a world-frame coordinate
+   (the app's own lat/lng, projected through the shared origin in data/index.json), not as a
+   hand-authored local anchor. Rather than teach setPlace two different coordinate systems,
+   this converts the world coordinate INTO a synthetic local anchor and hands it to the
+   existing, tested setPlace unchanged — same rule the file already follows elsewhere:
+   "NO NEW CAMERA CODE... this only decides the order." The rotation matrix anchorWorld
+   applies is orthonormal, so its inverse is just its transpose — no matrix solve needed. */
+function worldToLocal(d, wx, wz){
+  const s = d.dispScale || 1;
+  const c = Math.cos(d.rot), n = Math.sin(d.rot);
+  const dx = (wx - d.x) / s, dz = (wz - d.z) / s;
+  return { x: dx * c - dz * n, z: dx * n + dz * c };
 }
 
 /* PICK MARKERS — a small persistent group, cleared and rebuilt on every record/reset rather than
