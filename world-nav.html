@@ -1370,45 +1370,13 @@ function fitDist(r, fovDeg){
    implied: 1.55/2.32, 1.5/5.7, and 0.62 x 0.159. */
 const PITCH_WORLD = 0.668, PITCH_DISTRICT = 0.263, PITCH_PLACE = 0.0986;
 
-/* THE FRAMING EXTENT SHOWS THE DENSE CLUSTER, NOT ALL SIX ISLANDS — deliberately separate
-   from worldExtent() above. worldExtent() has to stay the TRUE full spread: it sizes the far
-   clip plane and the shadow camera (see the note above it — shrinking it reintroduces exactly
-   the "black arriving from the top of the frame" bug that note describes). Framing is a
-   different question: what the CAMERA should show.
-
-   SAADIYAT DROPPED FROM THE CLUSTER, CONFIRMED BY THE ACTUAL DIORAMA COORDINATES, NOT A
-   GUESS. Corniche, Al Maryah and Al Reem sit close together — d.x/d.z of (-100,165), (5,-55)
-   and (220,85). Saadiyat, at (-110,-290) with r=140, is far enough south that including it
-   pulls the bounding box's z-span from 495 to 785 units and shifts the frame's centre-point
-   about 145 units toward the empty gap between it and the tight trio — confirmed live: the
-   city rendered off in one corner of the frame with the rest black, exactly what a centre-
-   point sitting in mostly-empty water produces. Bounding radius with Saadiyat: ~392 units.
-   Without it: ~310 — about 21% tighter, and centred on the part of the city that is actually
-   there. Saadiyat stays fully reachable via the rail; it just isn't part of the one shot
-   meant to represent "Abu Dhabi" at a glance, the same way Yas and Al Raha already aren't. */
-function worldFramingExtent(){
-  const CLUSTER = ['corniche', 'maryah', 'reem'];
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  DISTRICTS.filter(d => CLUSTER.includes(d.id)).forEach(d => {
-    const R = d.r * (d.dispScale || 1);
-    x0 = Math.min(x0, d.x - R); x1 = Math.max(x1, d.x + R);
-    z0 = Math.min(z0, d.z - R); z1 = Math.max(z1, d.z + R);
-  });
-  if (!isFinite(x0)) return worldExtent();
-  return {
-    cx: (x0 + x1) / 2,
-    cz: (z0 + z1) / 2,
-    r:  Math.max(120, Math.max(x1 - x0, z1 - z0) / 2),
-  };
-}
-
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   resetOrbit();
   /* AIMED AT THE ARCHIPELAGO, NOT AT CORNICHE. lookAt puts goal.target dead centre of frame, so
      whatever this is set to IS the middle of the shot. It was Corniche, which is one island at one
      corner of five. */
-  const W = worldFramingExtent();
+  const W = worldExtent();
   goal.target.set(W.cx, 0, W.cz);
   /* The two ratios are the ones the old literals implied — 600 and 400 against a half-extent of
      258. They are unchanged; what changed underneath them is that B is now the real half-extent
@@ -3300,13 +3268,15 @@ setWorld();
    OPENING_PLACE comment names as the fault to prevent — just inverted, and now real, confirmed on
    both the app's Home and Landing pages.
 
-   JUST setWorld() — NOT A SEPARATE COMPOSITION. An earlier version of this duplicated setWorld's
-   cluster-framing math here as its own inline block, so the opening and a mid-session tap on the
-   rail's "Abu Dhabi" card composed the same shot via two different code paths that could drift
-   apart. Real feedback: "should just be the same view as set for Abu Dhabi on the area rail" —
-   correct, and simpler. setWorld() itself now frames the dense cluster (see worldFramingExtent
-   above setWorld's own definition), so calling it here IS calling the same thing the rail calls;
-   one composition, two callers, no duplicate math to keep in sync.
+   JUST setWorld() — NOT A SEPARATE COMPOSITION. Two earlier attempts lived here: first a
+   duplicated inline copy of setWorld's own math, then a dedicated worldFramingExtent()
+   narrowing the shot to fewer islands (four, then three) to cut down on visible empty sea.
+   Both were reverted. Real feedback settled it twice: "should just be the same view as set
+   for Abu Dhabi on the area rail" — meaning call setWorld() itself, not a variant of it — and
+   then, after the narrowing kept drifting toward looking like Corniche alone rather than Abu
+   Dhabi: "just open with the Abu Dhabi view already known." setWorld() is back to its
+   original worldExtent()-based framing, all six islands, unmodified. This calls it directly;
+   one composition, two callers, nothing narrowed.
 
    attract.i starts at 0 and the first advance goes to 1, so whatever is composed here IS leg 0 and
    attractGo never runs for it.
