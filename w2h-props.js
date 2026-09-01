@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v28';
+export const BUILD = 'props v29';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -687,6 +687,7 @@ function addProps(d, layer, plan, budget = {}){
      normal pointing away from the water is the one whose neighbouring ground is inside the island
      — the same test the painter's seawardSign uses, applied per column rather than per polyline
      because a 10 km chain changes which way the sea lies several times over. */
+  const pathLamps = [];
   const chains = plan.cycleChains || [];
   if (chains.length && XS_){
     /* SPACING IS DERIVED FROM THE LENGTH, NOT FIXED, and a fixed one is why the lighting stopped
@@ -707,12 +708,22 @@ function addProps(d, layer, plan, budget = {}){
     for (const c of chains)
       for (let i = 1; i < c.length; i++)
         totalLen += Math.hypot(c[i][0] - c[i-1][0], c[i][1] - c[i-1][1]);
-    const allotted = Math.max(24, Math.floor(B.lamps * 0.40));
-    const stepPath = Math.max(XS_.pathStepLamp, totalLen / allotted);
-    /* A ceiling well above the allotment rather than at it: the walk can overshoot slightly on the
-       last step of each chain, and cutting at exactly the allotment would reintroduce the same
-       mid-run stop it is here to prevent. */
-    const cap = Math.ceil(allotted * 1.35);
+    /* THE SPACING IS THE TARGET AND THE COUNT FOLLOWS, which is the opposite of the last version
+       and the reason one end came out sparse.
+
+       Deriving step from a fixed allotment sounded right but the arithmetic does not survive the
+       real numbers: Corniche carries 59 km of cycle chain and the allotment was about 112 columns,
+       so the spacing solved to roughly 520 metres. That is not lighting, it is an occasional lamp.
+
+       Fixing the spacing instead and letting the count be whatever the length demands gives 59 km
+       at 70 m, about 840 columns. Lamps are instanced — one geometry, one draw — so the cost of
+       that is the instance buffer rather than draw calls, and the seafront is the one run in the
+       scene where a continuous line of light is the entire point.
+
+       The hard ceiling is a guard against a future island with an absurd amount of chain, not a
+       budget: it sits well above what any of the six currently needs. */
+    const stepPath = XS_.pathStepLamp * 2.8;          // 25 m nominal -> 70 m on the seafront
+    const cap = 900;
     let placed = 0;
     for (const chain of chains){
       if (placed >= cap) break;
@@ -729,9 +740,29 @@ function addProps(d, layer, plan, budget = {}){
         const lx = x + nx * off * sgn, ly = y + ny * off * sgn;
         if (!inside(lx * 1.02, ly * 1.02)) return;
         lamps.push({ x:lx, y:ly, rot: Math.atan2(tx, ty) });
+        pathLamps.push([lx, ly]);
         placed++;
       });
     }
+  }
+
+  /* ---- AND NOW THE ROAD PASS MUST NOT LIGHT THE SAME CORRIDOR TWICE ----
+
+     Two placers were running over the same ground: this chain pass, and the road walk below
+     lighting the ring road the track runs beside. Where the Corniche track sits alongside the
+     carriageway — which is most of its length — that put two column lines a few metres apart,
+     visibly denser than anywhere else on the island and wrong in a way that reads immediately.
+
+     The cross-section says one line lights both, so the chain pass wins and the road pass yields.
+     Tested by distance rather than by trying to decide in advance which roads run beside a track,
+     because the answer changes along a single polyline. */
+  const PAIR_KEEP = 46 / 7.8 / d.r;                  // metres, converted the same way as the rest
+  function nearPathLamp(nx, ny){
+    for (let i = 0; i < pathLamps.length; i++){
+      const dx = nx - pathLamps[i][0], dy = ny - pathLamps[i][1];
+      if (dx*dx + dy*dy < PAIR_KEEP*PAIR_KEEP) return true;
+    }
+    return false;
   }
 
   const RANK = { major: 0, minor: 1, local: 2 };
@@ -753,7 +784,8 @@ function addProps(d, layer, plan, budget = {}){
          where the crossings are, so roughly one in eight landed inside an intersection — standing
          in the carriageway, which is visible from the plan camera and wrong from every other one.
          A junction is lit from its signal masts and its corners, never from its middle. */
-      if (lamps.length < B.lamps && inside(lx * 1.02, ly * 1.02) && !nearCrossing(lx, ly, JUNCTION_KEEP))
+      if (lamps.length < B.lamps && inside(lx * 1.02, ly * 1.02) && !nearCrossing(lx, ly, JUNCTION_KEEP)
+          && !nearPathLamp(lx, ly))
         lamps.push({ x:lx, y:ly, rot: Math.atan2(tx, ty) });
       /* THE AVENUE WAS A PAIR AT EVERY STEP, both sides, at exactly the same offset — which is
          the single most visible repetition in the scene, because a road is a straight line and a
