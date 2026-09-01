@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v235';
+export const BUILD = 'world v236';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3902,13 +3902,13 @@ matBeach.userData.nightAlbedo    = GROUND_NIGHT_ALB;
    Night colours stay near-black and close together, because at night these surfaces are lit by
    window spill and should not have opinions. The glass classifier decides on the NIGHT hex, so
    every one of these keeps b <= 1.75r and stays out of the glass path. */
-const matPlaceStone = stdMat({ color:0x161C22, roughness:0.9 });
+const matPlaceStone = stdMat({ color:0x1E1B16, roughness:0.9 });
 matPlaceStone.userData.duskColor = 0xD3C4A6;      // precast concrete, neutral
 
-const matStoneRend  = stdMat({ color:0x1A1A20, roughness:0.99, metalness:0.0 });
+const matStoneRend  = stdMat({ color:0x1E1C18, roughness:0.99, metalness:0.0 });
 matStoneRend.userData.duskColor  = 0xE0C79A;      // warm limestone
 
-const matStoneClad  = stdMat({ color:0x171B21, roughness:0.26, metalness:0.62 });
+const matStoneClad  = stdMat({ color:0x1E1B17, roughness:0.26, metalness:0.62 });
 matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 
 /* PAINTED WHITE RENDER, AND THE MISSING MAJORITY FINISH.
@@ -3924,7 +3924,7 @@ matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 
    Night hex keeps b/r at 1.12, well inside the 1.75 the glass classifier tests, so this stays out
    of the glass path like every other body material. */
-const matStoneWhite = stdMat({ color:0x1A1B1D, roughness:0.95, metalness:0.0 });
+const matStoneWhite = stdMat({ color:0x1D1C1A, roughness:0.95, metalness:0.0 });
 matStoneWhite.userData.duskColor = 0xE9E4DA;      // painted white render, barely warmed by the dusk
 
 /* A SECOND GLAZING, AND A ROOF THAT IS NOT A WALL.
@@ -3946,7 +3946,7 @@ matStoneWhite.userData.duskColor = 0xE9E4DA;      // painted white render, barel
 
    Both keep blue-over-red on the NIGHT hex on the correct side of 1.75, since that is still what
    the lift classifies on. */
-const matGlassBronze = stdMat({ color:0x101A22, roughness:0.35, metalness:0.44 });
+const matGlassBronze = stdMat({ color:0x1E1912, roughness:0.35, metalness:0.44 });
 Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, duskMetal:0.44, duskEnv:1.15 });
 /* Set below, next to matPlaceGlass, where the reasoning lives. Declared here because this
    material is defined first and the assignment has to follow its userData merge. */
@@ -3973,10 +3973,32 @@ const matRoofTile  = stdMat({ color:0x1A1210, roughness:0.94, metalness:0.02 });
 matRoofTile.userData.duskColor  = 0xA9663F;       // fired terracotta, the deeper of the two
 const matRoofTileL = stdMat({ color:0x1C1714, roughness:0.94, metalness:0.02 });
 matRoofTileL.userData.duskColor = 0xC0906A;       // sand-tile, the Lagoons tone
-/* 0x1B1813, NOT 0x111C22. The night body of the same glass, moved off blue for the same reason
-   the day colour was — a dark blue-green body under any lift at all is the teal the towers were
-   reading as. Near-black and faintly warm: a glass tower at night is dark, and what light it
-   shows comes from the windows in it rather than from the glass itself. */
+/* ---------- WHY EVERY NIGHT FACADE COLOUR MOVED, MEASURED RATHER THAN JUDGED ----------
+
+   The city takes a x5 albedo lift at night, and EVERY facade family was authored blue-biased.
+   On a near-black colour a six-point blue bias is invisible and looks like a sensible cool
+   shadow. Multiply it five times and it is not a bias any more, it is the colour:
+
+     placeStone   #161C22  ->  (110,140,170)   blue over red by 60
+     stoneClad    #171B21  ->  (115,135,165)   by 50
+     glassBronze  #101A22  ->  ( 80,130,170)   by 90
+     stoneRend    #1A1A20  ->  (130,130,160)   by 30
+     stoneWhite   #1A1B1D  ->  (130,135,145)   by 15
+
+   That is the slate-teal the towers have been reading as, and it is why fixing the glass alone
+   changed almost nothing: glass is one family of six, so five sixths of every facade in the scene
+   carried on producing it. The island glow, the glass albedo and the window temperature were all
+   real faults and none of them was THIS one, because the arithmetic was never checked.
+
+   IT ONLY LOOKS BROKEN WHERE TOWERS DOMINATE. On Corniche the lifted blue is spread across
+   twenty thousand low buildings and reads as cool night shadow, which is plausible. On Al Maryah
+   and Al Reem the same colour is on forty tall slabs filling the frame, and forty saturated
+   slate-teal slabs is the neon look.
+
+   Each is now warm-neutral to warm at the same luminance, so after the lift they land near
+   (135,120,95) rather than (110,140,170) — the relative differences between the five families are
+   preserved, the brightness is unchanged, and only the hue crosses over. Bronze goes furthest
+   warm because bronze glazing is what Gulf towers actually use. */
 const matPlaceGlass = stdMat({ color:0x1B1813, roughness:0.35, metalness:0.1 });
 /* GLASS DOES NOT TAKE THE CITY'S x5 NIGHT LIFT, AND TAKING IT WAS THE TEAL.
 
