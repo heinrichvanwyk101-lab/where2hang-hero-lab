@@ -393,7 +393,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v167', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v169', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1475,11 +1475,38 @@ window.__w2hSetResults = setResults;
     const d = queue[qi++];
     try {
       if (buildIsland && d && d.pending){
-        d.group.visible = false;            // attractTick reveals it once it has settled
+        /* NOT HIDDEN, AND THAT IS A DELIBERATE REVERSAL.
+
+           This set visible = false and left the reveal to attractTick, which fires on isleReady —
+           and isleReady with footprints on means built AND the footprint state settled. An island
+           whose footprint fetch stalls therefore never satisfies it and stays invisible for the
+           rest of the session, the only cure being a rail tap that forces the path again. That is
+           exactly the "was Raha not built until I selected it" symptom, and it is the hiding that
+           causes it, not the building.
+
+           The tour was allowed to hide islands because the tour also revealed them, and it was
+           flying elsewhere while they built. This pump builds off-camera anyway — the camera is
+           wherever the rail last pointed — so the assembly is rarely in frame, and a brief glimpse
+           of an island arriving is far cheaper than one that never does. */
         const idx = window.__basemapIndex;
         if (idx && BMAP.loadIsland) BMAP.loadIsland(idx, d.id).catch(() => {});
-        if (roadsIn(d.id)) buildAndRegister(d);
-        else whenRoads(d.id).then(() => { if (d.pending) buildAndRegister(d); });
+        /* A REVEAL THAT CANNOT FAIL TO FIRE.
+
+           buildAndRegister hides the island itself — reasonably, because the tour that normally
+           calls it is flying elsewhere and reveals it on isleReady. But isleReady with footprints
+           on also requires the footprint state to SETTLE, and a fetch that stalls never settles,
+           so the island stays hidden with nothing left to reveal it. attractTick is not a fallback
+           here; it tests the same condition.
+
+           Six seconds after the build the island is shown regardless. If isleReady fired first,
+           attractTick already showed it and this does nothing. If it never fires, this is the
+           difference between an island that arrives a little raw and one that is simply absent —
+           which is the "was Raha not built until I selected it" symptom. */
+        const reveal = () => setTimeout(() => {
+          if (d.group && !d.group.visible){ d.group.visible = true; d._shown = true; }
+        }, 6000);
+        if (roadsIn(d.id)){ buildAndRegister(d); reveal(); }
+        else whenRoads(d.id).then(() => { if (d.pending) buildAndRegister(d); reveal(); });
       }
     } catch (e) { console.warn('prefetch failed:', d && d.id, e && e.message); }
     setTimeout(pump, 1400);
