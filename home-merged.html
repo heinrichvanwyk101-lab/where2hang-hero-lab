@@ -268,8 +268,18 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 /* The world sits behind everything, fixed rather than sticky: it is the background of the whole
    page, not of the hero alone. citydim above it carries the same dimming the photographic version
    used, so the content over it keeps its contrast as the scene changes between day and night. */
+/* THE GAP BEFORE THE FIRST FRAME IS A GRADIENT, NOT BLACK.
+
+   The iframe paints nothing until the world's first render — several seconds on a cold load — and
+   an element with no background is black, which is the worst possible thing to put behind a
+   greeting. A sky-to-sea gradient costs nothing, shows through until the canvas draws over it, and
+   is close enough to the day scene that the transition reads as the haze clearing rather than as a
+   different picture arriving.
+
+   Set on the iframe itself rather than a wrapper: an iframe's own background paints before its
+   document does, so this is visible from the first layout. */
 #world{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:0;pointer-events:none;
-  background:#06111a}
+  background:linear-gradient(180deg,#AFC3D2 0%,#C4CFD6 34%,#9DAFB4 52%,#6E8894 74%,#4C6874 100%)}
 .citydim{z-index:1}
 
 /* THE STAGE, TAKEN FROM home-stage RATHER THAN INVENTED. .act1 is 130lvh and .stage is sticky at
@@ -356,10 +366,10 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .msrow{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding:2px 18px 4px;
   margin:0 -18px}
 .msrow::-webkit-scrollbar{display:none}
-.ms{flex:0 0 auto;width:170px;border-radius:14px;overflow:hidden;appearance:none;padding:0;
+.ms{flex:0 0 auto;width:148px;border-radius:14px;overflow:hidden;appearance:none;padding:0;
   text-align:left;border:1px solid rgba(255,255,255,.1);background:rgba(10,16,20,.42);
   backdrop-filter:blur(20px) saturate(.9);-webkit-backdrop-filter:blur(20px) saturate(.9)}
-.ms .im{position:relative;height:112px;background:#0d1418}
+.ms .im{position:relative;height:96px;background:#0d1418}
 .ms .im img{width:100%;height:100%;object-fit:cover;display:block}
 .ms .bdg{position:absolute;left:8px;top:8px;font:700 10px Inter,sans-serif;color:var(--gold);
   border:1px solid rgba(232,181,71,.5);border-radius:6px;padding:3px 6px;
@@ -399,11 +409,25 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
      is now clearly still a city rather than a grey panel. */
   background:rgba(10,16,20,.38);backdrop-filter:blur(20px) saturate(.9);
   -webkit-backdrop-filter:blur(20px) saturate(.9);
-  border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:12px;margin-top:12px}
+  border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:10px;margin-top:11px}
 .acts{padding:10px}
-.board{padding:4px 12px}
+/* TIGHTER. The board was a large grey slab for three rows; the rows carry the meaning and the
+   padding was carrying nothing. */
+.board{padding:2px 10px}
+.board .row{padding:9px 0}
+.board .th{width:44px;height:44px}
 .chips{display:flex;flex-wrap:wrap;gap:9px}
 .cats{display:flex;flex-wrap:wrap;gap:10px}
+
+/* TEXT THAT SURVIVES THE GLASS. Every muted token in home-stage was picked against near-black —
+   --dim on a #05080b page is fine and on a 38% panel over a bright sky it is gone. These are the
+   ones that actually disappeared: the distance column, the recurring line, the category links and
+   the card subtitles. Raised, not replaced: they stay quieter than the titles, which is their job. */
+.board .dist{color:#C7D4D2}
+.board .rec{color:#F0C978}
+.cats a{color:#DCE6E4}
+.ms .sb, .lm .sb, .areacap{color:#C2D0CE}
+.act2 small{color:#B9C7C5}
 
 /* The section headings sit BETWEEN panels, on nothing, so they carry their own shadow rather than
    a panel of their own — a strip behind two words reads as a button. */
@@ -453,7 +477,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
      updated on every deploy and the inner one never did, which looked exactly like embed mode not
      working. Bump this with the nav stamp. -->
 <iframe id="world" title="Abu Dhabi" loading="eager"
-        src="./world-nav.html?embed=1&rail=0&fp&v=169"></iframe>
+        src="./world-nav.html?embed=1&rail=0&fp&v=170"></iframe>
 <div class="citydim" id="citydim"></div>
 
 <div class="act1">
@@ -634,8 +658,16 @@ import('./area-rail.js').then(({ mountAreaRail }) => {
 /* Time of day drives the world, so the background agrees with the greeting above it. dawn has no
    counterpart in the world's three views and folds into day — the alternative is a fourth view,
    which is a modelling decision rather than a page one. */
+/* ?view=day|dusk|night FORCES IT, and without this there is no way to. The view chips are chrome,
+   so embed hides them, and this page then overrides whatever the world chose by sending setView
+   from the clock — so even world-nav's own ?view= could not survive. A build-time override belongs
+   on the host, because the host is what is holding the clock.
+
+   Left as a URL flag rather than a control: choosing the time of day is not a thing a visitor
+   should do, it is a thing the hour does. This is for looking at night at two in the afternoon. */
+const forced = (location.search.match(/[?&]view=(day|dusk|night)/) || [])[1];
 const h = new Date().getHours();
-send('setView', { view: h >= 19 || h < 6 ? 'night' : (h >= 17 ? 'dusk' : 'day') });
+send('setView', { view: forced || (h >= 19 || h < 6 ? 'night' : (h >= 17 ? 'dusk' : 'day')) });
 document.querySelector('.greet').firstChild.textContent =
   h < 12 ? 'Good morning.' : h < 17 ? 'Good afternoon.' : 'Good evening.';
 

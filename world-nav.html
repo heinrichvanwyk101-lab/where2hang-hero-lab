@@ -139,6 +139,16 @@
      #debug asks for it, which is exactly the rule everywhere else. */
   body.embed #dbg:not(.on){display:none !important}
   body.embed #gl{pointer-events:none}
+  /* HELD UNTIL THE SUBJECT IS WHOLE. The canvas starts transparent in embed mode, so what shows
+     through is the host's own gradient rather than an island under construction. Corniche was the
+     one island exempt from "revealed whole, never half" — on the grounds that it is the opening
+     subject and the hold leg covers its build — and that exemption is precisely why the opening
+     looks broken: the camera is pointed at the one thing allowed to assemble on screen.
+
+     Fading the canvas rather than the island keeps it simple and covers everything at once: ground
+     paint, fabric, footprints, props and the LOD swap all land behind it. */
+  .embed-early #gl, body.embed #gl{opacity:0;transition:opacity .9s ease}
+  .embed-early #gl.ready, body.embed #gl.ready{opacity:1}
   #rail{position:fixed;left:0;right:0;top:56px;height:22vh;z-index:3;
     display:block;touch-action:pan-y;pointer-events:auto;
     opacity:var(--railop,.62);transform:translateX(var(--railx,0px));
@@ -393,7 +403,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v169', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v170', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1581,30 +1591,42 @@ if (/[?&]embed=1/.test(location.search)){
   /* The host cannot know when the modules finished evaluating, so it is told rather than left to
      guess with a timeout. Anything sent before this arrives would land on a camera that has not
      composed its first shot yet. */
-  /* ---- THE OPENING, WHICH IS A DIFFERENT SHOT WHEN THE WORLD IS A BACKGROUND ----
+  /* ---- THE OPENING: COMPOSE, WAIT, THEN REVEAL ----
 
-     The development shell opens tight on Palace District, because there the city IS the subject
-     and a wide shot of five brown silhouettes says nothing. Behind a home page the opposite holds:
-     the subject is the greeting and the rail, the city is the setting, and the setting should
-     arrive as a place rather than as a close-up of one building.
+     Three shots were tried and the third is the one that is not about the shot at all. Opening
+     wide and descending still meant watching Corniche build from above; opening tight on a
+     landmark meant watching it build from close up. The fault was never the framing — it was that
+     anything was visible while the island was still arriving.
 
-     SO IT OPENS HIGH AND DESCENDS. The wide shot is also the cheapest thing to draw and the most
-     forgiving of an unfinished island — at world distance Corniche assembling reads as haze, not
-     as construction. That buys the seconds the build needs without anyone watching a progress bar.
-     Then, once the island has actually settled, it flies down to it.
+     So the canvas is held transparent, the shot is composed behind it, and only when the subject
+     has actually settled does it fade in. Nobody sees a stage of the build, which is the same rule
+     every other island already follows and the reason they have never looked wrong.
 
-     WAITS FOR isleReady, NOT A TIMER. A fixed delay is a guess about a device, and the wrong guess
-     either descends onto a half-built island or holds a finished one at arm's length. The ceiling
-     exists only so that a payload that never lands cannot park the camera in orbit for good. */
+     THE CAMERA IS SNAPPED, NOT FLOWN. Easing towards Corniche from the world position would be a
+     flight over geometry that is still assembling — and with the canvas dark, a flight nobody can
+     see anyway. Copying goal into cur makes the revealed frame the composed frame.
+
+     ?open=world KEEPS THE WIDE ESTABLISHING SHOT for anyone who prefers it; the hold and the fade
+     work the same either way, so the choice is now purely about what the first frame shows rather
+     than about hiding a build. */
+  const OPEN_WIDE = /[?&]open=world/.test(location.search);
   setWorld();
+  const gl = document.getElementById('gl');
   let waited = 0;
-  const descend = setInterval(() => {
+  const opening = setInterval(() => {
     waited += 250;
-    if (!isleReady(corniche) && waited < 12000) return;
-    clearInterval(descend);
-    /* Only if nothing else has taken the camera in the meantime. A rail tap during the wait is a
-       deliberate choice and must not be overridden by an opening that is still running. */
-    if (state === STATE.WORLD && !activeDistrict) setDistrict(corniche);
+    if (!isleReady(corniche) && waited < 14000) return;
+    clearInterval(opening);
+    if (!OPEN_WIDE && state === STATE.WORLD && !activeDistrict){
+      setDistrict(corniche);
+      if (typeof cur !== 'undefined' && cur && goal){          // snap, do not fly
+        try { cur.target.copy(goal.target); cur.dist = goal.dist;
+              cur.elev = goal.elev; cur.angle = goal.angle; cur.fov = goal.fov; } catch(e){}
+      }
+    }
+    /* Two frames before the fade: one to apply the composed camera, one to draw it. Fading on the
+       same tick shows the previous frame brightening into the new one. */
+    requestAnimationFrame(() => requestAnimationFrame(() => gl && gl.classList.add('ready')));
   }, 250);
 
   post('ready', { build: B_NAV });
