@@ -1374,14 +1374,20 @@ const PITCH_WORLD = 0.668, PITCH_DISTRICT = 0.263, PITCH_PLACE = 0.0986;
    from worldExtent() above. worldExtent() has to stay the TRUE full spread: it sizes the far
    clip plane and the shadow camera (see the note above it — shrinking it reintroduces exactly
    the "black arriving from the top of the frame" bug that note describes). Framing is a
-   different question: what the CAMERA should show. Corniche, Al Maryah, Al Reem and Saadiyat
-   sit close together; Yas and Al Raha sit genuinely far from the rest — fitting all six in one
-   shot means a lot of visible empty sea between them, which reads fine by day and flat/empty
-   at night (confirmed live, both times). setWorld() frames on this instead. Yas and Al Raha
-   stay fully reachable via the rail — one drag away — just not crammed into the one shot meant
-   to represent the whole city at a glance. */
+   different question: what the CAMERA should show.
+
+   SAADIYAT DROPPED FROM THE CLUSTER, CONFIRMED BY THE ACTUAL DIORAMA COORDINATES, NOT A
+   GUESS. Corniche, Al Maryah and Al Reem sit close together — d.x/d.z of (-100,165), (5,-55)
+   and (220,85). Saadiyat, at (-110,-290) with r=140, is far enough south that including it
+   pulls the bounding box's z-span from 495 to 785 units and shifts the frame's centre-point
+   about 145 units toward the empty gap between it and the tight trio — confirmed live: the
+   city rendered off in one corner of the frame with the rest black, exactly what a centre-
+   point sitting in mostly-empty water produces. Bounding radius with Saadiyat: ~392 units.
+   Without it: ~310 — about 21% tighter, and centred on the part of the city that is actually
+   there. Saadiyat stays fully reachable via the rail; it just isn't part of the one shot
+   meant to represent "Abu Dhabi" at a glance, the same way Yas and Al Raha already aren't. */
 function worldFramingExtent(){
-  const CLUSTER = ['corniche', 'maryah', 'reem', 'saadiyat'];
+  const CLUSTER = ['corniche', 'maryah', 'reem'];
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   DISTRICTS.filter(d => CLUSTER.includes(d.id)).forEach(d => {
     const R = d.r * (d.dispScale || 1);
