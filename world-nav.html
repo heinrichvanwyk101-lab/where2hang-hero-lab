@@ -111,31 +111,13 @@
   .isle.on{opacity:1}
   .isle i{display:block;width:5px;height:5px;border-radius:50%;background:#3DE9CD;
     margin:0 auto 5px;box-shadow:0 0 8px #3DE9CD}
-  /* THE ISLAND STRIP. A navigation bar, not a feature — it sits in the dead band above the
-     skyline and must never compete with the city behind it. Scroll-snap rather than a 3D rail:
-     the hero carousel was 2.5-unit cards with a light pool, cast shadows and a float, which is
-     right for a landing page and wrong for a chrome strip, and it cost a second WebGL context to
-     draw what CSS draws for nothing. */
-  #rail{position:fixed;left:0;right:0;top:76px;z-index:3;
-    display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;
-    padding:2px 50vw 8px;scroll-snap-type:x mandatory;
-    -webkit-overflow-scrolling:touch;scrollbar-width:none;
-    touch-action:pan-x;pointer-events:auto}
-  #rail::-webkit-scrollbar{display:none}
+  /* THE ISLAND RAIL BAND. area-rail draws a convex arc, so the band has to be tall enough for
+     the arc's rise without becoming a feature — 21vh holds the 1.5-unit card plus the curve of
+     its neighbours and nothing more. The canvas is transparent and unlit, so the city reads
+     through the gaps between cards rather than behind a panel. */
+  #rail{position:fixed;left:0;right:0;top:70px;height:21vh;z-index:3;
+    display:block;touch-action:pan-y;pointer-events:auto}
   #rail.off{display:none}
-  .rt{flex:0 0 auto;scroll-snap-align:center;width:104px;
-    border:1px solid rgba(255,255,255,.14);border-radius:12px;overflow:hidden;
-    background:rgba(27,30,34,.55);backdrop-filter:blur(10px);
-    -webkit-backdrop-filter:blur(10px);appearance:none;padding:0;
-    box-shadow:0 6px 18px rgba(0,0,0,.35);opacity:.72;
-    transition:opacity .22s ease, transform .22s ease, border-color .22s ease}
-  .rt img{display:block;width:100%;height:52px;object-fit:cover;opacity:.85}
-  .rt span{display:block;font:600 11px/1.3 Inter,sans-serif;color:#E7EDF3;
-    padding:6px 8px 7px;text-align:center;white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px}
-  .rt[aria-current="true"]{opacity:1;transform:translateY(-3px);
-    border-color:rgba(0,194,168,.65);box-shadow:0 8px 22px rgba(0,0,0,.45)}
-  .rt[aria-current="true"] span{color:#EAFFF9}
   .views{position:fixed;right:12px;bottom:18px;z-index:6;display:flex;gap:8px}
   .chip{appearance:none;border:1px solid rgba(255,255,255,.16);
     background:rgba(16,22,28,.85);color:#E7EDF3;font:600 13px Inter,sans-serif;
@@ -170,7 +152,7 @@
 <body>
 
 <canvas id="gl"></canvas>
-<div id="rail" class="off"></div>
+<canvas id="rail" class="off"></canvas>
 
 <div class="top">
   <div class="title">Where<b>2</b>Hang</div>
@@ -374,7 +356,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v148', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v149', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3854,75 +3836,64 @@ function attractTick(now){
    own route, which is correct: they are already deferred. */
 warmHideAll();
 
-/* ---------- THE ISLAND STRIP -------------------------------------------------------------------
+/* ---------- THE ISLAND RAIL ---------------------------------------------------------------------
 
-   A SOFT NAVIGATION BAR, AND THE HERO CAROUSEL WAS THE WRONG INSTRUMENT FOR IT. city-hero.js is
-   built to be the subject of a landing page — 2.5-unit cards, a pool of light, a cast shadow, a
-   float cycle — and shrinking that into chrome fights every decision in it. It also spent a second
-   WebGL context drawing what scroll-snap draws for free, and it framed itself off-centre because
-   its camera solve is aspect-driven rather than layout-driven.
+   area-rail.js, NOT city-hero.js, AND THE DIFFERENCE IS WHAT IT WAS BUILT FOR. The hero carousel
+   is the subject of a landing page: 2.5 x 2.78 portrait cards, a pool of light, a cast shadow and
+   an idle float. Shrinking that into chrome fights every decision in it, which is what the first
+   two attempts here looked like. area-rail is already the district rail — a shallow convex arc of
+   2.35 x 1.5 landscape cards that bow toward the viewer, drag-only with no idle motion, the centre
+   one nearest and largest and its neighbours receding and dimming. That is a navigation bar.
 
-   So this is DOM. Tiles snap to centre, the strip is padded by half a viewport at each end so the
-   first and last can reach the middle, and the whole thing is translucent with a blur behind it so
-   the city reads through rather than being covered.
+   ABU DHABI FIRST, THEN THE ISLANDS, mirroring the hierarchy: the whole city, then each island.
+   Tapping a card is the same action as tapping the island, so the camera move is triggered from
+   the rail rather than from the tour.
 
-   ABU DHABI FIRST, THEN THE ISLANDS. The strip mirrors the navigation hierarchy exactly — the
-   whole city, then each island — so tapping a tile is the same action as tapping the island itself
-   and the camera move is triggered from here rather than from the tour.
+   MOUNTED AFTER LAYOUT FLUSHES. fit() solves the camera distance from clientWidth and clientHeight
+   at construction, so mounting synchronously after removing display:none frames the arc against a
+   zero-size box — which is exactly why the first rail sat off to the right. Two frames.
 
-   The active tile follows the camera rather than only the finger, because the attract tour moves
-   between islands on its own and a strip that disagreed with the view would be worse than none. */
+   WHERE THIS IS GOING. The scene behind this canvas is intended to become the site's background
+   everywhere, with the UI over it, so a transparent WebGL rail composited over a live 3D city is
+   the shape of the thing rather than a workaround. The obvious next step is feeding the scene
+   camera into the rail's dolly so the cards parallax against the real city instead of sitting flat
+   over it — area-rail has no idle motion of its own, so there is nothing to fight. */
 const RAIL_OFF = /[?&]rail=0/.test(location.search);
-if (!RAIL_OFF) requestAnimationFrame(() => {
-  const el = document.getElementById('rail');
-  if (!el) return;
-  const IMG = 'https://where2hang.ae/images/';
-  const ART = { corniche:'Hero-skyline.webp', maryah:'Venue-coya.webp', reem:'Hero-skyline.webp',
-                saadiyat:'Venue-louvre.webp', yas:'Venue-seaworld.webp', raha:'Hero_activity.webp' };
-  const tiles = [{ id:'__world', name:'Abu Dhabi', img:'Hero-skyline.webp', d:null }]
-    .concat(DISTRICTS.map(d => ({ id:d.id, name:d.name, img:ART[d.id] || 'Hero-skyline.webp', d })));
+if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
+  try {
+    const { mountAreaRail } = await import('./area-rail.js');
+    const el = document.getElementById('rail');
+    if (!el) return;
+    const IMG = 'https://where2hang.ae/images/';
+    const ART = { corniche:'Hero-skyline.webp', maryah:'Venue-coya.webp', reem:'Hero-skyline.webp',
+                  saadiyat:'Venue-louvre.webp', yas:'Venue-seaworld.webp', raha:'Hero_activity.webp' };
+    /* count is area-rail's second line on the card. Place anchors are what an island actually
+       offers here, so that is what it counts — not a venue total this build does not have. */
+    const areas = [{ name:'Abu Dhabi', count:DISTRICTS.length, img:IMG + 'Hero-skyline.webp',
+                     fallback:IMG + 'Hero-skyline.webp', _d:null }]
+      .concat(DISTRICTS.map(d => ({
+        name: d.name,
+        count: (d.placeAnchors && d.placeAnchors.length) || 0,
+        img: IMG + (ART[d.id] || 'Hero-skyline.webp'),
+        fallback: IMG + 'Hero-skyline.webp',
+        _d: d })));
 
-  const nodes = tiles.map(t => {
-    const b = document.createElement('button');
-    b.className = 'rt'; b.type = 'button'; b.setAttribute('aria-current', 'false');
-    const im = document.createElement('img');
-    im.src = IMG + t.img; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async';
-    /* A tile that loses its image must still be a tile: hide the broken glyph and let the
-       translucent panel and the label carry it. */
-    im.onerror = () => { im.style.display = 'none'; };
-    const sp = document.createElement('span'); sp.textContent = t.name;
-    b.appendChild(im); b.appendChild(sp);
-    b.addEventListener('click', () => {
-      attractStop();                       // a deliberate choice stops the tour, as any tap does
-      if (t.d) setDistrict(t.d); else setWorld();
-      mark(t.id);
-    });
-    el.appendChild(b);
-    return b;
-  });
+    el.classList.remove('off');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-  function mark(id){
-    tiles.forEach((t, i) => {
-      const on = t.id === id;
-      nodes[i].setAttribute('aria-current', on ? 'true' : 'false');
-      if (on) nodes[i].scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' });
+    mountAreaRail(el, {
+      areas,
+      onSelect: (i) => {
+        const a = areas[i]; if (!a) return;
+        attractStop();                    // a deliberate choice stops the tour, as any tap does
+        if (a._d) setDistrict(a._d); else setWorld();
+      },
     });
+    window.__railSetVisible = on => el.classList.toggle('off', !on);
+  } catch (e) {
+    console.warn('island rail unavailable:', e && e.message);
   }
-
-  el.classList.remove('off');
-  mark('__world');
-
-  /* FOLLOWS THE CAMERA, NOT ONLY THE TAP. Half a second is far below anything a person notices
-     and costs one string compare, which is the right trade against wiring a callback into every
-     path that can change the view — setDistrict, setPlace, Back, and the tour all reach it. */
-  let lastId = '__world';
-  setInterval(() => {
-    const id = (typeof activeDistrict !== 'undefined' && activeDistrict) ? activeDistrict.id : '__world';
-    if (id !== lastId){ lastId = id; mark(id); }
-  }, 500);
-
-  window.__railSetVisible = on => el.classList.toggle('off', !on);
-});
+}, 0));
 
 attract.on = !ATTRACT_OFF;
 attract.until = performance.now() + ATTRACT[0].ms;
