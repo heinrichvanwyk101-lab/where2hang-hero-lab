@@ -41,7 +41,52 @@
 <script type="importmap">{ "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
-}}</script>
+}}
+/* ---------- LANDMARKS: THE THIRD RUNG --------------------------------------------------------
+
+   Every label below is copied from the world's own place anchors. placeByName matches on the
+   string exactly, so these are not descriptions — they are keys, and a rewording breaks the card
+   silently rather than loudly.
+
+   QASR AL WATAN CARRIES ITS OWN NOTE. The presidential palace is not somewhere you visit, so it
+   belongs here as architecture rather than as a destination, and the subtitle says so — a venue
+   app that sends someone to a gate they cannot pass has done worse than nothing.
+
+   'soon' MARKS GEOMETRY THAT IS NOT AUTHORED YET. Louvre exists as an anchor and a footprint but
+   not as a modelled building, so the card flies there and shows a box. Saying so on the card is
+   better than letting someone tap it and conclude the model is worse than it is. */
+const LM = [
+  { id:'corniche', label:'Emirates Palace',   sub:'Corniche',   img:'Hero-skyline.webp' },
+  { id:'corniche', label:'Qasr Al Watan',     sub:'Presidential palace · not open to visit',
+    img:'Hero-skyline.webp' },
+  { id:'corniche', label:'Grand Mosque',      sub:'Sheikh Zayed Grand Mosque', img:'Hero-skyline.webp' },
+  { id:'corniche', label:'Etihad Towers',     sub:'Corniche',   img:'Hero-skyline.webp' },
+  { id:'corniche', label:'Marina Mall',       sub:'Breakwater',  img:'Hero-skyline.webp' },
+  { id:'corniche', label:'Qasr Al Hosn',      sub:'The old fort', img:'Hero-skyline.webp' },
+  { id:'yas',      label:'Ferrari World',     sub:'Yas Island',  img:'Venue-ferrariworld.webp' },
+  { id:'yas',      label:'SeaWorld',          sub:'Yas Island',  img:'Venue-seaworld.webp' },
+  { id:'yas',      label:'Yas Marina',        sub:'The circuit', img:'Venue-mcgettigans.webp' },
+  { id:'raha',     label:'Aldar HQ',          sub:'Al Raha',     img:'Hero_activity.webp' },
+  { id:'raha',     label:'Al Raha Beach Resort', sub:'Al Raha',  img:'Hero_activity.webp' },
+  { id:'saadiyat', label:'Louvre Abu Dhabi',  sub:'Saadiyat',    img:'Venue-louvre.webp', soon:true },
+  { id:'reem',     label:'Gate Towers',       sub:'Al Reem',     img:'Hero-skyline.webp' },
+];
+{
+  const row = document.getElementById('lmrow');
+  if (row) LM.forEach(l => {
+    const b = document.createElement('button');
+    b.className = 'lm'; b.type = 'button';
+    b.innerHTML = '<div class="im"><img loading="lazy" decoding="async" alt="" src="' + IMG + l.img +
+      '" onerror="this.style.display=\'none\'">' +
+      (l.soon ? '<span class="tag soon">Building</span>' : '<span class="tag">3D</span>') +
+      '</div><div class="nm"></div><div class="sb"></div>';
+    b.querySelector('.nm').textContent = l.label;
+    b.querySelector('.sb').textContent = l.sub;
+    b.addEventListener('click', () => send('setPlace', { id:l.id, label:l.label }));
+    row.appendChild(b);
+  });
+}
+</script>
 <style>
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
@@ -411,6 +456,27 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 .act2{background:rgba(255,255,255,.05);backdrop-filter:none}
 .recur, .edi{background:rgba(12,18,22,.62);backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px)}
+
+/* ---------- THE LANDMARK RAIL ------------------------------------------------------------------
+
+   These are the hand-built ones — authored geometry rather than an extruded footprint — so this
+   section is the only place in the page where the modelling itself is the subject. Tapping flies
+   to the anchor, which is the third rung of the hierarchy and the closest the camera ever gets.
+
+   Labels are the world's own place labels, verbatim. A typo here does not read as a typo; it reads
+   as a card that does nothing, because placeByName matches on exactly this string. */
+.lmrow{display:flex;gap:11px;overflow-x:auto;scrollbar-width:none;padding:2px 18px 4px;margin:0 -18px}
+.lmrow::-webkit-scrollbar{display:none}
+.lm{flex:0 0 auto;width:150px;border-radius:14px;overflow:hidden;appearance:none;padding:0;
+  text-align:left;border:1px solid rgba(255,255,255,.11);background:rgba(12,18,22,.62);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.lm .im{height:92px;background:#0d1418;position:relative}
+.lm .im img{width:100%;height:100%;object-fit:cover;display:block}
+.lm .tag{position:absolute;right:7px;top:7px;font:700 9px Inter,sans-serif;letter-spacing:.6px;
+  color:#0a0d0e;background:var(--teal);border-radius:5px;padding:2px 5px}
+.lm .tag.soon{background:rgba(232,181,71,.9)}
+.lm .nm{font:700 13px/1.3 Inter,sans-serif;color:#EDF4F2;padding:9px 10px 2px}
+.lm .sb{font-size:11px;color:var(--dim);padding:0 10px 10px}
 </style>
 </head>
 <body>
@@ -426,7 +492,7 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
      updated on every deploy and the inner one never did, which looked exactly like embed mode not
      working. Bump this with the nav stamp. -->
 <iframe id="world" title="Abu Dhabi" loading="eager"
-        src="./world-nav.html?embed=1&rail=0&fp&v=165"></iframe>
+        src="./world-nav.html?embed=1&rail=0&fp&v=166"></iframe>
 <div class="citydim" id="citydim"></div>
 
 <div class="act1">
@@ -492,6 +558,8 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
   <div class="ms"><div class="im"><span class="bdg">Must see</span><img src="https://where2hang.ae/images/Venue-hudayriyatbeach.webp" onerror="this.src='https://where2hang.ae/images/Hero_activity.webp'" alt=""></div><div class="nm">Hudayriyat Beach</div><div class="sb">Hudayriyat</div></div>
   <div class="ms"><div class="im"><span class="bdg">Must see</span><img src="https://where2hang.ae/images/Venue-ferrariworld.webp" onerror="this.src='https://where2hang.ae/images/Hero-ent.webp'" alt=""></div><div class="nm">Ferrari World</div><div class="sb">Yas Island</div></div>
 </div>
+<div class="sec rise"><h4>Explore the model</h4><span class="va">View all</span></div>
+<div class="lmrow rise" id="lmrow"></div>
 <div class="recur rise">
   <span class="i"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10a8 8 0 0114-5M20 14a8 8 0 01-14 5"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
   <span class="t"><b>Every weekend</b> &middot; <span data-live="recurring">1 regular happening</span></span>

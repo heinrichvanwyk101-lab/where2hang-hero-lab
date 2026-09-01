@@ -386,7 +386,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v165', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v166', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1493,7 +1493,8 @@ window.__w2hSetResults = setResults;
    so the world has no use for them and the host page keeps every gesture — and listens for the
    four messages the host needs.
 
-     host -> world    setDistrict {id} · setResults {points,label} · setView {view} · setWorld
+     host -> world    setDistrict {id} · setPlace {id,label} · setResults {points,label}
+                      setView {view} · setWorld
                       idle · wake
      world -> host    ready · district {id}
 
@@ -1514,6 +1515,17 @@ if (/[?&]embed=1/.test(location.search)){
         if (d){ attractStop(); setDistrict(d); }
       }
       else if (m.type === 'setResults') { attractStop(); setResults(m.points, m.label); }
+      /* setPlace IS THE THIRD RUNG AND THE BRIDGE WAS MISSING IT. The hierarchy is world,
+         district, landmark — the host could reach the first two and not the one the hand-built
+         geometry actually lives at, which is the only rung where the modelling shows.
+
+         The island builds first if it has not yet: setPlace frames an anchor on an island that may
+         still be coastline, and a landmark shot of empty ground is worse than a slower one. */
+      else if (m.type === 'setPlace'){
+        const d = DISTRICTS.find(x => x.id === m.id);
+        const a = d && placeByName(d, m.label);
+        if (d && a){ attractStop(); if (d.pending) setDistrict(d); setPlace(d, a); }
+      }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
          ReferenceError the moment the branch runs, not a falsy value to fall through. */
       else if (m.type === 'setView' && m.view) { view = m.view; applyView(m.view); }
