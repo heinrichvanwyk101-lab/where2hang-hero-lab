@@ -1647,18 +1647,18 @@ if (/[?&]embed=1/.test(location.search)){
          place), so a venue tap reads exactly like a landmark tap, not a different kind of jump.
 
          h/r ARE GENERIC, NOT AUTHORED. A landmark's anchor carries a real building height and
-         footprint radius; a venue in the app's own database is just a point. 5/20 is a
-         street-level "step in close" default — deliberately tighter than a landmark shot, since
-         there is no building to fill the frame with. Worth tuning once this is seen live against
-         real venues rather than guessed twice. */
+         footprint radius; a venue in the app's own database is just a point. 8/38 reads as
+         "there it is, clearly, in its surroundings" — pulled back from an earlier 5/20 after
+         direct feedback that the tighter default read as zooming onto the building face
+         rather than placing it. Worth tuning further once seen live against more venues. */
       else if (m.type === 'setVenue'){
         const d = DISTRICTS.find(x => x.id === m.id);
         if (d && Number.isFinite(m.x) && Number.isFinite(m.z)){
           attractStop();
           if (d.pending || !d.placeAnchors) setDistrict(d);
           const local = worldToLocal(d, m.x, m.z);
-          const anchor = { x: local.x, z: local.z, h: Number.isFinite(m.h) ? m.h : 5,
-                            r: Number.isFinite(m.r) ? m.r : 20, label: m.label || 'Venue' };
+          const anchor = { x: local.x, z: local.z, h: Number.isFinite(m.h) ? m.h : 8,
+                            r: Number.isFinite(m.r) ? m.r : 38, label: m.label || 'Venue' };
           descend([() => setWorld(), () => setDistrict(d), () => setPlace(d, anchor)]);
         } else console.warn('setVenue: unknown district or non-finite coords', m.id, m.x, m.z);
       }
