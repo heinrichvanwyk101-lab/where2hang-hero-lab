@@ -138,7 +138,23 @@
      only guessed at from the standalone page, which loads differently. It stays hidden unless
      #debug asks for it, which is exactly the rule everywhere else. */
   body.embed #dbg:not(.on){display:none !important}
-  body.embed #gl{pointer-events:none}
+  /* THE CANVAS TAKES POINTERS AGAIN, AND touch-action IS WHAT MAKES THAT SAFE.
+
+     Embed turned input off entirely on the reasoning that the camera is never manual — carousel
+     and results dictate position. Turning the model to read it from another side is a different
+     thing from navigating it: nothing about it changes WHERE the camera is, only which way it
+     faces, and it is the gesture a visitor will reach for the moment there are labels on a group
+     of results to tap.
+
+     touch-action:pan-y is the whole safety argument, and it is home-stage's own rule: vertical
+     belongs to the page so the reveal still scrolls, horizontal belongs to us so the model turns.
+     Nothing has to arbitrate at run time — the browser decides by axis, before either party sees
+     the gesture.
+
+     The orbit machinery is untouched. One finger horizontal is yaw, two are twist and pinch, and
+     every transition still calls resetOrbit, so a rail tap lands square on its composed shot
+     regardless of how far the model has been turned. */
+  body.embed #gl{pointer-events:auto;touch-action:pan-y}
   /* HELD UNTIL THE SUBJECT IS WHOLE. The canvas starts transparent in embed mode, so what shows
      through is the host's own gradient rather than an island under construction. Corniche was the
      one island exempt from "revealed whole, never half" — on the grounds that it is the opening
@@ -403,7 +419,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v170', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v173', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1527,6 +1543,40 @@ window.__w2hSetResults = setResults;
   }, 400);
 }
 
+/* ---------- THE DESCENT ----------------------------------------------------------------------
+
+   ARRIVING SOMEWHERE IS NOT THE SAME AS BEING PUT THERE. A snap to a venue answers "what does it
+   look like" and says nothing about "where is it" — the visitor has no idea whether they are on
+   Saadiyat or Yas, which for a city they may not know is most of the information.
+
+   So every jump to a specific thing goes out before it goes in: the whole city, then the island,
+   then the place. Two seconds at each rung is not a pause for its own sake — it is long enough for
+   the eye to find the island against the archipelago it just saw, which is the entire point of
+   showing the wide shot first.
+
+   NO NEW CAMERA CODE. Each rung is one of the composers that already exists; this only decides the
+   order and the dwell. The frame loop eases between them exactly as it does for any other move, so
+   the descent inherits whatever the transition already felt like.
+
+   INTERRUPTIBLE, AND THAT MATTERS MORE THAN THE TIMING. Four seconds is a long time to take
+   someone's camera. A token cancels any running descent the moment a newer one starts, so a
+   visitor who taps twice gets the second thing rather than the first thing finishing first.
+
+   ?descend=0 turns it off, for anyone comparing this against the snap. */
+let descentToken = 0;
+const DESCEND_OFF = /[?&]descend=0/.test(location.search);
+const DWELL = 2000;
+function descend(steps){
+  const mine = ++descentToken;
+  if (DESCEND_OFF || !steps.length){ steps[steps.length - 1](); return; }
+  const run = i => {
+    if (mine !== descentToken) return;            // a newer descent has taken over
+    try { steps[i](); } catch (e) { console.warn('descend step failed:', e && e.message); }
+    if (i + 1 < steps.length) setTimeout(() => run(i + 1), DWELL);
+  };
+  run(0);
+}
+
 /* ---------- EMBED BRIDGE -----------------------------------------------------------------------
 
    THE PRODUCT SURFACE IS A MODE, NOT A SECOND FILE. Copying this shell to make an embeddable one
@@ -1558,7 +1608,16 @@ if (/[?&]embed=1/.test(location.search)){
         const d = DISTRICTS.find(x => x.id === m.id);
         if (d){ attractStop(); setDistrict(d); }
       }
-      else if (m.type === 'setResults') { attractStop(); setResults(m.points, m.label); }
+      else if (m.type === 'setResults'){
+        attractStop();
+        /* Results have no single island, so the middle rung is skipped unless setResults itself
+           resolves a host — it sets activeDistrict when every point falls on one, and that is
+           read after the fact rather than guessed at here. */
+        descend([
+          () => setWorld(),
+          () => setResults(m.points, m.label),
+        ]);
+      }
       /* setPlace IS THE THIRD RUNG AND THE BRIDGE WAS MISSING IT. The hierarchy is world,
          district, landmark — the host could reach the first two and not the one the hand-built
          geometry actually lives at, which is the only rung where the modelling shows.
@@ -1574,7 +1633,7 @@ if (/[?&]embed=1/.test(location.search)){
           attractStop();
           if (d.pending || !d.placeAnchors) setDistrict(d);
           const a = placeByName(d, m.label);
-          if (a) setPlace(d, a);
+          if (a) descend([() => setWorld(), () => setDistrict(d), () => setPlace(d, a)]);
           else console.warn('setPlace: no anchor named', m.label, 'on', m.id);
         }
       }
@@ -1623,6 +1682,16 @@ if (/[?&]embed=1/.test(location.search)){
         try { cur.target.copy(goal.target); cur.dist = goal.dist;
               cur.elev = goal.elev; cur.angle = goal.angle; cur.fov = goal.fov; } catch(e){}
       }
+      /* fitClip AFTER THE SNAP, AND WITHOUT IT THE LAND IS MISSING.
+
+         The ground is drawn against a fitted clip range, and setDistrict only calls fitClip inside
+         its build branch — reasonably, because normally the camera EASES to a new position over a
+         second and the range is refitted along the way. Snapping puts the camera somewhere the
+         range was never fitted for, so the island platform falls outside it and the city appears to
+         stand on open water: buildings, parks and roads present, land absent.
+
+         That is the whole of "land not built in opening". It was never a build problem. */
+      try { fitClip(); } catch(e){}
     }
     /* Two frames before the fade: one to apply the composed camera, one to draw it. Fading on the
        same tick shows the previous frame brightening into the new one. */
