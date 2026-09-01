@@ -1639,26 +1639,53 @@ if (/[?&]embed=1/.test(location.search)){
         }
       }
       /* setVenue IS setPlace FOR A REAL VENUE, not a hand-authored landmark. The host sends a
-         world-frame coordinate (its own venue lat/lng, projected through the shared origin in
-         data/index.json — the same projection this project settled on at the very start of the
-         embed integration) rather than a label to look up. worldToLocal converts it into a
-         synthetic local anchor and hands it straight to the existing, tested setPlace — same
-         descend() choreography as setPlace above (out to the world, then the island, then the
-         place), so a venue tap reads exactly like a landmark tap, not a different kind of jump.
+         real-world-frame coordinate (its own venue lat/lng, projected through the shared origin
+         in data/index.json) rather than a label to look up.
+
+         THE FIRST VERSION OF THIS WAS WRONG, AND WRONG IN A WAY THAT PUT EVERY VENUE IN THE
+         SEA. It treated the incoming coordinate as if it were already in anchorWorld's DIORAMA
+         frame (the compressed d.x/d.z/dispScale/rot space the six islands are laid out in for
+         the opening shot) and tried to invert anchorWorld directly. But a real venue's
+         coordinate comes from lib/worldProjection.ts in REAL GEOGRAPHIC METRES — the same frame
+         data/index.json's own building footprints arrive in, which is a completely different
+         number range (Corniche spans roughly -12,145 to 6,892 in real metres; the SAME island's
+         diorama position is d.x = -100). Subtracting one from the other produced a huge,
+         meaningless offset — different for every venue in magnitude, but large enough in every
+         case to land the camera off the island entirely, in the surrounding sea plane, which is
+         why it looked the same regardless of which venue was tapped: far enough off, sea looks
+         like sea everywhere.
+
+         THE ACTUAL CONVERSION, taken directly from how a real building already gets placed —
+         w2h-basemap.js's buildingsUnits, which every footprint on every island already goes
+         through: subtract the island's own real-metre centre (BMAP.islandOrigin, the same
+         entry.extent.cx/cy the bake stores), divide by M_PER_UNIT (7.8), and flip the sign on
+         the north/south axis ("the northing flips to -z", buildingsUnits' own words). That
+         produces the SAME local-anchor space a hand-authored landmark's {x,z} already lives in,
+         which is what anchorWorld (inside the existing, unchanged setPlace) correctly expects.
+         No new camera code, no new coordinate frame — the one that was already there, used
+         correctly this time.
 
          h/r ARE GENERIC, NOT AUTHORED. A landmark's anchor carries a real building height and
          footprint radius; a venue in the app's own database is just a point. 8/38 reads as
          "there it is, clearly, in its surroundings" — pulled back from an earlier 5/20 after
-         direct feedback that the tighter default read as zooming onto the building face
-         rather than placing it. Worth tuning further once seen live against more venues. */
+         direct feedback that the tighter default read as zooming onto the building face rather
+         than placing it. Worth tuning further once seen live against more venues. */
       else if (m.type === 'setVenue'){
         const d = DISTRICTS.find(x => x.id === m.id);
         if (d && Number.isFinite(m.x) && Number.isFinite(m.z)){
+          const idx = window.__basemapIndex;
+          const entry = idx && (idx.islands || []).find(x => x.id === d.id);
+          if (!entry){ console.warn('setVenue: no basemap entry for', d.id); return; }
           attractStop();
           if (d.pending || !d.placeAnchors) setDistrict(d);
-          const local = worldToLocal(d, m.x, m.z);
-          const anchor = { x: local.x, z: local.z, h: Number.isFinite(m.h) ? m.h : 8,
-                            r: Number.isFinite(m.r) ? m.r : 38, label: m.label || 'Venue' };
+          const [ox, oy] = BMAP.islandOrigin(entry);
+          const anchor = {
+            x:  (m.x - ox) / BMAP.M_PER_UNIT,
+            z: -(m.z - oy) / BMAP.M_PER_UNIT,
+            h: Number.isFinite(m.h) ? m.h : 8,
+            r: Number.isFinite(m.r) ? m.r : 38,
+            label: m.label || 'Venue',
+          };
           descend([() => setWorld(), () => setDistrict(d), () => setPlace(d, anchor)]);
         } else console.warn('setVenue: unknown district or non-finite coords', m.id, m.x, m.z);
       }
@@ -1829,20 +1856,6 @@ function anchorWorld(d, a){
     z: d.z + (-a.x * n + a.z * c) * s,
     y: (GROUND + (a.h || 0)) * s,
   };
-}
-
-/* THE INVERSE OF anchorWorld — for a real venue, which arrives as a world-frame coordinate
-   (the app's own lat/lng, projected through the shared origin in data/index.json), not as a
-   hand-authored local anchor. Rather than teach setPlace two different coordinate systems,
-   this converts the world coordinate INTO a synthetic local anchor and hands it to the
-   existing, tested setPlace unchanged — same rule the file already follows elsewhere:
-   "NO NEW CAMERA CODE... this only decides the order." The rotation matrix anchorWorld
-   applies is orthonormal, so its inverse is just its transpose — no matrix solve needed. */
-function worldToLocal(d, wx, wz){
-  const s = d.dispScale || 1;
-  const c = Math.cos(d.rot), n = Math.sin(d.rot);
-  const dx = (wx - d.x) / s, dz = (wz - d.z) / s;
-  return { x: dx * c - dz * n, z: dx * n + dz * c };
 }
 
 /* PICK MARKERS — a small persistent group, cleared and rebuilt on every record/reset rather than
