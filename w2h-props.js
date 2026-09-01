@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v30';
+export const BUILD = 'props v31';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -622,7 +622,34 @@ function addParkProps(d, plan, rings, budget = {}, onIsle){
    THE PLACER
    ============================================================================================= */
 function addProps(d, layer, plan, budget = {}){
+  const XS_ = plan.xsec;
   const B = Object.assign({ palms:420, lamps:280, cars:70, boats:14, shrubs:300 }, budget);
+
+  /* ---- THE LAMP BUDGET IS SIZED FROM THE ROADS, NOT SET TO A NUMBER ----
+
+     280 was never going to light a city. Corniche carries 367 km of major road; at 32 m on one
+     side that is 11,458 columns, so a flat budget of 280 lit about two and a half per cent of it
+     and stopped — and which two and a half per cent depended on the order the bake happened to
+     emit polylines in, which is why the seafront was dark while random back streets were not.
+
+     A budget that is a constant is really a statement that the developer does not know how much
+     road there is. We do know: it is baked, it is measured here in the same units the walk uses,
+     and the count that follows is simply length over spacing.
+
+     THE CEILING IS ABOUT FRAME TIME, NOT TIDINESS. Lamps are instanced — one draw call however
+     many there are — so the cost is the instance buffer and the emissive quads at night, not
+     draw calls. Corniche's majors come to roughly eleven thousand instances, which against a
+     scene already carrying between five and nine million triangles is real but affordable. The
+     ceiling exists so that an island with pathological data cannot take the frame down.
+
+     ?lamps=N overrides it, in the same spirit as ?cycw and ?cycol: the honest way to settle how
+     much lighting is too much is to look at it. */
+  if (XS_ && plan.mainRoadLen){
+    const need = Math.ceil(plan.mainRoadLen / XS_.stepLamp);
+    const m = typeof location !== 'undefined' && location.search.match(/[?&]lamps=(\d+)/);
+    const ceil = m ? Math.min(40000, parseInt(m[1], 10)) : 12000;
+    B.lamps = Math.max(B.lamps, Math.min(need, ceil));
+  }
   // Metres from the junction centre to the signal mast, across and along the approach.
   const SIGNAL_SETBACK = 16 / 7.8 / d.r;
   // Clear radius round a crossing centre in which no lamp, palm or car may stand.
@@ -660,7 +687,6 @@ function addProps(d, layer, plan, budget = {}){
      plan.xsec carries the offsets already multiplied by the exaggeration the paint actually used.
      Fallback to the old constants if an older world file is loaded, so this file does not require
      them to move together. */
-  const XS_ = plan.xsec;
   const roads = plan.ring.map(pts => ({ pts, w: 0.040, cls: 'major' }))
     .concat(plan.arterials.map(a => ({ pts: a, w: 0.034, cls: a.cls || (a.major ? 'major' : 'minor') })));
 

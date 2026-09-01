@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v227';
+export const BUILD = 'world v228';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3264,6 +3264,22 @@ function paintGround(d, plan){
       pathLamp: o(XSEC_PATH_M.lamp), pathPalm: o(XSEC_PATH_M.palm),
       pathStepLamp: XSEC_PATH_M.lampStep * perM, pathStepPalm: XSEC_PATH_M.palmStep * perM,
     };
+    /* HOW MUCH MAIN ROAD THERE IS, measured rather than assumed, so the prop placer can size its
+       lamp budget from it instead of carrying a constant. Normalised units, matching the step it
+       will divide into. Majors only: minors and locals are lit from whatever is left over, and
+       including them here would have Corniche asking for twenty-five thousand columns. */
+    plan.mainRoadLen = (plan.arterials || []).reduce((sum, a) => {
+      const cls = a.cls || (a.major ? 'major' : 'minor');
+      if (cls !== 'major' || a.length < 2) return sum;
+      let L = 0;
+      for (let i = 1; i < a.length; i++) L += Math.hypot(a[i][0] - a[i-1][0], a[i][1] - a[i-1][1]);
+      return sum + L;
+    }, 0) + (plan.ring || []).reduce((sum, seg) => {
+      let L = 0;
+      for (let i = 1; i < seg.length; i++) L += Math.hypot(seg[i][0] - seg[i-1][0], seg[i][1] - seg[i-1][1]);
+      return sum + L;
+    }, 0);
+
     /* The real cycle chains, in the same normalised space, so the placer can light the seafront
        run itself rather than only the roads. This is the Corniche's 10.2 km track. */
     plan.cycleChains = ((d.roads && d.roads.drawPaths) || [])
