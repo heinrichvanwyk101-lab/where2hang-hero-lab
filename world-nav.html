@@ -125,6 +125,13 @@
      are not symmetric about it at every scroll position. A layout nudge is the honest fix for a
      perceptual offset — chasing it inside the camera solve would be guessing at a thing that is
      already arithmetically correct. */
+  /* EMBED MODE. A second file would mean two copies of a 283KB shell and a manual sync every
+     time the model moves, which is the one thing this project cannot afford. So the product
+     surface is a MODE of the development shell: ?embed=1 hides every piece of chrome and opens a
+     postMessage door. One source, two presentations. */
+  body.embed .top, body.embed .back, body.embed .views,
+  body.embed .stamp, body.embed #rail, body.embed #dbg, body.embed .isle{display:none !important}
+  body.embed #gl{pointer-events:none}
   #rail{position:fixed;left:0;right:0;top:56px;height:22vh;z-index:3;
     display:block;touch-action:pan-y;pointer-events:auto;
     opacity:var(--railop,.62);transform:translateX(var(--railx,0px));
@@ -374,7 +381,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v155', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v158', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1422,6 +1429,58 @@ function setResults(points, label){
 /* Exposed so a search layer outside this module can drive the camera without importing anything.
    The whole seam is one function taking world-space points. */
 window.__w2hSetResults = setResults;
+
+/* ---------- EMBED BRIDGE -----------------------------------------------------------------------
+
+   THE PRODUCT SURFACE IS A MODE, NOT A SECOND FILE. Copying this shell to make an embeddable one
+   would put two copies of every camera composer in the repo and a manual sync between them, on a
+   project edited from a phone through a web editor. A mode cannot drift from itself.
+
+   ?embed=1 hides the chrome, disables pointer events on the canvas — the camera is never manual,
+   so the world has no use for them and the host page keeps every gesture — and listens for the
+   four messages the host needs.
+
+     host -> world    setDistrict {id} · setResults {points,label} · setView {view} · setWorld
+                      idle · wake
+     world -> host    ready · district {id}
+
+   ORIGIN IS NOT CHECKED, DELIBERATELY, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT. Nothing
+   here reads storage, credentials or user data; the whole surface is "move a camera". The cost of
+   a wrong origin is a stranger framing Al Reem. If this ever grows a message that returns data,
+   the check goes in before that message does. */
+if (/[?&]embed=1/.test(location.search)){
+  document.body.classList.add('embed');
+  const post = (type, data) => { try { parent.postMessage(Object.assign({ w2h:true, type }, data), '*'); } catch(e){} };
+  addEventListener('message', ev => {
+    const m = ev.data;
+    if (!m || m.w2h !== true || !m.type) return;
+    try {
+      if (m.type === 'setWorld') { attractStop(); setWorld(); }
+      else if (m.type === 'setDistrict'){
+        const d = DISTRICTS.find(x => x.id === m.id);
+        if (d){ attractStop(); setDistrict(d); }
+      }
+      else if (m.type === 'setResults') { attractStop(); setResults(m.points, m.label); }
+      /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
+         ReferenceError the moment the branch runs, not a falsy value to fall through. */
+      else if (m.type === 'setView' && m.view) { view = m.view; applyView(m.view); }
+      /* Sent by the host when an opaque route covers the world, and again when it clears. The
+         camera keeps whatever goal it had, so waking resumes the same shot rather than composing
+         a new one. */
+      else if (m.type === 'idle') WORLD_IDLE = true;
+      else if (m.type === 'wake') WORLD_IDLE = false;
+    } catch (e) { console.warn('embed message failed:', m.type, e && e.message); }
+  });
+  /* The host cannot know when the modules finished evaluating, so it is told rather than left to
+     guess with a timeout. Anything sent before this arrives would land on a camera that has not
+     composed its first shot yet. */
+  post('ready', { build: B_NAV });
+  let lastId = null;
+  setInterval(() => {
+    const id = activeDistrict ? activeDistrict.id : null;
+    if (id !== lastId){ lastId = id; post('district', { id }); }
+  }, 400);
+}
 
 function setDistrict(d){
   /* BUILD THE ISLAND IF IT IS NOT BUILT YET. The four outer islands ship as coastline only and
@@ -3998,12 +4057,24 @@ if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
        close as eyeballing a screenshot can get. */
     el.style.setProperty('--railx', q('railx', '16') + 'px');
 
+    /* THE FRONT CARD DRIVES THE CAMERA, not only a tap. The rail is the navigation, so whichever
+       island is centred is the one the world is looking at; a tap only shortcuts the wait.
+
+       300ms OF STILLNESS FIRST. A drag from one end of the arc to the other crosses every island
+       in well under a second, and setDistrict builds an island the first time it is reached — so
+       firing per card would queue six synchronous builds for a gesture that meant one. */
+    let flyT = 0, flown;
+    const fly = a => { flyT = 0; if (a._d === flown) return; flown = a._d;
+                       attractStop(); a._d ? setDistrict(a._d) : setWorld(); };
     mountAreaRail(el, {
       areas,
+      onFront: (i) => {
+        const a = areas[i]; if (!a) return;
+        clearTimeout(flyT); flyT = setTimeout(() => fly(a), 300);
+      },
       onSelect: (i) => {
         const a = areas[i]; if (!a) return;
-        attractStop();                    // a deliberate choice stops the tour, as any tap does
-        if (a._d) setDistrict(a._d); else setWorld();
+        clearTimeout(flyT); fly(a);       // a deliberate choice commits without the settle wait
       },
     });
 
@@ -4067,8 +4138,27 @@ phase('prefetch');
    measuring something other than what it claims and every conclusion drawn from it is suspect. */
 const FRAME_MS = [];
 let _frame0 = true, _tick0Done = false;
+/* IDLE, BECAUSE THE WORLD NEVER UNMOUNTS.
+
+   The world is the background of every route — home, search, events, map, profile — so it is
+   mounted for the whole session and rendering behind whatever is on top of it. Most of the time
+   that is right: the tabs are translucent and the city reads through them. But a fully opaque
+   sheet leaves eleven million triangles being drawn to a surface nobody can see, on a phone, for
+   as long as that sheet is up.
+
+   THE ANSWER IS NOT TO UNMOUNT IT. Unmounting is what this whole architecture exists to avoid —
+   1.1MB of modules and an island rebuild every time someone taps a tab. Idling costs nothing to
+   resume: the scene, the textures and the camera are all exactly where they were, and the next
+   frame draws them.
+
+   rAF IS STILL SCHEDULED WHILE IDLE, deliberately. A loop that cancels itself needs something to
+   restart it, and that something is another message that can be missed; a loop that returns early
+   costs one branch per frame and cannot get stuck off. The host sends `idle` when it covers the
+   world and `wake` when it uncovers it, and if the host never sends either, nothing changes. */
+let WORLD_IDLE = false;
 function frame(){
   requestAnimationFrame(frame);
+  if (WORLD_IDLE) return;
   const _t0tick = _frame0 ? performance.now() : 0;
   /* THE WAIT FOR THE FIRST ANIMATION FRAME TO RUN AT ALL, separated from what happens inside it.
      Everything before this point is module top-level work; if this number is large the main thread

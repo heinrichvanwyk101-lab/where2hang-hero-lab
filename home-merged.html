@@ -271,24 +271,49 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
   background:#06111a}
 .citydim{z-index:1}
 
-/* TOP BLOCK. Everything above the fold, over the world. Not sticky — it scrolls away and the
-   reveal takes over, which is home-stage's own sequence with a different object in the frame. */
-.topwrap{position:relative;z-index:3;padding:calc(env(safe-area-inset-top) + 14px) 18px 0}
-.brandrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.brandrow .mk{font-size:23px;font-weight:800;letter-spacing:-.4px;color:#F3F8F7}
+/* THE STAGE, TAKEN FROM home-stage RATHER THAN INVENTED. .act1 is 130lvh and .stage is sticky at
+   100lvh inside it, so the top holds for a third of a screen of scroll before the reveal slides
+   over it. That hold IS the break — the pause between the city and the content — and building it
+   any other way would have meant re-deriving a thing that already works.
+
+   The stage carries the mark, the greeting and the rail, and nothing else. Everything that was
+   above the fold in the first attempt — ask bar, Wasta, the tabs — has moved into the reveal,
+   where it belongs: above the fold is one object over a city, which is the whole idea. */
+.act1{position:relative;height:130lvh;z-index:2}
+.homestage{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden;
+  padding:calc(env(safe-area-inset-top) + 12px) 18px 0;touch-action:pan-y}
+.brandrow{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.brandrow .mk{font-size:20px;font-weight:800;letter-spacing:-.35px;color:#F3F8F7}
 .brandrow .mk i{font-style:normal;color:var(--teal)}
-.beta{font:700 10px Inter,sans-serif;letter-spacing:1.2px;color:var(--gold);
-  border:1px solid rgba(232,181,71,.5);border-radius:6px;padding:3px 6px;margin-left:8px}
-.loc{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--dim);margin-top:3px}
-.live-c{display:flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.16);
-  border-radius:999px;padding:7px 13px;background:rgba(10,16,20,.55);backdrop-filter:blur(9px);
-  font-size:12.5px;color:#D6E2E0;white-space:nowrap}
-.live-c .dot{width:8px;height:8px;border-radius:50%;background:#3DE9A0;
-  box-shadow:0 0 9px rgba(61,233,160,.8)}
+.beta{font:700 9px Inter,sans-serif;letter-spacing:1.1px;color:var(--gold);
+  border:1px solid rgba(232,181,71,.5);border-radius:5px;padding:2px 5px;margin-left:7px;
+  vertical-align:2px}
+.loc{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--dim);margin-top:2px}
+.live-c{display:flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.16);
+  border-radius:999px;padding:6px 11px;background:rgba(10,16,20,.5);backdrop-filter:blur(9px);
+  font-size:11.5px;color:#D6E2E0;white-space:nowrap}
+.live-c .dot{width:7px;height:7px;border-radius:50%;background:#3DE9A0;
+  box-shadow:0 0 8px rgba(61,233,160,.8)}
 .live-c b{color:#F3F8F7;font-weight:700}
 
-.greet{margin-top:20px;font-size:31px;line-height:1.14;font-weight:800;letter-spacing:-.7px;
-  color:#F3F8F7}
+/* THE ASK BAR AND WASTA, NOW IN THE REVEAL. Same components, different home. */
+.askbar{display:flex;align-items:center;gap:11px;
+  border:1px solid rgba(232,181,71,.42);border-radius:15px;padding:13px 13px 13px 15px;
+  background:rgba(8,13,17,.72);backdrop-filter:blur(11px)}
+.askbar .sp{color:var(--gold);flex:0 0 auto}
+.askbar input{flex:1;background:none;border:0;outline:none;color:#E9F2F0;
+  font:400 15px Inter,sans-serif;min-width:0}
+.askbar input::placeholder{color:#7f8d8b;font-style:italic}
+.askbar .go{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:0;
+  background:rgba(0,194,168,.2);color:var(--teal);display:grid;place-items:center}
+.wasta{display:inline-flex;align-items:center;gap:9px;margin-top:10px;
+  border:1px solid rgba(232,181,71,.4);border-radius:999px;padding:9px 15px;
+  background:rgba(8,13,17,.66);backdrop-filter:blur(9px);font:600 13.5px Inter,sans-serif;
+  color:#EFE6D4}
+.wasta .dot{width:7px;height:7px;border-radius:50%;background:var(--teal)}
+
+.greet{margin-top:14px;font-size:23px;line-height:1.18;font-weight:800;letter-spacing:-.5px;
+  color:#F3F8F7;text-shadow:0 2px 16px rgba(0,0,0,.55)}
 .greet span{display:block;color:var(--teal)}
 
 .askbar{display:flex;align-items:center;gap:11px;margin-top:17px;
@@ -309,12 +334,17 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 /* THE AREA RAIL, ABOVE THE FOLD. 200px is home-stage's own height for it — the rail was already
    tuned at that size, and changing it here would mean re-solving a camera fit that is already
    right. The caption stays because it is the only thing that says the rail is draggable. */
-.arearail{position:relative;height:200px;margin:20px -18px 0}
+.arearail{position:relative;height:186px;margin:16px -18px 0}
 .arearail canvas{position:absolute;inset:0;width:100%;height:100%;display:block;
   touch-action:pan-y}
 .areacap{text-align:center;font-size:12.5px;color:var(--dim);margin-top:2px}
 .areacap b{color:#E9F2F0}
-.scrollcue{display:block;margin:20px auto 26px;width:26px;height:26px;opacity:.5}
+/* Bottom of the stage, not after the rail: the space between the rail and this is the city, and
+   that gap is the point of the whole layout. */
+.cue{position:absolute;left:0;right:0;bottom:calc(7vh + env(safe-area-inset-bottom));
+  text-align:center;color:var(--sub);font-size:10.5px;letter-spacing:1.5px;font-weight:700;
+  text-shadow:0 2px 10px rgba(0,0,0,.85)}
+.cue svg{display:block;margin:7px auto 0;width:22px;height:22px;opacity:.55}
 
 /* MUST-SEES. Horizontal, same card language as the boards below it. */
 .msrow{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding:2px 18px 4px;
@@ -349,12 +379,13 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
         src="./world-nav.html?embed=1&rail=0"></iframe>
 <div class="citydim" id="citydim"></div>
 
-<div class="topwrap">
+<div class="act1">
+<div class="homestage">
   <div class="brandrow">
     <div>
       <div class="mk">Where<i>2</i>Hang<span class="beta">BETA</span></div>
       <div class="loc">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
         Abu Dhabi
       </div>
     </div>
@@ -363,29 +394,30 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 
   <div class="greet">Good morning.<span>Where to tonight?</span></div>
 
-  <div class="askbar">
-    <span class="sp"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg></span>
-    <input id="ask" type="text" placeholder="&ldquo;a quiet cafe on the corniche&rdquo;" autocomplete="off" enterkeyhint="search">
-    <button class="go" id="askgo" aria-label="Search">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
-    </button>
-  </div>
-
-  <button class="wasta"><span class="dot"></span>
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v10H9l-5 4z"/></svg>
-    Chat with Wasta
-  </button>
-
   <div class="arearail"><canvas id="arearail" aria-label="Explore Abu Dhabi by area"></canvas></div>
   <div class="areacap">Drag to explore &middot; <b id="areaname">Abu Dhabi</b> &middot; <span id="areacount">6 areas</span></div>
 
-  <svg class="scrollcue" viewBox="0 0 24 24" fill="none" stroke="#cfe0dd" stroke-width="2"><path d="M12 4v14M6 13l6 6 6-6"/></svg>
+  <div class="cue">SCROLL
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v14M6 13l6 6 6-6"/></svg>
+  </div>
+</div>
 </div>
 
 <section class="reveal" id="reveal">
   <div class="pull">Narrow it down</div>
 
-  <div class="lens rise">
+  <div class="askbar rise">
+  <span class="sp"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M12 3l1.8 4.7L18 9l-4.2 1.3L12 15l-1.8-4.7L6 9l4.2-1.3z"/></svg></span>
+  <input id="ask" type="text" placeholder="&ldquo;a quiet cafe on the corniche&rdquo;" autocomplete="off" enterkeyhint="search">
+  <button class="go" id="askgo" aria-label="Search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+  </button>
+</div>
+<button class="wasta rise"><span class="dot"></span>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v10H9l-5 4z"/></svg>
+  Chat with Wasta
+</button>
+<div class="lens rise">
     <button class="lensbtn on" data-world="eat">Eat &amp; Drink</button>
     <button class="lensbtn" data-world="do">Activities</button>
     <button class="lensbtn" data-world="see">Entertainment</button>
@@ -479,6 +511,7 @@ const AREAS = [
   { id:'raha',     name:'Al Raha',   count:'29 venues',  img:'Hero_activity.webp' },
 ];
 const IMG = 'https://where2hang.ae/images/';
+let flyT = 0, flown = undefined;   // debounce handle, and the last area actually flown to
 const name = document.getElementById('areaname');
 const count = document.getElementById('areacount');
 
@@ -486,11 +519,30 @@ import('./area-rail.js').then(({ mountAreaRail }) => {
   mountAreaRail(document.getElementById('arearail'), {
     areas: AREAS.map(a => ({ name:a.name, count:a.count,
                              img:IMG + a.img, fallback:IMG + 'Hero-skyline.webp' })),
-    /* onFront fires as the arc settles, so the caption tracks the drag rather than waiting for a
-       tap. The camera does NOT follow the drag — only a deliberate selection moves it, which is
-       what keeps a scroll past the rail from flying the city around. */
-    onFront: (i) => { const a = AREAS[i]; if (!a) return; name.textContent = a.name; count.textContent = a.count; },
+    /* THE FRONT CARD IS THE CAMERA. Whichever area is centred is where the world is looking —
+       the carousel dictates position rather than merely offering it, which is the whole point of
+       having no manual camera. A tap is then confirmation rather than the only way to move.
+
+       DEBOUNCED, BECAUSE A DRAG CROSSES CARDS. Dragging from Abu Dhabi to Al Raha passes through
+       four areas in under a second, and firing on each would queue four island builds and four
+       camera flights for a gesture that meant one. 300ms of stillness is well under the threshold
+       where the delay is felt and well over the time a finger spends passing a card.
+
+       The caption is NOT debounced — it tracks the drag frame by frame, so the label moves with
+       the finger while the world waits for the finger to stop. */
+    onFront: (i) => {
+      const a = AREAS[i]; if (!a) return;
+      name.textContent = a.name; count.textContent = a.count;
+      clearTimeout(flyT);
+      flyT = setTimeout(() => {
+        if (a.id === flown) return;             // already there; a drag that returns is not a move
+        flown = a.id;
+        a.id ? send('setDistrict', { id:a.id }) : send('setWorld');
+      }, 300);
+    },
+    /* A tap commits immediately, skipping the settle wait — the intent is unambiguous. */
     onSelect: (i) => { const a = AREAS[i]; if (!a) return;
+                       clearTimeout(flyT); flown = a.id;
                        a.id ? send('setDistrict', { id:a.id }) : send('setWorld'); },
   });
   /* area-rail assigns its photo texture without kicking its own render loop, and that loop parks
