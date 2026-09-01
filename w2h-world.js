@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v231';
+export const BUILD = 'world v232';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4841,7 +4841,26 @@ DISTRICTS.forEach(d => {
      a Y rotation and a point on the Y axis is invariant under it, so only the offset and the
      display scale matter. Range scales with the island for the same reason. */
   const gscale = d.dispScale || 1;
-  const glow = new THREE.PointLight(d.tint, 0, 150 * gscale, 2);
+  /* THE GLOW IS WARM ON EVERY ISLAND, AND TAKING ITS COLOUR FROM d.tint WAS THE VEGAS EFFECT.
+
+     d.tint is an IDENTITY colour — it tints an island's label, its marker dot, its UI chip. Al
+     Reem's is 0x8FD3E8 and Al Maryah's is 0xBFD3E0, both strong cyans, chosen to read on a dark
+     panel. Feeding that straight into a PointLight put a 70-intensity turquoise stage lamp inside
+     each of those two islands at night, washing every tower within 150 units. The other islands
+     carry warm or sand tints, so their glow reads as city warmth and nothing looked wrong — which
+     is exactly why this survived: it only misfires on the two islands whose identity colour
+     happens to be cool.
+
+     An identity colour and a light colour are different things. A city glowing back off its own
+     streets and windows is warm at night wherever it is, and a district does not change what
+     colour its light is because its label is blue.
+
+     A trace of tint is kept — fifteen per cent — so Al Reem still reads a shade cooler than
+     Corniche, which is true of the real place and is the distinction the tint was reaching for.
+     The rest is the same amber the windows use, so the glow and the lights it is meant to
+     represent finally agree with each other. */
+  const glowCol = new THREE.Color(d.tint).lerp(new THREE.Color(0xE8B547), 0.85);
+  const glow = new THREE.PointLight(glowCol, 0, 150 * gscale, 2);
   glow.position.set(d.x, (GROUND + 20) * gscale, d.z);
   world.add(glow);
   d.glow = glow;
