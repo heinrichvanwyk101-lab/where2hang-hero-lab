@@ -130,7 +130,9 @@
      surface is a MODE of the development shell: ?embed=1 hides every piece of chrome and opens a
      postMessage door. One source, two presentations. */
   body.embed .top, body.embed .back, body.embed .views,
-  body.embed .stamp, body.embed #rail, body.embed .isle{display:none !important}
+  body.embed .stamp, body.embed #rail, body.embed .isle,
+  .embed-early .top, .embed-early .back, .embed-early .views,
+  .embed-early .stamp, .embed-early #rail, .embed-early .isle{display:none !important}
   /* #dbg is NOT in that list. The HUD is the only way to watch a load sequence, and hiding it in
      the one shell where the real sequence runs meant the merged page could never be measured —
      only guessed at from the standalone page, which loads differently. It stays hidden unless
@@ -181,6 +183,11 @@
 </head>
 <body>
 
+<!-- THE EMBED CLASS IS SET HERE, NOT IN THE MODULE, and the difference is several seconds of
+     wrong. The module that adds it runs after 1.1MB of imports resolve, so until then world-nav's
+     own header, breadcrumb and "Tap an island" render on top of the host page — which is exactly
+     the duplicated text over the greeting. A classic no-module script executes during parse. -->
+<script>if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add('embed-early');</script>
 <canvas id="gl"></canvas>
 <canvas id="rail" class="off"></canvas>
 
@@ -386,7 +393,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v166', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v167', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1522,9 +1529,17 @@ if (/[?&]embed=1/.test(location.search)){
          The island builds first if it has not yet: setPlace frames an anchor on an island that may
          still be coastline, and a landmark shot of empty ground is worse than a slower one. */
       else if (m.type === 'setPlace'){
+        /* BUILD FIRST, LOOK UP SECOND. placeAnchors are attached during the island build, so
+           resolving the label before building returns null on any island the visitor has not
+           reached yet — and the card silently does nothing, which is exactly how this presented. */
         const d = DISTRICTS.find(x => x.id === m.id);
-        const a = d && placeByName(d, m.label);
-        if (d && a){ attractStop(); if (d.pending) setDistrict(d); setPlace(d, a); }
+        if (d){
+          attractStop();
+          if (d.pending || !d.placeAnchors) setDistrict(d);
+          const a = placeByName(d, m.label);
+          if (a) setPlace(d, a);
+          else console.warn('setPlace: no anchor named', m.label, 'on', m.id);
+        }
       }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
          ReferenceError the moment the branch runs, not a falsy value to fall through. */
