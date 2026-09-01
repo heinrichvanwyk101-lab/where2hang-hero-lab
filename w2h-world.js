@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v230';
+export const BUILD = 'world v231';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3842,7 +3842,42 @@ const matLandFlat = stdMat({ color:0x424E58, roughness:1, metalness:0 });
 const GROUND_NIGHT_ALB = (typeof location !== 'undefined' &&
   (location.search.match(/[?&]ngnd=(\d*\.?\d+)/) || [])[1] !== undefined)
   ? parseFloat(location.search.match(/[?&]ngnd=(\d*\.?\d+)/)[1]) : 0.9;
+/* A WARM EMISSIVE FLOOR ON THE GROUND ONLY, WHICH IS NOT THE SAME AS MORE LIGHT.
+
+   GROUND_NIGHT_ALB fixed the over-reflective sand and went too far: at world and district
+   distance whole landmasses drop to black and the lit objects standing on them read as floating.
+   The obvious repair is to put the albedo back up, and it is the wrong one — albedo is a response
+   to the scene lights, so raising it brightens the sand exactly where the lamps and windows are
+   working hardest and eats the contrast that makes the city legible at distance. That contrast is
+   the thing worth protecting; it is what gives the render its sense of scale.
+
+   Emissive is light-independent. It lifts the terrain off pure black by a fixed amount and touches
+   nothing else in the scene — not a building, not a lamp, not a window — so the coastline stays
+   perceptible while the lit city keeps every bit of its separation from the ground it sits on.
+
+   WARM, BECAUSE THE ALTERNATIVE READS AS MOONLIGHT. A neutral or cool floor on sand at night looks
+   like a different time of day; this is a city that glows amber, and the ground beneath it takes a
+   trace of that. Low enough to be a floor rather than a light: a few per cent, sensed as shape at
+   the coast rather than seen as illumination.
+
+   ?gemi=N to tune, alongside ?ngnd= which stays exactly as it was. */
+const GROUND_NIGHT_EMI = (typeof location !== 'undefined' &&
+  (location.search.match(/[?&]gemi=(\d*\.?\d+)/) || [])[1] !== undefined)
+  ? parseFloat(location.search.match(/[?&]gemi=(\d*\.?\d+)/)[1]) : 0.10;
+const GROUND_EMI_HEX = 0x5A4632;                 // warm sand, not moonlight
+function groundNightFloor(m){
+  if (!m || !GROUND_NIGHT_EMI) return m;
+  m.emissive = new THREE.Color(GROUND_EMI_HEX);
+  m.emissiveIntensity = GROUND_NIGHT_EMI;
+  return m;
+}
+
 matLandFlat.userData.nightAlbedo = GROUND_NIGHT_ALB;
+groundNightFloor(matLandFlat);
+groundNightFloor(beachSand.night);
+groundNightFloor(shoreMat.stone.night);
+groundNightFloor(shoreMat.rock.night);
+groundNightFloor(shoreMat.deck.night);
 matBeach.userData.nightAlbedo    = GROUND_NIGHT_ALB;
 
 /* FOUR SURFACES, AND NOW THEY CAN ACTUALLY BE FOUR COLOURS.
@@ -8382,6 +8417,9 @@ function buildGroundFor(d){
      lamps, park lights, windows — loses its contrast against the sand it is standing on. Tunable
      live with ?ngnd= while the value is being found. */
   night.userData.nightAlbedo = GROUND_NIGHT_ALB;
+  /* The painted island floor takes the same floor as the untextured platform, so an island does
+     not change brightness at the moment its ground texture finishes uploading. */
+  groundNightFloor(night);
   const day  = dayGround.clone();  day.map  = tex;
   const dusk = duskGround.clone(); dusk.map = tex;
   /* PLAN MODE MATERIALS. MeshBasic, so no light, no shadow, no material tint and no exposure —
