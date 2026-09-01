@@ -381,7 +381,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v159', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v160', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1499,6 +1499,45 @@ if (/[?&]embed=1/.test(location.search)){
        deliberate choice and must not be overridden by an opening that is still running. */
     if (state === STATE.WORLD && !activeDistrict) setDistrict(corniche);
   }, 250);
+
+  /* ---- BUILDING WITHOUT A TOUR ----
+
+     TURNING THE TOUR OFF TOOK THE BUILD DRIVER WITH IT, and that is why nothing has footprints.
+     The four outer islands ship as coastline only and grow their city the first time something
+     commits to them; the only thing that ever committed was the attract flight, through
+     attractPrefetch a leg ahead of the camera. Remove the flight and nothing builds until a rail
+     tap — so the first tap on every island pays a full synchronous build while the visitor
+     watches, which is the stall the prefetch exists to prevent.
+
+     So the prefetch runs on its own clock instead. One island at a time, well spaced, starting
+     after Corniche has settled so the two never compete for the main thread. The camera does not
+     move — this is construction, not navigation, and the two were only ever coupled because the
+     tour happened to need both.
+
+     ISLE ORDER IS THE RAIL'S ORDER, not the tour's, because the rail is what a visitor will reach
+     for. Whichever card they drag to next is most likely the one after the one they are on. */
+  {
+    const queue = DISTRICTS.filter(d => d !== corniche);
+    let qi = 0;
+    const pump = () => {
+      if (qi >= queue.length) return;
+      const d = queue[qi++];
+      try {
+        if (buildIsland && d.pending){
+          d.group.visible = false;             // revealed by attractTick once it has settled
+          if (buildIsland(d.id)){ snapshotMats(d.group); registerLift(d.group); applyView(view); }
+          addFootprints(d); addGroundFeatures(d); addWaterGeometry(d);
+        }
+      } catch (e) { console.warn('prefetch failed:', d.id, e && e.message); }
+      setTimeout(pump, 1200);
+    };
+    /* Corniche first and alone. It is the opening subject and it is by far the heaviest; anything
+       else building alongside it lengthens the one wait the visitor actually sees. */
+    const waitC = setInterval(() => {
+      if (!isleReady(corniche)) return;
+      clearInterval(waitC); setTimeout(pump, 900);
+    }, 400);
+  }
 
   post('ready', { build: B_NAV });
   let lastId = null;
