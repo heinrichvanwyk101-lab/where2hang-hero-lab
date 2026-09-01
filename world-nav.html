@@ -381,7 +381,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v158', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v159', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1474,6 +1474,32 @@ if (/[?&]embed=1/.test(location.search)){
   /* The host cannot know when the modules finished evaluating, so it is told rather than left to
      guess with a timeout. Anything sent before this arrives would land on a camera that has not
      composed its first shot yet. */
+  /* ---- THE OPENING, WHICH IS A DIFFERENT SHOT WHEN THE WORLD IS A BACKGROUND ----
+
+     The development shell opens tight on Palace District, because there the city IS the subject
+     and a wide shot of five brown silhouettes says nothing. Behind a home page the opposite holds:
+     the subject is the greeting and the rail, the city is the setting, and the setting should
+     arrive as a place rather than as a close-up of one building.
+
+     SO IT OPENS HIGH AND DESCENDS. The wide shot is also the cheapest thing to draw and the most
+     forgiving of an unfinished island — at world distance Corniche assembling reads as haze, not
+     as construction. That buys the seconds the build needs without anyone watching a progress bar.
+     Then, once the island has actually settled, it flies down to it.
+
+     WAITS FOR isleReady, NOT A TIMER. A fixed delay is a guess about a device, and the wrong guess
+     either descends onto a half-built island or holds a finished one at arm's length. The ceiling
+     exists only so that a payload that never lands cannot park the camera in orbit for good. */
+  setWorld();
+  let waited = 0;
+  const descend = setInterval(() => {
+    waited += 250;
+    if (!isleReady(corniche) && waited < 12000) return;
+    clearInterval(descend);
+    /* Only if nothing else has taken the camera in the meantime. A rail tap during the wait is a
+       deliberate choice and must not be overridden by an opening that is still running. */
+    if (state === STATE.WORLD && !activeDistrict) setDistrict(corniche);
+  }, 250);
+
   post('ready', { build: B_NAV });
   let lastId = null;
   setInterval(() => {
@@ -3314,7 +3340,11 @@ const ATTRACT = [
    flag rather than a build constant for the same reason ?drawn is: a diagnostic you have to
    redeploy to use is a diagnostic nobody uses. */
 const IDLE_MS = 45000;
-const ATTRACT_OFF = location.search.includes('still');
+/* EMBED IMPLIES STILL. A background that flies itself around while someone is reading a greeting
+   and dragging a card rail is competing with them; in the merged page the rail dictates the camera
+   and the tour is a second driver of the same thing. ?still still works on its own for the
+   development shell. */
+const ATTRACT_OFF = location.search.includes('still') || /[?&]embed=1/.test(location.search);
 
 /* THE ERROR TRAP, WHICH SHOULD HAVE EXISTED BEFORE THE ATTRACT LOOP DID.
 

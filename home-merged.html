@@ -375,8 +375,12 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 </head>
 <body>
 
+<!-- &v= IS NOT DECORATION. The iframe URL is its own cache entry, and while the string stayed
+     constant the browser kept serving whichever world-nav.html it fetched first — so the outer page
+     updated on every deploy and the inner one never did, which looked exactly like embed mode not
+     working. Bump this with the nav stamp. -->
 <iframe id="world" title="Abu Dhabi" loading="eager"
-        src="./world-nav.html?embed=1&rail=0"></iframe>
+        src="./world-nav.html?embed=1&rail=0&v=159"></iframe>
 <div class="citydim" id="citydim"></div>
 
 <div class="act1">
