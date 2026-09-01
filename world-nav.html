@@ -130,7 +130,12 @@
      surface is a MODE of the development shell: ?embed=1 hides every piece of chrome and opens a
      postMessage door. One source, two presentations. */
   body.embed .top, body.embed .back, body.embed .views,
-  body.embed .stamp, body.embed #rail, body.embed #dbg, body.embed .isle{display:none !important}
+  body.embed .stamp, body.embed #rail, body.embed .isle{display:none !important}
+  /* #dbg is NOT in that list. The HUD is the only way to watch a load sequence, and hiding it in
+     the one shell where the real sequence runs meant the merged page could never be measured —
+     only guessed at from the standalone page, which loads differently. It stays hidden unless
+     #debug asks for it, which is exactly the rule everywhere else. */
+  body.embed #dbg:not(.on){display:none !important}
   body.embed #gl{pointer-events:none}
   #rail{position:fixed;left:0;right:0;top:56px;height:22vh;z-index:3;
     display:block;touch-action:pan-y;pointer-events:auto;
@@ -381,7 +386,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v164', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v165', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1430,6 +1435,54 @@ function setResults(points, label){
    The whole seam is one function taking world-space points. */
 window.__w2hSetResults = setResults;
 
+/* ---- BUILDING WITHOUT A TOUR, AND IT RUNS EVERYWHERE, NOT ONLY IN EMBED ----
+
+   The four outer islands ship as coastline only and grow their city the first time something
+   commits to them. The attract flight used to be that something, through attractPrefetch a leg
+   ahead of the camera — so turning the tour off in embed mode silently removed the only build
+   driver, and nothing beyond Corniche ever populates.
+
+   WHAT THIS IS NOT. The second attempt extracted attractPrefetch's body into a shared function
+   and rendered a black screen with nothing in the error trap. I still do not know why; the
+   identifiers all resolve and the syntax checks. So this does not refactor anything. It inlines
+   the same three lines, in the same order, next to the code that runs them — duplication I would
+   normally argue against, chosen here because the alternative is a change I cannot explain.
+
+   THE THREE LINES MATTER INDIVIDUALLY, which is what the first attempt got wrong by calling
+   buildIsland directly:
+
+     loadIsland   the FULL island file. islandGeometry reads BASE[id].water synchronously during
+                  the build; without this an island's water depends on network weather and a miss
+                  reads as an island that never had any.
+     roadsIn      already have roads-<id>.json? Then build now.
+     whenRoads    otherwise wait for it. The ground canvas is painted ONCE during the build, so
+                  building early leaves a generated lattice for the rest of the session.
+
+   ONE AT A TIME, SPACED, AFTER CORNICHE. Corniche is the opening subject and by far the
+   heaviest; anything building alongside it lengthens the one wait a visitor actually sees. */
+{
+  const queue = DISTRICTS.filter(d => d !== corniche);
+  let qi = 0;
+  const pump = () => {
+    if (qi >= queue.length) return;
+    const d = queue[qi++];
+    try {
+      if (buildIsland && d && d.pending){
+        d.group.visible = false;            // attractTick reveals it once it has settled
+        const idx = window.__basemapIndex;
+        if (idx && BMAP.loadIsland) BMAP.loadIsland(idx, d.id).catch(() => {});
+        if (roadsIn(d.id)) buildAndRegister(d);
+        else whenRoads(d.id).then(() => { if (d.pending) buildAndRegister(d); });
+      }
+    } catch (e) { console.warn('prefetch failed:', d && d.id, e && e.message); }
+    setTimeout(pump, 1400);
+  };
+  const waitC = setInterval(() => {
+    if (!isleReady(corniche)) return;
+    clearInterval(waitC); setTimeout(pump, 900);
+  }, 400);
+}
+
 /* ---------- EMBED BRIDGE -----------------------------------------------------------------------
 
    THE PRODUCT SURFACE IS A MODE, NOT A SECOND FILE. Copying this shell to make an embeddable one
@@ -1499,54 +1552,6 @@ if (/[?&]embed=1/.test(location.search)){
        deliberate choice and must not be overridden by an opening that is still running. */
     if (state === STATE.WORLD && !activeDistrict) setDistrict(corniche);
   }, 250);
-
-  /* ---- BUILDING WITHOUT A TOUR, THIRD ATTEMPT AND THE REASONING FOR THE SHAPE ----
-
-     The four outer islands ship as coastline only and grow their city the first time something
-     commits to them. The attract flight used to be that something, through attractPrefetch a leg
-     ahead of the camera — so turning the tour off in embed mode silently removed the only build
-     driver, and nothing beyond Corniche ever populates.
-
-     WHAT THIS IS NOT. The second attempt extracted attractPrefetch's body into a shared function
-     and rendered a black screen with nothing in the error trap. I still do not know why; the
-     identifiers all resolve and the syntax checks. So this does not refactor anything. It inlines
-     the same three lines, in the same order, next to the code that runs them — duplication I would
-     normally argue against, chosen here because the alternative is a change I cannot explain.
-
-     THE THREE LINES MATTER INDIVIDUALLY, which is what the first attempt got wrong by calling
-     buildIsland directly:
-
-       loadIsland   the FULL island file. islandGeometry reads BASE[id].water synchronously during
-                    the build; without this an island's water depends on network weather and a miss
-                    reads as an island that never had any.
-       roadsIn      already have roads-<id>.json? Then build now.
-       whenRoads    otherwise wait for it. The ground canvas is painted ONCE during the build, so
-                    building early leaves a generated lattice for the rest of the session.
-
-     ONE AT A TIME, SPACED, AFTER CORNICHE. Corniche is the opening subject and by far the
-     heaviest; anything building alongside it lengthens the one wait a visitor actually sees. */
-  {
-    const queue = DISTRICTS.filter(d => d !== corniche);
-    let qi = 0;
-    const pump = () => {
-      if (qi >= queue.length) return;
-      const d = queue[qi++];
-      try {
-        if (buildIsland && d && d.pending){
-          d.group.visible = false;            // attractTick reveals it once it has settled
-          const idx = window.__basemapIndex;
-          if (idx && BMAP.loadIsland) BMAP.loadIsland(idx, d.id).catch(() => {});
-          if (roadsIn(d.id)) buildAndRegister(d);
-          else whenRoads(d.id).then(() => { if (d.pending) buildAndRegister(d); });
-        }
-      } catch (e) { console.warn('prefetch failed:', d && d.id, e && e.message); }
-      setTimeout(pump, 1400);
-    };
-    const waitC = setInterval(() => {
-      if (!isleReady(corniche)) return;
-      clearInterval(waitC); setTimeout(pump, 900);
-    }, 400);
-  }
 
   post('ready', { build: B_NAV });
   let lastId = null;
