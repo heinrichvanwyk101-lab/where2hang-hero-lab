@@ -348,7 +348,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v144', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v145', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -619,7 +619,37 @@ scene.add(moon);
    so a horizontal surface takes a fifth of what a wall takes. Raise it towards the moon's height
    and the sea comes up with it, which is the one thing the whole night palette is arranged to
    avoid. Intensity is the lever here; elevation is not. */
-const rim = new THREE.DirectionalLight(C.teal, 0.46);
+/* THE RIM IS NOT BRAND TEAL, AND IT SHOULD NEVER HAVE BEEN.
+
+   This was C.teal — 0x00C2A8, the Where2Hang brand colour, straight out of the UI palette and
+   into a scene light at 0.46 intensity. It is the same category error as the island glow taking
+   d.tint: an identity colour is for labels and chips, and using one as a LIGHT means every
+   surface it touches is stained with it.
+
+   IT IS ALSO THE ANSWER TO A FAULT CHASED THROUGH SEVEN BUILDS. Al Reem, Al Maryah and Al Raha's
+   tower cluster reading as neon turquoise was blamed in turn on the island glow, the glass night
+   albedo, the cool window temperature, the day glass hue, all six w2h-world facade families and
+   the w2h-city mass colour. Every one of those was a real blue bias and none of them was this,
+   because no albedo correction can survive being lit by a saturated cyan key.
+
+   A RIM LIGHT IS EXACTLY THE WORST PLACE TO PUT A STRONG HUE. It grazes — the comment below is
+   explicit that its direction is 0.18 in y — so it picks out tall vertical faces and broad
+   specular surfaces and leaves everything low almost untouched. That is precisely the observed
+   pattern: Corniche is 20,000 low buildings and looks correct, tower islands are slabs standing
+   in a cyan key and look like Vegas, and the open sea beyond Al Raha glows turquoise because
+   water at a grazing angle is the most specular thing in the scene.
+
+   0x9FB6C4 is a cool blue-grey — the counter-key stays cool, which is what the geometry note
+   below wants, but it is now a colour night actually produces rather than a logo. Intensity and
+   elevation are untouched: the reasoning below about the ratio and the grazing angle is sound and
+   was never the problem.
+
+   ?rim=RRGGBB to try others without a deploy. */
+const RIM_COL = (() => {
+  const m = location.search.match(/[?&]rim=([0-9a-fA-F]{6})/);
+  return m ? parseInt(m[1], 16) : 0x9FB6C4;
+})();
+const rim = new THREE.DirectionalLight(RIM_COL, 0.46);
 rim.position.set(220, 60, 240);
 scene.add(rim);
 
