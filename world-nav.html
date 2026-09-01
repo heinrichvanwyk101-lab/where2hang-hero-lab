@@ -1370,13 +1370,39 @@ function fitDist(r, fovDeg){
    implied: 1.55/2.32, 1.5/5.7, and 0.62 x 0.159. */
 const PITCH_WORLD = 0.668, PITCH_DISTRICT = 0.263, PITCH_PLACE = 0.0986;
 
+/* THE FRAMING EXTENT SHOWS THE DENSE CLUSTER, NOT ALL SIX ISLANDS — deliberately separate
+   from worldExtent() above. worldExtent() has to stay the TRUE full spread: it sizes the far
+   clip plane and the shadow camera (see the note above it — shrinking it reintroduces exactly
+   the "black arriving from the top of the frame" bug that note describes). Framing is a
+   different question: what the CAMERA should show. Corniche, Al Maryah, Al Reem and Saadiyat
+   sit close together; Yas and Al Raha sit genuinely far from the rest — fitting all six in one
+   shot means a lot of visible empty sea between them, which reads fine by day and flat/empty
+   at night (confirmed live, both times). setWorld() frames on this instead. Yas and Al Raha
+   stay fully reachable via the rail — one drag away — just not crammed into the one shot meant
+   to represent the whole city at a glance. */
+function worldFramingExtent(){
+  const CLUSTER = ['corniche', 'maryah', 'reem', 'saadiyat'];
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  DISTRICTS.filter(d => CLUSTER.includes(d.id)).forEach(d => {
+    const R = d.r * (d.dispScale || 1);
+    x0 = Math.min(x0, d.x - R); x1 = Math.max(x1, d.x + R);
+    z0 = Math.min(z0, d.z - R); z1 = Math.max(z1, d.z + R);
+  });
+  if (!isFinite(x0)) return worldExtent();
+  return {
+    cx: (x0 + x1) / 2,
+    cz: (z0 + z1) / 2,
+    r:  Math.max(120, Math.max(x1 - x0, z1 - z0) / 2),
+  };
+}
+
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   resetOrbit();
   /* AIMED AT THE ARCHIPELAGO, NOT AT CORNICHE. lookAt puts goal.target dead centre of frame, so
      whatever this is set to IS the middle of the shot. It was Corniche, which is one island at one
      corner of five. */
-  const W = worldExtent();
+  const W = worldFramingExtent();
   goal.target.set(W.cx, 0, W.cz);
   /* The two ratios are the ones the old literals implied — 600 and 400 against a half-extent of
      258. They are unchanged; what changed underneath them is that B is now the real half-extent
@@ -3266,9 +3292,15 @@ setWorld();
    command runs) was visible as the shot landing on the palace and then glide-correcting to wide,
    which is exactly the "opens wide and cuts to the landmark" disagreement this file's own
    OPENING_PLACE comment names as the fault to prevent — just inverted, and now real, confirmed on
-   both the app's Home and Landing pages. setWorld composes immediately here too: it depends only
-   on Corniche's low-poly overview mass, which (per PROGRESSIVE WARM-UP below) is complete before
-   the first render regardless of embed, not on any detailed build finishing.
+   both the app's Home and Landing pages.
+
+   JUST setWorld() — NOT A SEPARATE COMPOSITION. An earlier version of this duplicated setWorld's
+   cluster-framing math here as its own inline block, so the opening and a mid-session tap on the
+   rail's "Abu Dhabi" card composed the same shot via two different code paths that could drift
+   apart. Real feedback: "should just be the same view as set for Abu Dhabi on the area rail" —
+   correct, and simpler. setWorld() itself now frames the dense cluster (see worldFramingExtent
+   above setWorld's own definition), so calling it here IS calling the same thing the rail calls;
+   one composition, two callers, no duplicate math to keep in sync.
 
    attract.i starts at 0 and the first advance goes to 1, so whatever is composed here IS leg 0 and
    attractGo never runs for it.
@@ -3279,38 +3311,7 @@ setWorld();
    both were telling the truth about different things. osm is checked too because that is the field
    the bake matches on and the two can differ. */
 (() => {
-  if (/[?&]embed=1/.test(location.search)) {
-    /* THE OPENING SHOT FRAMES THE DENSE CLUSTER, NOT ALL SIX ISLANDS. setWorld()'s own shot
-       fits every island including Yas and Al Raha, which sit genuinely far from the rest —
-       Corniche, Al Maryah, Al Reem and Saadiyat are all close together; Yas and Al Raha are
-       not. Fitting the full spread means a lot of visible empty sea in the opening frame,
-       which reads fine by day (the sky's own colour fills the gap) and flat/empty at night
-       (just dark space) — confirmed live, both times. This computes the same worldExtent()
-       -style bounding box but only over the four central islands, giving a fuller, more
-       "across the city" first shot. Yas and Al Raha are not lost — one rail drag away — just
-       not crammed into the very first establishing frame. Same formula setWorld() itself
-       uses (0.52B at fov 52, PITCH_WORLD, sunSafe(0)) — only the islands feeding the bounding
-       box differ, so this is not new camera math, just a tighter subject. state/activeDistrict
-       /ui are left exactly as setWorld() sets them, so the rail and breadcrumb still read
-       "Abu Dhabi" correctly. */
-    state = STATE.WORLD; activeDistrict = null; activePlace = null;
-    resetOrbit();
-    const CLUSTER = ['corniche', 'maryah', 'reem', 'saadiyat'];
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    DISTRICTS.filter(d => CLUSTER.includes(d.id)).forEach(d => {
-      const R = d.r * (d.dispScale || 1);
-      x0 = Math.min(x0, d.x - R); x1 = Math.max(x1, d.x + R);
-      z0 = Math.min(z0, d.z - R); z1 = Math.max(z1, d.z + R);
-    });
-    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-    const B = Math.max(120, Math.max(x1 - x0, z1 - z0) / 2);
-    goal.target.set(cx, 0, cz);
-    goal.dist = fitDist(B * 0.52, 52); goal.elev = goal.dist * PITCH_WORLD;
-    goal.angle = sunSafe(0); goal.fov = 52;
-    applyLOD();
-    ui('Abu Dhabi', 'Tap an island');
-    return;
-  }
+  if (/[?&]embed=1/.test(location.search)) { setWorld(); return; }
   const a = placeByName(corniche, OPENING_PLACE);
   if (a) setPlace(corniche, a);
   else { console.warn('opening place "' + OPENING_PLACE + '" not found on corniche'); setDistrict(corniche); }
