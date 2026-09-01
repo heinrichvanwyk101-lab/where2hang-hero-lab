@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v228';
+export const BUILD = 'world v230';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -429,9 +429,28 @@ const waterNormal = makeWaterNormal(256);
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(3200, 3200, 70, 70),
+  /* NORMAL SCALE 0.16, DOWN FROM 0.42, AND THE MOTTLING WAS THE TWO NUMBERS DISAGREEING.
+
+     The normal map was retuned twice to kill moire — repeat 140 to 26 to 17 — and each step made
+     the tile larger and its features coarser. It now runs 92 to 490 metres, which is swell. But
+     normalScale stayed where it was set when the features were ripple-sized, so a half-kilometre
+     swell was being given the same surface relief a two-metre ripple had.
+
+     Against a 13-degree dusk sun on a glossy surface that produces specular lobes the size of city
+     blocks — the pale blotching visible across the water on every island, not just the small ones.
+     It reads as a texture artefact because it effectively is one: geometry-scale normals standing
+     in for sub-pixel chop.
+
+     Chop at this distance is a ROUGHNESS property, not a normal one — it is what you cannot
+     resolve. So the swell is dropped to a subtle perturbation of the reflection rather than a
+     source of distinct highlights.
+
+     normalScale specifically, rather than roughness, because applyLift rewrites roughness,
+     metalness and envMapIntensity per view and would undo a change made here. normalScale it does
+     not touch, so this holds in day, dusk and night alike. */
   stdMat({ color:0x050A10, roughness:0.58, metalness:0.05,
     envMapIntensity:0.95, normalMap:waterNormal,
-    normalScale:new THREE.Vector2(0.42, 0.42) })
+    normalScale:new THREE.Vector2(0.16, 0.16) })
 );
 water.rotation.x = -Math.PI/2;
 /* NO SHADOWS ON THE SEA. The dusk sun sits 13 degrees up, so every island throws a shadow two
@@ -5785,7 +5804,23 @@ function fabricMats(cool){
   const BARE = { roof:1, tile:1, tileL:1 };
   Object.entries(Object.assign({ roof:matRoofDeck, tile:matRoofTile, tileL:matRoofTileL }, base))
         .forEach(([n, m]) => {
-    out[n] = WCLASS.map((_, i) => BARE[n] ? m : glazed(m, WIN_TEX[i][cool ? 1 : 0]));
+    /* COOL IS NOW A MIX, NOT A VERDICT ON THE WHOLE ISLAND.
+
+       This read WIN_TEX[i][cool ? 1 : 0], so a cool island took the white-blue window texture for
+       every building on it and a warm one took amber for every building. Al Reem and Al Maryah
+       both carry a cool tint, and the result is two districts glowing a uniform pale blue against
+       a city that is uniformly amber — which reads as a rendering fault rather than as character,
+       because no real city is lit one temperature.
+
+       The class index is the building's HEIGHT BUCKET, so it is already the right hook: on a cool
+       island the tall classes go cool and the low ones stay warm. That is what a real skyline
+       does — offices and hotels run white LED and fluorescent, apartments and villas run warm —
+       and it is the height that tells you which is which. A warm island is untouched.
+
+       WCLASS.length - 2 is the threshold: the top two buckets only. Al Reem's towers keep the cool
+       character the tint was asking for, and everything beneath them rejoins the city. */
+    const coolAt = i => cool && i >= WCLASS.length - 2;
+    out[n] = WCLASS.map((_, i) => BARE[n] ? m : glazed(m, WIN_TEX[i][coolAt(i) ? 1 : 0]));
     out[n].raw = m;                       // crowns, plant rooms and anything else not a wall
     // The Day counterparts, hung on the same buckets and therefore free.
     out[n].day = WCLASS.map((_, i) => dayFacade(n, BARE[n] ? null : DAY_TEX[i]));
