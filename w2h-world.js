@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v234';
+export const BUILD = 'world v235';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3973,7 +3973,11 @@ const matRoofTile  = stdMat({ color:0x1A1210, roughness:0.94, metalness:0.02 });
 matRoofTile.userData.duskColor  = 0xA9663F;       // fired terracotta, the deeper of the two
 const matRoofTileL = stdMat({ color:0x1C1714, roughness:0.94, metalness:0.02 });
 matRoofTileL.userData.duskColor = 0xC0906A;       // sand-tile, the Lagoons tone
-const matPlaceGlass = stdMat({ color:0x111C22, roughness:0.35, metalness:0.1 });
+/* 0x1B1813, NOT 0x111C22. The night body of the same glass, moved off blue for the same reason
+   the day colour was — a dark blue-green body under any lift at all is the teal the towers were
+   reading as. Near-black and faintly warm: a glass tower at night is dark, and what light it
+   shows comes from the windows in it rather than from the glass itself. */
+const matPlaceGlass = stdMat({ color:0x1B1813, roughness:0.35, metalness:0.1 });
 /* GLASS DOES NOT TAKE THE CITY'S x5 NIGHT LIFT, AND TAKING IT WAS THE TEAL.
 
    0x111C22 is a dark blue-green, correct for solar glass and nearly black on screen as written.
@@ -4211,7 +4215,23 @@ const DAY_FAMILY = {
   rend:   0xE2D6BB,      // warm limestone render
   stone:  0xD2CBBE,      // precast concrete, neutral
   clad:   0xC4C8CC,      // brushed aluminium, faintly cool
-  glass:  0xA8BAC4,      // blue-green solar glass, darker than the stone around it
+  /* BRONZE-NEUTRAL, NOT BLUE-GREEN, AND THIS IS THE FAULT EVERY OTHER FIX WAS DOWNSTREAM OF.
+
+     0xA8BAC4 is a blue-green solar glass. It sits on the cool side of a palette that is otherwise
+     limestone, precast and sand, and the facade rule is "tall is glass" — so on an island that is
+     mostly towers, every building takes it and the whole district turns blue-grey against a tan
+     city. That is visible in Day and Dusk as slabs of the wrong colour, and at Night it is the
+     same material carrying the same hue, which is why chasing the glow light, the glass albedo
+     and the window temperature each moved something real and none of them moved this.
+
+     IT IS ALSO WRONG FOR THE CITY. Blue-green solar glazing is a Northern European and East Asian
+     convention. Gulf towers are overwhelmingly bronze and gold-tinted — Etihad Towers, the Gate
+     Towers, ADNOC, Aldar are all warm-reflective, none of them blue. So the correction is not a
+     compromise against the palette; it is what is actually there.
+
+     Kept slightly cooler and darker than the limestone beside it, because glazing IS darker and
+     less warm than stone in daylight. The distinction stays; the hue crosses to the right side. */
+  glass:  0xB6AE9E,      // bronze-neutral solar glass, darker than the stone around it
   bronze: 0xBCA88C,      // bronze coating, warm and duller
   roof:   0x9A9384,      // ballast and plant
   tile:   0xB5714A,      // fired clay, the Beach Villas roof
