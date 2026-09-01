@@ -100,6 +100,16 @@
     font:500 10px/1.4 ui-monospace,monospace;color:rgba(180,200,192,.42);
     text-shadow:0 1px 2px rgba(0,0,0,.55);white-space:pre}
   .stamp.off{display:none}
+  /* THE EMBED-VISIBLE STAMP, DELIBERATELY NOT IN THE embed-HIDING RULE BELOW. .stamp itself
+     is hidden in embed mode along with the rest of the chrome, which meant there was no way
+     to confirm from inside the actual app whether a fresh deploy had genuinely reached it —
+     only the standalone shell could ever show a build number. Added specifically to settle a
+     real, extended disagreement about whether fixes were actually reaching the app or being
+     served stale by some caching layer between GitHub and the browser. Same text as .stamp,
+     visible everywhere including embed, small and out of the way (top-right, low opacity). */
+  .embedstamp{position:fixed;right:8px;top:8px;z-index:2147483000;pointer-events:none;
+    font:600 9px/1.3 ui-monospace,monospace;color:rgba(232,181,71,.55);
+    text-shadow:0 1px 3px rgba(0,0,0,.85);white-space:pre}
   .back{position:fixed;left:12px;bottom:18px;z-index:6;appearance:none;
     border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
     font:600 14px Inter,sans-serif;padding:11px 18px;border-radius:999px;
@@ -224,6 +234,7 @@
   <div class="dbg" id="dbg"></div>
 </div>
 <div class="stamp" id="stamp"></div>
+<div class="embedstamp" id="embedstamp"></div>
 
 <div id="pickout"><div class="txt" id="pickoutTxt"></div><button id="pickoutCopy">Copy</button></div>
 
@@ -457,6 +468,10 @@ if (DEBUG) document.getElementById('dbg').classList.add('on');
   const st = document.getElementById('stamp');
   if (location.hash.indexOf('nostamp') >= 0 || DEBUG) st.classList.add('off');
   else st.textContent = B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS;
+  // Unconditional — no #nostamp/#debug exemption, since the whole point is confirming the
+  // app itself received this build, and the app can't set a URL hash on the iframe.
+  const est = document.getElementById('embedstamp');
+  if (est) est.textContent = B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS;
 }
 
 
