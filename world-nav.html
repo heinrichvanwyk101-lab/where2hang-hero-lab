@@ -2002,6 +2002,15 @@ function ui(crumb, hint){
   document.getElementById('crumb').innerHTML = crumb;
   document.getElementById('hint').textContent = hint;
   document.getElementById('back').classList.toggle('on', state !== STATE.WORLD);
+  /* MIRRORED INTO THE EMBED-VISIBLE STAMP, TEXTUALLY, NOT VISUALLY. crumb is exactly what the
+     code itself believes the camera is showing — "Abu Dhabi" for setWorld(), "Abu Dhabi >
+     Corniche" for setDistrict(corniche) — set by the very same function whose branch decided
+     what to compose. Reading this removes all visual interpretation of the 3D scene from the
+     question of which state actually ran; it says so in words, in the corner, on the real app,
+     every single frame this changes. */
+  const est = document.getElementById('embedstamp');
+  if (est) est.textContent = (B_NAV || '') + ' / ' + (B_CITY || '') + ' / ' + (B_WORLD || '') +
+    ' / ' + (B_PROPS || '') + '\n' + crumb.replace(/<[^>]*>/g, '');
 }
 document.getElementById('back').addEventListener('click', () => {
   if (state === STATE.PLACE)         setDistrict(activeDistrict);
