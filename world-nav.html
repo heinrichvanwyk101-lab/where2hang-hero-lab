@@ -3286,6 +3286,20 @@ setWorld();
    district shot without a word. The overlay said leg 0 corniche and the camera said dist 4191, and
    both were telling the truth about different things. osm is checked too because that is the field
    the bake matches on and the two can differ. */
+/* ?forcecam= — A DIAGNOSTIC ESCAPE HATCH, ADDED TO SETTLE A REAL DISAGREEMENT ABOUT WHICH SHOT
+   IS ACTUALLY SHOWING. Everything above composes the opening shot through several layers —
+   embed detection, OPENING_PLACE, descend() sequencing elsewhere — and after extensive code
+   reading kept saying "this calls setWorld()" while what was reported back kept looking like
+   Corniche's own district shot, the two sides needed a way to compare the actual, named camera
+   states directly against each other with zero interpretation in between. This checks first,
+   before any of the normal opening logic, and returns immediately if present — so
+   ?forcecam=world is PURELY setWorld(), nothing else has a chance to run first or after. */
+if (/[?&]forcecam=world/.test(location.search)) { setWorld(); }
+else if (/[?&]forcecam=corniche/.test(location.search)) { setDistrict(corniche); }
+else if (/[?&]forcecam=maryah/.test(location.search)) { const d = DISTRICTS.find(x => x.id === 'maryah'); if (d) setDistrict(d); }
+else if (/[?&]forcecam=reem/.test(location.search)) { const d = DISTRICTS.find(x => x.id === 'reem'); if (d) setDistrict(d); }
+else if (/[?&]forcecam=saadiyat/.test(location.search)) { const d = DISTRICTS.find(x => x.id === 'saadiyat'); if (d) setDistrict(d); }
+else
 (() => {
   if (/[?&]embed=1/.test(location.search)) { setWorld(); return; }
   const a = placeByName(corniche, OPENING_PLACE);
