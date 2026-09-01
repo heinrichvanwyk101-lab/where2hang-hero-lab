@@ -3256,6 +3256,20 @@ phase('applyView');
 setWorld();
 /* THE OPENING SHOT IS LEG 0's SHOT, composed here rather than defaulting to the district view.
 
+   EMBED OPENS WIDE, THE STANDALONE SHELL DOES NOT. The two hosts want different first shots for
+   different reasons: the standalone dev shell composes on OPENING_PLACE (Palace District) because
+   Emirates Palace is hand-built kit geometry with no payload dependency, so it's ready immediately
+   and fills a frame without the unfinished city behind it showing. The embedded app, though, wants
+   its first shot to match what its own UI is already showing — the area rail's own first card is
+   "Abu Dhabi", the whole world — so composing on the palace first and then getting corrected by
+   the host's own setWorld a moment later (necessarily after `ready` fires and the host's queued
+   command runs) was visible as the shot landing on the palace and then glide-correcting to wide,
+   which is exactly the "opens wide and cuts to the landmark" disagreement this file's own
+   OPENING_PLACE comment names as the fault to prevent — just inverted, and now real, confirmed on
+   both the app's Home and Landing pages. setWorld composes immediately here too: it depends only
+   on Corniche's low-poly overview mass, which (per PROGRESSIVE WARM-UP below) is complete before
+   the first render regardless of embed, not on any detailed build finishing.
+
    attract.i starts at 0 and the first advance goes to 1, so whatever is composed here IS leg 0 and
    attractGo never runs for it.
 
@@ -3265,6 +3279,7 @@ setWorld();
    both were telling the truth about different things. osm is checked too because that is the field
    the bake matches on and the two can differ. */
 (() => {
+  if (/[?&]embed=1/.test(location.search)) { setWorld(); return; }
   const a = placeByName(corniche, OPENING_PLACE);
   if (a) setPlace(corniche, a);
   else { console.warn('opening place "' + OPENING_PLACE + '" not found on corniche'); setDistrict(corniche); }
