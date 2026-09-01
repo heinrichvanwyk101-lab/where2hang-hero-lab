@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v233';
+export const BUILD = 'world v234';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4075,6 +4075,10 @@ const VILLA_ABS_M = 12;
    to be too, or the city relights itself on every reload and no two screenshots can be compared.
    16 columns because u is arc length round the WHOLE perimeter: a typical block is eight units
    round, so sixteen bays is about half a unit each, matching the storey height. */
+const COOL_WIN_BLEND = (typeof location !== 'undefined' &&
+  (location.search.match(/[?&]coolwin=(\d*\.?\d+)/) || [])[1] !== undefined)
+  ? Math.max(0, Math.min(1, parseFloat(location.search.match(/[?&]coolwin=(\d*\.?\d+)/)[1]))) : 0;
+
 function fabricWindows(rows, warm){
   const cols = 16;
   const cv = document.createElement('canvas');
@@ -4098,8 +4102,36 @@ function fabricWindows(rows, warm){
         const base = 0.45 + rnd() * 0.55;
         for (let k = 0; k < run && x < cols; k++, x++){
           const a = Math.min(1, base * (0.82 + rnd() * 0.36));
+          /* THE COOL WINDOW IS A WARM-NEUTRAL WHITE NOW, NOT A BLUE-WHITE, AND THE REASON IS THE
+             MIP CHAIN RATHER THAN THE COLOUR ITSELF.
+
+             rgba(214,226,232) is a perfectly reasonable office white up close. But this texture is
+             an EMISSIVE MAP on a tower seen from a district or world camera, where it is a handful
+             of pixels and every level of the mip chain averages it further. At distance the
+             individual windows are gone and the facade glows the texture's MEAN — and the mean of
+             a blue-white window on a near-black wall is a flat pale mint. That is why the towers
+             read as solid glowing slabs with no window detail, and why nothing done to the body
+             material, the glass albedo or the island glow ever touched it: the thing emitting is
+             this texture's average, not any of those.
+
+             A cool bright against a warm-dark scene is also the most conspicuous thing that can be
+             put in it, which is why two islands of it read as neon while the same luminance in
+             amber reads as a city.
+
+             So cool stays COOLER THAN WARM — offices are not lit the same as apartments and that
+             distinction is worth keeping — but it moves to a neutral white with a trace of warmth
+             rather than a blue one, and it is dimmed further so its mip mean sits below the amber
+             rather than above it.
+
+             ?coolwin=N blends the cool window all the way back to the warm one: 0 is this build,
+             1 makes cool identical to warm and the distinction disappears entirely. That is the
+             fastest way to settle how much separation the two should actually have. */
+          const cw = COOL_WIN_BLEND;
+          const cr = 226 + (232 - 226) * cw, cg = 219 + (181 - 219) * cw, cb = 205 + (71 - 205) * cw;
+          const ca = a * (0.60 + 0.40 * cw);
           g.fillStyle = warm ? 'rgba(232,181,71,' + a.toFixed(2) + ')'
-                             : 'rgba(214,226,232,' + (a * 0.82).toFixed(2) + ')';
+                             : 'rgba(' + Math.round(cr) + ',' + Math.round(cg) + ',' +
+                               Math.round(cb) + ',' + ca.toFixed(2) + ')';
           g.fillRect(x * 4 + 1, y * 4 + 1, 2, 2.5);
         }
       } else x++;
