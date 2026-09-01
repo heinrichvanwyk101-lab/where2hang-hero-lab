@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v29';
+export const BUILD = 'props v30';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -769,12 +769,33 @@ function addProps(d, layer, plan, budget = {}){
   roads.sort((a, b) => (RANK[a.cls] ?? 1) - (RANK[b.cls] ?? 1));
 
   roads.forEach(rd => {
-    // Lamps alternate sides; palms go in pairs on the verge outside them. Spacing is in
-    // NORMALISED island units, so a small island gets proportionally fewer, not smaller.
+    /* ONE SIDE PER ROAD, FIXED FOR ITS WHOLE LENGTH.
+
+       This was `s = (i % 2) ? 1 : -1` — the column flipping sides at every step. That is a
+       two-row line by construction, roughly 46 m apart across the corridor, and it had been there
+       since long before any of the cross-section work. It survived three rounds of fixing the
+       doubling because Corniche is dominated by the seafront chain lamps and hides it; Al Raha and
+       Al Maryah have no long chain, so the road lamps are the whole of the lighting and the
+       alternation is all there is to see.
+
+       Real street lighting runs down one side and stays there. The side is picked once from the
+       road's net bearing rather than at random, so two parallel streets are lit on the same
+       geographic side instead of facing each other, and it is deterministic — the same road lights
+       the same way on every rebuild.
+
+       SPACING IS UNCHANGED AT 32 m AND THE COUNT IS UNCHANGED TOO. Every lamp that used to exist
+       still exists; they are all on one side now instead of half on each. Per-side density
+       therefore doubles, from a lamp every 64 m to every 32 m, which is what single-sided lighting
+       actually looks like on a real carriageway. */
+    const sideFor = pts => {
+      const a = pts[0], b = pts[pts.length - 1];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      return (Math.abs(dx) > Math.abs(dy) ? (dx >= 0 ? 1 : -1) : (dy >= 0 ? 1 : -1));
+    };
+    const s = sideFor(rd.pts);
     const stepL = XS_ ? XS_.stepLamp : 0.052;
     walk(rd.pts, stepL, (x, y, tx, ty, i) => {
       const nx = -ty, ny = tx;
-      const s = (i % 2) ? 1 : -1;
       /* Kerb face plus the verge offset, which is the table's own definition. The old o1/o2 were
          multiples of a made-up corridor width and meant nothing in metres. */
       const o1 = XS_ ? (XS_.halfRoad + XS_.verge) : rd.w * 1.45;
