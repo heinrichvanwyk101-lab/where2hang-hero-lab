@@ -374,7 +374,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v151', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v153', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1345,6 +1345,84 @@ function setWorld(){
   applyLOD();
   ui('Abu Dhabi', 'Tap an island');
 }
+/* ---------- setResults — THE FOURTH COMPOSER ---------------------------------------------------
+
+   setWorld, setDistrict and setPlace each frame a thing the world already knows about: the
+   archipelago, an island, a landmark. A search or a filter frames something the world has never
+   heard of — an arbitrary set of points that may sit on one island or across four — so it needs a
+   composer of its own, and it is the only one whose subject has no radius until it is measured.
+
+   THE SAME CONTRACT AS THE OTHER THREE. It sets goal.target, dist, elev, angle and fov and then
+   gets out of the way; the frame loop eases exactly as it does for any other move. Nothing here
+   takes the camera, which is what makes a search result and a carousel tap the same kind of event
+   — the later one simply wins.
+
+   BOUNDS, NOT A CENTROID. Four venues clustered at one end of Yas and one at the far end have a
+   centroid in empty water between them; the bounding radius is what guarantees every result is in
+   frame. Measured as the half-diagonal so the fit holds whichever way the set is oriented.
+
+   THE PITCH FOLLOWS THE SPREAD, and that is the one judgement in here. A tight set is effectively
+   a place and wants the low, oblique, cinematic angle; a set spanning several islands is
+   effectively a map and wants to be read from above. Interpolating between PITCH_PLACE and
+   PITCH_WORLD across that range means one function serves both without a mode switch — which is
+   the map-versus-cinematic split arriving as a continuum rather than a state.
+
+   activeDistrict IS SET WHEN THE SET SITS ON ONE ISLAND, and null when it does not. That is what
+   keeps the rail honest for free: it reads activeDistrict every 400ms, so a result landing on
+   Saadiyat marks Saadiyat without search and the carousel knowing anything about each other.
+
+   points: [{ x, z, d? }] in DISPLAYED world coordinates — the same space goal.target lives in.
+   Whatever produces them (a venue projection, a place anchor, an island centre) is that caller's
+   problem, not this function's. */
+function setResults(points, label){
+  const pts = (points || []).filter(p => p && isFinite(p.x) && isFinite(p.z));
+  if (!pts.length) return false;
+
+  let x0 =  Infinity, z0 =  Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const p of pts){
+    if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+    if (p.z < z0) z0 = p.z; if (p.z > z1) z1 = p.z;
+  }
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  const halfDiag = Math.hypot(x1 - x0, z1 - z0) / 2;
+
+  /* A single result has no extent at all, and framing a zero radius puts the camera in the
+     building. SHOT_MIN_DISP is the same floor setDistrict uses for a small island, and it means
+     the same thing here: the closest the camera is ever allowed to stand. */
+  const r = Math.max(SHOT_MIN_DISP * 0.55, halfDiag * 1.25);
+
+  /* One island or several, decided by whether every point falls inside the same district's
+     displayed radius. Generous — 1.15 — because a waterfront venue can sit just outside the
+     radius the island is framed on without belonging anywhere else. */
+  let host = null;
+  for (const d of DISTRICTS){
+    const rr = (d.r * (d.dispScale || 1)) * 1.15;
+    if (pts.every(p => Math.hypot(p.x - d.x, p.z - d.z) <= rr)){ host = d; break; }
+  }
+
+  resetOrbit();
+  state = host ? STATE.DISTRICT : STATE.WORLD;
+  activeDistrict = host; activePlace = null;
+
+  /* Spread as a fraction of the whole archipelago, clamped, driving the pitch between the place
+     angle and the world angle. */
+  const W = worldExtent();
+  const spread = Math.min(1, Math.max(0, halfDiag / Math.max(1, W.r)));
+  const pitch = PITCH_PLACE + (PITCH_WORLD - PITCH_PLACE) * spread;
+
+  goal.fov = 46;
+  goal.target.set(cx, GROUND + 8, cz);
+  goal.dist = fitDist(r, goal.fov);
+  goal.elev = goal.dist * pitch;
+  goal.angle = sunSafe(goal.angle || 0);
+  applyLOD();
+  ui(label || 'Results', pts.length + (pts.length === 1 ? ' result' : ' results'));
+  return true;
+}
+/* Exposed so a search layer outside this module can drive the camera without importing anything.
+   The whole seam is one function taking world-space points. */
+window.__w2hSetResults = setResults;
+
 function setDistrict(d){
   /* BUILD THE ISLAND IF IT IS NOT BUILT YET. The four outer islands ship as coastline only and
      grow their city the first time the camera commits to one — see the note in w2h-world.js.
@@ -3907,8 +3985,14 @@ if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
        x = 0 — but it reads left, because at rest the visible cards are not symmetric about the
        middle: the arc shows about 2.7 steps and the trailing card is nearer the frame edge than
        the leading one. This is a perceptual correction to an arithmetically correct layout, which
-       is why it belongs here rather than inside the camera solve. */
-    el.style.setProperty('--railx', q('railx', '70') + 'px');
+       is why it belongs here rather than inside the camera solve.
+
+       28 IS INTERPOLATED FROM TWO OBSERVATIONS, NOT DERIVED. At 0 the arc read left, with the
+       right-hand neighbour fully in frame and the left one cut; at 70 it read right, with the left
+       neighbour whole and Corniche cut off. Those are the two ends of the same measurement, so the
+       centre is between them and nearer the low end than the high one. It is a settable number and
+       there is no arithmetic that produces it — ?railx= is how it gets finished. */
+    el.style.setProperty('--railx', q('railx', '28') + 'px');
 
     mountAreaRail(el, {
       areas,
