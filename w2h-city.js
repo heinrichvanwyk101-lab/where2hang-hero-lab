@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v94';
+export const BUILD = 'city v95';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -66,7 +66,22 @@ export const PALACE_FOOT = { w:64.3, d:49.3, dz:0.0 };
 export const C = {
   night:   0x0B1620,
   haze:    0x241D15,
-  mass:    0x151A1F,
+  /* 0x1E1B16, NOT 0x151A1F, AND THE CITY TAKES A x5 ALBEDO LIFT AT NIGHT.
+
+     This is the colour of every generated tower in the scene, and it was authored blue-biased:
+     (21, 26, 31), which looks like a sensible near-black cool concrete and is invisible as a tint.
+     Lifted five times it is (105, 130, 155) — blue over red by fifty — and that is the slate-teal
+     the towers on Al Reem and Al Maryah have been reading as through six attempts at fixing it.
+
+     The same fault was corrected across all six facade families in w2h-world.js at world v236 and
+     the towers did not change, because THESE towers are not built there. Al Reem's roads are
+     GENERATED and its skyline comes from cityRow and the boxTower family in this file, which have
+     their own palette and were never touched. The world file's stamp moved through six versions
+     while city stayed at v94, which was the tell.
+
+     Warm-neutral at the same luminance: (30, 27, 22), lifting to (150, 135, 110). Brightness
+     unchanged, hue crossed over. */
+  mass:    0x1E1B16,
   masswarm:0x241E17,
   gold:    0xE8B547,
   teal:    0x00C2A8,
@@ -180,9 +195,9 @@ const DUSK_BY_NIGHT = {
      the frame: two end blades and a lintel, roughly a third of the visible face, with dark blue
      glass filling the rest. A pale frame around a dark field is the real building's actual
      contrast and cannot read as one large unbroken light surface, which is what went wrong. */
-  0x121A24: 0xA9B6BE,   // ADNOC curtain wall: blue-grey glass, cooler and darker than Etihad's
-  0x151A1F: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
-  0x111C22: 0xB9BCC0,   // Etihad's solar glass reads as brushed metal against a low sun
+  0x1F1C17: 0xA9B6BE,   // ADNOC curtain wall: blue-grey glass, cooler and darker than Etihad's
+  0x1E1B16: 0xD3C4A6,   // generic mass: the same precast concrete the fabric uses, so they agree
+  0x1B1813: 0xB9BCC0,   // Etihad's solar glass reads as brushed metal against a low sun
   /* THE BRONZE ETIHAD TOWER IS GONE, and it never existed. The entry here reasoned from real
      photographs — one warm tower does stand apart from four cool ones in shot after shot — but
      the warm building is a neighbour of the complex, not a member of it. All five Etihad towers
@@ -199,9 +214,9 @@ const DUSK_BY_NIGHT = {
    fabric that now has glazing, floor lines and five distinct wall colours. The landmarks look
    less resolved than the background city, which is precisely backwards. */
 const DAY_BY_NIGHT = {
-  0x121A24: 0x8FA6B4,   // ADNOC glass: deep blue-grey, plainly darker than its own stone frame
-  0x151A1F: 0xD2CBBE,   // generic mass: matches the fabric's precast
-  0x111C22: 0xA8BAC4,   // Etihad: the same blue-green glass the fabric's towers use
+  0x1F1C17: 0x8FA6B4,   // ADNOC glass: deep blue-grey, plainly darker than its own stone frame
+  0x1E1B16: 0xD2CBBE,   // generic mass: matches the fabric's precast
+  0x1B1813: 0xB6AE9E,   // Etihad: the same bronze-neutral glass the fabric's towers use
 };
 
 /* The daylight counterpart of the window texture: a pale wall with DARK glazing, because in
@@ -721,7 +736,8 @@ function etihadTowers(x0, z0){
      SHEAR IS SCALED 1.85x FROM THE OLD LADDER. See the crown note in curvedTower: the ratio
      between towers was a deliberate silhouette choice and is preserved exactly; only the overall
      magnitude has changed, because the old one produced no visible slant at all. */
-  const GLASS = 0x111C22;
+  /* Matches matPlaceGlass in w2h-world.js, which moved off blue-green for the same reason. */
+  const GLASS = 0x1B1813;
   /* SOURCED FROM THE EXPORTED TABLE, so the mass proxy in w2h-world.js and the geometry here
      cannot disagree again. colour and floors are joined on here because they are this layer's
      business and the proxy has no use for either. */
@@ -3143,7 +3159,7 @@ function adnocHQ(x0, z0){
      that shadow reveal is what stops the slab flattening into one plane at midday. */
   const glass = new THREE.Mesh(
     roundedSlab(W - 2 * BLADE, D - 2 * INSET, H_GLASS, 0.18, 8),
-    cityMaterial(TEX_TOWER, 1, 1, 0.55, 0x121A24));
+    cityMaterial(TEX_TOWER, 1, 1, 0.55, 0x1F1C17));
   glass.position.set(x0, 0, z0);
   glass.rotation.y = rot;
   glass.userData.hero = true;
