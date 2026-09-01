@@ -376,6 +376,41 @@ body{background:#05080b;background-attachment:fixed;color:var(--text);font-famil
 
 /* Six items, not five: the live navbar carries Alerts and home-stage dropped it. */
 .navbar a{flex:1;min-width:0}
+
+/* ---------- GLASS, BECAUSE THE BACKDROP IS NOT DARK -------------------------------------------
+
+   The live home page's components assume near-black behind them, so contrast is free. Here the
+   same components sit over a scene that is bright sky at the top and dark water at the bottom,
+   and the .reveal scrim only covers its first 18% — so "Eat & Drink" and "Find My Spot" were
+   dark-on-bright and barely readable.
+
+   A FULL SHEET WOULD FIX IT AND DEFEAT THE POINT. The world has to stay visible; that is the
+   entire reason it is there. So each block gets its own panel and the city shows between them —
+   which is also what makes the page feel layered rather than pasted over a picture.
+
+   The blur is what does the work, not the tint: 14px of backdrop blur turns whatever is behind
+   into a wash, so text sits on something even, whatever the camera happens to be looking at. The
+   tint only sets the level. */
+.lens, .acts, .board, .chips, .cats{
+  background:rgba(12,18,22,.62);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:12px;margin-top:12px}
+.acts{padding:10px}
+.board{padding:4px 12px}
+.chips{display:flex;flex-wrap:wrap;gap:9px}
+.cats{display:flex;flex-wrap:wrap;gap:10px}
+
+/* The section headings sit BETWEEN panels, on nothing, so they carry their own shadow rather than
+   a panel of their own — a strip behind two words reads as a button. */
+.sec h4, .pull{text-shadow:0 2px 12px rgba(0,0,0,.85)}
+.sec .va{text-shadow:0 2px 12px rgba(0,0,0,.85)}
+
+/* Inner controls lose their own fills now that the panel provides one; two stacked translucencies
+   read as a smear rather than as glass. */
+.lensbtn{background:rgba(255,255,255,.05);backdrop-filter:none}
+.lensbtn.on{background:rgba(0,194,168,.22)}
+.act2{background:rgba(255,255,255,.05);backdrop-filter:none}
+.recur, .edi{background:rgba(12,18,22,.62);backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px)}
 </style>
 </head>
 <body>
