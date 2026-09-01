@@ -125,7 +125,7 @@
      are not symmetric about it at every scroll position. A layout nudge is the honest fix for a
      perceptual offset — chasing it inside the camera solve would be guessing at a thing that is
      already arithmetically correct. */
-  #rail{position:fixed;left:0;right:0;top:70px;height:21vh;z-index:3;
+  #rail{position:fixed;left:0;right:0;top:56px;height:22vh;z-index:3;
     display:block;touch-action:pan-y;pointer-events:auto;
     opacity:var(--railop,.62);transform:translateX(var(--railx,0px));
     transition:opacity .5s ease}
@@ -374,7 +374,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v150', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v151', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3903,7 +3903,12 @@ if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
        cost nothing and can be dialled in on a reload rather than a deploy. */
     const q = (k, d) => { const m = location.search.match(new RegExp('[?&]' + k + '=(-?\\d*\\.?\\d+)')); return m ? m[1] : d; };
     el.style.setProperty('--railop', q('railop', '.62'));
-    el.style.setProperty('--railx', q('railx', '0') + 'px');
+    /* +70px BY DEFAULT. The arc is centred by construction — front card at x = 0, camera at
+       x = 0 — but it reads left, because at rest the visible cards are not symmetric about the
+       middle: the arc shows about 2.7 steps and the trailing card is nearer the frame edge than
+       the leading one. This is a perceptual correction to an arithmetically correct layout, which
+       is why it belongs here rather than inside the camera solve. */
+    el.style.setProperty('--railx', q('railx', '70') + 'px');
 
     mountAreaRail(el, {
       areas,
