@@ -115,7 +115,7 @@
      district shot, and the place the hero's card rail belongs. Height in vh rather than px so it
      tracks the fold's two form factors; pointer-events on, because the carousel needs the drag
      and there is nothing behind this band but sky. z-index sits under the chrome and over #gl. */
-  #rail{position:fixed;left:0;right:0;top:92px;height:32vh;z-index:3;
+  #rail{position:fixed;left:0;right:0;top:64px;height:34vh;z-index:3;
     display:block;touch-action:pan-y;pointer-events:auto}
   #rail.off{display:none}
   .views{position:fixed;right:12px;bottom:18px;z-index:6;display:flex;gap:8px}
@@ -356,7 +356,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v146', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v147', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3865,9 +3865,35 @@ if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
     const { mountCityHero } = await import('./city-hero.js');
     const el = document.getElementById('rail');
     if (!el) return;
-    const items = DISTRICTS.map(d => ({ name: d.name, sub: '', _d: d }));
+    /* IMAGES, BECAUSE THE CARD IS A WINDOW AND AN EMPTY ONE IS A GREY SLAB. Without img the
+       carousel falls back to placeholderTex — a flat gradient with the name on it — which is why
+       the off-centre cards read as cardboard rather than glass. These are the same paths the
+       landing page hero uses, so they are known to exist, and every card carries a fallback the
+       way that page does. */
+    const IMG = 'https://where2hang.ae/images/';
+    const ART = {
+      corniche: ['Hero-skyline.webp',       'The seafront city'],
+      maryah:   ['Venue-coya.webp',         'Business and dining'],
+      reem:     ['Hero-skyline.webp',       'Towers and marinas'],
+      saadiyat: ['Venue-louvre.webp',       'Culture and beaches'],
+      yas:      ['Venue-seaworld.webp',     'Entertainment island'],
+      raha:     ['Hero_activity.webp',      'Waterfront living'],
+    };
+    const items = DISTRICTS.map(d => {
+      const a = ART[d.id] || [];
+      return { name: d.name, sub: a[1] || '', img: a[0] ? IMG + a[0] : null,
+               fallback: IMG + 'Hero-skyline.webp', _d: d };
+    });
     if (!items.length) return;
     el.classList.remove('off');
+    /* MOUNTED A FRAME AFTER UNHIDING, and this is why the rail was off-centre.
+
+       mountCityHero reads canvas.clientWidth and clientHeight at construction and derives the
+       camera framing from them — fit() solves the z distance against the aspect. The canvas had
+       display:none until the line above, so at the moment of a synchronous call its client box is
+       still zero and the aspect is whatever the fallback produces. One frame lets layout flush, so
+       fit() sees the real band and the rail lands centred in it. */
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const rail = mountCityHero(el, {
       venues: items,
       /* The rail's own idea of time of day follows the scene's, so the two never disagree about
