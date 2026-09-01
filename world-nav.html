@@ -115,9 +115,27 @@
      the arc's rise without becoming a feature — 21vh holds the 1.5-unit card plus the curve of
      its neighbours and nothing more. The canvas is transparent and unlit, so the city reads
      through the gaps between cards rather than behind a panel. */
+  /* THE ISLAND RAIL BAND. Chrome, not a feature, so opacity and a horizontal nudge are CSS
+     variables rather than constants — the rail sits over a scene whose brightness changes
+     completely between day, dusk and night, and one setting cannot serve all three.
+
+     translateX EXISTS BECAUSE THE ARC CENTRES ITSELF AND THE RESULT STILL READS LEFT. area-rail
+     puts the front card at x = 0 with the camera at x = 0, so it is centred by construction; what
+     is off is the perceived centre, because the arc is only 2.7 steps wide and the visible cards
+     are not symmetric about it at every scroll position. A layout nudge is the honest fix for a
+     perceptual offset — chasing it inside the camera solve would be guessing at a thing that is
+     already arithmetically correct. */
   #rail{position:fixed;left:0;right:0;top:70px;height:21vh;z-index:3;
-    display:block;touch-action:pan-y;pointer-events:auto}
+    display:block;touch-action:pan-y;pointer-events:auto;
+    opacity:var(--railop,.62);transform:translateX(var(--railx,0px));
+    transition:opacity .5s ease}
   #rail.off{display:none}
+  /* PER VIEW, BECAUSE THE BACKGROUND IS A DIFFERENT IMAGE IN EACH. Night is nearly black, so the
+     rail can be dim and still read; day is a bright hazy sky, so the same opacity disappears into
+     it and the cards need a touch more presence and less saturation to stay subordinate. */
+  #rail.v-night{opacity:calc(var(--railop,.62) * .78);filter:saturate(.75) brightness(.9)}
+  #rail.v-dusk {opacity:calc(var(--railop,.62) * .92);filter:saturate(.8) brightness(.96)}
+  #rail.v-day  {opacity:calc(var(--railop,.62) * 1.12);filter:saturate(.7) brightness(1.04)}
   .views{position:fixed;right:12px;bottom:18px;z-index:6;display:flex;gap:8px}
   .chip{appearance:none;border:1px solid rgba(255,255,255,.16);
     background:rgba(16,22,28,.85);color:#E7EDF3;font:600 13px Inter,sans-serif;
@@ -356,7 +374,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v149', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v150', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3881,6 +3899,12 @@ if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
     el.classList.remove('off');
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
+    /* ?railop= overall opacity, ?railx= horizontal nudge in px. Both are CSS variables so they
+       cost nothing and can be dialled in on a reload rather than a deploy. */
+    const q = (k, d) => { const m = location.search.match(new RegExp('[?&]' + k + '=(-?\\d*\\.?\\d+)')); return m ? m[1] : d; };
+    el.style.setProperty('--railop', q('railop', '.62'));
+    el.style.setProperty('--railx', q('railx', '0') + 'px');
+
     mountAreaRail(el, {
       areas,
       onSelect: (i) => {
@@ -3889,6 +3913,30 @@ if (!RAIL_OFF) requestAnimationFrame(() => setTimeout(async () => {
         if (a._d) setDistrict(a._d); else setWorld();
       },
     });
+
+    /* FORCING A REDRAW AFTER THE PHOTOS LAND, and this is working around a real bug rather than a
+       preference. area-rail's texture callback assigns the map and does not call kick(), while its
+       loop cancels its own rAF once the arc settles — so a photo that arrives after the rail comes
+       to rest is never drawn and the card keeps its placeholder until someone drags it. That is
+       every card on first load, which is why the arc is flat teal.
+
+       area-rail listens on window resize and re-renders there, so a few dispatched resizes cover
+       the load window without touching the module. The one-line fix belongs in area-rail.js —
+       kick() inside set() — but that file is a paste target for the app as well, so it should be
+       changed in both places deliberately rather than here. */
+    [120, 400, 900, 1800, 3200].forEach(t =>
+      setTimeout(() => window.dispatchEvent(new Event('resize')), t));
+
+    /* The rail follows the view the way the tiles follow the camera: one class, swapped when the
+       scene changes mode, so day, dusk and night each get their own weighting. */
+    let lastView = '';
+    setInterval(() => {
+      if (typeof view === 'undefined' || view === lastView) return;
+      lastView = view;
+      el.classList.remove('v-day', 'v-dusk', 'v-night');
+      if (view === 'day' || view === 'dusk' || view === 'night') el.classList.add('v-' + view);
+    }, 400);
+
     window.__railSetVisible = on => el.classList.toggle('off', !on);
   } catch (e) {
     console.warn('island rail unavailable:', e && e.message);
