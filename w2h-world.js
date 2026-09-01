@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v232';
+export const BUILD = 'world v233';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3948,6 +3948,8 @@ matStoneWhite.userData.duskColor = 0xE9E4DA;      // painted white render, barel
    the lift classifies on. */
 const matGlassBronze = stdMat({ color:0x101A22, roughness:0.35, metalness:0.44 });
 Object.assign(matGlassBronze.userData, { duskColor:0xC9B79C, duskRough:0.35, duskMetal:0.44, duskEnv:1.15 });
+/* Set below, next to matPlaceGlass, where the reasoning lives. Declared here because this
+   material is defined first and the assignment has to follow its userData merge. */
 
 const matRoofDeck = stdMat({ color:0x101216, roughness:0.97, metalness:0.02 });
 matRoofDeck.userData.duskColor = 0x8E8878;        // ballast and plant, the darkest thing up there
@@ -3972,6 +3974,31 @@ matRoofTile.userData.duskColor  = 0xA9663F;       // fired terracotta, the deepe
 const matRoofTileL = stdMat({ color:0x1C1714, roughness:0.94, metalness:0.02 });
 matRoofTileL.userData.duskColor = 0xC0906A;       // sand-tile, the Lagoons tone
 const matPlaceGlass = stdMat({ color:0x111C22, roughness:0.35, metalness:0.1 });
+/* GLASS DOES NOT TAKE THE CITY'S x5 NIGHT LIFT, AND TAKING IT WAS THE TEAL.
+
+   0x111C22 is a dark blue-green, correct for solar glass and nearly black on screen as written.
+   Multiplied by the city's night albedo lift it becomes rgb(85, 140, 170) — a saturated
+   turquoise — and every glass tower turns into a glowing block of it.
+
+   IT ONLY LOOKS BROKEN ON AL REEM because Al Reem is almost nothing but glass towers. Elsewhere
+   the same material is one of six, mixed among limestone, precast, clad and bronze, so the teal
+   is diluted to a cool note in a warm skyline and reads as variety. On an island where it is the
+   overwhelming share it stops being a note and becomes the island's colour, which is the Vegas
+   look — and no adjustment to the WINDOW temperature could ever have fixed it, because the
+   windows were never what was glowing.
+
+   A glass tower at night is DARK with lit windows in it. The body should not emit at all; the
+   emissive map is what carries the light, and it cannot read against a body that has been lifted
+   five times brighter than it was authored. Holding glass near its authored value gives the
+   windows something to sit against.
+
+   Bronze gets the same treatment for the same reason — 0x101A22 lifts to almost exactly the same
+   turquoise. */
+const GLASS_NIGHT_ALB = (typeof location !== 'undefined' &&
+  (location.search.match(/[?&]nglass=(\d*\.?\d+)/) || [])[1] !== undefined)
+  ? parseFloat(location.search.match(/[?&]nglass=(\d*\.?\d+)/)[1]) : 1.0;
+matPlaceGlass.userData.nightAlbedo = GLASS_NIGHT_ALB;
+matGlassBronze.userData.nightAlbedo = GLASS_NIGHT_ALB;
 /* ===========================================================================
    FACADE WINDOWS, AND THE END OF THE BAND.
 
