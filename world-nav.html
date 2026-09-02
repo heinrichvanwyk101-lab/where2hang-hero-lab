@@ -189,6 +189,19 @@
   #venueCard .vcName{color:#F2F5F7;font-size:16px;font-weight:800;line-height:1.25;
     padding-right:34px}
   #venueCard .vcMeta{color:#9AA6AE;font-size:13px;font-weight:600;margin-top:3px}
+  /* THE GROUP LIST. When several venues sit so close together that zooming further can't
+     separate them on screen, zooming again is the wrong answer — it just walks the camera in
+     without ever splitting the badge, which reads as the tap doing nothing. Showing them as a
+     list is the honest resolution: the group genuinely IS several venues at one spot, so name
+     them and let the person pick. Reuses the venue card's own shell so there's one card, two
+     contents, rather than a second floating panel with its own positioning to keep in sync. */
+  #venueCard .vcList{margin-top:10px;max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #venueCard .vcRow{display:block;width:100%;text-align:left;background:transparent;
+    border:none;border-top:1px solid rgba(255,255,255,.08);padding:11px 2px;cursor:pointer;
+    font-family:Inter,sans-serif}
+  #venueCard .vcRow:first-child{border-top:none}
+  #venueCard .vcRowName{color:#F2F5F7;font-size:14px;font-weight:700;line-height:1.3}
+  #venueCard .vcRowMeta{color:#9AA6AE;font-size:12px;font-weight:600;margin-top:2px}
   #venueCard .vcOpen{display:inline-block;margin-top:12px;background:#00C2A8;color:#06241f;
     font-size:14px;font-weight:800;border:none;border-radius:999px;padding:10px 18px;
     cursor:pointer;font-family:Inter,sans-serif}
@@ -345,6 +358,7 @@
     <button class="vcClose" id="vcClose" aria-label="Close">×</button>
     <div class="vcName" id="vcName"></div>
     <div class="vcMeta" id="vcMeta"></div>
+    <div class="vcList" id="vcList"></div>
     <button class="vcOpen" id="vcOpen">Open venue</button>
   </div>
 </div>
@@ -1727,9 +1741,8 @@ function clearResultMarkers(){
   // module init (setWorld calls it) before the element exists — hideVenueCard's own null check
   // covers that, but activeVenue must still be cleared either way.
   hideVenueCard();
-  // And the way-back-out button, which has nothing left to return to once the pins are gone.
-  const allBtn = document.getElementById('allBtn');
-  if (allBtn) allBtn.classList.remove('on');
+  // Button visibility isn't touched here — the poll near the tilt handler re-evaluates it from
+  // state directly, and will correctly switch it to "Back" or hide it as appropriate.
 }
 function placeResultMarkers(pts){
   clearResultMarkers();
@@ -1842,7 +1855,20 @@ function renderPinOverlay(){
    already uses for the whole set, run here on a smaller slice. Splitting the group visually is
    then just a consequence of the camera moving closer: the next renderPinOverlay() call
    projects the same points further apart on screen, past PIN_CLUSTER_PX, and they separate on
-   their own — no explicit "expand this cluster" state to track or get out of sync. */
+   their own — no explicit "expand this cluster" state to track or get out of sync.
+
+   EXCEPT WHEN THEY PHYSICALLY CANNOT SEPARATE, which is the case this used to handle badly.
+   Venues in one tower, one mall, one marina strip sit within a few metres of each other; no
+   camera distance short of standing inside the building will push them PIN_CLUSTER_PX apart on
+   screen. The old behaviour kept zooming anyway — walking the camera in, badge never splitting,
+   which reads as the tap simply not working. Reported exactly that way: "it bombs out and zooms
+   in one instead of showing all in the group".
+
+   So: measure the group's real spread first. Below the threshold, stop pretending the camera
+   can resolve it and just name them — a list of every venue in the group, each one selectable.
+   That's the honest answer to "these are several venues at one address", and it's also the
+   faster one for the person, who wanted to know what's there rather than to fly closer. */
+const CLUSTER_MIN_SPREAD = 14; // world units; below this, no zoom will ever separate the pins
 function zoomToPinCluster(pts){
   if (!pts.length) return;
   let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
@@ -1850,6 +1876,8 @@ function zoomToPinCluster(pts){
     if (p.x<x0) x0=p.x; if (p.x>x1) x1=p.x;
     if (p.z<z0) z0=p.z; if (p.z>z1) z1=p.z;
   }
+  const spread = Math.hypot(x1-x0, z1-z0);
+  if (spread < CLUSTER_MIN_SPREAD){ showGroupList(pts); return; }
   const cx=(x0+x1)/2, cz=(z0+z1)/2;
   /* FLOORS REDUCED SUBSTANTIALLY FROM THE FIRST VERSION — 30 world units minimum spread, then
      a further floor of SHOT_MIN_DISP*0.4 on top of that. Both exist for good reason elsewhere
@@ -1882,8 +1910,47 @@ function showVenueCard(v){
   document.getElementById('vcName').textContent = v.name || 'Venue';
   const meta = [v.category, v.areaLabel].filter(Boolean).join(' · ');
   document.getElementById('vcMeta').textContent = meta;
+  // Single-venue mode: no list, and the Open button is the action.
+  document.getElementById('vcList').innerHTML = '';
+  document.getElementById('vcList').style.display = 'none';
   // No venue id means nothing to navigate to — hide the button rather than offer a dead action.
   document.getElementById('vcOpen').style.display = v.venueId ? '' : 'none';
+  card.classList.add('on');
+}
+
+/* THE GROUP LIST, for venues too close together for any camera distance to separate. Same card
+   shell, different contents: a heading that says how many there are, then one row per venue.
+   Tapping a row switches the card to that venue's own single view — the person drills in by
+   name rather than by trying to hit one of several overlapping dots. activeVenue stays null
+   while the list is showing, so no pin is marked active: none of them individually is what the
+   card is about yet. */
+function showGroupList(pts){
+  const card = document.getElementById('venueCard');
+  if (!card) return;
+  activeVenue = null;
+  document.getElementById('vcName').textContent = pts.length + ' venues here';
+  document.getElementById('vcMeta').textContent = 'Too close together to separate — pick one';
+  document.getElementById('vcOpen').style.display = 'none';
+  const list = document.getElementById('vcList');
+  list.innerHTML = '';
+  list.style.display = '';
+  pts.forEach(p => {
+    const row = document.createElement('button');
+    row.className = 'vcRow';
+    const nm = document.createElement('div');
+    nm.className = 'vcRowName';
+    nm.textContent = p.name || 'Venue';
+    row.appendChild(nm);
+    const mt = (p.category || '').trim();
+    if (mt){
+      const meta = document.createElement('div');
+      meta.className = 'vcRowMeta';
+      meta.textContent = mt;
+      row.appendChild(meta);
+    }
+    row.addEventListener('click', () => showVenueCard(p));
+    list.appendChild(row);
+  });
   card.classList.add('on');
 }
 function hideVenueCard(){
@@ -1977,8 +2044,8 @@ function setResults(points, label){
   if (!pts.length) return false;
   resultPins = pts;
   resultsLabel = label || 'Results';
-  const allBtn = document.getElementById('allBtn');
-  if (allBtn) allBtn.classList.add('on');
+  // Button visibility is owned by the poll near the tilt handler, which reads state directly —
+  // setting it here too would just be a second writer racing the same class.
   return frameAllResults(resultsLabel);
 }
 /* Exposed so a search layer outside this module can drive the camera without importing anything.
@@ -2683,16 +2750,35 @@ document.getElementById('back').addEventListener('click', () => {
     tiltBtn.classList.toggle('on', liftTarget > 0.5);
   });
 
-  /* THE WAY BACK OUT. Re-runs the same framing setResults composed originally, from the same
-     resultPins it still holds, so it lands on exactly the shot the result set opened with —
-     including clearing any tilt or turn applied since, because frameAllResults calls
-     resetOrbit. Also dismisses the venue card, since the venue it describes is no longer what
-     the camera is looking at. */
+  /* THE WAY BACK OUT, AND NOT ONLY FOR RESULTS. With a result set loaded it re-runs the same
+     framing setResults composed originally, from the same resultPins it still holds, so it
+     lands on exactly the shot the set opened with — including clearing any tilt or turn applied
+     since, because frameAllResults calls resetOrbit.
+
+     WITHOUT a result set it now steps the navigation out instead, which is what .back does in
+     the standalone shell — and .back is explicitly hidden in embed mode (see the body.embed
+     rule), so until now the app had NO way back at all once you tapped into an island from the
+     rail. Reported plainly as "no back button". Same button, because two buttons doing
+     near-identical things in the same corner is worse than one that reads the state. */
   const allBtn = document.getElementById('allBtn');
   if (allBtn) allBtn.addEventListener('click', () => {
     hideVenueCard();
-    frameAllResults(resultsLabel);
+    if (resultPins && resultPins.length){ frameAllResults(resultsLabel); return; }
+    if (state === STATE.PLACE && activeDistrict) setDistrict(activeDistrict);
+    else if (state === STATE.DISTRICT) setWorld();
   });
+  /* Visible whenever there is anywhere to go back TO — a result set, or a navigation state
+     deeper than the world view. Re-evaluated on a light interval rather than wired into every
+     state change: the states are set from a dozen places (rail, bridge messages, attract,
+     pin taps) and hooking each one is more surface to keep in sync than a cheap poll. */
+  setInterval(() => {
+    const btn = document.getElementById('allBtn');
+    if (!btn) return;
+    const hasResults = !!(resultPins && resultPins.length);
+    const deeper = state === STATE.PLACE || state === STATE.DISTRICT;
+    btn.classList.toggle('on', hasResults || deeper);
+    btn.textContent = hasResults ? 'All results' : 'Back';
+  }, 600);
 }
 
 /* ===========================================================================
