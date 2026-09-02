@@ -233,6 +233,13 @@
     border-radius:999px;backdrop-filter:blur(8px);cursor:pointer;
     font:700 12px Inter,sans-serif;padding:0 14px;height:40px}
   .allBtn.on{display:flex}
+  /* Search's peek band is 58vh (app/search/page.tsx), so its composer starts at 42vh from the
+     bottom — matched here, not guessed, plus the same 18px the buttons already sit off the true
+     bottom. A single number shared between two files by comment rather than by code is exactly
+     the kind of thing that drifts, so: if Search's peek-band height ever changes, this needs the
+     same change or the buttons end up either buried again or floating with a gap above the
+     composer. */
+  body.hasChromeInset .allBtn, body.hasChromeInset .tiltBtn{bottom:calc(42vh + 18px)}
   .isle{position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;
     font:600 12px Inter,sans-serif;color:#DCE8F0;text-shadow:0 1px 8px rgba(0,0,0,.95);
     white-space:nowrap;opacity:0;transition:opacity .35s;letter-spacing:.04em}
@@ -1868,7 +1875,15 @@ function renderPinOverlay(){
    can resolve it and just name them — a list of every venue in the group, each one selectable.
    That's the honest answer to "these are several venues at one address", and it's also the
    faster one for the person, who wanted to know what's there rather than to fly closer. */
-const CLUSTER_MIN_SPREAD = 14; // world units; below this, no zoom will ever separate the pins
+/* FLOOR-DERIVED, NOT A GUESSED CONSTANT. The old 14-world-unit threshold was checked
+   independently of the floor radius the zoom below it actually enforces (SHOT_MIN_DISP*0.12 =
+   38.4) — so any group between ~14 and ~48 units wide passed the spread check, then had its
+   requested radius clamped to that same 38.4 floor as the LAST tap, landing the camera at the
+   identical distance every time. No visible zoom, no list, nothing: reported as "zoom maxed and
+   no list showing." Deriving the check from the same floor radius here means the two can never
+   drift apart like that again — if the shot below is about to hit the floor, that's the signal
+   to show the list, computed from the one number that actually decides it. */
+const CLUSTER_FLOOR_R = SHOT_MIN_DISP * 0.12; // world units; the camera's closest allowed radius
 function zoomToPinCluster(pts){
   if (!pts.length) return;
   let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
@@ -1876,8 +1891,8 @@ function zoomToPinCluster(pts){
     if (p.x<x0) x0=p.x; if (p.x>x1) x1=p.x;
     if (p.z<z0) z0=p.z; if (p.z>z1) z1=p.z;
   }
-  const spread = Math.hypot(x1-x0, z1-z0);
-  if (spread < CLUSTER_MIN_SPREAD){ showGroupList(pts); return; }
+  const halfDiagRaw = Math.hypot(x1-x0, z1-z0)/2;
+  if (halfDiagRaw * 1.6 <= CLUSTER_FLOOR_R){ showGroupList(pts); return; }
   const cx=(x0+x1)/2, cz=(z0+z1)/2;
   /* FLOORS REDUCED SUBSTANTIALLY FROM THE FIRST VERSION — 30 world units minimum spread, then
      a further floor of SHOT_MIN_DISP*0.4 on top of that. Both exist for good reason elsewhere
@@ -1887,10 +1902,10 @@ function zoomToPinCluster(pts){
      confirmed live: "zooms in to an extent but not enough", exactly what an artificial floor
      produces. Pin separation doesn't need the same safety margin a building shot does; nothing
      here is at risk of the camera ending up inside a wall. */
-  const halfDiag = Math.max(6, Math.hypot(x1-x0, z1-z0)/2);
+  const halfDiag = Math.max(6, halfDiagRaw);
   resetOrbit();
   goal.target.set(cx, GROUND + 8, cz);
-  goal.dist = fitDist(Math.max(SHOT_MIN_DISP * 0.12, halfDiag * 1.6), goal.fov || 46);
+  goal.dist = fitDist(Math.max(CLUSTER_FLOOR_R, halfDiag * 1.6), goal.fov || 46);
   goal.elev = goal.dist * PITCH_PLACE;
 }
 
@@ -2392,6 +2407,18 @@ if (/[?&]embed=1/.test(location.search)){
          a new one. */
       else if (m.type === 'idle') WORLD_IDLE = true;
       else if (m.type === 'wake') WORLD_IDLE = false;
+      /* SETCHROMEINSET — the allBtn/tiltBtn fix. Both sit at bottom:18px of THIS document,
+         which is the real device viewport (the iframe is position:fixed, inset:0 on the host
+         side). Search's own "FIND A SPOT" composer panel is in-flow host content painted at a
+         HIGHER z-index than the iframe, occupying the same bottom strip of screen — so the
+         buttons were rendering exactly where the composer covers them, every time. Reported as
+         "still no back button" against a screenshot where the code was already correct.
+         The host is the only side that knows its own layout, so it tells us: on is the class
+         toggle, .hasChromeInset in the CSS below reads it. Off by default (every other embed —
+         Home included — gets the normal bottom:18px, unaffected). */
+      else if (m.type === 'setChromeInset'){
+        document.body.classList.toggle('hasChromeInset', !!m.on);
+      }
     } catch (e) { console.warn('embed message failed:', m.type, e && e.message); }
   });
   /* The host cannot know when the modules finished evaluating, so it is told rather than left to
