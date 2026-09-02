@@ -4106,6 +4106,19 @@ async function addWaterGeometry(d){
       registerLift(d.group);
       fitClip();
       applyView(view);
+      /* AND THE TWO CALLS THAT WEREN'T HERE EITHER, found the same way buildAndRegister's own gap
+         was found — by reading this block against setDistrict's directly, not by assumption. This
+         comment's own first line already said "the same four calls setDistrict makes", correctly
+         counting four — but setDistrict makes seven, three of them (addFootprints,
+         addGroundFeatures, addWaterGeometry) unconditional and outside its own buildIsland gate.
+         Missing here for the same reason buildAndRegister was missing them: an island whose build
+         only succeeds on THIS retry, through THIS function, never reached them, and nothing else
+         in the file was calling them for it either. addWaterGeometry isn't added here — this
+         function's own next few lines already run refreshIslandWater immediately after, which is
+         this file's real water path for a deferred island, so adding a second, different water
+         call here would be the duplicate, not the fix. */
+      addFootprints(d);
+      addGroundFeatures(d);
       /* AND REDRAW THE BREADCRUMB, which setDistrict already wrote before this island existed.
          It reads d.built to choose between "Tap a place, or Back" and "Placeholder island —
          Back"; buildIsland sets that flag, and deferring the build now means the label is written
@@ -4409,8 +4422,22 @@ function buildAndRegister(d){
 
      The light is in `world` now, so hiding the group costs nothing. */
   if (d !== corniche && d.pending) d.group.visible = false;
-  if (!buildIsland(d.id)) return;
-  snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
+  /* RESTRUCTURED TO MATCH setDistrict'S OWN SHAPE, NOT GUESSED — read directly against it after
+     comparing the two side by side. setDistrict gates snapshotMats/registerLift/fitClip/applyView
+     behind a successful buildIsland() on THIS call (correct — they register geometry that only
+     exists if this call actually built something), but calls addFootprints / addGroundFeatures /
+     addWaterGeometry UNCONDITIONALLY afterward, regardless of whether buildIsland succeeded here
+     or had already succeeded on some earlier call. This function previously put all seven calls
+     behind the same single `if (!buildIsland(d.id)) return;` — meaning any island whose build was
+     deferred and only succeeded on a later retry (this pump's own retry, or the water-refresh
+     retry elsewhere in this file) NEVER reached addFootprints at all: buildIsland correctly
+     returns false once an island is already built, this function's own early return then skipped
+     straight past addFootprints, and nothing here ever called it again. addFootprints' own guard
+     (fpState.has(d.id)) already safely no-ops if it was genuinely already called, so calling it
+     unconditionally here costs nothing on the common case and fixes the stuck one. */
+  if (buildIsland(d.id)){
+    snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
+  }
   addFootprints(d);
   addGroundFeatures(d);
   /* THE THIRD CALL, MISSING SINCE THE DAY WATER WAS ADDED, and the reason Al Raha reads as a bare
