@@ -1652,8 +1652,26 @@ window.__w2hSetResults = setResults;
            attractTick already showed it and this does nothing. If it never fires, this is the
            difference between an island that arrives a little raw and one that is simply absent —
            which is the "was Raha not built until I selected it" symptom. */
+        /* reveal() ONLY EVER TOUCHED d.group.visible — THE OUTER SWITCH, NOT THE ONE THAT
+           MATTERS FOR WHAT'S ACTUALLY ON SCREEN. There are two separate visibility systems
+           here, easy to conflate. d.group.visible is the whole island's master switch — off,
+           and nothing about it renders at all. But whether it renders as real buildings or the
+           low-poly mass placeholder is a SEPARATE toggle, applyLOD's own d.detail.visible /
+           d.mass.visible pair, driven by whether this island's footprints have settled
+           (fpState). addFootprints is supposed to flip that itself, on success, via its own
+           internal applyLOD() call — but if that fetch is slow or fails silently for an island
+           built off-camera by this pump, nothing else ever re-checks it, and the island sits
+           on screen forever showing mass, buildings and all, because the swap simply never
+           got told to run. A rail tap never has this problem: setDistrict makes the island the
+           ACTIVE district, and applyLOD's own `on` condition forces detail visibility directly,
+           with no dependency on footprints having settled at all — which is exactly why "flick
+           to it and it appears" was never actually building anything new, just correcting a
+           swap that should have already happened. Calling applyLOD() here, unconditionally,
+           six seconds after every build attempt, is a guaranteed final checkpoint regardless of
+           whether addFootprints' own call ever fired. */
         const reveal = () => setTimeout(() => {
           if (d.group && !d.group.visible){ d.group.visible = true; d._shown = true; }
+          applyLOD();
         }, 6000);
         const tryBuild = () => {
           buildAndRegister(d);
