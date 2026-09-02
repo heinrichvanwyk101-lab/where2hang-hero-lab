@@ -124,6 +124,16 @@
     max-width:min(72vw,420px);text-align:right;
     background:rgba(6,10,13,.72);border-radius:6px;padding:5px 7px;
     border:1px solid rgba(255,255,255,.08)}
+  /* A SEPARATE, TINY, PURPOSE-BUILT INDICATOR — not a re-enabling of the full embedstamp,
+     which was correctly hidden by default after being reported as too intrusive once its own
+     bugs were fixed. This one is invisible by default (display:none) and only ever appears if
+     the camera's own NaN-recovery path actually fires — genuinely zero footprint during normal
+     use, but definitively visible on the real app the moment this specific bug happens, no
+     query param needed since the host app controls the iframe URL and can't add one anyway. */
+  #camNaNBadge{display:none;position:fixed;right:8px;top:8px;z-index:2147483000;
+    pointer-events:none;font:700 11px ui-monospace,monospace;color:#fff;
+    background:rgba(200,30,30,.92);border-radius:6px;padding:4px 8px}
+  #camNaNBadge.show{display:block}
   /* THE PIN LAYER. A plain HTML overlay, not WebGL sprites — the previous marker system
      (still present, still used elsewhere) draws small glowing dots straight into the 3D
      scene, which is the right tool for "a light exists here" but the wrong one for "a number
@@ -275,6 +285,7 @@
 <canvas id="gl"></canvas>
 <canvas id="rail" class="off"></canvas>
 <div id="pinLayer" aria-hidden="false"></div>
+<div id="camNaNBadge"></div>
 
 <div class="top">
   <div class="title">Where<b>2</b>Hang</div>
@@ -330,6 +341,15 @@ window.addEventListener('error', ev => fail('window', ev.error || ev.message));
    the earliest point anything could possibly reach it. */
 let lastResultsDiag = '';
 let islandStatusDiag = '';
+// Counts how many times the camera's own NaN-recovery path has fired. A screen recording
+// showed the world going completely blank right after search-result pins appeared, staying
+// blank until a tab switch — not self-healing the way this recovery path is supposed to. If
+// it's firing once, this stays at 1 and something else is the real cause. If it's firing every
+// frame, this climbs continuously, which would mean the recovery itself keeps producing
+// another NaN immediately rather than actually recovering — visible proof either way instead
+// of guessing from two data points.
+let camNaNCount = 0;
+let camNaNDiag = '';
 // {x,z,venueId,name,category} per point, in DISPLAY space — populated by setResultsReal's
 // handler, read every frame by the pin-overlay render loop. Declared here, not near the code
 // that uses it, for the same reason lastResultsDiag moved here after the TDZ bug: a `let`
@@ -2457,7 +2477,7 @@ function paintDiag(crumbText){
   const c = crumbText != null ? crumbText : (document.getElementById('crumb')?.textContent || '');
   est.textContent = (B_NAV || '') + ' / ' + (B_CITY || '') + ' / ' + (B_WORLD || '') +
     ' / ' + (B_PROPS || '') + '\n' + c + (lastResultsDiag ? '\n' + lastResultsDiag : '') +
-    (islandStatusDiag ? '\n' + islandStatusDiag : '');
+    (islandStatusDiag ? '\n' + islandStatusDiag : '') + (camNaNDiag ? '\n' + camNaNDiag : '');
 }
 function ui(crumb, hint){
   document.getElementById('crumb').innerHTML = crumb;
@@ -5101,7 +5121,20 @@ function frame(){
     const base = Math.max(1, (cur.elev - GROUND) * orbit.zoom);
     const r    = Math.hypot(dist, base);
     const a0   = Math.atan2(base, Math.max(1, dist));
-    const ang  = a0 + (Math.PI / 2 - a0) * Math.max(0, Math.min(1, orbit.lift));
+    /* CLAMPED TO 0.997, NOT 1 — THE ACTUAL "GOES BLANK AT FULL OVERHEAD" BUG. At lift exactly
+       1, ang is exactly π/2 and horiz is exactly 0: the camera sits directly above the target
+       with no horizontal offset at all, looking straight down. Three.js's default camera up
+       vector is (0,1,0) — when the view direction is exactly anti-parallel to that (straight
+       down is (0,-1,0)), the internal cross product used to build the camera's own right/up
+       basis for the view matrix degenerates, and the render can come out corrupted or blank —
+       classic gimbal lock, not specific to this file. Confirmed live: tilting fully to top-
+       down made the model disappear entirely, showing whatever was behind the iframe; leaving
+       and returning reset the camera off that exact angle and it worked again, which is
+       exactly what a singularity at one specific angle produces rather than a general bug.
+       0.997 stops a hair short of the pole — at any normal viewing distance the difference
+       from true vertical is a fraction of a degree, invisible to the eye, but the view
+       direction is never EXACTLY anti-parallel to up, so the degenerate case is never reached. */
+    const ang  = a0 + (Math.PI / 2 - a0) * Math.max(0, Math.min(0.997, orbit.lift));
     horiz = r * Math.cos(ang);
     elev  = Math.max(GROUND + 4, r * Math.sin(ang) + GROUND);
   }
@@ -5120,7 +5153,12 @@ function frame(){
      nothing. Three comparisons per frame buys a scene that recovers rather than one that is black
      until the page is reloaded, and it says so on the overlay rather than recovering silently. */
   if (!Number.isFinite(camera.position.x + camera.position.y + camera.position.z)){
-    noteError('camera', new Error('non-finite position — reframing'));
+    camNaNCount++;
+    noteError('camera', new Error('non-finite position — reframing (count ' + camNaNCount + ')'));
+    camNaNDiag = 'camNaN x' + camNaNCount;
+    paintDiag();
+    const badge = document.getElementById('camNaNBadge');
+    if (badge){ badge.textContent = 'camNaN ×' + camNaNCount; badge.classList.add('show'); }
     cur.dist = 600; cur.elev = 400; cur.angle = 0;
     cur.target.set(0, 0, 0);
     camera.position.set(0, 400, 600);
