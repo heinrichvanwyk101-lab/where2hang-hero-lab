@@ -1697,10 +1697,18 @@ function zoomToPinCluster(pts){
     if (p.z<z0) z0=p.z; if (p.z>z1) z1=p.z;
   }
   const cx=(x0+x1)/2, cz=(z0+z1)/2;
-  const halfDiag = Math.max(30, Math.hypot(x1-x0, z1-z0)/2);
+  /* FLOORS REDUCED SUBSTANTIALLY FROM THE FIRST VERSION — 30 world units minimum spread, then
+     a further floor of SHOT_MIN_DISP*0.4 on top of that. Both exist for good reason elsewhere
+     in this file (a district or place shot genuinely shouldn't crowd the camera into geometry)
+     but compounded here into a distance the camera could never get closer than, regardless of
+     how tight the actual cluster was or how many times the same remaining badge was tapped —
+     confirmed live: "zooms in to an extent but not enough", exactly what an artificial floor
+     produces. Pin separation doesn't need the same safety margin a building shot does; nothing
+     here is at risk of the camera ending up inside a wall. */
+  const halfDiag = Math.max(6, Math.hypot(x1-x0, z1-z0)/2);
   resetOrbit();
   goal.target.set(cx, GROUND + 8, cz);
-  goal.dist = fitDist(Math.max(SHOT_MIN_DISP * 0.4, halfDiag * 1.6), goal.fov || 46);
+  goal.dist = fitDist(Math.max(SHOT_MIN_DISP * 0.12, halfDiag * 1.6), goal.fov || 46);
   goal.elev = goal.dist * PITCH_PLACE;
 }
 
@@ -3311,14 +3319,20 @@ canvas.addEventListener('pointermove', e => {
         while (t >  Math.PI) t -= Math.PI * 2;
         while (t < -Math.PI) t += Math.PI * 2;
         orbit.yaw = yaw0 + t;
-        /* AND THE MIDPOINT'S VERTICAL TRAVEL TILTS, which is the gesture every map on this phone
-           uses and the one I left out. One finger pans in these modes, so there was nothing left
-           to tilt with — I opened the tilt clamp in the two modes whose tilt gesture I had just
-           removed. Dragging two fingers UP raises the camera toward overhead. */
-        const my = (a.y + b.y) * 0.5;
-        orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 2.2));
-        orbit.on = true;
       }
+      /* AND THE MIDPOINT'S VERTICAL TRAVEL TILTS — MOVED OUT FROM UNDER mapGesture(), which
+         was the actual reason a two-finger drag never tilted anything outside Plan/Check.
+         Search has no UI to switch view modes at all in embed, so this gesture — correctly
+         written — was permanently unreachable there. The lit-mode "turntable that can be
+         raised" behaviour this drives already exists independent of view mode (see the frame
+         loop's own elev calculation, which branches on mapGesture() only for WHICH formula to
+         use, not on whether lift applies at all) — this was a touch-reachability gap, not a
+         missing capability. Dragging two fingers UP raises the camera toward overhead in any
+         view now, which is exactly what dense pin clusters need: an angle steep enough to
+         actually separate them, not just the diorama's default oblique. */
+      const my = (a.y + b.y) * 0.5;
+      orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 2.2));
+      orbit.on = true;
     }
     return;
   }
