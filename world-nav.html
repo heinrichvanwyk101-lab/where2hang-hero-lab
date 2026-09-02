@@ -1511,6 +1511,25 @@ window.__w2hSetResults = setResults;
 {
   const queue = DISTRICTS.filter(d => d !== corniche);
   let qi = 0;
+  /* RETRY, NOT JUST ONE ATTEMPT AND MOVE ON. buildIsland's own comment on the road-wait gate is
+     explicit: "pending stays set: the next visit or attract leg retries". Attract normally
+     provides that retry — its own tick loop revisits legs and tries the build again each pass.
+     But attract is exactly what embed mode turns off (see the note above this block), which is
+     the whole reason this pump exists at all. It replaced attract's role as build driver but
+     never replicated attract's retry behaviour: it called buildAndRegister once per island and
+     moved on regardless of whether d.pending came back false (built) or stayed true (buildIsland
+     refused, still waiting on a roads payload). An island caught in that window stayed in mass
+     view for the rest of the session with nothing left to ever retry it — exactly the "doesn't
+     fully build until I select it on the rail" symptom, since a rail tap reaches setDistrict,
+     a completely different path with no such gap.
+
+     THE FIX IS TO REQUEUE, NOT TO WAIT LONGER UP FRONT. buildIsland's own gate already resolves
+     itself — 8 seconds after the first attempt it stops waiting and builds with the generated
+     fallback regardless (see its own comment: bounded, because a deferred island that never
+     builds is worse than one with invented streets). So pushing a still-pending island back onto
+     the end of the queue means pump reaches it again a full cycle later — by which point either
+     the real roads payload has landed, or buildIsland's own 8-second bound has elapsed and it
+     builds anyway. Either way it stops being permanently stuck. */
   const pump = () => {
     if (qi >= queue.length) return;
     const d = queue[qi++];
@@ -1546,8 +1565,19 @@ window.__w2hSetResults = setResults;
         const reveal = () => setTimeout(() => {
           if (d.group && !d.group.visible){ d.group.visible = true; d._shown = true; }
         }, 6000);
-        if (roadsIn(d.id)){ buildAndRegister(d); reveal(); }
-        else whenRoads(d.id).then(() => { if (d.pending) buildAndRegister(d); reveal(); });
+        const tryBuild = () => {
+          buildAndRegister(d);
+          reveal();
+          if (d.pending){
+            // Bounded independently of buildIsland's own 8s gate — belt and braces against an
+            // unbounded requeue loop if d.pending ever stays true for a different reason.
+            d._pumpRetries = (d._pumpRetries || 0) + 1;
+            if (d._pumpRetries <= 6) queue.push(d);
+            else console.warn('prefetch gave up on', d.id, 'after', d._pumpRetries, 'attempts');
+          }
+        };
+        if (roadsIn(d.id)) tryBuild();
+        else whenRoads(d.id).then(() => { if (d.pending) tryBuild(); else reveal(); });
       }
     } catch (e) { console.warn('prefetch failed:', d && d.id, e && e.message); }
     setTimeout(pump, 1400);
