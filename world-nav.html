@@ -260,6 +260,20 @@ function fail(where, e){
   console.error(where, e);
 }
 window.addEventListener('error', ev => fail('window', ev.error || ev.message));
+/* DECLARED HERE, NOT NEAR paintDiag WHICH USES IT, AND THAT PLACEMENT IS THE FIX ITSELF. This
+   was a `let` declared far down the file, right next to paintDiag — reads naturally there,
+   keeps related code together. But setWorld() runs synchronously at module top level (see its
+   own call further down), and setWorld() calls ui(), which calls paintDiag(), which reads this
+   variable — all before execution has ever reached the line where a `let` declared later in
+   the file would initialize. That is a real ReferenceError (a `let` binding is in the temporal
+   dead zone until its own declaration line runs, function hoisting does not change that), thrown
+   synchronously during module evaluation, uncaught, halting everything after it — including the
+   line, dozens further down, that posts 'ready' to the host. Nothing after the halt ever runs.
+   No amount of syntax checking catches this class of bug: node --check and esbuild both verify
+   grammar, neither simulates execution order. Confirmed live: the app sat blank for minutes,
+   this was why. Fixed by moving the declaration itself, not the logic that reads it, to before
+   the earliest point anything could possibly reach it. */
+let lastResultsDiag = '';
 
 import * as THREE from 'three';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
@@ -2157,7 +2171,6 @@ async function setPlace(d, anchor){
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
      'Back to ' + d.name);
 }
-let lastResultsDiag = '';
 function paintDiag(crumbText){
   const est = document.getElementById('embedstamp');
   if (!est) return;
