@@ -189,6 +189,18 @@
   #venueCard .vcName{color:#F2F5F7;font-size:16px;font-weight:800;line-height:1.25;
     padding-right:34px}
   #venueCard .vcMeta{color:#9AA6AE;font-size:13px;font-weight:600;margin-top:3px}
+  /* PHOTO, BEYOND NAME/CATEGORY — the popup's first real content past the placeholder. Bleeds
+     to the card's own edges via negative margin matching vcInner's padding, rather than vcInner
+     losing its padding entirely (which would need every other element re-padded individually).
+     off by default — most result sets will have venues with no hero_url/image_url yet, and an
+     empty grey rectangle reads as broken, not as "no photo available". */
+  #venueCard .vcPhoto{display:none;margin:-14px -16px 12px;height:120px;
+    background-size:cover;background-position:center;border-radius:16px 16px 0 0}
+  #venueCard .vcPhoto.on{display:block}
+  /* RATING — plain text colour, not a star glyph rendered via content, so it reads correctly
+     regardless of font/emoji support on the device. Same gold as the rest of the app's rating
+     treatment (app/venue/[id]/page.tsx). */
+  #venueCard .vcRating{color:#E8B547;font-weight:800}
   /* THE GROUP LIST. When several venues sit so close together that zooming further can't
      separate them on screen, zooming again is the wrong answer — it just walks the camera in
      without ever splitting the badge, which reads as the tap doing nothing. Showing them as a
@@ -380,6 +392,7 @@
 <div id="venueCard">
   <div class="vcInner">
     <button class="vcClose" id="vcClose" aria-label="Close">×</button>
+    <div class="vcPhoto" id="vcPhoto"></div>
     <div class="vcName" id="vcName"></div>
     <div class="vcMeta" id="vcMeta"></div>
     <div class="vcList" id="vcList"></div>
@@ -1939,9 +1952,21 @@ function showVenueCard(v){
   const card = document.getElementById('venueCard');
   if (!card) return;
   activeVenue = v;
+  const photo = document.getElementById('vcPhoto');
+  if (photo){
+    if (v.heroUrl){ photo.style.backgroundImage = "url('" + v.heroUrl + "')"; photo.classList.add('on'); }
+    else { photo.style.backgroundImage = ''; photo.classList.remove('on'); }
+  }
   document.getElementById('vcName').textContent = v.name || 'Venue';
-  const meta = [v.category, v.areaLabel].filter(Boolean).join(' · ');
-  document.getElementById('vcMeta').textContent = meta;
+  const metaEl = document.getElementById('vcMeta');
+  // Rating gets its own gold span; category/area stay plain text either side of it, joined
+  // with the same ' · ' separator whether or not a rating is present.
+  const metaParts = [];
+  if (Number.isFinite(v.rating)) metaParts.push('<span class="vcRating">★ ' + Number(v.rating).toFixed(1) + '</span>');
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+  if (v.category) metaParts.push(esc(v.category));
+  if (v.areaLabel) metaParts.push(esc(v.areaLabel));
+  metaEl.innerHTML = metaParts.join(' · ');
   // Single-venue mode: no list, and the Open button is the action.
   document.getElementById('vcList').innerHTML = '';
   document.getElementById('vcList').style.display = 'none';
@@ -1973,11 +1998,14 @@ function showGroupList(pts){
     nm.className = 'vcRowName';
     nm.textContent = p.name || 'Venue';
     row.appendChild(nm);
+    const rowMetaParts = [];
+    if (Number.isFinite(p.rating)) rowMetaParts.push('★ ' + Number(p.rating).toFixed(1));
     const mt = (p.category || '').trim();
-    if (mt){
+    if (mt) rowMetaParts.push(mt);
+    if (rowMetaParts.length){
       const meta = document.createElement('div');
       meta.className = 'vcRowMeta';
-      meta.textContent = mt;
+      meta.textContent = rowMetaParts.join(' · ');
       row.appendChild(meta);
     }
     row.addEventListener('click', () => showVenueCard(p));
@@ -2397,7 +2425,7 @@ if (/[?&]embed=1/.test(location.search)){
           const [ox, oy] = BMAP.islandOrigin(entry);
           const local = { x: (p.x - ox) / BMAP.M_PER_UNIT, z: -(p.z - oy) / BMAP.M_PER_UNIT, h: 0 };
           const w = anchorWorld(d, local);
-          converted.push({ x: w.x, z: w.z, venueId: p.venueId, name: p.name, category: p.category });
+          converted.push({ x: w.x, z: w.z, venueId: p.venueId, name: p.name, category: p.category, heroUrl: p.heroUrl, rating: p.rating });
         }
         // Diagnostic, not decoration — stored so ui() (called by setResults below, which this
         // message is about to trigger) can append it rather than have its own crumb-write
