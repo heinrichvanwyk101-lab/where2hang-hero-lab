@@ -106,8 +106,19 @@
      only the standalone shell could ever show a build number. Added specifically to settle a
      real, extended disagreement about whether fixes were actually reaching the app or being
      served stale by some caching layer between GitHub and the browser. Same text as .stamp,
-     visible everywhere including embed, small and out of the way (top-right, low opacity). */
-  .embedstamp{position:fixed;right:8px;top:8px;z-index:2147483000;pointer-events:none;
+     visible everywhere including embed, small and out of the way (top-right, low opacity).
+
+     HIDDEN BY DEFAULT NOW, NOT DELETED. It grew from one build-version line into build line +
+     crumb + setResultsReal diagnostic + five islands' worth of status, one line each — genuinely
+     useful while chasing those specific bugs, and genuinely a problem once they were fixed: a
+     large, semi-opaque, fixed-position box sitting right at the top of the real screen, tall and
+     wide enough to visibly sit over the title, the world preview band, and the filter cards
+     below it — which is very likely the "glass pane" and "darkened cards" both being the same
+     thing, not two separate faults. Everything that populates this still runs exactly as before;
+     only visibility changed, so the capability is one query param away next time something
+     actually needs watching live rather than half-guessed at. */
+  .embedstamp{display:none}
+  .embedstamp.dbgshow{position:fixed;right:8px;top:8px;z-index:2147483000;pointer-events:none;
     font:600 9px/1.35 ui-monospace,monospace;color:rgba(255,224,150,.92);
     text-shadow:0 1px 2px rgba(0,0,0,.9);white-space:pre-wrap;word-break:break-word;
     max-width:min(72vw,420px);text-align:right;
@@ -489,7 +500,12 @@ if (DEBUG) document.getElementById('dbg').classList.add('on');
   // Unconditional — no #nostamp/#debug exemption, since the whole point is confirming the
   // app itself received this build, and the app can't set a URL hash on the iframe.
   const est = document.getElementById('embedstamp');
-  if (est) est.textContent = B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS;
+  if (est){
+    est.textContent = B_NAV + ' / ' + B_CITY + ' / ' + B_WORLD + ' / ' + B_PROPS;
+    // Query param, not hash — the app forwards its own query string onto the iframe src
+    // (?embed=1&rail=0&fp&v=...), same place forcecam already lives, but never sets a hash.
+    if (/[?&]showdiag/.test(location.search)) est.classList.add('dbgshow');
+  }
 }
 
 
