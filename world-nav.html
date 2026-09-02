@@ -1388,6 +1388,7 @@ const PITCH_WORLD = 0.668, PITCH_DISTRICT = 0.263, PITCH_PLACE = 0.0986;
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
   resetOrbit();
+  clearResultMarkers();
   /* AIMED AT THE ARCHIPELAGO, NOT AT CORNICHE. lookAt puts goal.target dead centre of frame, so
      whatever this is set to IS the middle of the shot. It was Corniche, which is one island at one
      corner of five. */
@@ -1434,9 +1435,84 @@ function setWorld(){
    points: [{ x, z, d? }] in DISPLAYED world coordinates — the same space goal.target lives in.
    Whatever produces them (a venue projection, a place anchor, an island centre) is that caller's
    problem, not this function's. */
+/* ---- RESULT MARKERS: VISIBLE PINS, NOT JUST A CAMERA FRAME ----
+
+   setResults already computes exactly what's needed for this — pts, in the same display-space
+   the world's whole coordinate system runs on, converted from real venue coordinates by
+   setResultsReal's own proven per-island pipeline. Framing the camera around that spread and
+   never actually marking the individual points was half the job: a "here's roughly where they
+   are" establishing shot with nothing in it says less than the same shot with real light at
+   every result. This is the other half.
+
+   A SPRITE, NOT A MESH, because the whole point is legibility from any camera angle at any
+   distance — a flat pin billboard that always faces the camera reads as a mark on the map
+   regardless of where the camera ends up standing, where a 3D pin shape would foreshorten,
+   overlap its neighbours, or vanish edge-on depending on the angle.
+
+   ONE CACHED TEXTURE, MANY SPRITES. The canvas only needs building once; every marker after
+   that is a cheap THREE.Sprite reusing the same THREE.SpriteMaterial, not a fresh canvas draw
+   per point — the difference between a handful of allocations and one per result on every
+   search.
+
+   CLEARED AND REBUILT ON EVERY CALL, not diffed against the previous set. Result sets change
+   completely between searches rather than shifting by a point or two, so there is nothing
+   meaningful to diff — this disposes the old sprites and their positions are gone regardless
+   of whether the new list happens to share a venue with the old one. */
+let resultMarkerTexture = null;
+function resultMarkerTex(){
+  if (resultMarkerTexture) return resultMarkerTexture;
+  const s = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const g = cv.getContext('2d');
+  const cx = s / 2, cy = s / 2;
+  // Soft outer glow, teal, fading to nothing — reads as a light at distance rather than a hard dot.
+  const glow = g.createRadialGradient(cx, cy, 0, cx, cy, s / 2);
+  glow.addColorStop(0.00, 'rgba(0,194,168,0.95)');
+  glow.addColorStop(0.35, 'rgba(0,194,168,0.55)');
+  glow.addColorStop(1.00, 'rgba(0,194,168,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, s, s);
+  // A brighter, near-white core so it still reads as a distinct point up close, not just a haze.
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, s * 0.12);
+  core.addColorStop(0, 'rgba(255,255,255,0.95)');
+  core.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = core;
+  g.fillRect(0, 0, s, s);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  resultMarkerTexture = t;
+  return t;
+}
+const resultMarkers = new THREE.Group();
+resultMarkers.name = 'resultMarkers';
+scene.add(resultMarkers);
+let resultMarkerMat = null;
+function clearResultMarkers(){
+  resultMarkers.clear();
+  if (resultMarkerMat){ resultMarkerMat.dispose(); resultMarkerMat = null; }
+}
+function placeResultMarkers(pts){
+  clearResultMarkers();
+  resultMarkerMat = new THREE.SpriteMaterial({
+    map: resultMarkerTex(), transparent: true, depthWrite: false, sizeAttenuation: true,
+  });
+  // One material, shared directly (not cloned) by every sprite this call — safe because nothing
+  // here varies opacity or colour per marker; only position and scale differ, and those live on
+  // the sprite object itself, not the material.
+  for (const p of pts){
+    const spr = new THREE.Sprite(resultMarkerMat);
+    spr.position.set(p.x, GROUND + 5, p.z);
+    spr.scale.set(11, 11, 1);
+    resultMarkers.add(spr);
+  }
+}
+window.__w2hClearResultMarkers = clearResultMarkers;
+
 function setResults(points, label){
   const pts = (points || []).filter(p => p && isFinite(p.x) && isFinite(p.z));
   if (!pts.length) return false;
+  placeResultMarkers(pts);
 
   let x0 =  Infinity, z0 =  Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const p of pts){
@@ -1761,10 +1837,15 @@ if (/[?&]embed=1/.test(location.search)){
           const w = anchorWorld(d, local);
           converted.push({ x: w.x, z: w.z });
         }
+        // Diagnostic, not decoration — stored so ui() (called by setResults below, which this
+        // message is about to trigger) can append it rather than have its own crumb-write
+        // silently erase the one piece of evidence that would show whether this message ever
+        // arrived with usable points at all.
+        lastResultsDiag = 'setResultsReal: ' + raw.length + ' received, ' + converted.length + ' classified';
         if (converted.length){
           attractStop();
           descend([() => setWorld(), () => setResults(converted, m.label)]);
-        } else console.warn('setResultsReal: no points classified to a modelled island');
+        } else { console.warn('setResultsReal: no points classified to a modelled island'); paintDiag(); }
       }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
          ReferenceError the moment the branch runs, not a falsy value to fall through. */
@@ -1850,6 +1931,7 @@ if (/[?&]embed=1/.test(location.search)){
 }
 
 function setDistrict(d){
+  clearResultMarkers();
   /* BUILD THE ISLAND IF IT IS NOT BUILT YET. The four outer islands ship as coastline only and
      grow their city the first time the camera commits to one — see the note in w2h-world.js.
 
@@ -2035,6 +2117,7 @@ async function awaitFootprints(d, maxMs){
 }
 
 async function setPlace(d, anchor){
+  clearResultMarkers();
   if (FP_ON && d) await awaitFootprints(d, 900);
   resetOrbit();
   state = STATE.PLACE; activeDistrict = d; activePlace = anchor;
@@ -2074,6 +2157,14 @@ async function setPlace(d, anchor){
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + ' &rsaquo; ' + anchor.label + '</span>',
      'Back to ' + d.name);
 }
+let lastResultsDiag = '';
+function paintDiag(crumbText){
+  const est = document.getElementById('embedstamp');
+  if (!est) return;
+  const c = crumbText != null ? crumbText : (document.getElementById('crumb')?.textContent || '');
+  est.textContent = (B_NAV || '') + ' / ' + (B_CITY || '') + ' / ' + (B_WORLD || '') +
+    ' / ' + (B_PROPS || '') + '\n' + c + (lastResultsDiag ? '\n' + lastResultsDiag : '');
+}
 function ui(crumb, hint){
   document.getElementById('crumb').innerHTML = crumb;
   document.getElementById('hint').textContent = hint;
@@ -2083,10 +2174,11 @@ function ui(crumb, hint){
      Corniche" for setDistrict(corniche) — set by the very same function whose branch decided
      what to compose. Reading this removes all visual interpretation of the 3D scene from the
      question of which state actually ran; it says so in words, in the corner, on the real app,
-     every single frame this changes. */
-  const est = document.getElementById('embedstamp');
-  if (est) est.textContent = (B_NAV || '') + ' / ' + (B_CITY || '') + ' / ' + (B_WORLD || '') +
-    ' / ' + (B_PROPS || '') + '\n' + crumb.replace(/<[^>]*>/g, '');
+     every single frame this changes. A third line, lastResultsDiag, rides along whenever a
+     setResultsReal message has landed — set by that handler, read here so setResults' own call
+     into ui() (a few lines below in that same message's handling) can't silently erase the one
+     piece of on-screen evidence for whether the message arrived with usable points at all. */
+  paintDiag(crumb.replace(/<[^>]*>/g, ''));
 }
 document.getElementById('back').addEventListener('click', () => {
   if (state === STATE.PLACE)         setDistrict(activeDistrict);
