@@ -3177,9 +3177,22 @@ function applyView(next){
        Worth stating plainly: with a filmic curve, ADDING LIGHT REMOVES CONTRAST once you are
        past the knee. Every instinct says a diagnostic mode should be brightly lit. */
     sun.color.setHex(0xFFD9A8); sun.intensity = 1.8;
-    sunFill.color.setHex(0xCADCEA); sunFill.intensity = 0.62;
+    /* THE FILL AND SKY LIGHTS WERE THE ACTUAL REASON THE SAND KEPT READING GREY-BROWN, and no
+       amount of further warming the PALETTE was ever going to fix it. SURF.sand, the macro
+       tint, the tone variation and the haul routes were all warmed to a golden desert tone and
+       all of that was correct — but they were then being lit by a 0xCADCEA fill at 0.62 and a
+       0xBBD6E8 hemisphere, both distinctly cool blue-greys. Warm pigment under cold light
+       renders as exactly the muted grey-brown that kept getting reported, which is also why it
+       looked inconsistent: at dusk and night these same surfaces use warm light and read
+       correctly, so the ground genuinely did look different at different times of day with no
+       file change in between — the "flopping" was real, just not caching.
+
+       Shifted both toward warm daylight (a desert sky bounces warm light off sand, it doesn't
+       bounce studio blue) while keeping the same intensities, so the carefully-worked exposure
+       maths in the note above is untouched — only the hue of the fill moves, not its strength. */
+    sunFill.color.setHex(0xEADFC8); sunFill.intensity = 0.62;
     SUN_OFF.set(-380, 210, 260);
-    daySky.color.setHex(0xBBD6E8); daySky.groundColor.setHex(0x7A6E5C);
+    daySky.color.setHex(0xDCD6C4); daySky.groundColor.setHex(0x8A7856);
     daySky.intensity = 0.55;
   }
 
