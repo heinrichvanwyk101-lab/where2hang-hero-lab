@@ -3370,7 +3370,15 @@ canvas.addEventListener('pointermove', e => {
          actually separate them, not just the diorama's default oblique. */
       const my = (a.y + b.y) * 0.5;
       liftAnimating = false; // a real touch on the glass always wins over the button's own ease
-      orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 2.2));
+      /* SENSITIVITY RAISED FROM 2.2 TO 6 — reported as moving "1mm at a time" even on a large,
+         deliberate swipe. 2.2 meant a full screen height of vertical travel moved lift by 2.2,
+         which sounds generous until every other input in this file is compared against it:
+         yaw and pan both read as roughly a full turn or a full pan per screen-width of travel,
+         nothing this file already does asks for anywhere near a full screen of motion to
+         produce a moderate result. This brings tilt in line with how responsive the rest of
+         the gesture vocabulary already is, rather than leaving it as the one dramatically
+         under-sensitive control. */
+      orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 6));
       orbit.on = true;
     }
     return;
@@ -5058,29 +5066,34 @@ function frame(){
   /* Elevation scales with distance rather than adding to it, so a zoomed-in camera does not end
      up looking down from the height the world view wanted. Floored just above the ground plane:
      this is a diorama and there is nothing under it to look at. */
-  /* TWO MEANINGS FOR lift, BECAUSE THE LIT MODES AND THE MAP MODES WANT DIFFERENT THINGS.
+  /* TWO MEANINGS FOR lift, BECAUSE THE LIT MODES AND THE MAP MODES WANT DIFFERENT THINGS —
+     WAS TRUE, NO LONGER IS. This used to branch on mapGesture(): the arc formula (genuinely
+     reaches straight down) only in Plan/Check, and a plain "raise the height" formula
+     everywhere else that — as this comment already said, correctly, before anyone acted on
+     it — "can never reach overhead however far the clamp is opened: the camera climbs but
+     never comes in, so it asymptotes to a steep oblique." That was fine while lift was only
+     ever reachable in Plan/Check. Once the tilt gesture and the tilt button were both opened
+     up to every view (Search reported "can't actually get overhead, tilting barely does
+     anything"), the plain formula became the direct cause: lift could rise, orbit.lift could
+     hit 1, and the camera still could not get there, because the formula computing elev from
+     it never could regardless of the input.
 
-     In the lit modes it scales height while horizontal distance stays put — a turntable that can
-     be raised. That is why it can never reach overhead however far the clamp is opened: the camera
-     climbs but never comes in, so it asymptotes to a steep oblique. Fine for a diorama.
-
-     In Plan and Check it is a PITCH from 0 to 1, and 1 is straight down. The camera swings along an
-     arc of constant distance from the target, so the framing holds while the angle changes and the
-     top of the arc is genuinely vertical. At 0 it reproduces the lit-mode framing exactly, so
-     switching into Check does not move the camera. */
+     VERIFIED SAFE AT lift=0 BEFORE MAKING THIS UNCONDITIONAL, not assumed from the adjacent
+     comment's own claim. base = (cur.elev-GROUND)*zoom, r = hypot(dist, base), a0 =
+     atan2(base, dist) — by definition of atan2/hypot, r*cos(a0) ≡ dist and r*sin(a0) ≡ base
+     exactly. At lift=0, ang=a0, so horiz=r*cos(a0)=dist (unchanged) and elev=r*sin(a0)+GROUND
+     = base+GROUND = the old formula's own result at lift=0. Every existing view, at rest,
+     renders pixel-identical to before — this only changes what happens as lift rises above 0,
+     which in the lit modes was previously unreachable by anything except the two paths this
+     session just opened. */
   let elev, horiz = dist;
-  if (mapGesture()){
+  {
     const base = Math.max(1, (cur.elev - GROUND) * orbit.zoom);
     const r    = Math.hypot(dist, base);
     const a0   = Math.atan2(base, Math.max(1, dist));
     const ang  = a0 + (Math.PI / 2 - a0) * Math.max(0, Math.min(1, orbit.lift));
     horiz = r * Math.cos(ang);
     elev  = Math.max(GROUND + 4, r * Math.sin(ang) + GROUND);
-  } else {
-    /* Elevation scales with distance rather than adding to it, so a zoomed-in camera does not end
-       up looking down from the height the world view wanted. Floored just above the ground plane:
-       this is a diorama and there is nothing under it to look at. */
-    elev = Math.max(GROUND + 4, (cur.elev - GROUND) * orbit.zoom * (1 + orbit.lift) + GROUND);
   }
   /* THE PAN OFFSET IS APPLIED HERE AND NOWHERE ELSE, to both the eye and the aim, so panning
      slides the view across the model without turning it. Kept out of cur.target on purpose: the
