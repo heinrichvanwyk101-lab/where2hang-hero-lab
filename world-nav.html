@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Where2Hang — Abu Dhabi World</title>
 
 <!--
@@ -296,7 +296,24 @@
      because a one-finger vertical drag genuinely is a scroll and a two-finger one genuinely
      isn't. Must stay in sync with lib/WorldFrame.tsx's own touchAction on the iframe element:
      the stricter of the two wins, so changing only one side would change nothing. */
-  body.embed #gl{pointer-events:auto;touch-action:pinch-zoom}
+  /* CHANGED FROM pinch-zoom TO none — THE ACTUAL "WHOLE SCREEN ZOOMS, THEN EVERYTHING FREEZES"
+     BUG. pinch-zoom does not mean "let JS have the pinch" — it means the opposite: it explicitly
+     PERMITS THE BROWSER'S OWN native pinch-zoom gesture over this element. A two-finger pinch on
+     the canvas was scaling the actual page (reported exactly that way: "what's actually zooming
+     is the whole screen, not the model"), and once the browser has committed to its own zoom/pan
+     gesture it keeps claiming subsequent touches for that instead of dispatching clean pointer
+     events here — which is why rotate and tilt then stopped responding until reload. The custom
+     pinch/twist/tilt handling above (pointerdown/pointermove on #gl) already implements the
+     entire gesture set in JS; there is nothing left for native touch-action to usefully do here,
+     so it now does nothing at all and JS owns every touch on the canvas outright. Matched by
+     maximum-scale=1/user-scalable=no on the viewport meta tag above, as a second line of defence
+     against the same native zoom triggering by any other path (double-tap, etc).
+     MUST STAY IN SYNC WITH lib/WorldFrame.tsx's OWN touchAction ON THE IFRAME ELEMENT — the
+     iframe is an opaque element from the HOST document's point of view, so the host's own
+     touch-action on it governs whether the outer page treats a touch over the iframe as a native
+     zoom candidate before anything inside this document ever sees it. Both must read touch-
+     action:none or this fix only half-applies. */
+  body.embed #gl{pointer-events:auto;touch-action:none}
   /* HELD UNTIL THE SUBJECT IS WHOLE. The canvas starts transparent in embed mode, so what shows
      through is the host's own gradient rather than an island under construction. Corniche was the
      one island exempt from "revealed whole, never half" — on the grounds that it is the opening
