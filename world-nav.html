@@ -1318,7 +1318,21 @@ const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
    (see the pointer-move handler), so the two never fight — whichever one last had control
    simply wins, with no explicit conflict resolution needed. */
 let liftAnimating = false, liftTarget = 0;
-function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0; }
+function resetOrbit(){
+  orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0;
+  /* liftAnimating WAS MISSING HERE, AND THAT IS THE ACTUAL "TILTS BY ITSELF" BUG. This sets
+     orbit.lift = 0 directly — but if the tilt button's own damping animation was still active,
+     or even just left pointed at an old target from an earlier tap that had already finished,
+     the very next frame's easing (`orbit.lift += (liftTarget - orbit.lift) * e`) immediately
+     starts pulling it right back toward whatever liftTarget still was. setResults() calls this
+     on every new results set — so a wide search that reframes the camera would zero the tilt
+     here and then watch it silently climb back toward 1 a moment later, with nothing the user
+     did causing it: exactly "zooms out, shows pins, then tilts by itself." Likely the same
+     mechanism behind at least some of the reported over-sensitivity too — an uncommanded drift
+     riding on top of the gesture reads as the gesture overreacting, when it's really a second,
+     independent motion stacking on top of it. */
+  liftAnimating = false;
+}
 
 function applyLOD(){
   DISTRICTS.forEach(d => {
@@ -3378,7 +3392,7 @@ canvas.addEventListener('pointermove', e => {
          produce a moderate result. This brings tilt in line with how responsive the rest of
          the gesture vocabulary already is, rather than leaving it as the one dramatically
          under-sensitive control. */
-      orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 6));
+      orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 3.5));
       orbit.on = true;
     }
     return;
