@@ -214,15 +214,22 @@
      faces, and it is the gesture a visitor will reach for the moment there are labels on a group
      of results to tap.
 
-     touch-action:pan-y is the whole safety argument, and it is home-stage's own rule: vertical
-     belongs to the page so the reveal still scrolls, horizontal belongs to us so the model turns.
-     Nothing has to arbitrate at run time — the browser decides by axis, before either party sees
-     the gesture.
+     touch-action WAS pan-y, AND THAT WAS RIGHT UNTIL THE WORLD GREW A VERTICAL GESTURE OF ITS
+     OWN. The argument above is sound as far as it goes: vertical belongs to the page so the
+     reveal still scrolls, horizontal belongs to us so the model turns, and the browser decides
+     by axis before either party sees the gesture. The catch is the last part — "before either
+     party sees the gesture" cuts both ways. Two-finger vertical drag now tilts the camera
+     toward overhead, and pan-y was eating that at the browser level, so the handler never
+     received it. Reported precisely: tilt barely moves unless a rotation is started first
+     (horizontal, which pan-y never claimed), after which the vertical part finally arrives.
 
-     The orbit machinery is untouched. One finger horizontal is yaw, two are twist and pinch, and
-     every transition still calls resetOrbit, so a rail tap lands square on its composed shot
-     regardless of how far the model has been turned. */
-  body.embed #gl{pointer-events:auto;touch-action:pan-y}
+     pinch-zoom keeps both axes available to this canvas for MULTI-finger gestures while leaving
+     single-finger vertical drags to fall through to the page's own scroll, since one finger is
+     not a pinch. Finger count decides it instead of axis — which is the right split here,
+     because a one-finger vertical drag genuinely is a scroll and a two-finger one genuinely
+     isn't. Must stay in sync with lib/WorldFrame.tsx's own touchAction on the iframe element:
+     the stricter of the two wins, so changing only one side would change nothing. */
+  body.embed #gl{pointer-events:auto;touch-action:pinch-zoom}
   /* HELD UNTIL THE SUBJECT IS WHOLE. The canvas starts transparent in embed mode, so what shows
      through is the host's own gradient rather than an island under construction. Corniche was the
      one island exempt from "revealed whole, never half" — on the grounds that it is the opening
@@ -1338,6 +1345,9 @@ const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
    (see the pointer-move handler), so the two never fight — whichever one last had control
    simply wins, with no explicit conflict resolution needed. */
 let liftAnimating = false, liftTarget = 0;
+// Tracks the lift value the far plane was last recalculated at, so the frame loop only rebuilds
+// the projection matrix when the tilt has actually moved rather than every frame it's non-zero.
+let lastLiftForClip = 0;
 function resetOrbit(){
   orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0;
   /* liftAnimating WAS MISSING HERE, AND THAT IS THE ACTUAL "TILTS BY ITSELF" BUG. This sets
@@ -1432,7 +1442,25 @@ function worldBounds(){
    source for it and no copy to drift. */
 function fitClip(){
   const B = worldBounds();
-  camera.far = Math.max(6000, B * 4.2);
+  /* FAR NOW ACCOUNTS FOR WHERE THE CAMERA ACTUALLY IS, NOT ONLY HOW WIDE THE WORLD IS. The
+     note above already diagnosed this exact failure once — "the black arriving from the top of
+     the frame: not fog, not the sky, just the clip plane eating the scene" — and fixed it for
+     the case it was hitting then, a camera pulling far BACK from a large archipelago. B * 4.2
+     covers that generously. What it does not cover is a camera going far UP: the arc formula
+     the tilt gesture drives trades horizontal distance for elevation as lift rises, so at steep
+     tilt the camera climbs well above anything derived from the world's horizontal extent, and
+     the same clip plane starts cutting the far side of the scene again — reported as the sky
+     closing over the model past a certain tilt, which is the identical symptom described above
+     from the identical cause, just reached from a different direction.
+
+     camera.position is the live, damped position the last frame actually rendered from, so this
+     tracks the real geometry rather than a nominal state value. fitClip is otherwise only called
+     on discrete state changes (build, view switch, district change) — never per frame — which is
+     exactly why the far plane was correct on load and went stale during a manual tilt: nothing
+     recalculated it while the camera was climbing. The frame loop now calls this while lift is
+     actively changing (see the elevation block) for that reason. */
+  const camDistFromCentre = camera.position.length();
+  camera.far = Math.max(6000, B * 4.2, camDistFromCentre + B * 2.2);
   camera.updateProjectionMatrix();
 
   const big = DISTRICTS.reduce((a, d) => Math.max(a, d.r * (d.dispScale || 1)), 0);
@@ -2158,6 +2186,13 @@ if (/[?&]embed=1/.test(location.search)){
         lastResultsDiag = 'setResultsReal: ' + raw.length + ' received, ' + converted.length + ' classified';
         if (converted.length){
           attractStop();
+          /* The canvas must be visible before this composes anything. setResultsReal is the exact
+             message the blank-out was observed immediately after — it calls attractStop() and
+             descend() below, which recompose camera state that the opening interval may still be
+             working through, and that interval owns the only normal path to adding 'ready'. Adding
+             it here too costs nothing if it's already set. */
+          const glc = document.getElementById('gl');
+          if (glc) glc.classList.add('ready');
           descend([() => setWorld(), () => setResults(converted, m.label)]);
         } else { console.warn('setResultsReal: no points classified to a modelled island'); paintDiag(); }
       }
@@ -2235,6 +2270,19 @@ if (/[?&]embed=1/.test(location.search)){
        same tick shows the previous frame brightening into the new one. */
     requestAnimationFrame(() => requestAnimationFrame(() => gl && gl.classList.add('ready')));
   }, 250);
+
+  /* A REVEAL THAT CANNOT BE SKIPPED, AND THE CANVAS IS INVISIBLE UNTIL IT RUNS. In embed mode
+     #gl starts at opacity:0 and ONLY the 'ready' class makes it visible (see the CSS) — nothing
+     anywhere removes that class, so a blank world can only ever mean the class was never added.
+     It's added at the end of the opening interval above, which waits on Corniche and can be
+     raced: a setResultsReal arriving during that window calls attractStop() and descend(), which
+     recompose the camera state the interval is still working through. Confirmed by elimination
+     rather than assumed — the camera-NaN badge added for exactly this question never appeared,
+     so the camera position was valid the whole time and the scene was genuinely rendering; it
+     was simply being drawn onto a fully transparent canvas. This runs regardless, once, four
+     seconds in: if the normal path already revealed it this is a no-op, and if anything skipped
+     that path this is the difference between a working world and a permanently blank one. */
+  setTimeout(() => { const g2 = document.getElementById('gl'); if (g2) g2.classList.add('ready'); }, 4000);
 
   post('ready', { build: B_NAV });
   let lastId = null;
@@ -5137,6 +5185,19 @@ function frame(){
     const ang  = a0 + (Math.PI / 2 - a0) * Math.max(0, Math.min(0.997, orbit.lift));
     horiz = r * Math.cos(ang);
     elev  = Math.max(GROUND + 4, r * Math.sin(ang) + GROUND);
+  }
+  /* KEEP THE FAR PLANE IN STEP WITH A CLIMBING CAMERA. fitClip derives far partly from
+     camera.position, but is otherwise only called on discrete state changes — so during a tilt,
+     which moves the camera continuously without any state change at all, it would stay at
+     whatever it was when the tilt began and start clipping the far side of the scene as the
+     camera rose. Guarded rather than called unconditionally: lift is 0 for the overwhelming
+     majority of frames (nobody is tilting most of the time) and the threshold check is far
+     cheaper than the projection-matrix rebuild fitClip triggers. lastLiftForClip means it also
+     only fires when lift has actually MOVED since the last refresh, not merely while it happens
+     to be non-zero — so holding a steady tilt costs nothing after the first frame. */
+  if (Math.abs(orbit.lift - lastLiftForClip) > 0.01){
+    lastLiftForClip = orbit.lift;
+    try { fitClip(); } catch(e){}
   }
   /* THE PAN OFFSET IS APPLIED HERE AND NOWHERE ELSE, to both the eye and the aim, so panning
      slides the view across the model without turning it. Kept out of cur.target on purpose: the
