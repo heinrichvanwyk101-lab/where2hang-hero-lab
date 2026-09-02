@@ -1660,8 +1660,18 @@ const SURF = {
   // darkest thing on the island by a clear margin.
   street:   '#454C53',
   road:     '#33383E',
-  apron:    '196,188,168',      // the developed ground the whole city sits on
-  apron3:   '#C4BCA8',          // same tone as .apron, as a hex triple — mixHex needs one
+  /* APRON WARMED TO MATCH THE SAND BENEATH IT — AND THIS IS WHY ONLY ONE ISLAND LOOKED FIXED.
+     SURF.sand was warmed to a golden desert tone and that change was real and correct, but on a
+     developed island the apron is laid OVER the sand across the whole interior (see the four
+     concentric fills below), so most of what's actually visible on Corniche or Al Reem is apron,
+     not sand. Saadiyat is far less densely developed, so real sand shows through and it read as
+     correctly warm — in the same frame, same render, which is what ruled out caching as the
+     explanation entirely: a stale file would have made every island equally wrong. Shifted the
+     same direction and by a similar amount as the sand it sits on, so developed ground still
+     reads as paved rather than as desert, just paved-in-a-desert-city rather than paved-in-a-
+     grey-one. */
+  apron:    '206,190,158',      // the developed ground the whole city sits on
+  apron3:   '#CEBE9E',          // same tone as .apron, as a hex triple — mixHex needs one
   paving:   '#D7D1BE',
   pavingLt: '#E6E0CE',
   kerb:     '#EFEBDF',
@@ -2614,7 +2624,15 @@ function paintGround(d, plan){
      for a different and subtler job elsewhere) and higher alpha. An invisible fix is worth
      exactly as much as no fix, so this trades some of the earlier shimmer margin away
      deliberately rather than staying "safe" and pointless. */
-  paintMacroTint(g, W, H, PX, PY, U, '#807461', '#f1dcb7', 0.62);
+  /* WARMED TO MATCH THE SAND UNDERNEATH — THIS LAYER IS WHY THE SAND FIX LOOKED LIKE IT DIDN'T
+     TAKE. SURF.sand was correctly warmed to a golden desert tone, but this tint is painted over
+     the whole island at 0.62 alpha, and its two endpoints were hardcoded grey-browns (#807461
+     to #f1dcb7) that predate that change. At that alpha it dominates whatever is beneath it, so
+     most of what was actually visible was this, not the sand — which is exactly why Saadiyat
+     (less developed, more raw sand showing) looked right in the same frame where Corniche and
+     Al Reem still looked brown. Same warming direction and roughly the same amount as the sand
+     itself, so the ground variation this provides is preserved exactly; only its hue moves. */
+  paintMacroTint(g, W, H, PX, PY, U, '#8C7A56', '#F5E3BC', 0.62);
 
   /* GROUND VARIATION, AND IT IS ONE FILL THAT WAS DOING ALL THE WORK.
 
@@ -2635,7 +2653,12 @@ function paintGround(d, plan){
   {
     /* Five tones around the base: two compacted and darker, one gravelled and cooler, two
        wind-blown and paler. Nothing here is more than about eight per cent off #B7A78B. */
-    const TONE = [SURF.sandDk, '#AFA083', '#A89A80', SURF.sandLt, '#C6B99E'];
+    /* Five tones around the base, ALL WARMED with the sand — the three hardcoded ones here
+       (#AFA083, #A89A80, #C6B99E) were grey-browns from before the palette shift, so they were
+       actively pulling the ground back toward the colour the sand change was meant to leave
+       behind. The two SURF references were already correct, since those constants moved with
+       the palette; only the literals needed catching up. */
+    const TONE = [SURF.sandDk, '#BFA579', '#B89C6F', SURF.sandLt, '#D6C293'];
     const span = Math.max(W, H);
     for (let i = 0; i < 54; i++){
       const cx = R() * W, cy = R() * H;
@@ -2659,7 +2682,7 @@ function paintGround(d, plan){
       g.translate(cx, cy); g.rotate(ang + (R() - 0.5) * 0.35);
       const gr = g.createLinearGradient(0, -wdt, 0, wdt);
       gr.addColorStop(0, 'rgba(0,0,0,0)');
-      gr.addColorStop(0.5, '#A2947A');
+      gr.addColorStop(0.5, '#B29A6E');
       gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.globalAlpha = 0.07;
       g.fillStyle = gr;
@@ -2678,8 +2701,8 @@ function paintGround(d, plan){
   for (let i = 0; i < 44; i++){
     const x = PX((R()*2 - 1)), y = PY((R()*2 - 1)), rr = U * (0.06 + R() * 0.18);
     const grd = g.createRadialGradient(x, y, 0, x, y, rr);
-    grd.addColorStop(0, R() < 0.5 ? 'rgba(162,147,122,0.40)' : 'rgba(206,192,163,0.34)');
-    grd.addColorStop(1, 'rgba(162,147,122,0)');
+    grd.addColorStop(0, R() < 0.5 ? 'rgba(178,154,110,0.40)' : 'rgba(222,201,152,0.34)');
+    grd.addColorStop(1, 'rgba(178,154,110,0)');
     g.fillStyle = grd;
     g.beginPath(); g.arc(x, y, rr, 0, 6.2832); g.fill();
   }
