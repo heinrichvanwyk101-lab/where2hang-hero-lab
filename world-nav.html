@@ -154,6 +154,15 @@
     font:600 14px Inter,sans-serif;padding:11px 18px;border-radius:999px;
     backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .25s}
   .back.on{opacity:1;pointer-events:auto}
+  /* ALWAYS VISIBLE, UNLIKE .back — tilting toward overhead is useful in any state, not only
+     when there's somewhere to go "back" to, so this doesn't share .back's opacity-toggle
+     pattern at all; it's simply on from the start. Right side, same row as Back, so the two
+     read as a pair without competing for the same corner. */
+  .tiltBtn{position:fixed;right:12px;bottom:18px;z-index:6;appearance:none;
+    width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
+    border-radius:999px;backdrop-filter:blur(8px);cursor:pointer;padding:0}
+  .tiltBtn.on{background:rgba(0,194,168,.92);color:#06241f;border-color:transparent}
   .isle{position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;
     font:600 12px Inter,sans-serif;color:#DCE8F0;text-shadow:0 1px 8px rgba(0,0,0,.95);
     white-space:nowrap;opacity:0;transition:opacity .35s;letter-spacing:.04em}
@@ -279,6 +288,12 @@
 <div id="pickout"><div class="txt" id="pickoutTxt"></div><button id="pickoutCopy">Copy</button></div>
 
 <button class="back" id="back">Back</button>
+<button class="tiltBtn" id="tiltBtn" aria-label="Tilt to top view">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="4" y="4" width="16" height="16" rx="2"/>
+    <path d="M4 10h16M10 4v16"/>
+  </svg>
+</button>
 
 <div class="views">
   <button class="chip" id="vProg" style="display:none">Progs</button>
@@ -1296,6 +1311,13 @@ function _visibleChain(o){
 }
 const ZOOM_MIN = 0.08;
 const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
+/* SEPARATE FROM ORBIT.LIFT ITSELF, WHICH THE GESTURE HANDLER SETS DIRECTLY AND INSTANTLY —
+   this is only for the tilt BUTTON, which needs to ease toward a target over time rather than
+   snap, the same reason cur/goal are damped elsewhere in this file rather than assigned
+   directly. liftAnimating is turned off the moment a real touch gesture grabs the camera
+   (see the pointer-move handler), so the two never fight — whichever one last had control
+   simply wins, with no explicit conflict resolution needed. */
+let liftAnimating = false, liftTarget = 0;
 function resetOrbit(){ orbit.yaw = 0; orbit.lift = 0; orbit.zoom = 1; orbit.panX = 0; orbit.panZ = 0; }
 
 function applyLOD(){
@@ -2443,6 +2465,22 @@ document.getElementById('back').addEventListener('click', () => {
   else if (state === STATE.DISTRICT) setWorld();
 });
 
+/* TAP TO TOGGLE, NOT PRESS-AND-HOLD-AND-DRAG. The gesture this replaces needed two fingers
+   placed, then moved vertically, then held without lifting — precise, sustained, and reported
+   directly as too hard for people to reliably reproduce. This is one tap: toward top view if
+   currently more level than not, back toward level otherwise, eased in over time via the
+   liftAnimating flag the frame loop now watches. The gesture itself is untouched and still
+   works for anyone who wants fine control — this is an easier alternative, not a replacement. */
+{
+  const tiltBtn = document.getElementById('tiltBtn');
+  tiltBtn.addEventListener('click', () => {
+    liftTarget = orbit.lift > 0.5 ? 0 : 1;
+    liftAnimating = true;
+    orbit.on = true;
+    tiltBtn.classList.toggle('on', liftTarget > 0.5);
+  });
+}
+
 /* ===========================================================================
    VIEW MODES, independent of the navigation state.
 
@@ -3331,6 +3369,7 @@ canvas.addEventListener('pointermove', e => {
          view now, which is exactly what dense pin clusters need: an angle steep enough to
          actually separate them, not just the diorama's default oblique. */
       const my = (a.y + b.y) * 0.5;
+      liftAnimating = false; // a real touch on the glass always wins over the button's own ease
       orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 2.2));
       orbit.on = true;
     }
@@ -4993,6 +5032,17 @@ function frame(){
   cur.elev  += (goal.elev  - cur.elev)  * e;
   cur.angle += (goal.angle - cur.angle) * e;
   cur.fov   += (goal.fov   - cur.fov)   * e;
+
+  /* THE TILT BUTTON'S OWN EASING, separate from cur/goal — orbit.lift is a live gesture value
+     everywhere else in this file, set directly and instantly by touch, and that's correct for
+     a finger actually on the glass. A button has no continuous input to track, so it needs
+     something to ease TOWARD instead. Same damping factor (e) as everything else this frame,
+     so a tap doesn't feel like a different camera than a drag does. */
+  if (liftAnimating){
+    orbit.lift += (liftTarget - orbit.lift) * e;
+    orbit.on = true;
+    if (Math.abs(liftTarget - orbit.lift) < 0.004){ orbit.lift = liftTarget; liftAnimating = false; }
+  }
 
   /* The idle drift stops the moment the camera is touched. Two things moving the view at once
      reads as a bug, and on a still frame the drift is what makes a held angle look unsteady. */

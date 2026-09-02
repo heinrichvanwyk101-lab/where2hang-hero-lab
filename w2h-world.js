@@ -1644,9 +1644,14 @@ function insetRing(id, inset){
    from the last pass — they were lifted to stop parkland reading as a stain, but the fix for
    that was never to brighten the grass, it was to brighten everything the grass sits against. */
 const SURF = {
-  sand:     '#B7A78B',
-  sandDk:   '#9E8F74',
-  sandLt:   '#DDD1B4',
+  /* WARMED FROM A MUTED GREY-TAN TOWARD ACTUAL DESERT SAND. The original #B7A78B reads as
+     closer to a generic pale brown than the warm, golden tone real Abu Dhabi bare land has —
+     this is a desert, and the ground should say so at a glance rather than read as unfinished
+     concrete. All three variants shifted together, keeping the same light/dark relationship
+     rather than warming only the base and leaving sandDk/sandLt out of step with it. */
+  sand:     '#C7A876',
+  sandDk:   '#AD8A5C',
+  sandLt:   '#E6D3A6',
   beach:    '#E4D8BC',
   lawn:     'rgba(74,104,52,',
   lawnLt:   'rgba(96,132,66,',
