@@ -1603,7 +1603,7 @@ function descend(steps){
    four messages the host needs.
 
      host -> world    setDistrict {id} · setPlace {id,label} · setVenue {id,x,z,label,h?,r?}
-                      setResults {points,label}
+                      setResults {points,label} · setResultsReal {points:[{id,x,z}],label}
                       setView {view} · setWorld
                       idle · wake
      world -> host    ready · district {id}
@@ -1704,6 +1704,38 @@ if (/[?&]embed=1/.test(location.search)){
           descend([() => setWorld(), () => setDistrict(d), () => setPlace(d, anchor)]);
         } else console.warn('setVenue: unknown district or non-finite coords', m.id, m.x, m.z);
       }
+      /* setResultsReal IS setResults FOR REAL VENUES, same relationship setVenue has to
+         setPlace. The existing setResults(points, label) already does the hard part —
+         bounding multiple points, deciding whether they share one island or span several,
+         interpolating pitch by spread — all of it correct and unchanged. What it has never
+         had is a way to feed it REAL venue coordinates: its own points are in display space
+         (the same frame d.x/d.z live in), and a search result set arrives in real geographic
+         metres with no island pre-assigned to the group as a whole, since results can span
+         islands. So each point is converted individually here — same BMAP.islandOrigin /
+         M_PER_UNIT / anchorWorld pipeline setVenue already proved correct, just run once per
+         point instead of once for a single venue — and the converted list is handed straight
+         to the untouched setResults(). Points whose island the app could not classify (most
+         of the database — outside the six modelled islands) are simply dropped rather than
+         guessed at, same rule locateVenueInWorld already follows on the app side. */
+      else if (m.type === 'setResultsReal'){
+        const idx = window.__basemapIndex;
+        const raw = Array.isArray(m.points) ? m.points : [];
+        const converted = [];
+        for (const p of raw){
+          if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z) || !p.id) continue;
+          const d = DISTRICTS.find(x => x.id === p.id);
+          const entry = idx && (idx.islands || []).find(x => x.id === p.id);
+          if (!d || !entry) continue;
+          const [ox, oy] = BMAP.islandOrigin(entry);
+          const local = { x: (p.x - ox) / BMAP.M_PER_UNIT, z: -(p.z - oy) / BMAP.M_PER_UNIT, h: 0 };
+          const w = anchorWorld(d, local);
+          converted.push({ x: w.x, z: w.z });
+        }
+        if (converted.length){
+          attractStop();
+          descend([() => setWorld(), () => setResults(converted, m.label)]);
+        } else console.warn('setResultsReal: no points classified to a modelled island');
+      }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
          ReferenceError the moment the branch runs, not a falsy value to fall through. */
       else if (m.type === 'setView' && m.view) { view = m.view; applyView(m.view); }
@@ -1734,8 +1766,22 @@ if (/[?&]embed=1/.test(location.search)){
 
      ?open=world KEEPS THE WIDE ESTABLISHING SHOT for anyone who prefers it; the hold and the fade
      work the same either way, so the choice is now purely about what the first frame shows rather
-     than about hiding a build. */
-  const OPEN_WIDE = /[?&]open=world/.test(location.search);
+     than about hiding a build.
+
+     embed=1 IS ALSO A REASON TO STAY WIDE — found the hard way, after an extended, genuinely
+     difficult investigation that first suspected caching, then a race with the embed opening
+     logic further down this file, before finally landing here. That later logic (the embed
+     check near the bottom of the module) already calls setWorld() correctly for embed mode —
+     but setWorld() clears activeDistrict to null, same as it always does, and THIS system's own
+     trigger condition below is exactly "state is WORLD and nothing has claimed the camera yet".
+     It has no idea embed mode exists; it only ever checked ?open=world. So it was firing
+     regardless, on its own delayed timer (waiting for Corniche to finish building), and quietly
+     overriding the embed opening a few seconds after the correct shot had already composed —
+     which is also why standalone mode was never reported broken: its own opening branch calls
+     setPlace(corniche, ...), which DOES set activeDistrict, so this system correctly saw the
+     camera as already claimed and left it alone. Embed was the one path that left activeDistrict
+     null on purpose, and the one path this file had never been told to treat as "leave it wide". */
+  const OPEN_WIDE = /[?&]open=world/.test(location.search) || /[?&]embed=1/.test(location.search);
   setWorld();
   const gl = document.getElementById('gl');
   let waited = 0;
