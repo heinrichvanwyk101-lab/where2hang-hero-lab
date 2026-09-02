@@ -274,6 +274,7 @@ window.addEventListener('error', ev => fail('window', ev.error || ev.message));
    this was why. Fixed by moving the declaration itself, not the logic that reads it, to before
    the earliest point anything could possibly reach it. */
 let lastResultsDiag = '';
+let islandStatusDiag = '';
 
 import * as THREE from 'three';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
@@ -1696,6 +1697,25 @@ window.__w2hSetResults = setResults;
   }, 400);
 }
 
+/* ISLAND STATUS, LIVE — NOT A GUESS AT WHAT'S WRONG, A DIRECT READING OF IT. d.pending (did the
+   geometry build finish) and fpState (did that island's footprint fetch finish, which is what
+   actually drives the mass-to-detail swap) are two separate state machines, easy to conflate
+   and exactly what the last fix got wrong: it retried on d.pending alone, with no visibility
+   into whether fpState was the one actually stuck. Rather than fix blind a third time, this
+   makes both states directly readable, live, on the real device, updated every two seconds —
+   long enough to watch an island move from pending through to on (or discover it never does).
+   Runs from a setInterval, same safety as everything else added after the TDZ bug: nothing
+   here executes until well after the module's own synchronous evaluation has finished, so
+   there is no declaration-order risk regardless of where this sits in the file. */
+setInterval(() => {
+  const est = document.getElementById('embedstamp');
+  if (!est) return;
+  const rows = DISTRICTS.filter(d => d !== corniche).map(d =>
+    d.id + ':' + (d.pending ? 'pending' : 'built') + '/fp=' + (fpState.get(d.id) || 'unset'));
+  islandStatusDiag = rows.join('  ');
+  paintDiag();
+}, 2000);
+
 /* ---------- THE DESCENT ----------------------------------------------------------------------
 
    ARRIVING SOMEWHERE IS NOT THE SAME AS BEING PUT THERE. A snap to a venue answers "what does it
@@ -2194,7 +2214,8 @@ function paintDiag(crumbText){
   if (!est) return;
   const c = crumbText != null ? crumbText : (document.getElementById('crumb')?.textContent || '');
   est.textContent = (B_NAV || '') + ' / ' + (B_CITY || '') + ' / ' + (B_WORLD || '') +
-    ' / ' + (B_PROPS || '') + '\n' + c + (lastResultsDiag ? '\n' + lastResultsDiag : '');
+    ' / ' + (B_PROPS || '') + '\n' + c + (lastResultsDiag ? '\n' + lastResultsDiag : '') +
+    (islandStatusDiag ? '\n' + islandStatusDiag : '');
 }
 function ui(crumb, hint){
   document.getElementById('crumb').innerHTML = crumb;
