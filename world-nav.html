@@ -1858,8 +1858,22 @@ function renderPinOverlay(){
   }
   const clusters = clusterScreenPoints(resultPins);
   const seen = new Set();
-  clusters.forEach((group, idx) => {
-    const key = 'p' + idx;
+  clusters.forEach((group) => {
+    /* IDENTITY-BASED, NOT POSITIONAL — THE ACTUAL FIX. The old key was 'p' + this cluster's
+       INDEX in this frame's freshly-rebuilt array. That looked stable (same index → same
+       element) but wasn't: the moment any cluster anywhere merges or splits, every cluster
+       after it in the array shifts by one position, and each one then reads as "new" here —
+       triggering pinEls.get() misses, then remove-and-recreate, for potentially every pin on
+       screen, every render. At a couple of dozen pins that's cheap enough not to notice; at
+       ~300 (an island's full venue set, new as of area-browsing pushing live counts) it's real
+       DOM churn 15 times a second, and that's what actually froze the app — not an infinite
+       loop, just hundreds of createElement/remove cycles competing with the render loop on a
+       mid-range phone. Keying by WHO is in the group instead of WHERE it landed in the array
+       means the same set of venues keeps the same element across frames regardless of what
+       happens elsewhere on screen — only an actual merge or split (rare, momentary) changes a
+       key. venueId first since it's the real identity; name is the fallback for a pin with none
+       (matches the "degrades gracefully" contract ResultsWorldSync's own header describes). */
+    const key = group.map((g) => g.p.venueId || g.p.name || '?').sort().join(',');
     seen.add(key);
     const cx = group.reduce((s, g) => s + g.s.x, 0) / group.length;
     const cy = group.reduce((s, g) => s + g.s.y, 0) / group.length;
