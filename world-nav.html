@@ -124,6 +124,31 @@
     max-width:min(72vw,420px);text-align:right;
     background:rgba(6,10,13,.72);border-radius:6px;padding:5px 7px;
     border:1px solid rgba(255,255,255,.08)}
+  /* THE PIN LAYER. A plain HTML overlay, not WebGL sprites — the previous marker system
+     (still present, still used elsewhere) draws small glowing dots straight into the 3D
+     scene, which is the right tool for "a light exists here" but the wrong one for "a number
+     badge someone can tap". Numbers baked into canvas textures need a fresh texture per
+     distinct count, and hit-testing a tap against a billboard sprite needs raycasting against
+     every candidate every frame — both solvable, both worse than what HTML already does for
+     free: real text, real click targets, zero extra render passes. The layer itself claims no
+     touches (pointer-events:none) so it never blocks the world's own pan/rotate underneath;
+     individual pin/cluster elements re-enable pointer-events on themselves only, the same
+     "transparent except where something specific needs it" pattern the app side just applied
+     to fix its own touch-blocking bug. z-index sits above #gl but this is still inside the
+     iframe's own stacking context — the host page's zIndex:1 content (Search's header, its
+     composer, etc.) still covers these where THAT content is opaque, exactly as intended:
+     pins only show where the world itself is actually visible. */
+  #pinLayer{position:fixed;inset:0;pointer-events:none;z-index:40;overflow:hidden}
+  .w2hPin{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;
+    font:700 12px Inter,sans-serif;user-select:none;-webkit-user-select:none;
+    transition:left .12s linear,top .12s linear}
+  .w2hPin.cluster{width:34px;height:34px;border-radius:50%;
+    background:rgba(0,194,168,.94);color:#06241f;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.45),0 0 0 3px rgba(0,194,168,.22)}
+  .w2hPin.single{width:16px;height:16px;border-radius:50%;
+    background:rgba(255,255,255,.96);
+    box-shadow:0 1px 5px rgba(0,0,0,.5),0 0 0 4px rgba(0,194,168,.32)}
   .back{position:fixed;left:12px;bottom:18px;z-index:6;appearance:none;
     border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
     font:600 14px Inter,sans-serif;padding:11px 18px;border-radius:999px;
@@ -240,6 +265,7 @@
 <script>if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add('embed-early');</script>
 <canvas id="gl"></canvas>
 <canvas id="rail" class="off"></canvas>
+<div id="pinLayer" aria-hidden="false"></div>
 
 <div class="top">
   <div class="title">Where<b>2</b>Hang</div>
@@ -289,6 +315,27 @@ window.addEventListener('error', ev => fail('window', ev.error || ev.message));
    the earliest point anything could possibly reach it. */
 let lastResultsDiag = '';
 let islandStatusDiag = '';
+// {x,z,venueId,name,category} per point, in DISPLAY space — populated by setResultsReal's
+// handler, read every frame by the pin-overlay render loop. Declared here, not near the code
+// that uses it, for the same reason lastResultsDiag moved here after the TDZ bug: a `let`
+// referenced from a synchronously-called-at-top-level function throws if its own declaration
+// line hasn't run yet. This one is only ever touched from frame() and the message handler,
+// both well past the module's initial synchronous pass by the time either fires — but keeping
+// every piece of this kind of shared state declared in one place, this early, means that
+// safety doesn't have to be re-verified by hand for each new addition.
+let resultPins = [];
+/* SEPARATE FROM THE EMBED-BLOCK'S OWN post(), NOT A DUPLICATE OF IT BY ACCIDENT. That post is
+   a const arrow function declared inside `if (embed=1){...}`, block-scoped there and nowhere
+   else — genuinely unreachable from code defined outside that block, not a TDZ timing issue
+   but real scope isolation. Found this the hard way: wrote tapResultPin calling post()
+   directly, assuming (wrongly, without checking) that it was module-level given how early
+   'ready' gets posted through it. It would have thrown the moment anyone tapped a pin. This
+   carries the same embed-only intent — no host to message in standalone mode, so it silently
+   no-ops there — without touching the existing, proven-working scoped one at all. */
+function postToHost(type, data){
+  if (!/[?&]embed=1/.test(location.search)) return;
+  try { parent.postMessage(Object.assign({ w2h: true, type }, data), '*'); } catch (e) {}
+}
 
 import * as THREE from 'three';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
@@ -1525,6 +1572,11 @@ let resultMarkerMat = null;
 function clearResultMarkers(){
   resultMarkers.clear();
   if (resultMarkerMat){ resultMarkerMat.dispose(); resultMarkerMat = null; }
+  // Pin overlay too — already called from setWorld/setDistrict/setPlace, so this is the same
+  // single cleanup point extended rather than a second one to keep in sync separately.
+  resultPins = [];
+  for (const el of pinEls.values()) el.remove();
+  pinEls.clear();
 }
 function placeResultMarkers(pts){
   clearResultMarkers();
@@ -1541,12 +1593,139 @@ function placeResultMarkers(pts){
     resultMarkers.add(spr);
   }
 }
+
+/* ---- PIN OVERLAY: CLUSTERED, TAPPABLE, VENUE-AWARE ----
+
+   This is what setResults() actually calls now for a results set with venue identity attached
+   (setResultsReal's own points carry venueId/name/category through — see that handler).
+   placeResultMarkers above is left defined and unused by this path rather than deleted:
+   window.__w2hClearResultMarkers still points at clearResultMarkers, and removing the function
+   under a live external reference is a worse failure than one unused function sitting here.
+
+   CLUSTERED BY SCREEN-SPACE DISTANCE, NOT WORLD-SPACE. World-space clustering would need a
+   different, hand-tuned radius at every camera distance — tight when close, wide when far, with
+   no natural way to derive one from the other. Screen space sidesteps this entirely: project
+   every point through the SAME camera the scene is actually drawn with, then group whatever
+   lands within N pixels of whatever else. Zoom in and the same two points drift further apart
+   on screen without either the code or a config value having to know why — the camera did that
+   part for free. This is the same principle fitDist/worldExtent already lean on elsewhere in
+   this file: let the projection carry the work instead of re-deriving it by hand per state. */
+function worldToScreen(x, y, z){
+  const v = new THREE.Vector3(x, y, z);
+  v.project(camera);
+  return {
+    x: (v.x * 0.5 + 0.5) * window.innerWidth,
+    y: (-v.y * 0.5 + 0.5) * window.innerHeight,
+    behind: v.z > 1 || v.z < -1,
+  };
+}
+
+const PIN_CLUSTER_PX = 46; // screen-space radius; two points closer than this on screen merge
+const pinEls = new Map();  // stable key -> DOM element, reused across frames to avoid thrash
+let pinFrameCounter = 0;
+
+function clusterScreenPoints(pts){
+  const projected = [];
+  for (const p of pts){
+    const s = worldToScreen(p.x, GROUND + 6, p.z);
+    if (!s.behind) projected.push({ p, s });
+  }
+  const clusters = [];
+  const used = new Array(projected.length).fill(false);
+  for (let i = 0; i < projected.length; i++){
+    if (used[i]) continue;
+    const group = [projected[i]];
+    used[i] = true;
+    for (let j = i + 1; j < projected.length; j++){
+      if (used[j]) continue;
+      const dx = projected[i].s.x - projected[j].s.x, dy = projected[i].s.y - projected[j].s.y;
+      if (Math.hypot(dx, dy) < PIN_CLUSTER_PX){ group.push(projected[j]); used[j] = true; }
+    }
+    clusters.push(group);
+  }
+  return clusters;
+}
+
+function renderPinOverlay(){
+  const layer = document.getElementById('pinLayer');
+  if (!layer) return;
+  if (!resultPins.length){
+    if (pinEls.size){ for (const el of pinEls.values()) el.remove(); pinEls.clear(); }
+    return;
+  }
+  const clusters = clusterScreenPoints(resultPins);
+  const seen = new Set();
+  clusters.forEach((group, idx) => {
+    const key = 'p' + idx;
+    seen.add(key);
+    const cx = group.reduce((s, g) => s + g.s.x, 0) / group.length;
+    const cy = group.reduce((s, g) => s + g.s.y, 0) / group.length;
+    let el = pinEls.get(key);
+    if (!el){
+      el = document.createElement('div');
+      layer.appendChild(el);
+      pinEls.set(key, el);
+    }
+    el.style.left = cx + 'px';
+    el.style.top = cy + 'px';
+    if (group.length > 1){
+      el.className = 'w2hPin cluster';
+      el.textContent = String(group.length);
+      el.onclick = () => zoomToPinCluster(group.map(g => g.p));
+    } else {
+      el.className = 'w2hPin single';
+      el.textContent = '';
+      const venue = group[0].p;
+      el.onclick = () => tapResultPin(venue);
+    }
+  });
+  for (const [key, el] of pinEls){
+    if (!seen.has(key)){ el.remove(); pinEls.delete(key); }
+  }
+}
+
+/* Tapping a cluster reframes on just that sub-group — the same bounding-box math setResults
+   already uses for the whole set, run here on a smaller slice. Splitting the group visually is
+   then just a consequence of the camera moving closer: the next renderPinOverlay() call
+   projects the same points further apart on screen, past PIN_CLUSTER_PX, and they separate on
+   their own — no explicit "expand this cluster" state to track or get out of sync. */
+function zoomToPinCluster(pts){
+  if (!pts.length) return;
+  let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
+  for (const p of pts){
+    if (p.x<x0) x0=p.x; if (p.x>x1) x1=p.x;
+    if (p.z<z0) z0=p.z; if (p.z>z1) z1=p.z;
+  }
+  const cx=(x0+x1)/2, cz=(z0+z1)/2;
+  const halfDiag = Math.max(30, Math.hypot(x1-x0, z1-z0)/2);
+  resetOrbit();
+  goal.target.set(cx, GROUND + 8, cz);
+  goal.dist = fitDist(Math.max(SHOT_MIN_DISP * 0.4, halfDiag * 1.6), goal.fov || 46);
+  goal.elev = goal.dist * PITCH_PLACE;
+}
+
+/* SINGLE-PIN TAP, TEXTUAL FEEDBACK ONLY FOR NOW — DELIBERATELY NOT A FULL DETAIL POPUP YET.
+   A real popup (venue name, category, a way to reach /venue/{id}) needs the host app to do the
+   actual navigation — this iframe can compose a camera shot but has no business changing the
+   parent page's route itself. That's a new world -> host message and a new handler in
+   WorldFrame.tsx, a deliberately separate, later step rather than something to half-build here
+   under a name that promises more than this does. This much is real and useful on its own: a
+   tighter shot on the one venue tapped, matching the exact shot setPlace already composes for
+   a landmark, so tapping a single pin is at minimum "look at this one closely", even before the
+   popup exists. */
+function tapResultPin(v){
+  resetOrbit();
+  goal.target.set(v.x, GROUND + 6, v.z);
+  goal.dist = fitDist(SHOT_MIN_DISP * 0.5, goal.fov || 46);
+  goal.elev = goal.dist * PITCH_PLACE;
+  postToHost('venueTapped', { venueId: v.venueId || null, name: v.name || null, category: v.category || null });
+}
 window.__w2hClearResultMarkers = clearResultMarkers;
 
 function setResults(points, label){
   const pts = (points || []).filter(p => p && isFinite(p.x) && isFinite(p.z));
   if (!pts.length) return false;
-  placeResultMarkers(pts);
+  resultPins = pts;
 
   let x0 =  Infinity, z0 =  Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const p of pts){
@@ -1906,7 +2085,7 @@ if (/[?&]embed=1/.test(location.search)){
           const [ox, oy] = BMAP.islandOrigin(entry);
           const local = { x: (p.x - ox) / BMAP.M_PER_UNIT, z: -(p.z - oy) / BMAP.M_PER_UNIT, h: 0 };
           const w = anchorWorld(d, local);
-          converted.push({ x: w.x, z: w.z });
+          converted.push({ x: w.x, z: w.z, venueId: p.venueId, name: p.name, category: p.category });
         }
         // Diagnostic, not decoration — stored so ui() (called by setResults below, which this
         // message is about to trigger) can append it rather than have its own crumb-write
@@ -5576,6 +5755,17 @@ function frame(){
       // The number to tune against, on the device rather than in an estimate.
       'frame  ' + ftStat;
   }
+  /* THROTTLED TO ROUGHLY EVERY 4TH FRAME, NOT EVERY FRAME. DOM writes (style.left/top on
+     however many pin elements exist, plus className/textContent swaps on cluster boundary
+     changes) are a different cost profile than anything else in this loop — real layout work
+     the browser has to do outside the WebGL path entirely. At 60fps that is 60 DOM touches a
+     second for something that only needs to track a camera easing smoothly over a damped
+     curve; a quarter of that reads as identically smooth and costs a quarter as much. Runs
+     unconditionally otherwise — resultPins is empty outside of an active results view, and
+     renderPinOverlay's own first check is cheap enough that skipping the call entirely would
+     save nothing worth the extra branch. */
+  pinFrameCounter++;
+  if (pinFrameCounter % 4 === 0) renderPinOverlay();
 }
 frame();
 
