@@ -3372,29 +3372,25 @@ canvas.addEventListener('pointermove', e => {
         while (t < -Math.PI) t += Math.PI * 2;
         orbit.yaw = yaw0 + t;
       }
-      /* AND THE MIDPOINT'S VERTICAL TRAVEL TILTS — MOVED OUT FROM UNDER mapGesture(), which
-         was the actual reason a two-finger drag never tilted anything outside Plan/Check.
-         Search has no UI to switch view modes at all in embed, so this gesture — correctly
-         written — was permanently unreachable there. The lit-mode "turntable that can be
-         raised" behaviour this drives already exists independent of view mode (see the frame
-         loop's own elev calculation, which branches on mapGesture() only for WHICH formula to
-         use, not on whether lift applies at all) — this was a touch-reachability gap, not a
-         missing capability. Dragging two fingers UP raises the camera toward overhead in any
-         view now, which is exactly what dense pin clusters need: an angle steep enough to
-         actually separate them, not just the diorama's default oblique. */
-      const my = (a.y + b.y) * 0.5;
-      liftAnimating = false; // a real touch on the glass always wins over the button's own ease
-      /* SENSITIVITY RAISED FROM 2.2 TO 6 — reported as moving "1mm at a time" even on a large,
-         deliberate swipe. 2.2 meant a full screen height of vertical travel moved lift by 2.2,
-         which sounds generous until every other input in this file is compared against it:
-         yaw and pan both read as roughly a full turn or a full pan per screen-width of travel,
-         nothing this file already does asks for anywhere near a full screen of motion to
-         produce a moderate result. This brings tilt in line with how responsive the rest of
-         the gesture vocabulary already is, rather than leaving it as the one dramatically
-         under-sensitive control. */
-      orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 3.5));
-      orbit.on = true;
     }
+    /* LIFT MOVED ENTIRELY OUT FROM UNDER pinch0>8 — that guard exists so zoom's own ratio
+       (pinch0/d) has a real initial separation to divide by, not a near-zero one that would
+       make tiny finger jitter read as a huge zoom swing. Tilt has no such need — it only ever
+       reads vertical midpoint travel, never pinch distance — but it was sitting inside the
+       same gate anyway, inherited from copying the zoom/yaw structure rather than from any
+       actual reason tilt needed it. The exact bug this produced: touch down with two fingers
+       already close together (pinch0<=8, easy to do by accident when the intent is a vertical
+       drag rather than a deliberate pinch) and the WHOLE block, including lift, was skipped
+       for that entire touch session — "moves less than 1mm". Doing something else first that
+       happened to start with wider separation (a real pinch, a rotate) cleared the threshold
+       for THAT session and tilt started working too, since it was riding on the same gate by
+       accident — matching exactly "engage it first, then it lets me tilt, lift finger and
+       need to engage again." Now unconditional on any two-finger touch, regardless of how far
+       apart the fingers started. */
+    const my = (a.y + b.y) * 0.5;
+    liftAnimating = false; // a real touch on the glass always wins over the button's own ease
+    orbit.lift = Math.max(0, Math.min(1, lift0 + (mid0 - my) / window.innerHeight * 3.5));
+    orbit.on = true;
     return;
   }
 
