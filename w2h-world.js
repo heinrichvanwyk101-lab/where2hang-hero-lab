@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v243';
+export const BUILD = 'world v244';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1531,6 +1531,29 @@ function inwardAt(id, pts, i, dist){
 /* The same sample, pushed the other way. inwardAt keeps whichever side lands inside the polygon;
    this keeps whichever lands outside, which is all the difference between a ring road and a
    beach. */
+/* WHICH WAY IS OUT, DECIDED ONCE PER SAMPLE — see outwardAt below for why deciding it per call
+   is not the same thing. Probed at a short fixed distance, where "is this point inside the
+   island" is a question about the coast at this sample rather than about whatever land happens
+   to lie a full beach-width away across a channel. */
+function outwardSign(id, pts, i, probe){
+  const n = pts.length - 1;
+  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+  let tx = b.x - a.x, ty = b.y - a.y;
+  const L = Math.hypot(tx, ty) || 1;
+  tx /= L; ty /= L;
+  return insideIsle(id, pts[i].x - ty * probe, pts[i].y + tx * probe) ? -1 : 1;
+}
+
+/* Offset along the sample normal in a direction the CALLER fixed, with no test of its own. */
+function outwardFixed(pts, i, dist, sgn){
+  const n = pts.length - 1;
+  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+  let tx = b.x - a.x, ty = b.y - a.y;
+  const L = Math.hypot(tx, ty) || 1;
+  tx /= L; ty /= L;
+  return [pts[i].x - ty * dist * sgn, pts[i].y + tx * dist * sgn];
+}
+
 function outwardAt(id, pts, i, dist){
   const n = pts.length - 1;
   const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
@@ -5271,6 +5294,79 @@ DISTRICTS.forEach(d => {
        along one direction from one origin. */
     const reach = [];
     for (let i = 0; i < n; i++) reach.push(beachReach(d.id, o, i, BW));
+    /* THE PINCHES ARE TEST NOISE, AND THEY ARE WHAT MAKES THE BEACH A ROW OF TRIANGLES.
+
+       Measured on the built geometry, island by island: Corniche has 153 runs of zero reach and
+       146 of them are one or two samples long, longest 4. Saadiyat 143 of 175 isolated, Reem 129
+       of 186, Yas 71 of 125. These are not inlets. A ninety-metre beach does not vanish for one
+       eight-metre sample and come back at full width immediately after — the per-sample test is
+       conservative and slightly noisy along a real surveyed coastline, and a single failure drops
+       every outward ring at that sample onto the outline. The skirt becomes a vertical curtain
+       one sample wide, and with a pinch every sixteen samples the strip between them reads as a
+       row of separate wedges rather than one surface. That is the reported symptom.
+
+       CLOSED FIRST — a dilation then an erosion over the same seven-sample window, which is the
+       standard way to delete gaps shorter than the window while leaving everything longer at its
+       original extent. A neighbour-pair despeckle was tried first and measured worse: it only
+       reaches one sample either side, so Corniche's runs of three and four survived it, and the
+       slope limiter then had to taper into every one of them and ate the beach — median width
+       fell from 0.74 to 0.50 on Corniche and Al Maryah's beach all but disappeared at 0.05.
+       Closing removes those runs outright, so the taper is spent only on collapses that are real.
+
+       THEN LIMIT THE SLOPE, which only ever decreases reach and so cannot fold anything. Genuine
+       collapses — the head of a real inlet, Al Raha's canals — survive despeckling because they
+       are tens of samples long, and this makes the beach taper into them over about twenty
+       samples instead of falling off a cliff in one. A beach that narrows to nothing is what a
+       real coast does; one that stops dead is what reads as a broken surface. */
+    /* THE TEN RINGS OF ONE SAMPLE MUST MARCH THE SAME WAY, AND THEY DID NOT.
+
+       outwardAt re-decides the direction on every call, flipping to the far side whenever the
+       offset point lands inside the island. That is a reasonable rule for a single query and the
+       wrong one for a strip: the rings of one sample are queried at ten different distances, and
+       at a coast with water on both sides — a spit, a channel, the head of a marina — the inner
+       ring at 1.8 units stays seaward while the outer ring at 12.0 reaches across the channel,
+       tests inside, and flips LANDWARD. The two ends of the same skirt then point in opposite
+       directions and the surface folds back over the island, which is geometry crossing its own
+       coastline and reads as a shape protruding from the land edge.
+
+       So the direction is settled once per sample, from a short probe that asks about the coast
+       here rather than about land a full beach-width away, and all ten rings take it.
+
+       THE PROBE IS IN SHAPE UNITS, NOT WORLD ONES. o holds shape-space coordinates — every call
+       below divides a world offset by d.r before passing it — so a probe written as a world
+       distance is roughly d.r times too far, lands most of the way across the island, and reports
+       "inside" for samples whose coast is perfectly ordinary. Measured while getting this wrong:
+       it pushed Saadiyat's inverted share from 20.1 to 26.7 per cent and Al Maryah's from 2 to
+       9.5. It takes the first outward ring's own offset, which is the shortest distance any ring
+       here actually uses. */
+    const sgn = [];
+    const SGN_PROBE = 1.8 / d.r;
+    for (let i = 0; i < n; i++) sgn.push(outwardSign(d.id, o, i, SGN_PROBE));
+
+    const RW = 3;                                     // half-window: closes dropouts up to 7 samples
+    const dil = new Array(n), ero = new Array(n);
+    for (let i = 0; i < n; i++){
+      let m = 0;
+      for (let k = -RW; k <= RW; k++) m = Math.max(m, reach[(i + k + n) % n]);
+      dil[i] = m;
+    }
+    for (let i = 0; i < n; i++){
+      let m = Infinity;
+      for (let k = -RW; k <= RW; k++) m = Math.min(m, dil[(i + k + n) % n]);
+      ero[i] = m;
+    }
+    for (let i = 0; i < n; i++) reach[i] = ero[i];
+    const REACH_STEP = BW * 0.14;
+    for (let s = 0; s < 2; s++){
+      for (let k = 0; k < n; k++){
+        const i = k, j = (k + 1) % n;
+        if (reach[j] > reach[i] + REACH_STEP) reach[j] = reach[i] + REACH_STEP;
+      }
+      for (let k = n - 1; k >= 0; k--){
+        const i = (k + 1) % n, j = k;
+        if (reach[j] > reach[i] + REACH_STEP) reach[j] = reach[i] + REACH_STEP;
+      }
+    }
     const pos = [], col = [], idx = [];
     P.forEach(([off, y, sh]) => {
       for (let i = 0; i < n; i++){
@@ -5279,7 +5375,7 @@ DISTRICTS.forEach(d => {
         // always wider than 1.8 units.
         const f = reach[i] / BW;
         const [px, py] = off < 0 ? inwardAt(d.id, o, i, -off / d.r)
-                                 : outwardAt(d.id, o, i, (off / d.r) * f);
+                                 : outwardFixed(o, i, (off / d.r) * f, sgn[i]);
         pos.push(px * d.r, y, -py * d.r);
         col.push(sh, sh, sh);
       }
