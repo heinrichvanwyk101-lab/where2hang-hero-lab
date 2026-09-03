@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v250';
+export const BUILD = 'world v251';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5353,15 +5353,35 @@ DISTRICTS.forEach(d => {
          The heights are the same numbers they have always been, which is the point: slope is drop
          over run, and only the run changes. The steepest face on the profile goes from 32 degrees
          to about 6, and the beach stops reading as a terrace with a step in it. */
+      /* A SHORE FACE, BECAUSE A UNIFORMLY GENTLE BEACH AND A MOVING SEA DO NOT MIX.
+
+         Six times the run made every slope on the profile 1 to 6 degrees, and the sea is not a
+         flat plane: the wave loop is sin*0.55 + sin*0.42, so the surface swings 0.97 either side
+         of SEA_Y. Two nearly parallel surfaces sweeping through each other is z-fighting, and it
+         renders as a comb of triangles along the waterline — reported as the beach looking "too
+         thin to properly render", which is the right observation and the wrong cause.
+
+         Measured on Corniche's own cross-section at sea 0.85: the water reaches from -0.12 to
+         1.82, and the beach passed through that band between horizontal 10.6 and 49.9. Thirty-
+         nine units of sand inside the wash zone, with seven of the ten rings in it.
+
+         So the beach is no longer one uniform ramp. It keeps a wide, almost level dry berm — that
+         is the width that was asked for and it is where the beach reads as a beach — then drops
+         through the wave band over a short run, then flattens again into submerged shallows out
+         to the same total width as before. Ring 2 is lifted to 1.90 specifically to sit ABOVE the
+         wave crest, so the long gentle run ends before the water can reach it.
+
+         That puts the wash zone at about 9 units instead of 39, which is a crossing the depth
+         buffer can resolve. Total run, both anchor rings, and every shade are unchanged. */
       [-1.8, GROUND, 1.00],   // on the top face, inside the outline: overlap, do not abut
       [ 1.8, 2.55,   1.06],   // clear of the bevel at its widest; promenade starts here
-      [11.4, 1.55,   0.74],   // was the 68-degree sea wall; now the gentlest thing on the coast
-      [22.2, 0.75,   1.10],
-      [31.2, 0.35,   1.28],   // berm
-      [39.6, 0.16,   1.55],   // FOAM, upper edge
-      [42.0, 0.10,   1.55],   // FOAM, lower edge
-      [45.6, 0.00,   0.78],   // wet — meets mean sea level, which SEA_Y now lifts
-      [52.8, -0.35,  0.58],
+      [36.0, 1.90,   0.74],   // dry berm ends just ABOVE the wave crest — 1.1 deg of run
+      [40.0, 0.75,   1.10],   // shore face: crosses the wash zone at 16 deg, not 2
+      [42.0, 0.35,   1.28],   // berm
+      [43.0, 0.16,   1.55],   // FOAM, upper edge
+      [43.6, 0.10,   1.55],   // FOAM, lower edge
+      [44.6, 0.00,   0.78],   // wet
+      [47.0, -0.35,  0.58],
       [63.0, -1.20,  0.38],   // MUST clear the -0.97 wave trough — see the note above
     ];
     /* ONE SKIRT PER LANDMASS, NOT ONE PER ISLAND — AND THIS IS AL RAHA'S MISSING BEACH.
