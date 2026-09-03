@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v267';
+export const BUILD = 'world v268';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5128,6 +5128,9 @@ const DISTRICTS = [
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
   { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+    /* FULLY BUILT, per the brief: the generated fill is kept everywhere the survey has nothing,
+       not only within 160 m of a surveyed footprint (world-nav cullFabric). */
+    fillAll:true,
     /* NO GENERATED BUILDING STOCK ON THIS ISLAND, and it is the only one carrying the flag.
 
        Al Raha Beach is a single master-planned development on reclaimed ground, not a city that

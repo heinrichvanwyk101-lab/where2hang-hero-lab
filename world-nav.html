@@ -679,7 +679,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v190', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v191', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -5247,7 +5247,11 @@ function cullFabric(d, list){
         if (inZone(ix, iz)){ o.setMatrixAt(i, zero); culled++; continue; }
         const g = nearGrain(ix, iz);
         /* Too close: a real building already stands here. Too far: nobody builds here at all. */
-        if (g.d2 < NEAR2 || g.d2 > FAR2){ o.setMatrixAt(i, zero); culled++; continue; }
+        /* d.fillAll (nav v191): a district that is known to be fully built — Al Raha — keeps its
+           generated stock however far the nearest surveyed footprint is; the far test exists to
+           stop filler spreading over ground nobody built on, and that ground does not exist there.
+           The near test still yields to every real building. */
+        if (g.d2 < NEAR2 || (g.d2 > FAR2 && !d.fillAll)){ o.setMatrixAt(i, zero); culled++; continue; }
         kept++;
         if (!GFIT) continue;
         /* THE SCALE IS THE BOX. urbanFabric writes M.scale.set(o.w, o.h, o.d) onto a unit profile
