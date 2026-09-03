@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v236';
+export const BUILD = 'world v237';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8591,7 +8591,41 @@ function buildGroundFor(d){
   });
 }
 
-DISTRICTS.forEach(d => { if (!d.pending) buildGroundFor(d); });
+/* THE UNBUILT PLATFORM HAD NO DAY OR DUSK MATERIAL, AND THAT IS THE GREY ISLAND.
+
+   An island wears matLandFlat (0x424E58, a dark blue-grey) on slot 0 until buildGroundFor
+   replaces it with the painted canvas. Only Corniche is !pending, so only Corniche was painted at
+   load — the other five kept matLandFlat, which carries no userData.dayMats or duskMats, so
+   applyView had nothing to swap to and left them grey in every lit view. The world overview is
+   the one shot showing all six at once, which is exactly where that reads as one sandy island
+   beside five slate ones.
+
+   It also explains why this looked intermittent rather than broken: whether an island is sand or
+   grey depends purely on whether anything has built it yet this session. Visit Yas and come back
+   and Yas is sand; reload and it is grey again. Nothing was ever painting wrongly — five sixths
+   of the archipelago simply was not painted.
+
+   THE FIX IS NOT TO PAINT THEM ALL AT LOAD. That is five more buildGroundFor calls on the startup
+   path, which is the cost the d.pending deferral exists to avoid on exactly the devices that
+   already struggle. Instead the flat platform gets the SAME untextured sand materials the painted
+   ground is built from — dayGround and duskGround are the un-mapped originals buildGroundFor
+   clones before adding its canvas, so this shares those instances rather than inventing a second
+   pair of colours that could drift from them. An unpainted island now reads as plain sand and
+   gains its roads and blocks when it is actually built.
+
+   userData.ground IS DELIBERATELY NOT SET HERE. applyView's Plan branch does
+   `if (o.userData.ground) o.material = o.userData.planMats` — with ground true and no planMats
+   that assigns undefined, and three.js then reads material.visible on undefined and kills the
+   render loop from inside projectObject. That is the failure snapshotMats' own header describes.
+   Leaving ground unset keeps Plan behaving exactly as it does today: an island with no painted
+   ground plan is hidden there, which is honest, since there is no ground plan to draw yet. */
+function flatGroundMats(d){
+  (d.isleMeshes || []).forEach(m => {
+    m.userData.dayMats  = [dayGround,  dayBeach];
+    m.userData.duskMats = [duskGround, duskBeach];
+  });
+}
+DISTRICTS.forEach(d => { if (!d.pending) buildGroundFor(d); else flatGroundMats(d); });
 
 /* ---------- shadow flags, one sweep ---------- */
 world.traverse(o => {
