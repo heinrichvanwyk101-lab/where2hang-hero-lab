@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v254';
+export const BUILD = 'world v255';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5458,7 +5458,13 @@ DISTRICTS.forEach(d => {
        dropped, which leaves a cell-sized stair at the outer edge — under water on every island
        since the outer ring sits below the wave trough — and a cell-sized overlap at the land
        edge, which is the same overlap the strip's inner ring existed to provide. */
-    const BSPAN = Math.max(0.45, Math.min(2.6, d.r / 510)) * (d.beachScale || 1);
+    /* HALVED, ON INSTRUCTION, WITH THE CONSTRUCTION FINALLY RIGHT. The first look at the
+       heightfield beach — continuous, attached, on every island — was "too big in some areas,
+       Corniche takes a whole bay". The r/510 share was chosen against the strip, which lost half
+       its width to reach clamping and fans; the field draws its full width everywhere, so the same
+       number reads as twice the beach. r/1020 puts every island near three per cent of its span.
+       d.beachScale still multiplies it per island, and is the first lever for the trimming pass. */
+    const BSPAN = Math.max(0.22, Math.min(1.3, d.r / 1020)) * (d.beachScale || 1);
     const PROF = P.map(([off, y, sh]) => [off <= 1.8 ? off : 1.8 + (off - 1.8) * BSPAN, y, sh]);
     const D_IN  = -PROF[0][0];
     const D_MAX = PROF[PROF.length - 1][0];
@@ -5484,6 +5490,7 @@ DISTRICTS.forEach(d => {
       const NX = Math.min(440, Math.ceil((bx1 - bx0) / cellS));
       const NY = Math.min(440, Math.ceil((by1 - by0) / cellS));
       const csx = (bx1 - bx0) / NX, csy = (by1 - by0) / NY;
+      const LIP_W = Math.hypot(csx, csy) * d.r;             // one cell diagonal, world units
       const W = NX + 1;
       const vIdx = new Int32Array(W * (NY + 1)).fill(-1);
       const pos = [], col = [];
@@ -5493,7 +5500,24 @@ DISTRICTS.forEach(d => {
           const sx = bx0 + i * csx;
           const dW = distToOutline(d.id, sx, sy) * d.r;
           const sgnd = insideIsle(d.id, sx, sy) ? -dW : dW;
-          if (sgnd < -D_IN || sgnd > D_MAX) continue;
+          /* THE INLAND EDGE IS EXTENDED BY ONE CELL DIAGONAL, AND THAT IS THE GAP AT THE LAND.
+
+             A vertex was emitted only inside [-D_IN, D_MAX], and a cell with any corner outside
+             that band was dropped. At the outer edge that is harmless — the stair it leaves is
+             under water. At the INNER edge it is not: a coast cell whose inland corner falls past
+             -1.8 is dropped whole, so the beach's true inner edge sits anywhere from -1.8 to a
+             full cell seaward of it. On Corniche a cell is 10 units, and the platform bevel is
+             1.6, so along much of the coast the beach started outside the bevel and the dark
+             platform side showed between sand and land. Reported as "attachment to land still
+             not solid, still gaps", and it is exactly that.
+
+             So vertices are kept one cell diagonal further inland than the inset, at the lip's
+             own height and shade — profAt already clamps anything at or past PROF[0] to the lip —
+             which guarantees every cell that touches the band has all four corners and nothing
+             along the coast is dropped. The cost is a flat sand lip of up to one cell over the
+             ground just inland of the coast, at GROUND + 0.02; with the cell size tied to beach
+             width, halving the width halves that too. */
+          if (sgnd < -(D_IN + LIP_W) || sgnd > D_MAX) continue;
           const [y, sh] = profAt(sgnd);
           vIdx[j * W + i] = pos.length / 3;
           pos.push(sx * d.r, y, -sy * d.r);
