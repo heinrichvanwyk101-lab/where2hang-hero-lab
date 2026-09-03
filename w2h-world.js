@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v259';
+export const BUILD = 'world v260';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5565,7 +5565,7 @@ DISTRICTS.forEach(d => {
           }
           return c;
         };
-        return { remove, only,
+        return { remove, only, pip,
           keep: (x, y) => {
             for (const p of remove) if (pip(p, x, y)) return false;
             if (!only.length) return true;
@@ -5576,6 +5576,33 @@ DISTRICTS.forEach(d => {
       if (MASK) console.info('beach ' + d.id + ': masks remove=' + MASK.remove.length + ' only=' + MASK.only.length);
       const csx = (bx1 - bx0) / NX, csy = (by1 - by0) / NY;
       const LIP_W = Math.hypot(csx, csy) * d.r;             // one cell diagonal, world units
+      /* THE "ONLY" SET IS DILATED ACROSS THE LATTICE, AND THAT IS THE DIFFERENCE BETWEEN A MAP
+         AND A RENDER. OSM's natural=beach polygons sit LANDWARD of the OSM coastline — the beach
+         is land, the coastline is the water's edge — while the band this lattice draws runs
+         SEAWARD of the outline by D_MAX. Tested point-in-polygon, the two barely overlap: on the
+         first bake Corniche's beach fell from 27,575 vertices to 409 and Al Maryah and Al Raha
+         lost theirs outright. The rule that means what was intended is "the nearest stretch of
+         coast is a beach", which is the polygon raster grown seaward by the band's own width.
+         Rasterised once per island onto this lattice and dilated with a separable max filter, so
+         the cost is a few million comparisons rather than a distance-to-polygon per vertex.
+         "remove" stays as drawn: a marina basin or a buffered pier is already where it should
+         bite. */
+      const W_ = NX + 1, H_ = NY + 1;
+      let onlyMask = null;
+      if (MASK && MASK.only.length){
+        const raw = new Uint8Array(W_ * H_);
+        const pipO = (x, y) => { for (const p of MASK.only) if (MASK.pip(p, x, y)) return true; return false; };
+        for (let j = 0; j < H_; j++){ const sy = by0 + j * csy;
+          for (let i = 0; i < W_; i++) if (pipO(bx0 + i * csx, sy)) raw[j * W_ + i] = 1; }
+        const K = Math.ceil((D_MAX + LIP_W) / (Math.min(csx, csy) * d.r)) + 1;
+        const tmp = new Uint8Array(W_ * H_); onlyMask = new Uint8Array(W_ * H_);
+        for (let j = 0; j < H_; j++) for (let i = 0; i < W_; i++){          // rows
+          let v = 0; for (let k = -K; k <= K && !v; k++){ const ii = i + k; if (ii >= 0 && ii < W_ && raw[j * W_ + ii]) v = 1; }
+          tmp[j * W_ + i] = v; }
+        for (let j = 0; j < H_; j++) for (let i = 0; i < W_; i++){          // columns
+          let v = 0; for (let k = -K; k <= K && !v; k++){ const jj = j + k; if (jj >= 0 && jj < H_ && tmp[jj * W_ + i]) v = 1; }
+          onlyMask[j * W_ + i] = v; }
+      }
       const W = NX + 1;
       const vIdx = new Int32Array(W * (NY + 1)).fill(-1);
       const pos = [], col = [];
@@ -5603,7 +5630,11 @@ DISTRICTS.forEach(d => {
              ground just inland of the coast, at GROUND + 0.02; with the cell size tied to beach
              width, halving the width halves that too. */
           if (sgnd < -(D_IN + LIP_W) || sgnd > D_MAX) continue;
-          if (MASK && !MASK.keep(sx, sy)) continue;
+          if (MASK){
+            if (onlyMask && !onlyMask[j * W_ + i]) continue;
+            let cut = false; for (const p of MASK.remove) if (MASK.pip(p, sx, sy)){ cut = true; break; }
+            if (cut) continue;
+          }
           const [y, sh] = profAt(sgnd);
           vIdx[j * W + i] = pos.length / 3;
           pos.push(sx * d.r, y, -sy * d.r);
