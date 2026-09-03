@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v253';
+export const BUILD = 'world v254';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5424,208 +5424,105 @@ DISTRICTS.forEach(d => {
        distToOutline have been answering correctly about all nine landmasses this whole time. Only
        the CURVE the beach was laid along was wrong. This walks the same ring set the platform
        geometry is built from, on the same condition, and emits one strip per ring. */
-    const beachRings = [isleOutline(d.id)];
-    for (const o of beachRings){
-    const n = o.length - 1;
-    if (n < 8) continue;                       // too few samples to make a strip worth indexing
-    /* Reach is solved ONCE per sample and every ring then scales the same clamped distance, so
-       the five rings can never cross each other however tight the coast gets — they all lie
-       along one direction from one origin. */
-    const reach = [];
-    for (let i = 0; i < n; i++) reach.push(beachReach(d.id, o, i, BW));
-    /* THE PINCHES ARE TEST NOISE, AND THEY ARE WHAT MAKES THE BEACH A ROW OF TRIANGLES.
+    /* THE BEACH IS A DISTANCE-FIELD HEIGHTFIELD NOW, NOT A STRIP OF OFFSET RINGS.
 
-       Measured on the built geometry, island by island: Corniche has 153 runs of zero reach and
-       146 of them are one or two samples long, longest 4. Saadiyat 143 of 175 isolated, Reem 129
-       of 186, Yas 71 of 125. These are not inlets. A ninety-metre beach does not vanish for one
-       eight-metre sample and come back at full width immediately after — the per-sample test is
-       conservative and slightly noisy along a real surveyed coastline, and a single failure drops
-       every outward ring at that sample onto the outline. The skirt becomes a vertical curtain
-       one sample wide, and with a pinch every sixteen samples the strip between them reads as a
-       row of separate wedges rather than one surface. That is the reported symptom.
+       The strip pushed every outline sample along that sample's own normal, one ring per offset.
+       That is not an offset curve. On a convex corner adjacent normals diverge and the strip fans
+       open; on a concave one they converge and it folds; only along a straight run was it right.
+       Every fix made to it — reach, tangent, direction, floor, width — tuned a construction that
+       cannot produce an even-width beach on a curved coast, and the measurements said so:
+       Corniche's mid-ring sat 77 per cent off a constant distance from the coast at the MEDIAN.
+       Reported from the device as "starts attached to land on corners, then radiates out — the
+       basic essence of this shape is wrong." That is the right diagnosis.
 
-       CLOSED FIRST — a dilation then an erosion over the same seven-sample window, which is the
-       standard way to delete gaps shorter than the window while leaving everything longer at its
-       original extent. A neighbour-pair despeckle was tried first and measured worse: it only
-       reaches one sample either side, so Corniche's runs of three and four survived it, and the
-       slope limiter then had to taper into every one of them and ate the beach — median width
-       fell from 0.74 to 0.50 on Corniche and Al Maryah's beach all but disappeared at 0.05.
-       Closing removes those runs outright, so the taper is spent only on collapses that are real.
+       Two replacements were tried and measured before this one. A ring-level winding sign sent
+       Al Reem 14 to 77 per cent of its beach inland and Al Raha 0.6 to 71. Projecting each ring
+       vertex onto the offset curve diverged in every bay — nearest-coast alternates between the
+       two banks and the point walks off, Corniche's outer ring reaching 434 units for a beach
+       drawn at 150. Neither is retried here.
 
-       THEN LIMIT THE SLOPE, which only ever decreases reach and so cannot fold anything. Genuine
-       collapses — the head of a real inlet, Al Raha's canals — survive despeckling because they
-       are tens of samples long, and this makes the beach taper into them over about twenty
-       samples instead of falling off a cliff in one. A beach that narrows to nothing is what a
-       real coast does; one that stops dead is what reads as a broken surface. */
-    /* THE TEN RINGS OF ONE SAMPLE MUST MARCH THE SAME WAY, AND THEY DID NOT.
+       A HEIGHTFIELD SIDESTEPS THE WHOLE PROBLEM. Sample a grid over the coast; for each point
+       take its signed distance to the shore — negative inland, positive seaward — and if it is
+       within the beach's band, its height and shade come straight from the ring table read as a
+       function of that distance. There is no direction to get wrong, no per-sample reach to
+       clamp, no floor to bridge with: the distance field is the offset curve, exactly, at every
+       distance at once. A bay narrower than the beach fills to its midline because that is what
+       the field says; a headland gets the round join a headland should; a neck stays a neck.
+       Width is constant by definition because the distance IS the coordinate.
 
-       outwardAt re-decides the direction on every call, flipping to the far side whenever the
-       offset point lands inside the island. That is a reasonable rule for a single query and the
-       wrong one for a strip: the rings of one sample are queried at ten different distances, and
-       at a coast with water on both sides — a spit, a channel, the head of a marina — the inner
-       ring at 1.8 units stays seaward while the outer ring at 12.0 reaches across the channel,
-       tests inside, and flips LANDWARD. The two ends of the same skirt then point in opposite
-       directions and the surface folds back over the island, which is geometry crossing its own
-       coastline and reads as a shape protruding from the land edge.
-
-       So the direction is settled once per sample, from a short probe that asks about the coast
-       here rather than about land a full beach-width away, and all ten rings take it.
-
-       THE PROBE IS IN SHAPE UNITS, NOT WORLD ONES. o holds shape-space coordinates — every call
-       below divides a world offset by d.r before passing it — so a probe written as a world
-       distance is roughly d.r times too far, lands most of the way across the island, and reports
-       "inside" for samples whose coast is perfectly ordinary. Measured while getting this wrong:
-       it pushed Saadiyat's inverted share from 20.1 to 26.7 per cent and Al Maryah's from 2 to
-       9.5. It takes the first outward ring's own offset, which is the shortest distance any ring
-       here actually uses. */
-    /* THE BEACH IS A FRACTION OF THE ISLAND NOW, NOT A FIXED NUMBER OF UNITS.
-
-       The ring table's offsets are local units multiplied by the group scale, and the two things
-       that vary between islands run in OPPOSITE directions: Corniche has a radius of 1220 at
-       scale 1.0, Al Maryah 156 at scale 3.94. So the biggest island got the smallest beach.
-       Measured as a share of each island's own span: Corniche 2.07 per cent, Saadiyat 4.29, Yas
-       5.73, Al Reem 8.89, Al Raha 9.79, Al Maryah 19.76. That is why Corniche read as having no
-       beach at all while Al Maryah looked like a sand sheet — a tenfold spread, from one table of
-       fixed offsets. "Six times wider" was uniform in the wrong space.
-
-       Island span is 2 * r * scale, and the drawn width is 61.2 * scale, so a target share of the
-       span reduces to a multiplier in r alone — the scale cancels. r/510 puts every island at
-       about six per cent. Clamped at both ends so a future island with an extreme radius cannot
-       produce either a hairline or a beach wider than the land.
-
-       PER-ISLAND OVERRIDE: d.beachScale multiplies this, so an island can be tuned on its own
-       without touching the others or this formula. */
+       Cost is one distToOutline and one insideIsle per grid vertex, both grid-accelerated, on a
+       lattice sized so about fourteen cells span the beach — 25 to 65 thousand samples per
+       island, once, at build time. Triangle counts land near the strip's. Vertices that fall
+       inland past the overlap or seaward past the outer ring are simply not emitted, so the
+       mesh is an annulus around the coast and nothing else; cells straddling either boundary are
+       dropped, which leaves a cell-sized stair at the outer edge — under water on every island
+       since the outer ring sits below the wave trough — and a cell-sized overlap at the land
+       edge, which is the same overlap the strip's inner ring existed to provide. */
     const BSPAN = Math.max(0.45, Math.min(2.6, d.r / 510)) * (d.beachScale || 1);
-
-    const sgn = [];
-    const SGN_PROBE = 1.8 / d.r;
-    for (let i = 0; i < n; i++) sgn.push(outwardSign(d.id, o, i, SGN_PROBE));
-
-    const RW = 3;                                     // half-window: closes dropouts up to 7 samples
-    const dil = new Array(n), ero = new Array(n);
-    for (let i = 0; i < n; i++){
-      let m = 0;
-      for (let k = -RW; k <= RW; k++) m = Math.max(m, reach[(i + k + n) % n]);
-      dil[i] = m;
-    }
-    for (let i = 0; i < n; i++){
-      let m = Infinity;
-      for (let k = -RW; k <= RW; k++) m = Math.min(m, dil[(i + k + n) % n]);
-      ero[i] = m;
-    }
-    for (let i = 0; i < n; i++) reach[i] = ero[i];
-    /* A FLOOR, BECAUSE A BEACH THAT STOPS IS WORSE THAN ONE THAT IS TOO WIDE.
-
-       Reported directly, and the measurements agree: "no beaches in narrow channels", and the
-       runs die. That is the clamp doing exactly what it was written to do — a channel narrower
-       than the beach cannot carry it, so reach goes to nearly zero and the skirt collapses. The
-       result is a coast that has sand along some stretches and none along others, which reads as
-       a broken build rather than as a narrow inlet.
-
-       This puts a floor under it: no sample drops below 45 per cent of the full width, so the
-       beach is continuous everywhere and only NARROWS at a pinch. The cost is the thing the clamp
-       existed to prevent, and it is real — in a channel narrower than twice the floor the rings
-       from opposite banks can meet in the middle. That is a visible sand bridge across a creek,
-       which is a smaller and more local wrong than a coastline that stops. d.beachScale is the
-       per-island lever for tuning that back down where it shows. */
-    const REACH_FLOOR = BW * 0.45;
-    for (let i = 0; i < n; i++) if (reach[i] < REACH_FLOOR) reach[i] = REACH_FLOOR;
-
-    const REACH_STEP = BW * 0.14;
-    for (let s = 0; s < 2; s++){
-      for (let k = 0; k < n; k++){
-        const i = k, j = (k + 1) % n;
-        if (reach[j] > reach[i] + REACH_STEP) reach[j] = reach[i] + REACH_STEP;
+    const PROF = P.map(([off, y, sh]) => [off <= 1.8 ? off : 1.8 + (off - 1.8) * BSPAN, y, sh]);
+    const D_IN  = -PROF[0][0];
+    const D_MAX = PROF[PROF.length - 1][0];
+    const profAt = s => {
+      if (s <= PROF[0][0]) return [PROF[0][1], PROF[0][2]];
+      for (let k = 0; k < PROF.length - 1; k++){
+        const [o0, y0, s0] = PROF[k], [o1, y1, s1] = PROF[k + 1];
+        if (s <= o1){ const t = (s - o0) / ((o1 - o0) || 1); return [y0 + (y1 - y0) * t, s0 + (s1 - s0) * t]; }
       }
-      for (let k = n - 1; k >= 0; k--){
-        const i = (k + 1) % n, j = k;
-        if (reach[j] > reach[i] + REACH_STEP) reach[j] = reach[i] + REACH_STEP;
+      const L = PROF[PROF.length - 1]; return [L[1], L[2]];
+    };
+    {
+      const oc = outlineClosed(d.id);
+      let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+      for (const [x, y] of oc){
+        if (x < bx0) bx0 = x; if (x > bx1) bx1 = x;
+        if (y < by0) by0 = y; if (y > by1) by1 = y;
       }
-    }
-    const pos = [], col = [], idx = [];
-    P.forEach(([off, y, sh]) => {
-      for (let i = 0; i < n; i++){
-        // reach[i] is the largest OUTWARD distance this sample can take before folding, so the
-        // pinch at an inlet stays proportional. Inward offsets need no clamp: the island is
-        // always wider than 1.8 units.
-        const f = reach[i] / BW;
-        /* THE INNER RING TAKES THE SAME LOCKED DIRECTION AS THE OUTER ONES, JUST NEGATED, AND
-           THAT IS THE WALL AT THE BACK OF THE BEACH.
-
-           It used to come from inwardAt, which picks its side by testing which one lands inside
-           the island. Two ways that goes wrong here and both were on screen. At a degenerate
-           sample its normal was (0,0), so the ring landed exactly ON the outline instead of 1.8
-           units inside it — measured as a ring0-to-ring1 gap of 1.8 world units on Al Raha where
-           every other island reads the correct 3.6 — and a skirt that starts at the outline abuts
-           the platform rather than overlapping it, leaving the platform's own bevelled side
-           (matBeach, 0x3E3B32, near-black brown) standing along the coast as a wall. And even
-           with a good normal, an independent inside/outside test can disagree with the direction
-           the outer rings settled on, which tears the strip apart at that sample.
-
-           sgn[i] is already the seaward direction for this sample, chosen once from a short probe.
-           Negating it is the landward direction by construction, so the inner ring cannot land on
-           the wrong side and cannot fail to inset. */
-        /* Ring 1 at +1.8 is an anchor, not part of the run: it clears the platform bevel, which
-           is a fixed 1.6 units on every island. So the span is scaled ABOUT it, leaving the
-           overlap that hides the land join exactly as measured. */
-        const offS = off <= 1.8 ? off : 1.8 + (off - 1.8) * BSPAN;
-        const [px, py] = off < 0 ? outwardFixed(o, i, (-off) / d.r, -sgn[i])
-                                 : outwardFixed(o, i, (offS / d.r) * f, sgn[i]);
-        pos.push(px * d.r, y, -py * d.r);
-        col.push(sh, sh, sh);
+      const padS = (D_MAX + 2) / d.r;
+      bx0 -= padS; by0 -= padS; bx1 += padS; by1 += padS;
+      const cellW = Math.max(2.5, D_MAX / 14);
+      const cellS = cellW / d.r;
+      const NX = Math.min(440, Math.ceil((bx1 - bx0) / cellS));
+      const NY = Math.min(440, Math.ceil((by1 - by0) / cellS));
+      const csx = (bx1 - bx0) / NX, csy = (by1 - by0) / NY;
+      const W = NX + 1;
+      const vIdx = new Int32Array(W * (NY + 1)).fill(-1);
+      const pos = [], col = [];
+      for (let j = 0; j <= NY; j++){
+        const sy = by0 + j * csy;
+        for (let i = 0; i <= NX; i++){
+          const sx = bx0 + i * csx;
+          const dW = distToOutline(d.id, sx, sy) * d.r;
+          const sgnd = insideIsle(d.id, sx, sy) ? -dW : dW;
+          if (sgnd < -D_IN || sgnd > D_MAX) continue;
+          const [y, sh] = profAt(sgnd);
+          vIdx[j * W + i] = pos.length / 3;
+          pos.push(sx * d.r, y, -sy * d.r);
+          col.push(sh, sh, sh);
+        }
       }
-    });
-    /* THE STRIP WAS FACING THE SEABED. This is why nothing has been visible for five drops, and
-       every explanation before it was wrong because they were all explanations of an appearance.
-
-       Reconstructing the geometry outside three and taking the cross product of each triangle:
-       3,181 of 3,240 faces pointed DOWN. MeshStandardMaterial is side: FrontSide by default, so
-       every one of them was back-face culled from any camera above the water. The beach has been
-       built correctly, positioned correctly, coloured correctly and shaded correctly since v23,
-       and drawing nothing at all.
-
-       The cause is the outline's handedness. ISLE_SHAPES runs clockwise in shape space, and the
-       mapping to world negates Y into Z — a reflection, which flips the sense of every winding
-       that goes through it. So a triangle order that is correct on paper comes out inverted in
-       the scene, and no amount of reasoning about which way the ring "goes" would have settled
-       it. Only the cross product settles it.
-
-       The winding is flipped here rather than by setting side: DoubleSide. Double-siding hides
-       a wrong normal instead of fixing it, and this surface is lit — it needs to face the sun
-       to be shaded as sand rather than as the underside of a shelf. */
-    for (let r = 0; r < P.length - 1; r++){
-      for (let i = 0; i < n; i++){
-        const j = (i + 1) % n, a = r * n, b = (r + 1) * n;
-        idx.push(a + i, b + j, b + i, a + i, a + j, b + j);
+      const idx = [];
+      for (let j = 0; j < NY; j++){
+        for (let i = 0; i < NX; i++){
+          const a = vIdx[j * W + i],       b = vIdx[j * W + i + 1];
+          const c = vIdx[(j + 1) * W + i + 1], e = vIdx[(j + 1) * W + i];
+          if (a < 0 || b < 0 || c < 0 || e < 0) continue;
+          // +Y facing: world X follows i, world Z runs against j (Z = -sy)
+          idx.push(a, b, c, a, c, e);
+        }
       }
-    }
-    const bg = new THREE.BufferGeometry();
-    bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    bg.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
-    bg.setIndex(idx);
-    bg.computeVertexNormals();
-    const beach = new THREE.Mesh(bg, beachSand.night);
-    /* dayMats and duskMats are not optional. A mesh carrying neither is handed the switcher's
-       generic pale dayMat in Day, and setting duskMats is also what keeps this out of the lift
-       registry — which would otherwise repaint the sand with DUSK_STONE along with the city.
-       userData.ground is deliberately NOT set: Plan is a drawing of the ground plan, and the
-       beach is outside every line on it. */
-    beach.userData.dayMats  = beachSand.day;
-    beach.userData.duskMats = beachSand.dusk;
-    /* NO SHADOWS ON THE BEACH, for the reason already written above the sea.
-
-       The dusk sun sits thirteen degrees up, so an island shadows its own seaward skirt for the
-       whole width of it on the away side — physically correct and, in the render, a black rim
-       around the island reading as exactly the pedestal edge the beach was built to remove. The
-       water opted out of shadow receipt for the same reason and the same sun. A narrow strip of
-       nearly flat pale sand has nothing to gain from shadowing and everything to lose.
-
-       Casting is off too: a skirt this shallow throws nothing anyone would see, and every
-       triangle offered to the shadow pass is paid for at both light sources. This must be set
-       AFTER the one-sweep traverse further down, which turns both flags on for everything —
-       hence the flag on the object rather than a call here. */
-    beach.userData.noShadow = true;
-    g.add(beach);
+      if (idx.length){
+        const bg = new THREE.BufferGeometry();
+        bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        bg.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
+        bg.setIndex(idx);
+        bg.computeVertexNormals();
+        const beach = new THREE.Mesh(bg, beachSand.night);
+        beach.userData.dayMats  = beachSand.day;
+        beach.userData.duskMats = beachSand.dusk;
+        beach.userData.noShadow = true;
+        beach.userData.beachField = { cells: NX * NY, verts: pos.length / 3, tris: idx.length / 3, cellW };
+        g.add(beach);
+      }
     }
   }
 
