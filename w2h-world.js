@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v248';
+export const BUILD = 'world v250';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -481,7 +481,27 @@ farSea.rotation.x = -Math.PI/2;
 
    -1.15 clears the trough by 0.18. The step this leaves at the 3200-unit boundary is 1.15 units
    seen from at least 1,600 away through 40 per cent fog. */
-farSea.position.y = -1.15;
+/* SEA LEVEL, RAISED — AND THE TWO PLANES MOVE TOGETHER.
+
+   The near water sits at 0 with a wave loop of sin*0.55 + sin*0.42, so mean sea level is 0 and
+   the profile's "wet" ring at y 0.00 was drawn to meet it. Raising it lifts the waterline UP the
+   beach slope, which is what takes height off the exposed island edge: every island's top face is
+   at 2.9 times its group scale, so on Al Maryah that edge stands 11.4 units out of the water and
+   on Al Reem 8.8, and the sea coming up is the only thing that shortens it without redrawing the
+   platform.
+
+   farSea keeps its 1.15 below the near plane. That gap is not arbitrary — the comment above
+   records it as clearing the wave trough at -0.97 by 0.18, and moving one plane without the other
+   would put the flat backdrop back through the animated surface.
+
+   ?sea=N overrides it live, because how far up is a judgement made by eye on the device, not a
+   number to be argued from here. */
+const SEA_Y = (() => {
+  const q = (location.search.match(/[?&]sea=(-?\d*\.?\d+)/) || [])[1];
+  return q !== undefined ? parseFloat(q) : 0.85;
+})();
+water.position.y = SEA_Y;
+farSea.position.y = SEA_Y - 1.15;
 farSea.receiveShadow = false;
 farSea.castShadow = false;
 scene.add(farSea);
@@ -1884,7 +1904,16 @@ const COAST_CLEAR = 0.050;                   // no building closer than this to 
    All three in metres, at the figures the real Corniche actually has: a wide public beach, a
    generous but walkable park, and a seafront road close enough to the sand that the two read as
    one promenade. */
-const BEACH_M       = 90;
+/* SIX TIMES WIDER, ON INSTRUCTION AND FOR A REASON THE PROFILE MAKES PLAIN. The heights in the
+   beach's ring table are fixed, so width is the only thing that sets its slope: at 90 m the drop
+   from the top face to the waterline happened over a run short enough to read as a terrace with a
+   step in it rather than a shore. Widening the run without touching the heights is what turns the
+   same profile into a beach — it takes the steepest face from 32 degrees to about 6.
+   ?beachm=N overrides it for comparison. */
+const BEACH_M       = (() => {
+  const q = (location.search.match(/[?&]beachm=(\d+)/) || [])[1];
+  return q !== undefined ? +q : 540;
+})();
 const COAST_PARK_M  = 46;
 const RING_INSET_M  = 78;
 
@@ -5287,16 +5316,53 @@ DISTRICTS.forEach(d => {
          Offsets are absolute world units from the outline now, signed, rather than a fraction of
          a width — because the two rings that matter are defined by bevelSize, which is a fixed
          distance and not a proportion of anything. */
+      /* THE OFFSETS ARE RESPACED, AND THE HEIGHTS ARE UNTOUCHED. THIS IS THE WALL.
+
+         The sea-wall ring sat 0.4 units out from a ring 1.0 units above it: a 68-degree face. On
+         Corniche that is a 7.8 metre kerb, which is what it was drawn as and what it still is.
+         But every other island's group is SCALED — Al Maryah 3.94, Al Reem 3.04, Al Raha 2.54,
+         Yas 1.89, Saadiyat 1.61 — and this profile scales with it, so the same step becomes a
+         30 metre near-vertical face on Al Maryah, 24 on Al Reem, 20 on Al Raha. With a 3.6-unit
+         flat shelf immediately above it, the coast reads as a terrace ending in a cliff rather
+         than a beach running into the sea. Reported exactly that way: "a mountain wall at where
+         beach should end", and "not solid and not reaching sea level either".
+
+         Fixed by redistributing the HORIZONTAL spacing so no segment is a wall, keeping every
+         height, the total width, and both fixed rings: -1.8 still lands on the top face inside
+         the outline, and +1.8 still clears the platform bevel at its widest (bevelSize 1.6), so
+         the overlap that stops the platform edge showing through is untouched.
+
+         Each interval's run is set halfway between what it had and what it would get if run were
+         allocated purely in proportion to drop. Pure proportion gives one uniform ramp and throws
+         away the berm and foam structure the shades depend on; the blend keeps the shape and
+         takes the steepest face from 68 degrees to 33. On Al Maryah that is the difference
+         between a 30 metre cliff and a 30 metre slope. */
+      /* SIX TIMES THE RUN, MEASURED FROM RING 1 OUTWARD, HEIGHTS UNTOUCHED.
+
+         BEACH_M is only the reach CLAMP — the largest offset a sample's coast will tolerate before
+         the rings fold. The width the beach actually has is this column, so raising BEACH_M alone
+         changed nothing on the built geometry, which the cross-section confirmed: Corniche stayed
+         13.8 units end to end at 90 m and at 540.
+
+         The first two rings do not scale. -1.8 sits on the top face inside the outline and +1.8
+         clears the platform bevel at its widest (bevelSize 1.6); that pair is what makes the skirt
+         OVERLAP the platform instead of abutting it, and stretching the gap between them would
+         drop the quad below the top face and bury it. So everything from ring 1 outward is scaled
+         about ring 1, six times, and the anchor is left alone.
+
+         The heights are the same numbers they have always been, which is the point: slope is drop
+         over run, and only the run changes. The steepest face on the profile goes from 32 degrees
+         to about 6, and the beach stops reading as a terrace with a step in it. */
       [-1.8, GROUND, 1.00],   // on the top face, inside the outline: overlap, do not abut
       [ 1.8, 2.55,   1.06],   // clear of the bevel at its widest; promenade starts here
-      [ 2.2, 1.55,   0.74],   // sea wall
-      [ 3.6, 0.75,   1.10],
-      [ 5.6, 0.35,   1.28],   // berm
-      [ 7.8, 0.16,   1.55],   // FOAM, upper edge
-      [ 8.6, 0.10,   1.55],   // FOAM, lower edge
-      [ 9.4, 0.00,   0.78],   // wet
-      [10.8, -0.35,  0.58],
-      [12.0, -1.20,  0.38],   // MUST clear the -0.97 wave trough — see the note above
+      [11.4, 1.55,   0.74],   // was the 68-degree sea wall; now the gentlest thing on the coast
+      [22.2, 0.75,   1.10],
+      [31.2, 0.35,   1.28],   // berm
+      [39.6, 0.16,   1.55],   // FOAM, upper edge
+      [42.0, 0.10,   1.55],   // FOAM, lower edge
+      [45.6, 0.00,   0.78],   // wet — meets mean sea level, which SEA_Y now lifts
+      [52.8, -0.35,  0.58],
+      [63.0, -1.20,  0.38],   // MUST clear the -0.97 wave trough — see the note above
     ];
     /* ONE SKIRT PER LANDMASS, NOT ONE PER ISLAND — AND THIS IS AL RAHA'S MISSING BEACH.
 
