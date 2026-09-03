@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v252';
+export const BUILD = 'world v253';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5478,6 +5478,25 @@ DISTRICTS.forEach(d => {
        it pushed Saadiyat's inverted share from 20.1 to 26.7 per cent and Al Maryah's from 2 to
        9.5. It takes the first outward ring's own offset, which is the shortest distance any ring
        here actually uses. */
+    /* THE BEACH IS A FRACTION OF THE ISLAND NOW, NOT A FIXED NUMBER OF UNITS.
+
+       The ring table's offsets are local units multiplied by the group scale, and the two things
+       that vary between islands run in OPPOSITE directions: Corniche has a radius of 1220 at
+       scale 1.0, Al Maryah 156 at scale 3.94. So the biggest island got the smallest beach.
+       Measured as a share of each island's own span: Corniche 2.07 per cent, Saadiyat 4.29, Yas
+       5.73, Al Reem 8.89, Al Raha 9.79, Al Maryah 19.76. That is why Corniche read as having no
+       beach at all while Al Maryah looked like a sand sheet — a tenfold spread, from one table of
+       fixed offsets. "Six times wider" was uniform in the wrong space.
+
+       Island span is 2 * r * scale, and the drawn width is 61.2 * scale, so a target share of the
+       span reduces to a multiplier in r alone — the scale cancels. r/510 puts every island at
+       about six per cent. Clamped at both ends so a future island with an extreme radius cannot
+       produce either a hairline or a beach wider than the land.
+
+       PER-ISLAND OVERRIDE: d.beachScale multiplies this, so an island can be tuned on its own
+       without touching the others or this formula. */
+    const BSPAN = Math.max(0.45, Math.min(2.6, d.r / 510)) * (d.beachScale || 1);
+
     const sgn = [];
     const SGN_PROBE = 1.8 / d.r;
     for (let i = 0; i < n; i++) sgn.push(outwardSign(d.id, o, i, SGN_PROBE));
@@ -5495,6 +5514,23 @@ DISTRICTS.forEach(d => {
       ero[i] = m;
     }
     for (let i = 0; i < n; i++) reach[i] = ero[i];
+    /* A FLOOR, BECAUSE A BEACH THAT STOPS IS WORSE THAN ONE THAT IS TOO WIDE.
+
+       Reported directly, and the measurements agree: "no beaches in narrow channels", and the
+       runs die. That is the clamp doing exactly what it was written to do — a channel narrower
+       than the beach cannot carry it, so reach goes to nearly zero and the skirt collapses. The
+       result is a coast that has sand along some stretches and none along others, which reads as
+       a broken build rather than as a narrow inlet.
+
+       This puts a floor under it: no sample drops below 45 per cent of the full width, so the
+       beach is continuous everywhere and only NARROWS at a pinch. The cost is the thing the clamp
+       existed to prevent, and it is real — in a channel narrower than twice the floor the rings
+       from opposite banks can meet in the middle. That is a visible sand bridge across a creek,
+       which is a smaller and more local wrong than a coastline that stops. d.beachScale is the
+       per-island lever for tuning that back down where it shows. */
+    const REACH_FLOOR = BW * 0.45;
+    for (let i = 0; i < n; i++) if (reach[i] < REACH_FLOOR) reach[i] = REACH_FLOOR;
+
     const REACH_STEP = BW * 0.14;
     for (let s = 0; s < 2; s++){
       for (let k = 0; k < n; k++){
@@ -5529,8 +5565,12 @@ DISTRICTS.forEach(d => {
            sgn[i] is already the seaward direction for this sample, chosen once from a short probe.
            Negating it is the landward direction by construction, so the inner ring cannot land on
            the wrong side and cannot fail to inset. */
+        /* Ring 1 at +1.8 is an anchor, not part of the run: it clears the platform bevel, which
+           is a fixed 1.6 units on every island. So the span is scaled ABOUT it, leaving the
+           overlap that hides the land join exactly as measured. */
+        const offS = off <= 1.8 ? off : 1.8 + (off - 1.8) * BSPAN;
         const [px, py] = off < 0 ? outwardFixed(o, i, (-off) / d.r, -sgn[i])
-                                 : outwardFixed(o, i, (off / d.r) * f, sgn[i]);
+                                 : outwardFixed(o, i, (offS / d.r) * f, sgn[i]);
         pos.push(px * d.r, y, -py * d.r);
         col.push(sh, sh, sh);
       }
