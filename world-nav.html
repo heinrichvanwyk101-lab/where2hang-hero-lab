@@ -118,7 +118,13 @@
      only visibility changed, so the capability is one query param away next time something
      actually needs watching live rather than half-guessed at. */
   .embedstamp{display:none}
-  .embedstamp.dbgshow{position:fixed;right:8px;top:8px;z-index:2147483000;pointer-events:none;
+  /* display:block IS THE LOAD-BEARING PROPERTY HERE AND IT WAS THE ONE MISSING. This rule set
+     position, z-index, font, colour, background and border, but never display — so the
+     .embedstamp{display:none} above it stayed in force and ?showdiag added a class that
+     changed everything except whether the element rendered. The stamp could not appear under
+     any URL, which is why the build could never be confirmed from the phone and several
+     deploys were argued about instead of read. */
+  .embedstamp.dbgshow{display:block;position:fixed;right:8px;top:8px;z-index:2147483000;pointer-events:none;
     font:600 9px/1.35 ui-monospace,monospace;color:rgba(255,224,150,.92);
     text-shadow:0 1px 2px rgba(0,0,0,.9);white-space:pre-wrap;word-break:break-word;
     max-width:min(72vw,420px);text-align:right;
@@ -661,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v179', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v180', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
