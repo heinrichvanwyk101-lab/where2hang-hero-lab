@@ -18,10 +18,54 @@ so nothing above the opening brace is ever parsed.
 
 ## Handed over at
 
-`nav v94 / city v34 / world v137 / props v22 / basemap v9`
+`nav v176 / city v95 / world v236 / props v31 / basemap v18`
 
-**LAST CONFIRMED LIVE WAS world v136 / city v33.** v137 and v34 were handed over
-but not verified deployed. First job: read the stamps.
+Read out of the files in this repo on 3 September 2026, not remembered.
+
+**nav v176 is committed to `main`, but its GitHub Pages publication was NOT
+verified** — the session that pushed it had no network egress to `github.io`.
+First job, unchanged: open the embed and read the stamp in the corner. If it does
+not say `nav v176`, the deploy has not taken.
+
+### nav v176 — the temporal-dead-zone fix
+
+Found by an audit reading this repo and the app repo together, reproduced in
+isolation, then fixed. `WORLD_IDLE`, `attract`, `gfState`, `CULL_R` and `KEEP_R`
+were each declared at their point of first use, hundreds of lines below the embed
+bridge's `addEventListener('message')`. Three top-level `await flushPaint(...)`
+calls sit upstream of those old sites, and each yields a frame back to the event
+loop — so a host message arriving in that gap reached a binding whose declaration
+statement had not executed yet. The handler's own `try/catch` turned the
+ReferenceError into a `console.warn`, so the command was dropped silently and
+nothing ever LOOKED broken.
+
+`idle`/`wake` carried the live cost. The host had started calling it on route
+changes, it landed in exactly that window, and the world kept rendering a full
+scene behind every opaque page instead of stopping at `if (WORLD_IDLE) return`
+in `frame()`. That is the mechanism behind "quite heavy, my phone doesn't really
+like it".
+
+All five moved verbatim to just above the listener, deleted from their old sites
+rather than duplicated.
+
+**THE RULE THIS PAID FOR:** a top-level `await` splits module evaluation, so
+"nothing runs until the module has finished evaluating" is FALSE for anything
+registered above one. Any new top-level `let`/`const` the embed bridge can reach
+must be declared above the listener at ~line 2350, not at its point of first use.
+
+Note the distinction against the comment in `world-nav.html` at line 2259
+("Runs from a setInterval ... so there is no declaration-order risk"). That is
+CORRECT for a `setInterval` — the first tick is a whole timer period away. It does
+not extend to a message listener, which fires the moment the host speaks, and the
+host speaks as soon as `post('ready')` goes out at ~line 2591 — some 3,700 lines
+before module evaluation actually finishes at `frame()`.
+
+---
+
+**Everything below this line was written when the stamps read `world v137 /
+city v34`.** The repo now reads `world v236 / city v95` — roughly a hundred world
+versions on — and none of the notes below have been re-verified against the
+current files. Read them as history, not as current state.
 
 ## THE ONE NUMBER THAT MATTERS
 
