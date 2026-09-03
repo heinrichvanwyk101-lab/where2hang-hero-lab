@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v251';
+export const BUILD = 'world v252';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1904,15 +1904,22 @@ const COAST_CLEAR = 0.050;                   // no building closer than this to 
    All three in metres, at the figures the real Corniche actually has: a wide public beach, a
    generous but walkable park, and a seafront road close enough to the sand that the two read as
    one promenade. */
-/* SIX TIMES WIDER, ON INSTRUCTION AND FOR A REASON THE PROFILE MAKES PLAIN. The heights in the
-   beach's ring table are fixed, so width is the only thing that sets its slope: at 90 m the drop
-   from the top face to the waterline happened over a run short enough to read as a terrace with a
-   step in it rather than a shore. Widening the run without touching the heights is what turns the
-   same profile into a beach — it takes the steepest face from 32 degrees to about 6.
-   ?beachm=N overrides it for comparison. */
+/* NOT THE WIDTH — THE COVERAGE DIAL. The beach's actual width is the offset column of its ring
+   table, which is now six times what it was. This is the largest offset a sample's coast has to
+   tolerate before the rings are pulled in, and every sample that fails it gets a beach scaled down
+   in proportion. At 540, matching the drawn width, the test asks whether each stretch of coast can
+   carry a 540 m beach — and half of Corniche cannot, which is why the beach was full width on some
+   runs and pinched on others. Measured share of samples under half width at 540: Al Reem 50.8 per
+   cent, Corniche 47, Saadiyat 30.2, Yas 20.1.
+
+   180 asks a question most of the coast can answer yes to, so the beach is drawn at its full width
+   along nearly all of the run. The cost is real and worth stating: the clamp is now testing a
+   third of what gets drawn, so in a channel narrower than the beach the rings can reach across it.
+   ?beachm=N is the dial between those two failures — lower for more continuous sand, higher if
+   bays start filling in. */
 const BEACH_M       = (() => {
   const q = (location.search.match(/[?&]beachm=(\d+)/) || [])[1];
-  return q !== undefined ? +q : 540;
+  return q !== undefined ? +q : 180;
 })();
 const COAST_PARK_M  = 46;
 const RING_INSET_M  = 78;
@@ -5373,7 +5380,23 @@ DISTRICTS.forEach(d => {
 
          That puts the wash zone at about 9 units instead of 39, which is a crossing the depth
          buffer can resolve. Total run, both anchor rings, and every shade are unchanged. */
-      [-1.8, GROUND, 1.00],   // on the top face, inside the outline: overlap, do not abut
+      /* GROUND + 0.02, NOT GROUND — AND THAT 0.02 IS THE STITCHED SEAM ALONG THE LAND EDGE.
+
+         The inner ring was placed at exactly GROUND, which is exactly the island platform's top
+         face, so the overlap strip that exists to hide the join was two COPLANAR surfaces. That
+         is z-fighting by construction: the depth buffer cannot order them, so the strip renders
+         as a torn stitch of alternating beach and ground. Measured on the built geometry, the
+         beach's inner ring world height and the platform top matched to three decimals on all six
+         islands — 2.900 against 2.900 on Corniche, 11.423 against 11.423 on Al Maryah.
+
+         It has always been coplanar. It only became the thing you notice when the beach went six
+         times wider, because the seam is now the edge of a large sheet rather than a hairline.
+
+         Lifting the ring puts the sand unambiguously ON the ground rather than in it. 0.02 local
+         units is 16 cm on Corniche and 61 cm on Al Maryah at its 3.94 scale — below the threshold
+         of a visible step at any camera this scene uses, and far above the depth buffer's ability
+         to separate the two surfaces. */
+      [-1.8, GROUND + 0.02, 1.00],   // on the top face, inside the outline: overlap, do not abut
       [ 1.8, 2.55,   1.06],   // clear of the bevel at its widest; promenade starts here
       [36.0, 1.90,   0.74],   // dry berm ends just ABOVE the wave crest — 1.1 deg of run
       [40.0, 0.75,   1.10],   // shore face: crosses the wash zone at 16 deg, not 2
