@@ -667,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v181', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v182', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -745,6 +745,7 @@ renderer.toneMappingExposure = 1.15;
    One flag each, one load each. Both are also legitimate permanent changes if either turns out to
    be the twenty seconds: shadows can be cheaper rather than absent, and an environment map can be
    baked smaller or dropped in favour of the lights already in the scene. */
+const PROBE_ON = location.search.includes('probe');
 const NO_SHADOW = location.search.includes('noshadow');
 const NO_ENV    = location.search.includes('noenv');
 renderer.shadowMap.enabled = !NO_SHADOW;
@@ -2333,6 +2334,7 @@ window.__w2hSetResults = setResults;
    places the mode can change, so it is correct without ever being reachable early. */
 let viewDiag = 'dusk';
 let viewSrcDiag = 'boot';
+let probeDiag = '';
 
 setInterval(() => {
   const est = document.getElementById('embedstamp');
@@ -2904,7 +2906,8 @@ function paintDiag(crumbText){
   const c = crumbText != null ? crumbText : (document.getElementById('crumb')?.textContent || '');
   est.textContent = (B_NAV || '') + ' / ' + (B_CITY || '') + ' / ' + (B_WORLD || '') +
     ' / ' + (B_PROPS || '') + '\n' + c + (lastResultsDiag ? '\n' + lastResultsDiag : '') +
-    (islandStatusDiag ? '\n' + islandStatusDiag : '') + (camNaNDiag ? '\n' + camNaNDiag : '');
+    (islandStatusDiag ? '\n' + islandStatusDiag : '') + (camNaNDiag ? '\n' + camNaNDiag : '') +
+    (probeDiag ? '\n' + probeDiag : '');
 }
 function ui(crumb, hint){
   document.getElementById('crumb').innerHTML = crumb;
@@ -3950,6 +3953,63 @@ canvas.addEventListener('pointerup', e => {
   ndc.x =  (e.clientX / window.innerWidth) * 2 - 1;
   ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
   ray.setFromCamera(ndc, camera);
+
+  /* ?probe — TAP THE THING AND HAVE IT SAY WHAT IT IS.
+
+     Five rounds of this were spent naming a suspect from a screenshot, changing it, and being
+     told nothing moved: unbuilt-platform materials, the macro tint, the beach trough, the ground
+     apron, the lit mode. Each was a plausible reading of some pixels and four of the five were
+     simply wrong, because a photograph of a dark polygon cannot say which mesh drew it, what
+     material that mesh holds, or whether the material it holds is the one it was meant to get.
+
+     So this stops answering the question by eye. It raycasts the actual scene graph under the
+     tap and prints, for the three frontmost hits: the object, its parent chain, the colour its
+     material is ACTUALLY carrying right now, and whether that mesh owns the per-view material
+     sets applyView switches between. That last column is the whole point — a mesh with no
+     dayMats cannot go light in day view no matter what the palette says, and no amount of
+     re-tinting the ground canvas will ever reach it.
+
+     Reads nothing, changes nothing, and returns before the navigation branches below, so a probe
+     tap cannot drop you into an island mid-diagnosis. */
+  if (PROBE_ON){
+    const hits = ray.intersectObject(world, true).slice(0, 3);
+    if (!hits.length) probeDiag = 'probe: nothing hit';
+    else probeDiag = hits.map((h, i) => {
+      const o = h.object;
+      const chain = [];
+      for (let q = o; q && q !== world && chain.length < 4; q = q.parent) chain.push(q.name || q.type);
+      const cols = [].concat(o.material).map(m => {
+        if (!m) return '?';
+        const c = m.color ? m.color.getHexString() : '------';
+        return c + (m.map ? '+map' : '');
+      }).join(',');
+      const sets = ['dayMats', 'duskMats', 'planMats', 'origMat']
+        .filter(k => o.userData[k]).join('/') || 'NONE';
+      /* THE PIXEL, NOT JUST THE MATERIAL — because on the ground the material is white with a
+         canvas map and every layer paintGround lays down shares it. Knowing the mesh is "the
+         ground" says nothing about whether the tone under the tap came from SURF.sand, the
+         macro tint, the apron or the fabric fill, and those are four different fixes. So the
+         hit's UV is converted back to canvas pixel coordinates and the colour is read straight
+         out of the source canvas: whatever the painter actually wrote, as a number, in the
+         corner of the phone. flipY is on for these textures, hence 1 - v. */
+      let px = '';
+      try {
+        const map = [].concat(o.material)[0] && [].concat(o.material)[0].map;
+        const im = map && (map.image || (map.source && map.source.data));
+        if (h.uv && im && im.getContext){
+          const cx = Math.min(im.width  - 1, Math.max(0, Math.floor(h.uv.x * im.width)));
+          const cy = Math.min(im.height - 1, Math.max(0, Math.floor((1 - h.uv.y) * im.height)));
+          const d = im.getContext('2d', { willReadFrequently: true }).getImageData(cx, cy, 1, 1).data;
+          px = ' px=#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('') +
+               ' @' + cx + ',' + cy;
+        }
+      } catch (e) { px = ' px=err'; }
+      return i + ') ' + chain.join('<') + ' y=' + h.point.y.toFixed(2) +
+             '\n   col=' + cols + ' mats=' + sets + px;
+    }).join('\n');
+    paintDiag();
+    return;
+  }
 
   if (state === STATE.WORLD){
     /* PICK.mode WAS NEVER CHECKED HERE, AND THAT IS THE BUG. Every tap in world view raycast
