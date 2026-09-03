@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v255';
+export const BUILD = 'world v256';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5396,7 +5396,20 @@ DISTRICTS.forEach(d => {
          units is 16 cm on Corniche and 61 cm on Al Maryah at its 3.94 scale — below the threshold
          of a visible step at any camera this scene uses, and far above the depth buffer's ability
          to separate the two surfaces. */
-      [-1.8, GROUND + 0.02, 1.00],   // on the top face, inside the outline: overlap, do not abut
+      /* BELOW THE TOP FACE NOW, NOT ABOVE IT — AND THAT IS THE SAND SHOWING ON LAND.
+
+         v252 lifted this ring 0.02 ABOVE GROUND to stop it z-fighting the platform cap, which
+         was right for a strip whose inland overlap was 1.8 units. The heightfield's inland lip
+         runs a full lattice cell past the coast so the join can never gap, and at +0.02 that
+         lip sat ON the ground: a stepped band of sand over the land, one cell deep, visible in
+         every screenshot of the v255 coast.
+
+         The same 0.02 separation works the other way. At GROUND - 0.06 the lip is inside the
+         platform's own extrusion, occluded by the cap wherever there is land, and it emerges only
+         where the land ends — which is the one place it was ever meant to show. The price is a
+         small step down from the top face onto the sand at the coast, which was asked for as an
+         acceptable transition and is a few tens of centimetres at scale. */
+      [-1.8, GROUND - 0.06, 1.00],   // just under the top face: hidden by land, emerges at the coast
       [ 1.8, 2.55,   1.06],   // clear of the bevel at its widest; promenade starts here
       [36.0, 1.90,   0.74],   // dry berm ends just ABOVE the wave crest — 1.1 deg of run
       [40.0, 0.75,   1.10],   // shore face: crosses the wash zone at 16 deg, not 2
@@ -5464,7 +5477,7 @@ DISTRICTS.forEach(d => {
        its width to reach clamping and fans; the field draws its full width everywhere, so the same
        number reads as twice the beach. r/1020 puts every island near three per cent of its span.
        d.beachScale still multiplies it per island, and is the first lever for the trimming pass. */
-    const BSPAN = Math.max(0.22, Math.min(1.3, d.r / 1020)) * (d.beachScale || 1);
+    const BSPAN = Math.max(0.17, Math.min(1.0, d.r / 1360)) * (d.beachScale || 1);   // v256: another quarter off
     const PROF = P.map(([off, y, sh]) => [off <= 1.8 ? off : 1.8 + (off - 1.8) * BSPAN, y, sh]);
     const D_IN  = -PROF[0][0];
     const D_MAX = PROF[PROF.length - 1][0];
