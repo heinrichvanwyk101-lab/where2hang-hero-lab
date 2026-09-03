@@ -1996,7 +1996,11 @@ async function main(){
     const rd = { id:baked.id,
                  roads:(baked.roads || []).filter(r => r.cls === 'major' || r.cls === 'minor' ||
                                                        r.cls === 'local'),
-                 paths:(baked.paths || []), plazas:(baked.plazas || []) };
+                 paths:(baked.paths || []), plazas:(baked.plazas || []),
+                 /* CAR PARKS RIDE IN THE SIDECAR, not only in the island file, because the ground is
+                    painted once at build from what the sidecar holds — the same reason paths and
+                    plazas are here. */
+                 parking:(baked.parking || []) };
     const rpath = `data/roads-${baked.id}.json`;
     await fs.writeFile(rpath, JSON.stringify(rd));
     const rbytes = (await fs.stat(rpath)).size;
