@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v258';
+export const BUILD = 'world v259';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5115,6 +5115,12 @@ function attachRealRoads(d){
 
 const pickTargets = [];
 
+  /* Declared at buildWorld scope and assigned inside the island loop below, so the export at the
+     bottom of buildWorld can reach it. A function DECLARATION inside the forEach callback is
+     scoped to that callback, and v258 exported it from outside — a ReferenceError at module top
+     level that took the whole page down. Hotfixed within the hour; the boot check in the bench
+     now runs before any push. */
+  let buildBeachFor = null;
 DISTRICTS.forEach(d => {
   const g = new THREE.Group();
   g.name = d.id;
@@ -5265,7 +5271,7 @@ DISTRICTS.forEach(d => {
      and hard-edge polygons are not known. addWaterGeometry in world-nav calls refreshBeach once
      the payload is in, which removes the first beach and builds it again with the real shore
      data. Deferred islands build after their payload and get it right first time. */
-  function buildBeachFor(d){
+  buildBeachFor = function(d){
     const g = d.group;
     for (const old of g.children.filter(c => c.userData && c.userData.beachField)){
       g.remove(old); old.geometry.dispose();
@@ -5628,7 +5634,7 @@ DISTRICTS.forEach(d => {
         g.add(beach);
       }
     }
-  }
+  };
   buildBeachFor(d);
 
   /* ---- shoreline modules -------------------------------------------------------------------
