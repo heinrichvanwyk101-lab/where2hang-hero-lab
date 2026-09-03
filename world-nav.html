@@ -667,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v180', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v181', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2317,12 +2317,29 @@ window.__w2hSetResults = setResults;
    Runs from a setInterval, same safety as everything else added after the TDZ bug: nothing
    here executes until well after the module's own synchronous evaluation has finished, so
    there is no declaration-order risk regardless of where this sits in the file. */
+/* WHICH LIT MODE IS ACTUALLY ON, MIRRORED RATHER THAN READ.
+
+   The islands read brown in one load and sand in the next, and every guess about WHY was made
+   from a screenshot — which cannot distinguish "the day palette is wrong" from "the day palette
+   never got applied". Four fixes were shipped against that ambiguity and none of them moved the
+   picture, because they were all aimed at day-view painting while the render on screen was dusk.
+   So the mode goes in the corner next to the build stamp, where it can be read off the phone.
+
+   A MIRROR, NOT THE VARIABLE. `view` is declared far below this line, and the interval that
+   prints it fires two seconds in — if module evaluation is still suspended at a top-level await
+   by then, touching `view` is a ReferenceError inside the callback, and typeof does not save a
+   let in its dead zone. Same hazard that took fpState and WORLD_IDLE out of this exact interval
+   and up to the hoist block. This is declared ahead of its only reader and assigned from both
+   places the mode can change, so it is correct without ever being reachable early. */
+let viewDiag = 'dusk';
+let viewSrcDiag = 'boot';
+
 setInterval(() => {
   const est = document.getElementById('embedstamp');
   if (!est) return;
   const rows = DISTRICTS.filter(d => d !== corniche).map(d =>
     d.id + ':' + (d.pending ? 'pending' : 'built') + '/fp=' + (fpState.get(d.id) || 'unset'));
-  islandStatusDiag = rows.join('\n');
+  islandStatusDiag = 'view=' + viewDiag + ' (' + viewSrcDiag + ')\n' + rows.join('\n');
   paintDiag();
 }, 2000);
 
@@ -2548,7 +2565,7 @@ if (/[?&]embed=1/.test(location.search)){
       }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
          ReferenceError the moment the branch runs, not a falsy value to fall through. */
-      else if (m.type === 'setView' && m.view) { view = m.view; applyView(m.view); }
+      else if (m.type === 'setView' && m.view) { view = m.view; viewSrcDiag = 'host'; applyView(m.view); }
       /* Sent by the host when an opaque route covers the world, and again when it clears. The
          camera keeps whatever goal it had, so waking resumes the same shot rather than composing
          a new one. */
@@ -3006,6 +3023,7 @@ const LABEL = { dusk:'Dusk', day:'Day', night:'Night', sil:'Silhouette', plan:'P
    render an unlit scene with no way to tell why from the URL. */
 const VIEW_Q = (location.search.match(/[?&]view=([a-z]+)/i) || [])[1];
 let view = MODES.includes((VIEW_Q || '').toLowerCase()) ? VIEW_Q.toLowerCase() : 'dusk';
+if (VIEW_Q) viewSrcDiag = 'url';
 
 const silMat    = new THREE.MeshBasicMaterial({ color:0x000000 });
 const silWater  = new THREE.MeshBasicMaterial({ color:0xB9CBD4 });
@@ -3322,6 +3340,11 @@ function applyLift(on, night){
 
 function applyView(next){
   view = next;
+  /* The stamp's mirror is written HERE, at the one chokepoint every mode change already passes
+     through, rather than at each of the three call sites that set `view`. A readout maintained
+     in parallel with the thing it reports is a readout that eventually disagrees with it, and
+     this one exists precisely because a wrong reading cost this session four misaimed fixes. */
+  viewDiag = next;
   const sil   = view === 'sil',  day   = view === 'day';
   const dusk  = view === 'dusk', night = view === 'night';
   const plan  = view === 'plan';
@@ -4247,9 +4270,21 @@ phase('liftReg');
 window.addEventListener('resize', resize);
 resize();
 phase('resize');
-// Dusk before setWorld, so the first frame is already the product state rather than a flash of
-// unlit night while the sky texture and key light are configured.
-applyView('dusk');
+/* Before setWorld, so the first frame is already the product state rather than a flash of unlit
+   night while the sky texture and key light are configured.
+
+   `view`, NOT THE LITERAL 'dusk' IT USED TO BE. Twenty lines of comment above VIEW_Q describe
+   ?view= as the way a shared link picks which of the six modes its one frame uses — and this
+   line, the only thing that lights the opening frame, ignored it and lit dusk every time. The
+   parse was real, the variable was set, and the boot render overrode it, so ?view=day was a
+   no-op wherever nothing rebuilt afterwards. That is not a cosmetic gap: ?view=day is how this
+   session tried to test whether the day palette was the problem, the test silently rendered
+   dusk, and the "day view is also brown" reading taken from it sent four fixes at the wrong
+   layer. A diagnostic switch that lies is worse than no switch.
+
+   Behaviourally identical for every ordinary load: with no ?view= in the URL, `view` IS 'dusk'.
+   The only URLs whose first frame changes are the ones that explicitly asked for a change. */
+applyView(view);
 phase('applyView');
 
 /* OPEN ON THE CORNICHE, NOT ON THE ARCHIPELAGO.
