@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v241';
+export const BUILD = 'world v242';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8594,7 +8594,27 @@ cglow.position.set(0, GROUND + 22, -10);
    Deliberately the last thing that happens. The painter needs the cell list, the cell list only
    exists after generation, and doing it in one sweep at the end means there is exactly one place
    to look when a road lands in the wrong district. */
-const dayGround  = stdMat({ color:0xD8D2C4, roughness:0.92, metalness:0 });
+/* DAY GROUND LEVEL, LIFTED — AND TUNABLE, THE SAME WAY ?ngnd= TUNES THE NIGHT ONE.
+
+   With the warm-up skip fixed (nav v186) the ground finally renders its day material, and what
+   it renders is the canvas MULTIPLIED by this colour. The canvas holds SURF.sand #C7A876, which
+   the palette note above calls actual desert sand; at 0xD8D2C4 the product is
+   199x216/255, 168x210/255, 118x196/255 = RGB(168,138,91), about fifteen per cent below the
+   colour the palette says it is choosing. That is why bare ground still reads browner than sand
+   even now that the right material is on the mesh.
+
+   This material's own job is level, not hue — "the map carries hue and pattern; these carry
+   level" — so level is the correct dial and the canvas is left alone. Lifted to 0xF0EADE, which
+   puts the product at RGB(187,154,103) and closer to the palette's stated intent without going
+   to a flat 1.0, since some headroom below white is what stops sunlit ground clipping under the
+   tone mapping.
+
+   ?dgnd=RRGGBB overrides it live, so the final value can be chosen by eye on the device that has
+   the problem rather than argued from arithmetic here — the exact reasoning ?ngnd= exists under.
+   Day only: dusk and night keep their own materials and are untouched. */
+const DGND_Q = (location.search.match(/[?&]dgnd=([0-9a-fA-F]{6})/) || [])[1];
+const dayGround  = stdMat({ color: DGND_Q ? parseInt(DGND_Q, 16) : 0xF0EADE,
+                            roughness:0.92, metalness:0 });
 const dayBeach   = stdMat({ color:0xAB9A7C, roughness:1, metalness:0 });
 const duskGround = stdMat({ color:0xC6B99E, roughness:0.94, metalness:0 });
 const duskBeach  = stdMat({ color:0x9C8C6F, roughness:1, metalness:0 });
