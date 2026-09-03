@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v247';
+export const BUILD = 'world v248';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1517,11 +1517,7 @@ function distToOutline(id, x, y){ return distToOutlineFast(id, x, y); }
    is 2.8 units inland on the north shore and 8.7 at the west tip, so a strip described as a
    constant width was in fact three times wider at one end than the other. */
 function inwardAt(id, pts, i, dist){
-  const n = pts.length - 1;
-  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
-  let tx = b.x - a.x, ty = b.y - a.y;
-  const L = Math.hypot(tx, ty) || 1;
-  tx /= L; ty /= L;
+  const [tx, ty] = tangentAt(pts, i);      // widened window: see tangentAt
   const nx = -ty, ny = tx;
   let px = pts[i].x + nx * dist, py = pts[i].y + ny * dist;
   if (!insideIsle(id, px, py)){ px = pts[i].x - nx * dist; py = pts[i].y - ny * dist; }
@@ -5408,7 +5404,23 @@ DISTRICTS.forEach(d => {
         // pinch at an inlet stays proportional. Inward offsets need no clamp: the island is
         // always wider than 1.8 units.
         const f = reach[i] / BW;
-        const [px, py] = off < 0 ? inwardAt(d.id, o, i, -off / d.r)
+        /* THE INNER RING TAKES THE SAME LOCKED DIRECTION AS THE OUTER ONES, JUST NEGATED, AND
+           THAT IS THE WALL AT THE BACK OF THE BEACH.
+
+           It used to come from inwardAt, which picks its side by testing which one lands inside
+           the island. Two ways that goes wrong here and both were on screen. At a degenerate
+           sample its normal was (0,0), so the ring landed exactly ON the outline instead of 1.8
+           units inside it — measured as a ring0-to-ring1 gap of 1.8 world units on Al Raha where
+           every other island reads the correct 3.6 — and a skirt that starts at the outline abuts
+           the platform rather than overlapping it, leaving the platform's own bevelled side
+           (matBeach, 0x3E3B32, near-black brown) standing along the coast as a wall. And even
+           with a good normal, an independent inside/outside test can disagree with the direction
+           the outer rings settled on, which tears the strip apart at that sample.
+
+           sgn[i] is already the seaward direction for this sample, chosen once from a short probe.
+           Negating it is the landward direction by construction, so the inner ring cannot land on
+           the wrong side and cannot fail to inset. */
+        const [px, py] = off < 0 ? outwardFixed(o, i, (-off) / d.r, -sgn[i])
                                  : outwardFixed(o, i, (off / d.r) * f, sgn[i]);
         pos.push(px * d.r, y, -py * d.r);
         col.push(sh, sh, sh);
