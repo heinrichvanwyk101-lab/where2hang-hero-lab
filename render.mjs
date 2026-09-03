@@ -33,9 +33,20 @@ export function render(group, {W=900,H=600,az=42,el=26,dist=null,label='',grid=t
       let col=m&&m.userData&&m.userData.dayMats?m.userData.dayMats.color:(m?m.color:null);
       if(m&&m.userData&&m.userData.duskColor!==undefined) col=new THREE.Color(m.userData.duskColor);
       const base=col?[col.r,col.g,col.b]:[0.7,0.7,0.7];
+      /* ONE WORLD MATRIX PER DRAWN COPY. A plain Mesh has exactly one; an InstancedMesh has one
+         per instance and its own matrixWorld is only the parent transform. Reading matrixWorld
+         alone — which this did until an instancing pass on yasBayJetty exposed it — collapses
+         every instance onto the same spot, so an instanced structure rendered as a single copy
+         and the bench silently disagreed with the scene. */
+      const MWs=[];
+      if(o.isInstancedMesh){
+        const im=new THREE.Matrix4();
+        for(let k=0;k<o.count;k++){ o.getMatrixAt(k,im); MWs.push(new THREE.Matrix4().multiplyMatrices(o.matrixWorld,im)); }
+      } else MWs.push(o.matrixWorld);
+      for(const MW of MWs)
       for(let i=gr.start;i<gr.start+gr.count;i+=3){
         const A=idx?idx[i]:i, B=idx?idx[i+1]:i+1, Cc=idx?idx[i+2]:i+2;
-        const v=[A,B,Cc].map(k=>new THREE.Vector3().fromBufferAttribute(pos,k).applyMatrix4(o.matrixWorld));
+        const v=[A,B,Cc].map(k=>new THREE.Vector3().fromBufferAttribute(pos,k).applyMatrix4(MW));
         const nrm=new THREE.Vector3().subVectors(v[1],v[0]).cross(new THREE.Vector3().subVectors(v[2],v[0])).normalize();
         const lam=Math.max(0,nrm.dot(SUN))*0.78+0.30;
         const p=v.map(q=>{const s=q.clone().applyMatrix4(MVP);return {x:(s.x*0.5+0.5)*W,y:(1-(s.y*0.5+0.5))*H,z:q.distanceTo(cam)};});

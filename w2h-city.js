@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v95';
+export const BUILD = 'city v96';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2204,26 +2204,53 @@ function yasBayJetty(x0, z0, facing){
   deck.position.y = 0.8 / M; deck.receiveShadow = true;
   g.add(deck);
 
-  /* Piles down both long edges, on the 16 m bay the berths use. */
-  for (let i = -5; i <= 5; i++){
-    for (const zz of [-W / 2 + 0.3 / M, W / 2 - 0.3 / M]){
-      const p = new THREE.Mesh(new THREE.BoxGeometry(0.5 / M, 5 / M, 0.5 / M), pileM);
-      p.position.set(i * 16 / M, -1.6 / M, zz);
-      g.add(p);
+  /* Piles down both long edges, on the 16 m bay the berths use.
+
+     ONE InstancedMesh, NOT 22 MESHES — and the geometry is built once rather than 22 times. Every
+     pile is the same box in the same material differing only by position, which is precisely the
+     case InstancedMesh exists for. The old form paid 22 draw calls AND allocated 22 identical
+     BoxGeometry objects, on a structure that is 504 triangles in total. Positions below are
+     unchanged, instance for instance, so the built shape is identical. */
+  const pileGeo = new THREE.BoxGeometry(0.5 / M, 5 / M, 0.5 / M);
+  const piles = new THREE.InstancedMesh(pileGeo, pileM, 22);   // 11 bays x 2 edges
+  {
+    const m4 = new THREE.Matrix4();
+    let n = 0;
+    for (let i = -5; i <= 5; i++){
+      for (const zz of [-W / 2 + 0.3 / M, W / 2 - 0.3 / M]){
+        m4.makeTranslation(i * 16 / M, -1.6 / M, zz);
+        piles.setMatrixAt(n++, m4);
+      }
     }
+    piles.count = n;
   }
+  g.add(piles);
 
   /* NINE FINGER BERTHS, seaward side, on a 16 m bay. Timber, low to the water, and the thing that
-     makes this read as a marina rather than as a slab of pale concrete in the bay. */
-  for (let i = -4; i <= 4; i++){
-    const f = new THREE.Mesh(new THREE.BoxGeometry(2.6 / M, 0.7 / M, 26 / M), timber);
-    f.position.set(i * 16 / M, 0.5 / M, W / 2 + 13 / M);
-    f.receiveShadow = true;
-    g.add(f);
-    const cleat = new THREE.Mesh(new THREE.BoxGeometry(0.4 / M, 1.9 / M, 0.4 / M), pileM);
-    cleat.position.set(i * 16 / M, 0.9 / M, W / 2 + 26 / M);
-    g.add(cleat);
+     makes this read as a marina rather than as a slab of pale concrete in the bay.
+
+     One InstancedMesh each for the fingers and their cleats, same reasoning as the piles: nine
+     identical boxes apiece, differing only in x. receiveShadow is carried onto the finger instance
+     because the individual finger meshes had it and an InstancedMesh does not inherit it. */
+  const fingerGeo = new THREE.BoxGeometry(2.6 / M, 0.7 / M, 26 / M);
+  const cleatGeo  = new THREE.BoxGeometry(0.4 / M, 1.9 / M, 0.4 / M);
+  const fingers = new THREE.InstancedMesh(fingerGeo, timber, 9);
+  const cleats  = new THREE.InstancedMesh(cleatGeo,  pileM,  9);
+  fingers.receiveShadow = true;
+  {
+    const m4 = new THREE.Matrix4();
+    let n = 0;
+    for (let i = -4; i <= 4; i++){
+      m4.makeTranslation(i * 16 / M, 0.5 / M, W / 2 + 13 / M);
+      fingers.setMatrixAt(n, m4);
+      m4.makeTranslation(i * 16 / M, 0.9 / M, W / 2 + 26 / M);
+      cleats.setMatrixAt(n, m4);
+      n++;
+    }
+    fingers.count = n; cleats.count = n;
   }
+  g.add(fingers);
+  g.add(cleats);
   /* The walkway the fingers hang off, so they are not nine loose planks. */
   const walk = new THREE.Mesh(new THREE.BoxGeometry(L * 0.92, 0.7 / M, 3.2 / M), timber);
   walk.position.set(0, 0.5 / M, W / 2 + 1.6 / M);
