@@ -62,10 +62,12 @@ before module evaluation actually finishes at `frame()`.
 
 ---
 
-**Everything below this line was written when the stamps read `world v137 /
-city v34`.** The repo now reads `world v236 / city v95` — roughly a hundred world
-versions on — and none of the notes below have been re-verified against the
-current files. Read them as history, not as current state.
+**Everything below was written at `world v137 / city v34`; the repo now reads
+`world v236 / city v95`.** Rather than leave a hundred versions of drift
+unresolved, every item was walked through with Heinrich on 3 September 2026 and
+marked. Two are done — see *Resolved since v137*. Four remain, and they are the
+OPEN list at the bottom. The Yas Bay survey is kept as reference, not history:
+the built band was extruded from it.
 
 ## THE ONE NUMBER THAT MATTERS
 
@@ -102,6 +104,10 @@ Surveyed plots, all closing as true rectangles:
 
 Areas: built 8.72 ha, deck 3.58, promenade 3.38, beach 1.95.
 
+**This survey is live reference, not a record.** The built band has since been
+extruded from these figures (was OPEN 4). Redoing the survey is the expensive
+part, so keep it with the geometry it produced.
+
 ## Rules this session paid for
 
 - **A mesh needs dayMats, duskMats, planMats and `ground` — all four.** Nineteen kit
@@ -122,19 +128,30 @@ Areas: built 8.72 ha, deck 3.58, promenade 3.38, beach 1.95.
 - **Draw before building.** Four drawing iterations found the mirrored hotel, the
   convex-hull overshoot and the wrong beach band before any code was written.
 
+## Resolved since v137
+
+- **Plan and Check hold colour.** Landmarks no longer drop out; the `city v34`
+  fix at the four `mk()` helpers (all of `dayMats`, `duskMats`, `planMats` and
+  `ground`) was sufficient on its own. `applyView` did NOT need opening up —
+  the lead the old note pointed at was a dead end, worth knowing before anyone
+  follows it again.
+- **The built band is extruded.** 8.72 ha at Yas Bay is real mass with courtyards
+  cut, built from the survey above rather than painted onto the ground.
+
 ## OPEN
 
-1. **Verify `b`.** Everything else waits on it.
-2. **Plan and Check** — landmarks should now hold colour. If Ferrari World still
-   drops out, `planMats` was not the whole story and applyView needs opening up.
-3. **The jetty is 42 separate meshes for 504 triangles** — 22 piles, 9 fingers,
+1. **Verify `b`.** Still the lead item — see THE ONE NUMBER THAT MATTERS above.
+   Everything on the Yas ground bands waits on it.
+2. **The jetty is 42 separate meshes for 504 triangles** — 22 piles, 9 fingers,
    9 cleats, each its own draw. Should be three instanced meshes, about 5 total.
-4. **The built band is painted, not extruded.** 8.72 ha of ground with the bake's
-   footprints and the Hilton standing on it. Courtyards are not cut into the mass.
-5. **2,419 venues city-wide have no geometry** — no footprint over them and none
+   Worth weighting higher than its size suggests: phone performance is a live
+   complaint, and it is what `nav v176`'s idle/wake fix was chasing from the
+   other direction.
+3. **2,419 venues city-wide have no geometry** — no footprint over them and none
    within 25 m. 261 on Yas, 1,902 on Corniche. Agreed shape: one unit per venue but
    built as three or four shopfronts of jittered width under a shared canopy.
-6. **The pier still reads as land** because OSM maps it as island — the four corners
+   The Corniche figure is the one that bites, since the embed opens on Corniche.
+4. **The pier still reads as land** because OSM maps it as island — the four corners
    match the baked coastline to 4 m. Making it read as a deck over water means cutting
-   the outline, which also feeds isleShape, isleCoast and groundPlan. Not done
-   silently; ask first.
+   the outline, which also feeds isleShape, isleCoast and groundPlan. **Not done
+   silently; ask first.** Still deliberately unresolved, not merely undone.
