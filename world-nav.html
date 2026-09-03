@@ -679,7 +679,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v189', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v190', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1253,7 +1253,7 @@ phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
-        propCount, tickSignals, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
+        propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor,
         groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, insideIsle } =
   buildWorld(scene, kit, {
@@ -5749,6 +5749,9 @@ function frame(){
      the per-frame cost is a loop over 416 signals doing one modulo and one compare, and skipping
      it would mean every junction jumping to a new state the moment an island is tapped. */
   if (tickSignals) tickSignals(t);
+  /* THE TRAFFIC MOVES ON THE SAME CLOCK, with the frame's own damped dt so a dropped frame is a
+     small jump rather than a stall. Guarded: an older world module has no tickTraffic. */
+  if (tickTraffic) tickTraffic(t, dt);
 
   const drift = (state === STATE.WORLD && !orbit.on) ? Math.sin(t * 0.045) * 0.09 : 0;
   const a = cur.angle + drift + orbit.yaw;

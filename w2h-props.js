@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v33';
+export const BUILD = 'props v34';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -238,6 +238,19 @@ carBody.translate(0, 0.62 * U_PER_M, 0);
 const carCabin = new THREE.BoxGeometry(2.3 * U_PER_M, 0.85 * U_PER_M, 1.60 * U_PER_M);
 carCabin.translate(-0.15 * U_PER_M, 1.45 * U_PER_M, 0);
 const carGeo = mergeGeometries([carBody, carCabin]);
+/* HEAD AND TAIL LIGHTS for the moving cars (props v34): four small emissive faces on the car's
+   own frame — two warm at the front, two red at the back — merged with two material groups so
+   the whole set is one nightOnly instanced mesh sharing the car's matrices. Not tone mapped, so
+   they clear the bloom threshold at dusk the way the lamp heads do. */
+const carLightGeo = (() => {
+  const U = U_PER_M;
+  const mk = (x, z) => { const g = new THREE.BoxGeometry(0.12 * U, 0.22 * U, 0.34 * U); g.translate(x, 0.70 * U, z); return g; };
+  const head = mergeGeometries([mk( 2.32 * U,  0.62 * U), mk( 2.32 * U, -0.62 * U)]);
+  const tail = mergeGeometries([mk(-2.32 * U,  0.62 * U), mk(-2.32 * U, -0.62 * U)]);
+  return mergeGeometries([head, tail], true);
+})();
+const matHeadlight = new THREE.MeshBasicMaterial({ color: 0xFFF1C2, toneMapped: false });
+const matTaillight = new THREE.MeshBasicMaterial({ color: 0xFF2A18, toneMapped: false });
 
 /* ---------- shrub ----------
 
@@ -1144,6 +1157,130 @@ function addProps(d, layer, plan, budget = {}){
     M.scale.set(s, s, s);
   });
 
+  /* ---------- TRAFFIC (props v34) ----------
+
+     MOVING CARS, ON THE SAME CENTRELINES THE GROUND PAINTS. Each vehicle is bound to one road
+     polyline with a direction and a distance along it, advances every frame at that class's
+     speed, and at the end of the road hands over to a road that shares the node it arrived at —
+     the junction table realCrossings builds from the same shared nodes — so a car turns at a
+     junction rather than vanishing. Only when nothing continues does it respawn elsewhere.
+
+     RIGHT-HAND TRAFFIC. On a two-way road the car keeps to the right of travel; on a one-way
+     carriageway it takes a random lane across the width. Lane offsets come from the painted
+     corridor of the class, the same plan.xsec.halfBy the lamps use, so a car is on the tarmac
+     the painter drew and not on the transit strip beside it.
+
+     The count follows the road length — one car per 140 m of major and minor road, capped — and
+     the cost is that many matrix writes a frame on two instanced meshes: the car bodies, which
+     exist in every view, and the head and tail lights, which are nightOnly quads riding on the
+     same matrices. Stopping at a red signal is deliberately not here yet: continuous flow first,
+     then the junction rule. */
+  const traffic = [];
+  const trafficRoads = roads.filter(rd => rd.cls !== 'local' && rd.pts.length >= 2);
+  const trafficCum = new Map();
+  const trafficNodes = new Map();
+  const ROAD_KERB_F = 1.20;                                 // the painter's kerb casing factor
+  const perM = 1 / (d.r * 7.8);                             // normalised units per metre
+  const cumOf = pts => {
+    let c = trafficCum.get(pts);
+    if (!c){ c = [0]; for (let i = 1; i < pts.length; i++) c.push(c[i-1] + Math.hypot(pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1])); trafficCum.set(pts, c); }
+    return c;
+  };
+  const nkey = p => Math.round(p[0] * 2e5) + ',' + Math.round(p[1] * 2e5);
+  const laneOf = rd => {
+    const half = (XS_.halfBy && XS_.halfBy[rd.cls] !== undefined) ? XS_.halfBy[rd.cls] : XS_.halfRoad;
+    const road = half / ROAD_KERB_F;                        // kerb casing off: the tarmac half-width
+    if (rd.pts.oneway){
+      const lanes = Math.max(1, Math.min(6, (rd.pts.lanes | 0) || 2));
+      const k = Math.floor(Math.random() * lanes);
+      return -road + road * (2 * k + 1) / lanes;             // across the carriageway, any lane
+    }
+    return -road * 0.5;                                       // right of travel: -n is the right
+  };
+  const trafficSpawn = (v, rd, dir, s) => {
+    v.rd = rd; v.dir = dir; v.s = s;
+    v.speed = ((rd.cls === 'major' ? 16 : 11) * (0.85 + Math.random() * 0.3)) * perM;   // m/s -> units/s
+    v.lane = laneOf(rd);   // the tangent is already flipped by dir, so -n is the right of travel either way
+  };
+  if (XS_ && trafficRoads.length){
+    let total = 0;
+    for (const rd of trafficRoads) total += cumOf(rd.pts).slice(-1)[0];
+    const N = Math.min(260, Math.max(24, Math.round(total / (140 * perM))));
+    for (const rd of trafficRoads){
+      const a0 = rd.pts[0], b0 = rd.pts[rd.pts.length - 1];
+      (trafficNodes.get(nkey(a0)) || trafficNodes.set(nkey(a0), []).get(nkey(a0))).push({ rd, dir: 1 });
+      if (!rd.pts.oneway) (trafficNodes.get(nkey(b0)) || trafficNodes.set(nkey(b0), []).get(nkey(b0))).push({ rd, dir: -1 });
+    }
+    for (let i = 0; i < N; i++){
+      const rd = trafficRoads[Math.floor(R() * trafficRoads.length)];
+      const c = cumOf(rd.pts);
+      const v = {};
+      trafficSpawn(v, rd, rd.pts.oneway || R() < 0.5 ? 1 : -1, R() * c[c.length - 1]);
+      traffic.push(v);
+    }
+  }
+  const trafficMesh = build(carGeo, matCar, traffic, () => {
+    M.position.set(0, -1000, 0); M.rotation.set(0, 0, 0); M.scale.set(1, 1, 1);
+  }, () => {
+    const v = R();
+    const k = v < 0.62 ? 1.05 : v < 0.86 ? 0.78 : 0.42;
+    return col.setRGB(k, k * 0.99, k * 0.97);
+  });
+  const lightsMesh = build(carLightGeo, [matHeadlight, matTaillight], traffic, () => {
+    M.position.set(0, -1000, 0); M.rotation.set(0, 0, 0); M.scale.set(1, 1, 1);
+  });
+  if (trafficMesh){ trafficMesh.frustumCulled = false; }
+  if (lightsMesh){
+    lightsMesh.frustumCulled = false;
+    lightsMesh.castShadow = lightsMesh.receiveShadow = false;
+    lightsMesh.userData.litMat = false;
+    lightsMesh.userData.nightOnly = true;
+    lightsMesh.userData.duskMats = [matHeadlight, matTaillight];
+  }
+  const TM = new THREE.Object3D();
+  function tickTraffic(t, dt){
+    if (!traffic.length || !trafficMesh) return;
+    for (let i = 0; i < traffic.length; i++){
+      const v = traffic[i];
+      const pts = v.rd.pts;
+      const c = cumOf(pts);
+      const L = c[c.length - 1];
+      v.s += v.speed * dt * v.dir;
+      if (v.s > L || v.s < 0){
+        /* arrived at a node: continue on a road that leaves it, else start again elsewhere */
+        const node = v.dir > 0 ? pts[pts.length - 1] : pts[0];
+        const outs = (trafficNodes.get(nkey(node)) || []).filter(o => o.rd !== v.rd);
+        if (outs.length){
+          const o = outs[Math.floor(Math.random() * outs.length)];
+          const oc = cumOf(o.rd.pts);
+          trafficSpawn(v, o.rd, o.dir, o.dir > 0 ? 0 : oc[oc.length - 1]);
+        } else {
+          const rd = trafficRoads[Math.floor(Math.random() * trafficRoads.length)];
+          const dir = rd.pts.oneway || Math.random() < 0.5 ? 1 : -1;
+          trafficSpawn(v, rd, dir, dir > 0 ? 0 : cumOf(rd.pts).slice(-1)[0]);
+        }
+        continue;
+      }
+      // locate the segment
+      let k = 1; while (k < c.length - 1 && c[k] < v.s) k++;
+      const s0 = c[k-1], s1 = c[k], f = s1 > s0 ? (v.s - s0) / (s1 - s0) : 0;
+      const a = pts[k-1], b = pts[k];
+      let tx = (b[0] - a[0]) * v.dir, ty = (b[1] - a[1]) * v.dir;
+      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      const nx = -ty, ny = tx;                                 // left of travel
+      const x = a[0] + (b[0] - a[0]) * f + nx * v.lane;
+      const y = a[1] + (b[1] - a[1]) * f + ny * v.lane;
+      TM.position.set(x * r, Y + 0.01, -y * r);
+      TM.rotation.set(0, Math.atan2(tx, ty), 0);
+      TM.scale.set(1, 1, 1);
+      TM.updateMatrix();
+      trafficMesh.setMatrixAt(i, TM.matrix);
+      if (lightsMesh) lightsMesh.setMatrixAt(i, TM.matrix);
+    }
+    trafficMesh.instanceMatrix.needsUpdate = true;
+    if (lightsMesh) lightsMesh.instanceMatrix.needsUpdate = true;
+  }
+
   /* ---------- the signal clock ----------
 
      Called from the frame loop, but it only WRITES when an aspect actually changes: a junction
@@ -1183,7 +1320,8 @@ function addProps(d, layer, plan, budget = {}){
   tickSignals(0);
 
   return { palms: palms.length, lamps: lamps.length, cars: cars.length, boats: boats.length,
-           shrubs: shrubs.length, signals: signals.length, tickSignals };
+           shrubs: shrubs.length, signals: signals.length, traffic: traffic.length,
+           tickSignals, tickTraffic };
 }
 
 return { addProps, addParkProps,

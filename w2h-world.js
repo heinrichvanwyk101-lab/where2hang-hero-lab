@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v265';
+export const BUILD = 'world v266';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -9314,6 +9314,7 @@ const duskBeach  = stdMat({ color:0x9C8C6F, roughness:1, metalness:0 });
 
 let propCount = { palms:0, lamps:0, cars:0, boats:0, shrubs:0, signals:0 };
 const signalTicks = [];
+const trafficTicks = [];
 /* PER-ISLAND, AND CALLABLE LATER. Was a forEach; the body is unchanged. */
 function buildGroundFor(d){
   const f = d.fabric;
@@ -9369,6 +9370,7 @@ function buildGroundFor(d){
        into NaN the moment it tried to add it. Collected separately and called from the frame
        loop. Guarded because an older props module has neither. */
     if (n.tickSignals){ signalTicks.push(n.tickSignals); delete n.tickSignals; }
+    if (n.tickTraffic){ trafficTicks.push(n.tickTraffic); delete n.tickTraffic; }
     Object.keys(n).forEach(k => propCount[k] = (propCount[k] || 0) + n[k]);
   }
   const night = stdMat({
@@ -9566,5 +9568,6 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
             of them have junctions. */
-         tickSignals: t => { for (let i = 0; i < signalTicks.length; i++) signalTicks[i](t); } };
+         tickSignals: t => { for (let i = 0; i < signalTicks.length; i++) signalTicks[i](t); },
+         tickTraffic: (t, dt) => { for (let i = 0; i < trafficTicks.length; i++) trafficTicks[i](t, dt); } };
 }
