@@ -147,6 +147,19 @@ part, so keep it with the geometry it produced.
   geometry rendered as a single copy and the bench silently disagreed with the
   scene. Fixed, and that is what made the jetty change verifiable by pixel
   comparison rather than by argument.
+- **The grey islands are solved, and it was never a painting bug** (`world v237`).
+  An island wears `matLandFlat` (0x424E58, dark blue-grey) on slot 0 until
+  `buildGroundFor` replaces it with the painted canvas, and `matLandFlat` has no
+  `userData.dayMats`/`duskMats` — so `applyView` had nothing to swap to. Only
+  Corniche is `!pending`, so only Corniche was painted at load; the other five
+  kept the grey. That is the whole of "one run correct, one run wrong": it
+  depends purely on what has been built this session, not on any nondeterminism.
+  The flat platform now takes the same untextured sand materials the painted
+  ground is cloned from. **The lesson worth keeping: the symptom was a MATERIAL
+  that was never swapped, not a CANVAS that was painted wrongly** — several
+  rounds went into the painting code looking for a fault that was not there.
+  Reading the two colours off the screenshot and matching them against the
+  material table is what found it in one pass.
 
 ## OPEN
 
