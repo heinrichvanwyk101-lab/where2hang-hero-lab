@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v239';
+export const BUILD = 'world v240';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2749,10 +2749,79 @@ function paintGround(d, plan){
      finally has something to be dark against.
 
      Coast stays sand: the outermost ring is at 0.95, so the beach band is untouched. */
-  [[0.95, 0.30], [0.90, 0.34], [0.84, 0.40], [0.76, 0.45]].forEach(([sc, a]) => {
-    g.fillStyle = 'rgba(' + SURF.apron + ',' + a + ')';
-    pathOutline(sc); g.fill();
-  });
+  /* THE APRON FOLLOWS THE CITY, NOT THE COASTLINE — and that reverses the decision the four
+     concentric fills above this line used to make.
+
+     THE OLD FORM, kept here because its reasoning is still worth reading: four rings at 0.95,
+     0.90, 0.84 and 0.76 of the outline, alphas 0.30/0.34/0.40/0.45, ramped so there was no hard
+     edge where paving began. Its comment argued that "on a developed island, paved ground is the
+     DEFAULT and sand is the exception", and it fixed a real complaint — the plan read THIN, bare
+     desert with roads floating on it and nothing for tarmac to be dark against.
+
+     WHAT IT ALSO DID was pave every island edge to edge. pathOutline takes no account of where
+     anything is actually built, so the four fills covered undeveloped ground at a cumulative
+     ~0.85 alpha, leaving no barren sand anywhere inside 0.95 of the coast. That is the direct
+     cause of "islands are brown, not sand": three separate passes at the SAND colour and the
+     macro tint could not show through a layer that was painted over all of them afterwards.
+
+     SO THE MASK IS NOW THE CITY ITSELF. plan.blocks (superblock polygons) and plan.cells (the
+     rotated plots inside them) are the same two sources the fabric pass a few lines below already
+     paints from, so the apron lands exactly where there is development and nowhere else.
+     Undeveloped ground keeps SURF.sand and the macro tint above it, which is what it was always
+     supposed to look like.
+
+     DRAWN OFFSCREEN AND BLURRED rather than filled straight onto the plan, reusing the mipBlur
+     the fabric pass already uses. That is what replaces the concentric ramp: the old form needed
+     four rings to avoid a hard ring at the coast, this one needs a blur to avoid a hard edge at
+     every block boundary. 0.85 matches the old cumulative alpha, so developed ground keeps the
+     tone it has today and only undeveloped ground changes.
+
+     NOT DILATED TO BRIDGE THE GAPS BETWEEN BLOCKS, deliberately. Carriageways are painted later
+     in this function from the real road network, so streets still read as streets; widening the
+     mask to cover them here would start walking back toward paving everything, which is the fault
+     being fixed. If this leaves the island reading sparse rather than deliberately barren, that
+     is a judgement to take rather than a number to quietly raise. */
+  /* GATED THE SAME WAY THE FABRIC PASS IS, and missing this would have been the whole point
+     thrown away. `if (d.genFabric !== false)` guards the pass below because on an island that
+     declared its building stock REAL the generated blocks and cells are an INVENTED plot grid —
+     the criss-cross that Raha lost its invented buildings but kept the grid of. Masking the apron
+     to that grid would lay developed ground in a pattern the real city does not follow, which is
+     a worse error than paving everything: wrong in a way that looks deliberate.
+
+     Al Raha is currently the only island with genFabric:false, so it now takes NO apron at all —
+     bare sand carrying its real roads and real footprints. That is honest, and it may also read
+     as too bare. Covering it properly needs the real footprint polygons as a mask, and paintGround
+     does not have them: footprints arrive later, as meshes, through addFootprints. Flagged rather
+     than papered over by falling back to the invented grid. */
+  if (d.genFabric !== false){
+    const apCv = document.createElement('canvas');
+    apCv.width = W; apCv.height = H;
+    const ag = apCv.getContext('2d', { willReadFrequently: true });
+    ag.fillStyle = 'rgb(' + SURF.apron + ')';
+    (plan.blocks || []).forEach(q => {
+      if (!q || q.length < 3) return;
+      ag.beginPath();
+      ag.moveTo(PX(q[0][0]), PY(q[0][1]));
+      for (let i = 1; i < q.length; i++) ag.lineTo(PX(q[i][0]), PY(q[i][1]));
+      ag.closePath(); ag.fill();
+    });
+    (plan.cells || []).forEach(c => {
+      const w = (c.wN || 0) * U, h = (c.dN || 0) * U;
+      if (!w || !h) return;
+      ag.save();
+      ag.translate(PX(c.jx), PY(c.jy));
+      ag.rotate(-(c.rot || 0));
+      ag.fillRect(-w/2, -h/2, w, h);
+      ag.restore();
+    });
+    const softened = mipBlur(apCv, 5);
+    g.save();
+    g.globalAlpha = 0.85;
+    g.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
+    g.drawImage(softened, 0, 0, W, H);
+    g.restore();
+  }
 
   /* 4. Parks, straight from the plan — UNLESS THE ISLAND HAS REAL ONES.
 
