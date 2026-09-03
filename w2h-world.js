@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v237';
+export const BUILD = 'world v238';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2624,15 +2624,35 @@ function paintGround(d, plan){
      for a different and subtler job elsewhere) and higher alpha. An invisible fix is worth
      exactly as much as no fix, so this trades some of the earlier shimmer margin away
      deliberately rather than staying "safe" and pointless. */
-  /* WARMED TO MATCH THE SAND UNDERNEATH — THIS LAYER IS WHY THE SAND FIX LOOKED LIKE IT DIDN'T
-     TAKE. SURF.sand was correctly warmed to a golden desert tone, but this tint is painted over
-     the whole island at 0.62 alpha, and its two endpoints were hardcoded grey-browns (#807461
-     to #f1dcb7) that predate that change. At that alpha it dominates whatever is beneath it, so
-     most of what was actually visible was this, not the sand — which is exactly why Saadiyat
-     (less developed, more raw sand showing) looked right in the same frame where Corniche and
-     Al Reem still looked brown. Same warming direction and roughly the same amount as the sand
-     itself, so the ground variation this provides is preserved exactly; only its hue moves. */
-  paintMacroTint(g, W, H, PX, PY, U, '#8C7A56', '#F5E3BC', 0.62);
+  /* THE DARK ENDPOINT WAS THE WHOLE PROBLEM, NOT THE ALPHA — third pass at this layer, and the
+     first two are directly above.
+
+     THE BRIEF: an island is barren desert sand, and the painter lays a city ON it. Undeveloped
+     ground should read as sand, full stop. This tint is the only layer that covers the WHOLE
+     island — roads, blocks and fabric all come after it and only touch developed ground — so it
+     is the only thing that can make bare desert the wrong colour, and it was.
+
+     WHAT IT ACTUALLY PRODUCED. Over SURF.sand #C7A876 at 0.62 alpha:
+         dark end #8C7A56 -> rgb(162,139,98)   a mud brown
+         light end #F5E3BC -> rgb(228,205,161) pale cream
+     So bare desert swung between brown and cream instead of sitting near sand. Reported plainly
+     as "most islands unbuilt areas are dark brown".
+
+     WHY NOT SIMPLY LOWER THE ALPHA, which was the obvious move. The pass above raised it for a
+     reason it recorded — the previous setting was confirmed too subtle against Day screenshots,
+     and "an invisible fix is worth exactly as much as no fix". Dropping alpha alone would walk
+     straight back into that. The fault was never the AMOUNT of variation, it was its DIRECTION:
+     the dark endpoint sat browner than the sand beneath it, so the wash could only muddy.
+
+     THE FIX IS TO CLAMP THE DARK END INTO THE SAND FAMILY. #C2A271 is five levels under
+     SURF.sand rather than sixty, so the wash now ranges from a whisper below sand to clearly
+     above it and can never reach brown. Alpha comes down to 0.32 — halved, not extinguished —
+     because a one-sided range needs less of it to read. Composited:
+         dark end  -> rgb(197,166,116)  a hair under sand
+         light end -> rgb(215,189,143)  sun-bleached sand
+     an 18-level swing, visible from the overview, entirely within the desert. Developed ground
+     is unaffected either way: it is painted over this a few lines further down. */
+  paintMacroTint(g, W, H, PX, PY, U, '#C2A271', '#F5E3BC', 0.32);
 
   /* GROUND VARIATION, AND IT IS ONE FILL THAT WAS DOING ALL THE WORK.
 
