@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-03T16:32:01.621Z",
+ "generated": "2026-09-03T17:53:23.505Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -7667,9 +7667,10 @@
      "y": -3491
     }
    },
-   "bytes": 5552736,
+   "bytes": 5750147,
    "counts": {
     "outline": 1905,
+    "landmasses": 1,
     "roads": 10674,
     "buildings": 20258,
     "inBox": 32583,
@@ -7683,6 +7684,7 @@
     "waterIslands": 0,
     "beaches": 75,
     "hardEdge": 421,
+    "parking": 1751,
     "withVenues": 1796
    }
   },
@@ -7904,9 +7906,10 @@
      "y": 1272.9
     }
    },
-   "bytes": 102958,
+   "bytes": 110212,
    "counts": {
     "outline": 47,
+    "landmasses": 1,
     "roads": 660,
     "buildings": 104,
     "inBox": 401,
@@ -7920,6 +7923,7 @@
     "waterIslands": 0,
     "beaches": 3,
     "hardEdge": 16,
+    "parking": 70,
     "withVenues": 18
    }
   },
@@ -9129,9 +9133,10 @@
      "y": 689.5
     }
    },
-   "bytes": 171131,
+   "bytes": 173378,
    "counts": {
     "outline": 296,
+    "landmasses": 1,
     "roads": 883,
     "buildings": 180,
     "inBox": 519,
@@ -9145,6 +9150,7 @@
     "waterIslands": 0,
     "beaches": 10,
     "hardEdge": 26,
+    "parking": 20,
     "withVenues": 39
    }
   },
@@ -10810,10 +10816,11 @@
      "y": 4815.5
     }
    },
-   "bytes": 617153,
+   "bytes": 625398,
    "counts": {
     "outline": 408,
-    "roads": 1550,
+    "landmasses": 1,
+    "roads": 1556,
     "buildings": 1839,
     "inBox": 2597,
     "withHeight": 500,
@@ -10826,6 +10833,7 @@
     "waterIslands": 0,
     "beaches": 6,
     "hardEdge": 38,
+    "parking": 59,
     "withVenues": 55
    }
   },
@@ -12719,22 +12727,24 @@
      "y": -3306.2
     }
    },
-   "bytes": 1174187,
+   "bytes": 1191785,
    "counts": {
     "outline": 462,
-    "roads": 2526,
+    "landmasses": 1,
+    "roads": 2528,
     "buildings": 3937,
     "inBox": 5673,
     "withHeight": 32,
-    "parks": 353,
+    "parks": 351,
     "paths": 170,
     "plazas": 9,
     "golf": 2,
     "raceway": 38,
-    "water": 15,
+    "water": 20,
     "waterIslands": 0,
     "beaches": 7,
     "hardEdge": 86,
+    "parking": 118,
     "withVenues": 84
    }
   },
@@ -14049,7 +14059,7 @@
     ]
    ],
    "landmarks": {},
-   "bytes": 309430,
+   "bytes": 314708,
    "counts": {
     "outline": 319,
     "landmasses": 9,
@@ -14066,6 +14076,7 @@
     "waterIslands": 0,
     "beaches": 5,
     "hardEdge": 91,
+    "parking": 45,
     "withVenues": 9
    }
   }
