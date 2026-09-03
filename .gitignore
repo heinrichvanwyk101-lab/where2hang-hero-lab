@@ -1,0 +1,21 @@
+# ==============================================================================================
+# GitHub Pages serves this repository's root directly, so anything committed here is PUBLISHED.
+# That makes an accidental node_modules/ commit worse than untidy — it would be served.
+#
+# BENCH.md's setup step is `npm i three`, run from the repo root because that is where
+# render.mjs and preview.mjs live. That drops three build artefacts into the root every time.
+# None of them belong in the repo: the bench is a dev tool, and the scene itself takes three.js
+# from the importmap in world-nav.html, not from node_modules.
+# ==============================================================================================
+node_modules/
+
+# Created by `npm i three`. The repo deliberately has no manifest — if one is ever added on
+# purpose, `git add -f package.json` overrides this line.
+package.json
+package-lock.json
+
+# preview.mjs writes <name>-plan.png, <name>-oblique.png and <name>-horizon.png beside itself.
+# Bench output is meant to be looked at and thrown away; the committed imagery is .webp.
+*-plan.png
+*-oblique.png
+*-horizon.png
