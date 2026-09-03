@@ -108,19 +108,19 @@ const ISLANDS = [
   { id:'reem',     name:'Al Reem',          bbox:[24.4850, 54.3850, 24.5200, 54.4300], centre:[24.4980, 54.4060] },
   { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
   { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
-  /* AL RAHA — NOT AN ISLAND, AND SAID SO EXPLICITLY VIA noCoastline. Al Raha Beach is mainland,
-     part of Khalifa City, roughly 1.4 km south of Yas's own mapped extent — Aldar HQ's real
-     coordinates (24.44111, 54.57528) sit just outside every one of the five boxes above, which
-     is what surfaced the gap in the first place. There is no closed OSM coastline ring here for
-     pickIsland to find, because the area is not bounded by open water on more than one side —
-     Channel Street and Al Raha Creek cut through it, they do not enclose it.
+  /* AL RAHA — A MAINLAND PATCH, NOT AN ISLAND, AND SAID SO VIA noCoastline. Al Raha Beach is a
+     strip of reclaimed islands and canals off Khalifa City, about 1.4 km south of Yas's mapped
+     extent, with the E10 behind it; there is no closed coastline ring around the whole of it for
+     pickIsland to find, because the mainland's coastline runs on past both ends.
 
-     outlineLL IS A TRACED SHAPE, NOT A GUESS — drawn by hand in geojson.io directly along Khor
-     Al Raha, the actual canal, rather than a rectangle that would cut across it. [lon, lat]
-     pairs, GeoJSON order, converted below. This is what noCoastline actually uses now; the bbox
-     below only has to be generous enough to fetch everything the traced shape needs, and was
-     widened east to 54.615 after the trace turned out to reach 54.6112 — past where the first,
-     un-traced version of this box stopped at 54.586. */
+     outlineLL IS THE FRAME, NOT THE SHORE. Drawn in geojson.io ([lon, lat] pairs, GeoJSON order):
+     its inland edges say where the district stops — the west cut just before Aldar HQ, because
+     west of there toward the city the ground is bare; the south edge along the E10; the east cut
+     at the Yas channel — and its seaward edge is drawn generously out in the water on purpose.
+     landFromCoast cuts OSM's own natural=coastline to this frame, so the shore, every canal and
+     every island (Al Bandar, Al Muneera, Al Zeina, Al Dana …) come from the survey. The frame also
+     sets the island's extent, so the hand-placed coordinates in w2h-world.js keep their origin
+     across re-bakes. The bbox only has to fetch everything the frame needs. */
   { id:'raha', name:'Al Raha', bbox:[24.4300, 54.5600, 24.4600, 54.6150], centre:[24.4460, 54.5850],
     noCoastline: true,
     outlineLL: [
@@ -1655,73 +1655,14 @@ async function bakeIsland(isle, proj){
      that ship rather than against everything the box returned. */
   await attachVenues(buildings, proj, isle.id);
 
-  /* HAND-TRACED WATER, MERGED HERE SO A RE-BAKE CANNOT SILENTLY LOSE IT. Al Raha's real canal
-     network — Khor Al Raha itself plus the individual islands through Al Dana, Al Seef, Al
-     Muneera and Al Zeina — turned out not to exist as extractable OSM tags at all; confirmed
-     across two live bakes, not assumed. The Overpass water query stays in this file because it is
-     correct and still useful for whatever small ponds ARE tagged, but for Raha specifically the
-     real shape came from tracing satellite imagery by hand, point by point, against the actual
-     coastline, verified visually against reference photos before being accepted.
-
-     data/water-<id>.json is optional and only Raha has one today. Reading it here, inside
-     bakeIsland, rather than patching data/isle-raha.json directly after the fact, is what makes
-     it survive the NEXT bake — a hand-edit to the output file would be silently overwritten the
-     moment anyone re-baked Raha for a roads or buildings refresh, and there would be no error to
-     say so, just a quietly regressed canal. waterIslands is a new field, not folded into water
-     itself: a creek with islands inside it needs the renderer to draw solid ground where the
-     islands are, which is a different operation from painting a hole, and conflating the two
-     into one polygon-with-holes was tried and abandoned — two of the eight islands sat close
-     enough to the creek's own traced edge that a strict polygon difference silently dropped them
-     rather than resolving them cleanly. Two flat lists, checked against each other by area
-     before this shipped, avoid the whole class of problem. */
-  let handWater = null;
-  /* fs IS NOT A MODULE-LEVEL IMPORT IN THIS FILE — every function that touches the filesystem
-     does its own `const fs = await import('node:fs/promises')`, on purpose (see the comment near
-     line 499). bakeIsland never needed file I/O before this water merge, so it never had one, and
-     a bare `fs.readFile` threw ReferenceError: fs is not defined — confirmed directly from a live
-     bake's own diagnostic output, not guessed. Declared here, above the try, rather than inside
-     it — a `const` declared inside try{} is not visible to its own catch{} block, and the catch
-     below needs fs too (for the directory listing), so importing only in the try left the catch's
-     own diagnostic broken by the exact same scoping mistake this whole fix exists to correct. */
-  const fs = await import('node:fs/promises');
-  try {
-    const wpath = `data/water-${isle.id}.json`;
-    const raw = await fs.readFile(wpath, 'utf8');
-    handWater = JSON.parse(raw);
-    process.stderr.write(`  ${isle.id}: hand-traced water found (${wpath}) — ` +
-      `${handWater.water.length} body, ${handWater.waterIslands.length} islands, merged in\n`);
-  } catch (e) {
-    /* WAS A BARE catch {}, SWALLOWING WHATEVER WENT WRONG WITHOUT SAYING WHAT. Two live bakes
-       against a repo where the file, the code, the commit and the timing all check out clean
-       from the git side still produced zero islands, with no way to tell from here whether that
-       was ENOENT, a JSON parse failure, a permissions issue, or something about the runner's
-       working directory this file's own reasoning never considered. Rather than guess a third
-       time, log everything a real diagnosis needs — but only for islands that actually HAVE a
-       hand-traced file to find, which today is Raha alone. For every other island, ENOENT here
-       is the ordinary, correct, silent case — five islands' worth of expected "no file" would
-       otherwise bury the one line that matters under noise nobody asked for. */
-    if (isle.id === 'raha'){
-      process.stderr.write(`  ${isle.id}: hand-traced water NOT merged — ${e.code || e.name}: ${e.message}\n`);
-      process.stderr.write(`    cwd: ${process.cwd()}\n`);
-      try {
-        const listing = await fs.readdir('data');
-        process.stderr.write(`    data/ contains: ${listing.join(', ')}\n`);
-      } catch (e2) {
-        process.stderr.write(`    could not even list data/: ${e2.code || e2.name}: ${e2.message}\n`);
-      }
-    }
-  }
-
-  /* NOT MERGED WHEN THE COASTLINE CLIP SUPPLIED THE SHORE. The hand trace of the canal and its
-     eight islands existed because the coastline was never consulted for this patch; once it is,
-     the canal is simply the water outside the land rings and the islands are land rings of their
-     own. Merging the trace on top would paint a second, hand-drawn canal across surveyed ground. */
-  if (handWater && coastClipped){
-    process.stderr.write(`  ${isle.id}: hand-traced water NOT merged — the coastline clip supplies the shore\n`);
-    handWater = null;
-  }
-  const finalWater = handWater ? water.concat(handWater.water) : water;
-  const waterIslands = handWater ? handWater.waterIslands : [];
+  /* NO HAND-TRACED WATER ANY MORE. data/water-raha.json — one canal body and eight islands
+     traced off satellite imagery — existed because the coastline was never consulted for a
+     mainland patch. landFromCoast now takes the canal and the islands from the survey, so the
+     trace and its merge are gone rather than left as a fallback that would paint a second,
+     hand-drawn canal across surveyed ground the day the two disagreed. waterIslands stays in the
+     artefact, empty, so nothing downstream has to learn a new shape. */
+  const finalWater = water;
+  const waterIslands = [];
   /* A SEPARATE, EXPLICIT LINE, not folded into the summary above — that line runs before this
      merge even happens (it is built from the pre-merge `water`, not finalWater), so it could
      never have reflected hand-traced data landing even if the wording implied it. Whoever reads

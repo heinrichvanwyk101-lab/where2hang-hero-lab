@@ -4901,10 +4901,11 @@ const DISTRICTS = [
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
       { label:'SeaWorld',      osm:'SeaWorld Abu Dhabi',      x: 22, z: 14, h: 8, r:38 },
     ] },
-  /* AL RAHA. Not an island — data/isle-raha.json says so via noCoastline in the bake, and the
-     outline here is a traced canal strip (Khor Al Raha) rather than a surveyed shoreline. r and
-     x/z below are placeholder-scale fallbacks; the real values come from BASE[d.id] the same way
-     every baked island's do, once the basemap transform runs.
+  /* AL RAHA. A mainland patch — data/isle-raha.json says so via noCoastline in the bake. Its
+     outline is the surveyed OSM coastline cut to a hand-drawn frame (tools/bake-city.mjs, the
+     ISLANDS table): nine landmasses, the canals between them open water, no hand-traced water or
+     islands any more. r and x/z below are placeholder-scale fallbacks; the real values come from
+     BASE[d.id] the same way every baked island's do, once the basemap transform runs.
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
   { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
