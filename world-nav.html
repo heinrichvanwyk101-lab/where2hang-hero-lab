@@ -667,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v182', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v183', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2335,6 +2335,13 @@ window.__w2hSetResults = setResults;
 let viewDiag = 'dusk';
 let viewSrcDiag = 'boot';
 let probeDiag = '';
+/* Counts applyView runs and stamps every mesh the traverse actually touches. The probe found the
+   ground wearing its NIGHT material in day view on an island that owns a full set of dayMats —
+   which has exactly two causes, needing opposite fixes: the traverse never reached that mesh
+   (build ran after the last applyView), or it reached it and something re-assigned night after.
+   A stamp separates them without another round of reading call sites: no stamp means never
+   touched; a stamp equal to the current run means touched and then overwritten. */
+let viewSeq = 0;
 
 setInterval(() => {
   const est = document.getElementById('embedstamp');
@@ -3528,7 +3535,9 @@ function applyView(next){
      coming back and the frame flattens. */
   renderer.toneMappingExposure = night ? 1.24 : dusk ? 1.02 : 1.0;
 
+  viewSeq++;
   world.traverse(o => {
+    o.userData.vSeen = next; o.userData.vSeq = viewSeq;
     /* SPRITES ARE NOT MESHES, and the grid labels have been visible in every view since the day
        they were added.
 
@@ -4004,8 +4013,12 @@ canvas.addEventListener('pointerup', e => {
                ' @' + cx + ',' + cy;
         }
       } catch (e) { px = ' px=err'; }
+      const seen = o.userData.vSeen
+        ? o.userData.vSeen + '#' + o.userData.vSeq + (o.userData.vSeq === viewSeq ? '=cur' : '<OLD')
+        : 'NEVER';
       return i + ') ' + chain.join('<') + ' y=' + h.point.y.toFixed(2) +
-             '\n   col=' + cols + ' mats=' + sets + px;
+             '\n   col=' + cols + ' mats=' + sets +
+             '\n   seen=' + seen + ' runs=' + viewSeq + px;
     }).join('\n');
     paintDiag();
     return;
