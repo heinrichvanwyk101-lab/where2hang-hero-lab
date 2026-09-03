@@ -84,6 +84,7 @@ export function fabricFor(id){
 /* GENERATED STOCK. What urbanFabric may build up to. */
 export const GEN_TALLEST = {
   corniche: 34,   // 265 m — the cap below trims this further
+  raha:      6,   //  47 m — Al Raha Beach's real stock: median 12.8 m, ninetieth percentile 45
   maryah:   26,   // 203 m  (was 40 = 312 m against a real ~200 m)
   reem:     38,   // 296 m  (was 44 = 343 m against Sky Tower's 292 m)
   /* 39 m, WHICH IS THE CULTURAL DISTRICT AND NOT THE ISLAND.

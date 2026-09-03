@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v19';
+export const BUILD = 'basemap v20';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -227,6 +227,7 @@ export async function loadRoads(idx, id){
      lazy-roads getter below exists to prevent. One fetch, one arrival. */
   entry._paths  = d.paths  || [];
   entry._plazas = d.plazas || [];
+  entry._parking = d.parking || [];      // surface car parks, sidecar copy (basemap v20)
   return entry._roads;
 }
 
@@ -367,6 +368,7 @@ export function waterShapesOf(entry, data){
     waterIslands: (data.waterIslands || []).map(norm),
     beaches: (data.beaches || []).map(norm),      // natural=beach, shape units
     hardEdge: (data.hardEdge || []).map(norm),    // marina / quay / pier / breakwater
+    parking:  (data.parking  || []).map(norm),    // amenity=parking surface lots
   };
 }
 
@@ -413,6 +415,17 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
         if (!entry._data) return [];
         if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
         return entry._waterN.hardEdge || [];
+      },
+      /* CAR PARKS: from the roads sidecar when it has landed (the copy the painter needs at
+         build), else from the island file, else none. Same normalisation as plazas. */
+      get parking(){
+        if (entry._roads && entry._parking){
+          if (!entry._parkingN) entry._parkingN = plazasNormalised(entry, entry._parking);
+          return entry._parkingN;
+        }
+        if (!entry._data) return [];
+        if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
+        return entry._waterN.parking || [];
       },
       /* LAZY, BECAUSE THIS TABLE IS BUILT ONCE AND THE ROADS ARRIVE FIVE TIMES.
          sceneIslands is called immediately after Corniche's roads are awaited; the other four

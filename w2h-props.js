@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v34';
+export const BUILD = 'props v35';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -901,6 +901,43 @@ function addProps(d, layer, plan, budget = {}){
       cars.push({ x:cx, y:cy, rot: Math.atan2(tx, ty) + (s < 0 ? Math.PI : 0) });
     });
   });
+
+  /* PARKED CARS IN THE SURVEYED CAR PARKS (props v35). Rows along each lot's long axis, cars nose-in
+     at a 2.7 m bay pitch, rows 8 m apart with alternating facing so each aisle has cars on both
+     sides, about half the bays taken. Static, like the kerbside cars, and capped so a stadium car
+     park does not eat the instance buffer. */
+  {
+    const lots = plan.parkingLots || [];
+    const perM_ = 1 / (d.r * 7.8);
+    const rowPitch = 8 * perM_, bayPitch = 2.7 * perM_;
+    const LOT_CAP = 900;
+    let placed = 0;
+    for (const ring of lots){
+      if (placed >= LOT_CAP) break;
+      let best = 0, ux = 1, uy = 0;
+      for (let i = 0; i < ring.length; i++){
+        const a = ring[i], b = ring[(i + 1) % ring.length];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L > best){ best = L; ux = (b[0] - a[0]) / L; uy = (b[1] - a[1]) / L; }
+      }
+      const vx = -uy, vy = ux;
+      let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+      for (const q of ring){ const u = q[0] * ux + q[1] * uy, v = q[0] * vx + q[1] * vy;
+        if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v; }
+      let row = 0;
+      for (let v = v0 + rowPitch * 0.6; v < v1 - rowPitch * 0.3; v += rowPitch, row++){
+        const face = (row % 2) ? 1 : -1;
+        for (let u = u0 + bayPitch * 0.8; u < u1 - bayPitch * 0.5; u += bayPitch){
+          if (R() > 0.52) continue;
+          const x = ux * u + vx * v, y = uy * u + vy * v;
+          if (!pointInRing(ring, x, y) || !inside(x, y)) continue;
+          if (placed >= LOT_CAP) break;
+          cars.push({ x, y, rot: Math.atan2(vx * face, vy * face) });
+          placed++;
+        }
+      }
+    }
+  }
 
   // Park palms, clustered. Parkland with evenly spaced trees reads as an orchard.
   plan.parks.forEach(p => {

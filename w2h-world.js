@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v266';
+export const BUILD = 'world v267';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -466,6 +466,48 @@ const farSea = new THREE.Mesh(
   stdMat({ color:0x050A10, roughness:0.62, metalness:0.05 })
 );
 farSea.rotation.x = -Math.PI/2;
+
+/* ---------- STARS (world v267) ----------
+
+   A dome of points at 5,200 units — inside the camera's 6,000 far plane, above the far sea's
+   horizon — each with its own phase and rate, twinkled in the vertex shader: one draw call,
+   no per-frame JavaScript beyond a uniform. nightOnly, so the shell shows it only after dark
+   and at dusk; origMat is stamped here because nothing else snapshots a scene-level object.
+   Sizes are skewed small with a few bright ones, which is what a sky looks like rather than a
+   field of identical dots. */
+const STAR_N = 1400;
+const starGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(STAR_N * 3), ph = new Float32Array(STAR_N), sz = new Float32Array(STAR_N);
+  let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const RS = 5200;
+  for (let i = 0; i < STAR_N; i++){
+    const a = rnd() * Math.PI * 2, e = 0.06 + Math.asin(rnd()) * 0.93;
+    pos[i*3] = RS * Math.cos(e) * Math.cos(a); pos[i*3+1] = RS * Math.sin(e); pos[i*3+2] = RS * Math.cos(e) * Math.sin(a);
+    ph[i] = rnd() * 6.2832; sz[i] = 1.3 + Math.pow(rnd(), 3) * 3.4;
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  starGeo.setAttribute('phase', new THREE.BufferAttribute(ph, 1));
+  starGeo.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+}
+const starMat = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 }, pr: { value: (typeof devicePixelRatio === 'number' ? Math.min(2, devicePixelRatio) : 1) } },
+  vertexShader: `attribute float phase; attribute float size; uniform float time; uniform float pr; varying float vA;
+    void main(){ float tw = 0.55 + 0.45 * sin(time * (1.4 + fract(phase * 0.618) * 2.6) + phase); vA = tw;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * (0.7 + 0.3 * tw) * pr; gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float r = length(c); if (r > 0.5) discard;
+      float a = smoothstep(0.5, 0.05, r) * vA; gl_FragColor = vec4(0.86, 0.91, 1.0, a); }`,
+  transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, toneMapped: false,
+});
+const stars = new THREE.Points(starGeo, starMat);
+stars.frustumCulled = false;
+stars.renderOrder = -10;
+stars.userData.nightOnly = true;
+stars.userData.litMat = false;
+stars.userData.origMat = starMat;
+stars.userData.noShadow = true;
+stars.onBeforeRender = () => { starMat.uniforms.time.value = performance.now() * 0.001; };
+scene.add(stars);
 /* -1.15, NOT -0.45, AND THE OLD COMMENT WAS WRONG ON ITS OWN TERMS.
 
    It said "clearly under the wave troughs". The wave loop in world-nav.html is
@@ -3707,6 +3749,63 @@ function paintGround(d, plan){
       g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(0.8, U * roadW(d, 1.2)); g.stroke();
     }
 
+    /* CAR PARKS (world v267): the surveyed amenity=parking lots, filled as asphalt a shade lighter
+       than a carriageway, with aisle lines along the lot's long axis at a 16 m pitch and bay
+       stripes across them where the canvas has the pixels to show a 2.7 m bay. The same rings
+       go to the prop placer (plan.parkingLots) to fill with parked cars. */
+    plan.parkingLots = [];
+    {
+      const lots = (d.roads && d.roads.drawParking) || [];
+      const pxM = U * roadW(d, 1);                     // canvas px per metre
+      for (const ring of lots){
+        if (!ring || ring.length < 4) continue;
+        let inside = 0;
+        for (const p of ring) if (insideIsle(d.id, p[0], p[1])) inside++;
+        if (inside < ring.length * 0.5) continue;
+        plan.parkingLots.push(ring);
+        // longest edge sets the row direction
+        let best = 0, ux = 1, uy = 0;
+        for (let i = 0; i < ring.length; i++){
+          const a = ring[i], b = ring[(i + 1) % ring.length];
+          const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (L > best){ best = L; ux = (b[0] - a[0]) / L; uy = (b[1] - a[1]) / L; }
+        }
+        g.save();
+        g.beginPath();
+        g.moveTo(PX(ring[0][0]), PY(ring[0][1]));
+        for (let i = 1; i < ring.length; i++) g.lineTo(PX(ring[i][0]), PY(ring[i][1]));
+        g.closePath();
+        g.fillStyle = SURF.road; g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.16)'; g.fill();
+        g.clip();
+        // rows: lines along u at a 16 m pitch across v, spanning the lot's extent
+        const vx = -uy, vy = ux;
+        let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+        for (const p of ring){ const u = p[0] * ux + p[1] * uy, v = p[0] * vx + p[1] * vy;
+          if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v; }
+        const mPitch = roadW(d, 16), bay = roadW(d, 2.7);
+        g.strokeStyle = SURF.line; g.lineWidth = Math.max(0.8, pxM * 0.25);
+        g.beginPath();
+        for (let v = v0 + mPitch * 0.5; v < v1; v += mPitch){
+          g.moveTo(PX(ux * u0 + vx * v), PY(uy * u0 + vy * v));
+          g.lineTo(PX(ux * u1 + vx * v), PY(uy * u1 + vy * v));
+          if (pxM * 2.7 >= 1.6){                      // bay stripes only where a bay is a pixel or more
+            for (let u = u0; u < u1; u += bay){
+              g.moveTo(PX(ux * u + vx * (v - mPitch * 0.34)), PY(uy * u + vy * (v - mPitch * 0.34)));
+              g.lineTo(PX(ux * u + vx * (v + mPitch * 0.34)), PY(uy * u + vy * (v + mPitch * 0.34)));
+            }
+          }
+        }
+        g.stroke();
+        g.restore();
+        g.beginPath();
+        g.moveTo(PX(ring[0][0]), PY(ring[0][1]));
+        for (let i = 1; i < ring.length; i++) g.lineTo(PX(ring[i][0]), PY(ring[i][1]));
+        g.closePath();
+        g.strokeStyle = SURF.kerb; g.lineWidth = Math.max(0.8, pxM * 1.0); g.stroke();
+      }
+    }
+
     /* THE FLOOR IS 2.4, NOT 4.0, AND THE FIRST VALUE BROKE THE HIERARCHY.
 
        MIN_PX gives ring 10, major 9, minor 6 and local 3.5 pixels for corridors of 31, 28, 18 and
@@ -5043,7 +5142,12 @@ const DISTRICTS = [
        attempt: cells and blocks feed buildGroundFor and groundPlan, so the paving, the block
        layout and the street grid all come out of the same arithmetic. Skipping the call takes
        the ground with it. meshes:false keeps every number and builds no boxes. */
-    genFabric:false,
+    /* genFabric:false IS GONE (world v267). It was set because the generator invented a skyline;
+       what it actually did was leave two thirds of a fully built strip bare, since the Overture
+       footprints cover 12 to 18 per cent of the mainland strip and next to nothing on three of
+       the islands. cullFabric zeroes the generated stock only where a real footprint stands, so
+       the real buildings win wherever they exist and the gaps fill at Al Raha's own profile —
+       GEN_TALLEST in w2h-districts.js holds it to mid-rise. */
     /* coreN WAS MISSING ENTIRELY, AND THAT IS WHAT CRASHED THE APP — not a deep bug, a plain
        omission. Every other district declares it (corniche 0.10/0.02, saadiyat 0.15/0.10, and so
        on); buildFabricFor reads d.coreN[0] and d.coreN[1] unconditionally with no fallback, so a
@@ -5381,6 +5485,7 @@ function attachRealRoads(d){
      Kept apart so a later call can still fill them rather than concluding there are none. */
   if (b.paths)  d.roads.drawPaths  = b.paths;
   if (b.plazas) d.roads.drawPlazas = b.plazas;
+  if (b.parking) d.roads.drawParking = b.parking;   // surface car parks (basemap v20)
   /* REAL JUNCTIONS, FROM THE CENTRELINES THEMSELVES. This was an empty list with a note that real
      junctions would "come with stage 3", and stage 3 never came: every island that painted its
      surveyed roads had no signals, no zebras, no junction pads and no keep-clear for lamps and
