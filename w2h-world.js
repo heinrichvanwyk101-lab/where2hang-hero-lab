@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v244';
+export const BUILD = 'world v247';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1535,31 +1535,46 @@ function inwardAt(id, pts, i, dist){
    is not the same thing. Probed at a short fixed distance, where "is this point inside the
    island" is a question about the coast at this sample rather than about whatever land happens
    to lie a full beach-width away across a channel. */
-function outwardSign(id, pts, i, probe){
+/* THE TANGENT HAS TO SURVIVE A REPEATED SAMPLE, AND THIS IS AL RAHA'S MISSING BEACH.
+
+   Every offset in this file took its direction from the difference between a sample's immediate
+   neighbours. On these resampled outlines those neighbours are frequently the SAME POINT: probing
+   240 positions around each island, 90 per cent of Al Raha's samples and 37 per cent of Al
+   Maryah's have a zero-length neighbour difference, against 2 per cent on Corniche.
+
+   A zero-length difference divided by `|| 1` does not fail loudly — it yields the normal (0, 0),
+   so every ring at that sample is placed exactly ON the outline point. insideIsle then reports it
+   inside, reach collapses to zero, and the skirt becomes a vertical curtain at the coast. The
+   measured share of beach samples with no width is 89.7 per cent on Al Raha and 41 on Al Maryah:
+   the same two islands, in the same proportion as their degenerate tangents.
+
+   So the window widens until it finds two distinct points. Where the neighbours already differ —
+   the overwhelming majority of samples on the four islands v244 fixed — it returns exactly what
+   the old expression returned, so this cannot disturb them. */
+function tangentAt(pts, i){
   const n = pts.length - 1;
-  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
-  let tx = b.x - a.x, ty = b.y - a.y;
-  const L = Math.hypot(tx, ty) || 1;
-  tx /= L; ty /= L;
+  for (let w = 1; w <= 32; w++){
+    const a = pts[(i - w % n + n) % n], b = pts[(i + w) % n];
+    const tx = b.x - a.x, ty = b.y - a.y;
+    const L = Math.hypot(tx, ty);
+    if (L > 1e-12) return [tx / L, ty / L];
+  }
+  return [1, 0];                       // a ring with no two distinct points inside 32 samples
+}
+
+function outwardSign(id, pts, i, probe){
+  const [tx, ty] = tangentAt(pts, i);
   return insideIsle(id, pts[i].x - ty * probe, pts[i].y + tx * probe) ? -1 : 1;
 }
 
 /* Offset along the sample normal in a direction the CALLER fixed, with no test of its own. */
 function outwardFixed(pts, i, dist, sgn){
-  const n = pts.length - 1;
-  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
-  let tx = b.x - a.x, ty = b.y - a.y;
-  const L = Math.hypot(tx, ty) || 1;
-  tx /= L; ty /= L;
+  const [tx, ty] = tangentAt(pts, i);
   return [pts[i].x - ty * dist * sgn, pts[i].y + tx * dist * sgn];
 }
 
 function outwardAt(id, pts, i, dist){
-  const n = pts.length - 1;
-  const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
-  let tx = b.x - a.x, ty = b.y - a.y;
-  const L = Math.hypot(tx, ty) || 1;
-  tx /= L; ty /= L;
+  const [tx, ty] = tangentAt(pts, i);
   const nx = -ty, ny = tx;
   let px = pts[i].x + nx * dist, py = pts[i].y + ny * dist;
   if (insideIsle(id, px, py)){ px = pts[i].x - nx * dist; py = pts[i].y - ny * dist; }
@@ -5287,8 +5302,27 @@ DISTRICTS.forEach(d => {
       [10.8, -0.35,  0.58],
       [12.0, -1.20,  0.38],   // MUST clear the -0.97 wave trough — see the note above
     ];
-    const o = isleOutline(d.id);
+    /* ONE SKIRT PER LANDMASS, NOT ONE PER ISLAND — AND THIS IS AL RAHA'S MISSING BEACH.
+
+       isleOutline returns a single ring. isleShape, and isleGridOf under it, already use
+       isleCoasts for any island whose basemap carries more than one shape, because Al Raha is
+       nine separate landmasses and one ring cannot describe them. The beach never got the same
+       treatment, so it was laid along the primary outline alone: twenty-one authored points
+       smoothed up to 1,850 samples tracing a blob that crosses open water on one side and dry
+       land on the other. Measured on the built geometry, 41.9 per cent of Al Raha's beach samples
+       offset to a point INSIDE the island and 48.3 per cent to one too close to some other part
+       of the coast, leaving 89.7 per cent of its shoreline with no beach at all — and what did
+       survive was disconnected fragments, because the blob only touches the real coast in places.
+       Al Maryah is the same fault at 41 per cent, from a 47-point outline.
+
+       The tests were never the problem: isleGridOf indexes every ring already, so insideIsle and
+       distToOutline have been answering correctly about all nine landmasses this whole time. Only
+       the CURVE the beach was laid along was wrong. This walks the same ring set the platform
+       geometry is built from, on the same condition, and emits one strip per ring. */
+    const beachRings = [isleOutline(d.id)];
+    for (const o of beachRings){
     const n = o.length - 1;
+    if (n < 8) continue;                       // too few samples to make a strip worth indexing
     /* Reach is solved ONCE per sample and every ring then scales the same clamped distance, so
        the five rings can never cross each other however tight the coast gets — they all lie
        along one direction from one origin. */
@@ -5431,6 +5465,7 @@ DISTRICTS.forEach(d => {
        hence the flag on the object rather than a call here. */
     beach.userData.noShadow = true;
     g.add(beach);
+    }
   }
 
   /* ---- shoreline modules -------------------------------------------------------------------
