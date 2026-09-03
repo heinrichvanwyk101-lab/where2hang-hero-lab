@@ -667,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v185', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v186', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -4526,6 +4526,27 @@ function warmStep(){
   if (!warmQueue.length){
     warmQueue = null;
     PH.warmDone = performance.now() - _phT;
+    /* THE ISLANDS WERE BROWN BECAUSE NOTHING RE-APPLIED THE VIEW AFTER THIS POINT.
+
+       applyView's warmHidden guard is right: warm-up hides a mesh so its first upload lands on a
+       later frame, and a traverse writing visible=true underneath would silently undo that. But
+       the guard returns BEFORE the material branches, so an applyView that runs while the queue
+       is still draining leaves every mesh still in it holding whatever material it was built
+       with — and the ground is built holding its NIGHT material, by design, because applyView is
+       supposed to swap it. warmStep then clears the flag and reveals the mesh, and if no view
+       change happens afterwards nothing ever performs that swap. The mesh renders, visible, in
+       day view, wearing 0x68737E, and every later applyView is fine but never comes.
+
+       That is the whole of the dark-brown ground. Measured, not deduced: ?probe reported
+       branch=warmHidden with vis=true on Saadiyat and Reem — the mark that made applyView skip
+       the assignment, and the reveal that happened after it, both visible in the same reading.
+       Corniche escaped it only because it is built before the boot applyView and got a later
+       pass from the opening shot; the five deferred islands had no such second chance, which is
+       exactly the split that was on screen.
+
+       One traverse, once, when the queue empties. Every mesh the warm window caused to be skipped
+       gets the material its current view actually calls for. */
+    applyView(view);
   }
 }
 
