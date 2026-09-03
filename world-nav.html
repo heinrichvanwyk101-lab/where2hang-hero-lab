@@ -661,7 +661,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v177', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v178', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -4117,10 +4117,32 @@ function updateLabels(){
 
    Flags rather than a change, because two candidates and one load each settles it — and a
    diagnostic that needs a deploy per attempt is one nobody runs. */
+/* 1.5 IS NOW THE DEFAULT, NOT UNCAPPED. This used to return 0 without ?dpr=, so production ran
+   at whatever the device reported up to the 2 set at construction — and a diagnostic that only
+   works when someone types a URL parameter is one nobody runs, which is exactly what the comment
+   above says about needing a deploy per attempt.
+
+   THE COST THIS PAYS. Every target in the composer chain is allocated at window size x pixel
+   ratio SQUARED, and EffectComposer asks for a 4-sample target on top of that. 2 -> 1.5 takes the
+   ratio term from 4 to 2.25: a 44 per cent cut in pixels filled, on every pass in the chain
+   (RenderPass, bloom, tilt-shift, SMAA), every frame.
+
+   AND IT IS A RESOLUTION TRADE, NOT A FREE WIN. The WebGL canvas genuinely renders fewer pixels
+   and the 3D scene is correspondingly softer — thin geometry and coastline edges are where that
+   shows first. Two things make it a fair trade rather than a regression: SMAA is already in this
+   chain doing the antialiasing (the renderer is built antialias:false for that reason), and it
+   matters MORE at a lower ratio, not less; and every label in this shell — the pin badges, the
+   isle names, the crumb and the build stamp — is DOM, not WebGL, so text is drawn by the browser
+   at full device resolution and is untouched by this.
+
+   ?dpr= still overrides, so any other value is one URL away — ?dpr=2 restores the old behaviour
+   for a side-by-side. Applied here rather than at the renderer's own construction so it lands
+   BEFORE the composer is built below and the whole chain inherits it. */
+const DPR_DEFAULT = 1.5;
 const DPR_CAP = (() => {
   const m = location.search.match(/[?&]dpr=(\d+(?:\.\d+)?)/);
   const v = m ? parseFloat(m[1]) : 0;
-  return isFinite(v) && v > 0 ? v : 0;
+  return isFinite(v) && v > 0 ? v : DPR_DEFAULT;
 })();
 if (DPR_CAP) renderer.setPixelRatio(Math.min(renderer.getPixelRatio(), DPR_CAP));
 
