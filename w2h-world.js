@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v240';
+export const BUILD = 'world v241';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8680,6 +8680,12 @@ function buildGroundFor(d){
   const planSide = new THREE.MeshBasicMaterial({ color: 0x2A3038 });
   d.isleMeshes.forEach(m => {
     m.material = [night, matBeach];
+    /* WHEN this happened, for ?probe. The ground is arriving on screen wearing this night
+       material in day view even though applyView's traverse demonstrably visits the mesh and the
+       mesh owns a full set of dayMats — which leaves "assigned after the last view pass" as the
+       only candidate left standing, and a run INDEX cannot tell that apart from "assigned before
+       and then overwritten". A clock can. */
+    m.userData.gAt = performance.now();
     /* Handed to the view switcher, one ground material per lighting mode, all sharing ONE
        canvas. The map carries hue and pattern; these carry level. Losing the ground plan in Day
        — the one mode that exists to judge layout — would be perverse, and losing it at dusk

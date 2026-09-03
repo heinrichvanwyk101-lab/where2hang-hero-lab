@@ -667,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v183', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v184', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3536,8 +3536,9 @@ function applyView(next){
   renderer.toneMappingExposure = night ? 1.24 : dusk ? 1.02 : 1.0;
 
   viewSeq++;
+  const vNow = performance.now();
   world.traverse(o => {
-    o.userData.vSeen = next; o.userData.vSeq = viewSeq;
+    o.userData.vSeen = next; o.userData.vSeq = viewSeq; o.userData.vAt = vNow;
     /* SPRITES ARE NOT MESHES, and the grid labels have been visible in every view since the day
        they were added.
 
@@ -4016,9 +4017,19 @@ canvas.addEventListener('pointerup', e => {
       const seen = o.userData.vSeen
         ? o.userData.vSeen + '#' + o.userData.vSeq + (o.userData.vSeq === viewSeq ? '=cur' : '<OLD')
         : 'NEVER';
+      /* THE ORDER, AS A NUMBER. gAt is when buildGroundFor last wrote the night material onto
+         this mesh; vAt is when applyView last swept it. gAt LATER than vAt means the ground was
+         painted after the view was applied and nothing has re-applied it since — the material on
+         screen is simply the last one written, and the fix is a view pass at the right point,
+         not anything in the palette. */
+      const order = (o.userData.gAt != null && o.userData.vAt != null)
+        ? ' order=' + (o.userData.gAt > o.userData.vAt
+            ? 'GROUND-AFTER-VIEW +' + Math.round(o.userData.gAt - o.userData.vAt) + 'ms'
+            : 'view-after-ground +' + Math.round(o.userData.vAt - o.userData.gAt) + 'ms')
+        : '';
       return i + ') ' + chain.join('<') + ' y=' + h.point.y.toFixed(2) +
              '\n   col=' + cols + ' mats=' + sets +
-             '\n   seen=' + seen + ' runs=' + viewSeq + px;
+             '\n   seen=' + seen + ' runs=' + viewSeq + px + order;
     }).join('\n');
     paintDiag();
     return;
