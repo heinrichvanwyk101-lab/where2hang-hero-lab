@@ -661,7 +661,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v174', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v176', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2322,6 +2322,36 @@ function descend(steps){
    here reads storage, credentials or user data; the whole surface is "move a camera". The cost of
    a wrong origin is a stranger framing Al Reem. If this ever grows a message that returns data,
    the check goes in before that message does. */
+/* HOISTED HERE, DELIBERATELY, AHEAD OF THE MESSAGE LISTENER BELOW — THE FIX FOR A REAL, LIVE
+   TDZ BUG (found by an external audit, reproduced, and confirmed against this exact file: the
+   message handler's own try/catch was silently swallowing "Cannot access 'WORLD_IDLE' before
+   initialization" every time it fired early). All five used to live at their point of first
+   use, hundreds of lines below the addEventListener call at line ~2350 — fine as long as
+   nothing could message this frame before the module finished evaluating past them. But three
+   top-level `await flushPaint(...)` calls upstream of the old declaration sites each yield a
+   frame back to the event loop, and the host can and does message during that gap (setResultsReal
+   and idle/wake both do, the moment the host has anything to say). A message arriving in that
+   window hit a `let`/`const` whose declaration statement hadn't executed yet — genuine temporal
+   dead zone, not a null check away — and the handler's catch(e){ console.warn(...) } swallowed
+   it every time, so the command was silently dropped rather than the app visibly blanking (which
+   is what made this so easy to miss: nothing LOOKED broken).
+   idle/wake is the one with a real, current cost: the host started actually calling sendToWorld
+   ("idle"/"wake") for the first time this session (previously dead code, never called), and it
+   was landing in exactly this gap on most route changes — meaning the world kept fully rendering
+   behind every opaque page instead of pausing, which is the literal mechanism behind "quite
+   heavy, my phone doesn't really like it". Fixed by existing purely because the call finally
+   started being made; this hoist is what makes it actually take effect.
+   No behaviour change to any of the five beyond WHEN they exist — same starting values, moved
+   verbatim from their old declaration sites (deleted there, not duplicated). attract's
+   performance.now() timestamp now reads a little earlier in the module's own load, which only
+   moves its idle-drift grace period earlier by the same handful of milliseconds this whole
+   block of module evaluation takes — not a meaningful behaviour change. */
+let WORLD_IDLE = false;
+const attract = { on:false, i:0, until:0, lastInput:performance.now() };
+const gfState = new Map();
+const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
+const KEEP_R = 160 / 7.8;
+
 if (/[?&]embed=1/.test(location.search)){
   document.body.classList.add('embed');
   const post = (type, data) => { try { parent.postMessage(Object.assign({ w2h:true, type }, data), '*'); } catch(e){} };
@@ -4573,7 +4603,7 @@ canvas.addEventListener('webglcontextlost', e => {
 canvas.addEventListener('webglcontextrestored', () => { ERR.msg = null; ERR.n = 0; });
 window.addEventListener('unhandledrejection', ev => noteError('promise', ev.reason));
 
-const attract = { on:false, i:0, until:0, lastInput:performance.now() };
+/* attract declared earlier now — see the hoist comment above the message listener. */
 
 /* Building the NEXT island now, so its arrival is a camera move rather than a camera move plus a
    second of frozen thread. Wrapped exactly like setDistrict's own call, because a freshly built
@@ -4634,8 +4664,8 @@ async function footprintsFrom(d){
 
    INERT WITHOUT THE BAKE. golfUnits and racewayUnits are new in basemap v7 and the arrays they
    read are new in the bake; against an older payload both come back empty, gfState records
-   'none', and nothing is added. */
-const gfState = new Map();
+   'none', and nothing is added. gfState itself is declared earlier now — see the hoist comment
+   above the message listener. */
 
 async function groundFeaturesFrom(d){
   const idx = window.__basemapIndex;
@@ -4836,7 +4866,7 @@ async function addWaterGeometry(d){
    already made Al Maryah render generated-or-real non-deterministically per load, and the comment
    above footprintsFrom says so. At THIS point both datasets are in hand and nothing has to move. */
 const NO_GRAIN = /[?&]nograin\b/.test(location.search);
-const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
+// CULL_R declared earlier now — see the hoist comment above the message listener.
 /* AND THE FAR TEST, WHICH IS THE OTHER HALF OF THE SAME IDEA.
 
    Near-culling alone still fills every part of an island that has no footprints in it, and on
@@ -4858,8 +4888,8 @@ const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
 
    YAS IS THE CHECK ON IT. Yas already reads correctly — its villa estates are real footprints and
    their form and grouping are right — and its southern half is theme parks and circuit, where
-   there is almost nothing real to be near. If this is calibrated properly Yas barely moves. */
-const KEEP_R = 160 / 7.8;
+   there is almost nothing real to be near. If this is calibrated properly Yas barely moves.
+   KEEP_R itself is declared earlier now — see the hoist comment above the message listener. */
 
 function cullFabric(d, list){
   if (!list || !list.length) return 0;
@@ -5396,8 +5426,9 @@ let _frame0 = true, _tick0Done = false;
    rAF IS STILL SCHEDULED WHILE IDLE, deliberately. A loop that cancels itself needs something to
    restart it, and that something is another message that can be missed; a loop that returns early
    costs one branch per frame and cannot get stuck off. The host sends `idle` when it covers the
-   world and `wake` when it uncovers it, and if the host never sends either, nothing changes. */
-let WORLD_IDLE = false;
+   world and `wake` when it uncovers it, and if the host never sends either, nothing changes.
+   WORLD_IDLE itself is declared earlier now — see the hoist comment above the message
+   listener; this was the exact binding the TDZ bug hit. */
 function frame(){
   requestAnimationFrame(frame);
   if (WORLD_IDLE) return;
