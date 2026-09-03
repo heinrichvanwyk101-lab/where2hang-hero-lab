@@ -361,6 +361,8 @@ export function waterShapesOf(entry, data){
   return {
     water: (data.water || []).map(norm),
     waterIslands: (data.waterIslands || []).map(norm),
+    beaches: (data.beaches || []).map(norm),      // natural=beach, shape units
+    hardEdge: (data.hardEdge || []).map(norm),    // marina / quay / pier / breakwater
   };
 }
 
@@ -397,6 +399,16 @@ export function sceneIslands(idx, t = 0, p = DAMP_P){
         if (!entry._data) return [];
         if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
         return entry._waterN.waterIslands;
+      },
+      get beaches(){
+        if (!entry._data) return [];
+        if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
+        return entry._waterN.beaches || [];
+      },
+      get hardEdge(){
+        if (!entry._data) return [];
+        if (!entry._waterN) entry._waterN = waterShapesOf(entry, entry._data);
+        return entry._waterN.hardEdge || [];
       },
       /* LAZY, BECAUSE THIS TABLE IS BUILT ONCE AND THE ROADS ARRIVE FIVE TIMES.
          sceneIslands is called immediately after Corniche's roads are awaited; the other four

@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v257';
+export const BUILD = 'world v258';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5260,7 +5260,16 @@ DISTRICTS.forEach(d => {
      one: it sat at -0.45, "punched through" the animated surface, and produced "a seam that had
      been there all along". It was moved to -1.15 to "clear the trough by 0.18". Anything in this
      scene meant to terminate under water clears -0.97 with margin or it will show an edge. */
-  {
+  /* WRAPPED INTO A FUNCTION SO IT CAN RUN TWICE. The first pass happens here, at island build,
+     when the basemap payload for a load-time island (Corniche) has not landed yet, so its beach
+     and hard-edge polygons are not known. addWaterGeometry in world-nav calls refreshBeach once
+     the payload is in, which removes the first beach and builds it again with the real shore
+     data. Deferred islands build after their payload and get it right first time. */
+  function buildBeachFor(d){
+    const g = d.group;
+    for (const old of g.children.filter(c => c.userData && c.userData.beachField)){
+      g.remove(old); old.geometry.dispose();
+    }
     /* THE FIRST PROFILE WAS INVISIBLE, FOR TWO REASONS WORTH RECORDING.
 
        It started at GROUND, 2.9 — but ExtrudeGeometry insets the top cap by bevelSize, so the
@@ -5511,8 +5520,8 @@ DISTRICTS.forEach(d => {
          is tools/pin.mjs's transform with one more division, and pin.mjs's self-test is the
          guarantee that it lands where the map says. */
       const MASK = (() => {
-        const fc = opts.beachMasks, ix = opts.basemapIndex;
-        if (!fc || !fc.features || !ix || !ix.origin) return null;
+        const fc = opts.beachMasks || { features: [] }, ix = opts.basemapIndex;
+        if (!ix || !ix.origin) return null;
         const ent = (ix.islands || []).find(i => i.id === d.id);
         if (!ent || !ent.extent) return null;
         const { cx, cy } = ent.extent, half = Math.max(ent.extent.w, ent.extent.d) / 2;
@@ -5531,6 +5540,16 @@ DISTRICTS.forEach(d => {
             (pr.mode === 'only' ? only : remove).push(outer);
           }
         }
+        /* THE AUTOMATIC LAYER, from the bake's own shore tags, already in shape units via the
+           basemap loader. natural=beach becomes the "only" set when the island has any, so the
+           beach is drawn where the map says beach and nowhere else; marina, quay, pier and
+           breakwater rings are always "remove". Hand-drawn features in w2h-beach-masks.js sit on
+           top: an "only" drawn by hand replaces the automatic set for that island, a "remove"
+           adds to it. An island with no data and no features keeps its full band. */
+        const B = BASE && BASE[d.id];
+        const autoBeach = (B && B.beaches) || [], autoHard = (B && B.hardEdge) || [];
+        for (const r of autoHard) if (r.length >= 3) remove.push(r);
+        if (!only.length) for (const r of autoBeach) if (r.length >= 3) only.push(r);
         if (!remove.length && !only.length) return null;
         const pip = (poly, x, y) => {
           let c = false;
@@ -5610,6 +5629,7 @@ DISTRICTS.forEach(d => {
       }
     }
   }
+  buildBeachFor(d);
 
   /* ---- shoreline modules -------------------------------------------------------------------
      One InstancedMesh per module TYPE this district asks for, so the mesh count tracks the number
@@ -9171,6 +9191,7 @@ function buildIsland(id){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
+         refreshBeach: buildBeachFor,
          buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,
          corniche, GROUND, propCount, KIT_ZONES, refreshIslandWater,
          /* EXPORTED FOR addParkProps, which groundFeaturesFor's own ring-acceptance loop does

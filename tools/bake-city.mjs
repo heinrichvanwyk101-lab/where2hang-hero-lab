@@ -694,6 +694,15 @@ function query(bbox){
      patch's shoreline runs, never where the water cuts back in. Everything inside that outline
      has been treated as plain buildable land because nothing told this query to look for water
      there — the ground painter cannot punch a hole it was never handed. */
+  /* BEACHES AND HARD EDGES — the shore's own tags, never queried before. natural=beach is where
+     the sand actually is; marina, quay, pier and breakwater are where it certainly is not. The
+     renderer draws its beach band only where the first says beach and never where the second
+     says wall, so the coast stops being a guess made from the outline alone. */
+  way["natural"="beach"](${b});
+  relation["natural"="beach"](${b});
+  way["leisure"="marina"](${b});
+  relation["leisure"="marina"](${b});
+  way["man_made"~"^(quay|pier|breakwater)$"](${b});
   way["natural"="water"](${b});
   relation["natural"="water"](${b});
   way["water"~"^(lagoon|basin|canal)$"](${b});
@@ -1141,6 +1150,7 @@ async function bakeIsland(isle, proj){
      cannot happen inside the element loop — these fill here and are resolved after it. */
   const rawPaths = { cycle: [], foot: [] };
   const plazas = [];
+  const beaches = [], hardEdge = [];      // shore tags, see the query
   /* let, not const — clipWaterToOutline reassigns this below, the same way `buildings` (further
      down) gets reassigned by clipToOutline rather than filtered in place. */
   let water = [];
@@ -1195,6 +1205,27 @@ async function bakeIsland(isle, proj){
        No area floor the way golf has one: a real internal canal can be narrow, and a floor tuned
        for a golf course would silently drop every one of them. Relations are multipolygons;
        outer ring only, as with buildings and parks. */
+    /* SHORE TAGS, BEFORE WATER: a marina basin is often also natural=water, and it has to land
+       in hardEdge as well as in water — so it is filed here first and NOT continued past, except
+       for beach, which is exclusive. Line-mapped piers and quays are buffered to a thin ring the
+       same way a canal centreline is; area-mapped ones come through as rings directly. */
+    if (t.natural === 'beach'){
+      const geom = el.geometry ||
+        (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
+      if (geom && geom.length >= 3) beaches.push(simplify(toXY(geom), SIMPLIFY_M).map(rd1));
+      continue;
+    }
+    if (t.leisure === 'marina' || /^(quay|pier|breakwater)$/.test(t.man_made || '')){
+      const geom = el.geometry ||
+        (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
+      if (geom && geom.length >= 2){
+        const pts = toXY(geom);
+        const closed = pts.length >= 4 && Math.hypot(pts[0][0]-pts[pts.length-1][0], pts[0][1]-pts[pts.length-1][1]) < 1.0;
+        const ring = closed ? pts : bufferLineToRing(pts, 30);
+        if (ring) hardEdge.push(simplify(ring, SIMPLIFY_M).map(rd1));
+      }
+      if (!(t.natural === 'water' || t.water)) continue;
+    }
     if (t.natural === 'water' || t.water){
       const geom = el.geometry ||
         (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
@@ -1528,6 +1559,7 @@ async function bakeIsland(isle, proj){
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
            paths, plazas:plazasKept,
            golf, raceway, water:finalWater, waterIslands,
+           beaches, hardEdge,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
@@ -1840,6 +1872,8 @@ async function main(){
                                   raceway:baked.raceway.length,
                                   water:baked.water.length,
                                   waterIslands:baked.waterIslands.length,
+                                  beaches:(baked.beaches||[]).length,
+                                  hardEdge:(baked.hardEdge||[]).length,
                                   withVenues:baked.buildings.filter(b => b.v).length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
 
