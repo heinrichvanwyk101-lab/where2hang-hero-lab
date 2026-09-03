@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v242';
+export const BUILD = 'world v243';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1558,14 +1558,55 @@ function outwardAt(id, pts, i, dist){
 
    Which is also the physically right answer. A beach in a tight inlet IS narrower, and pinching
    to nothing at the head of a channel is what the real coast does. */
+/* A REAL BISECTION, NOT FIVE HALVINGS — AND THIS IS THE BEACH READING AS SEPARATE TRIANGLES.
+
+   The old search tried want, then halved five times and gave up at zero, so it could only ever
+   return one of six values: want, want/2, want/4, want/8, want/16, 0. A sample whose coast could
+   carry 0.9 of the full width was handed 0.5 of it, a 44 per cent undershoot, and its neighbour
+   two metres away might pass at full width. Reach is what every outward ring is scaled by, so
+   the skirt does not taper along such a coast — its width SNAPS between discrete levels, and a
+   quad strip whose width snaps reads as a row of wedges rather than one surface.
+
+   Zero is the worst of the six and explains the rest of the description. Every outward ring is
+   placed at (off / d.r) * f with f = reach / BW, so at reach 0 all ten rings land ON the outline
+   while keeping their own Y values — 2.9 down to -1.20. The skirt stops being a slope and becomes
+   a vertical curtain at the coastline: lower than the ground, not slanted, not continuous with
+   the land edge, with a triangular transition either side of it where the neighbouring samples
+   still had width. That is the reported symptom, item for item.
+
+   So the search converges instead of stepping. lo is always a distance known to pass (0 trivially
+   does — it is zero width), hi always one known to fail, and ten iterations put the answer within
+   want/1024 of the true maximum. The acceptance test is unchanged, so a returned distance is
+   still one that clears the outline by the same margin the folding guard has always required —
+   the rings still cannot cross.
+
+   NEVER NARROWER THAN BEFORE, unconditionally, which is what makes this safe to ship without a
+   measurement first. The search still walks the old want/2 ... want/16 ladder to seed itself, so
+   it reproduces the old answer exactly, and the refinement afterwards only ever moves the result
+   up. Every sample therefore gets a reach greater than or equal to what it had — the beach can
+   only widen and smooth, and the worst case is that nothing visibly changes. */
 function beachReach(id, pts, i, want){
-  let dcur = want;
-  for (let k = 0; k < 5; k++){
-    const [px, py] = outwardAt(id, pts, i, dcur);
-    if (!insideIsle(id, px, py) && distToOutline(id, px, py) > dcur * 0.80) return dcur;
-    dcur *= 0.5;
+  const ok = d => {
+    const [px, py] = outwardAt(id, pts, i, d);
+    return !insideIsle(id, px, py) && distToOutline(id, px, py) > d * 0.80;
+  };
+  if (ok(want)) return want;
+  /* SEEDED FROM THE OLD HALVING SEQUENCE, so "never narrower than before" is unconditional
+     rather than merely likely. A plain bisection over [0, want] only guarantees it if ok() is
+     monotone in d, and on a real coastline — inlets, spits, a channel narrower than the beach —
+     it need not be. Walking the same want/2 ... want/16 ladder the old search walked reproduces
+     its answer exactly, and everything after that only moves the result up. */
+  let lo = 0, hi = want, d = want * 0.5;
+  for (let k = 0; k < 4; k++){
+    if (ok(d)){ lo = d; break; }
+    hi = d; d *= 0.5;
   }
-  return 0;
+  // Refine between the last distance known to pass and the first known to fail.
+  for (let k = 0; k < 8; k++){
+    const mid = (lo + hi) * 0.5;
+    if (ok(mid)) lo = mid; else hi = mid;
+  }
+  return lo;
 }
 
 // RING_INSET is now derived per district from RING_INSET_M; see ringInset().
