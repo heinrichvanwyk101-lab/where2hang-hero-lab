@@ -661,7 +661,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v178', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v179', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -4100,23 +4100,30 @@ function updateLabels(){
 }
 
 /* ---------- post ---------- */
-/* ?dpr=N and ?msaa=0 — THE TWO NUMBERS THAT DECIDE WHAT THE COMPOSER ALLOCATES.
+/* ?dpr=N — THE ONE NUMBER THAT DECIDES WHAT THE COMPOSER ALLOCATES.
 
    p0render came back at 21,037 ms with the world HIDDEN, against bloom 69, tilt 16, output 15 and
    SMAA 18. An empty scene through the RenderPass. Nothing is being drawn, so the cost is not
    drawing — it is the target the pass draws into.
 
-   Two things size that target and neither has ever been printed. It is allocated at window size
-   times the device pixel ratio, which on a Fold is not 1. And EffectComposer asks for a
-   MULTISAMPLED target on WebGL2 — four samples by default — so the allocation is four times what
-   the resolution suggests.
+   THE MSAA HALF OF THIS WAS WRONG, AND IT COST A ROUND OF WORK BEFORE ANYONE CHECKED. This block
+   used to say "EffectComposer asks for a MULTISAMPLED target on WebGL2 — four samples by default
+   — so the allocation is four times what the resolution suggests", and offered ?msaa=0 against it.
+   Read out of the PINNED three@0.169.0 rather than believed — note the importmap pins 0.169.0,
+   so a newer three installed for the bench is not the version that answers this:
 
-   MSAA is also redundant here: SMAA is in this same chain doing the antialiasing, and the renderer
-   itself was constructed with antialias:false for exactly that reason. Nobody asked for four-sample
-   MSAA; EffectComposer's default did.
+     RenderTarget.js:40      the default option is samples: 0
+     EffectComposer.js       builds its target with { type: HalfFloatType } and never passes
+                             samples, so it takes that 0
+     WebGLRenderer.js:2340   multisamples only when renderTarget.samples > 0
 
-   Flags rather than a change, because two candidates and one load each settles it — and a
-   diagnostic that needs a deploy per attempt is one nobody runs. */
+   So there is no MSAA in this chain, ?msaa=0 set 0 on something already 0, and the flag moved
+   nothing. The CONCLUSION the old text drew — that MSAA would be redundant here, because SMAA is
+   in this same chain and the renderer is separately built antialias:false — was correct. What was
+   false was the premise that any MSAA was happening to be redundant. The flag is removed rather
+   than left looking like a lever.
+
+   That leaves the pixel ratio as the only term sizing these targets, and it is squared. */
 /* 1.5 IS NOW THE DEFAULT, NOT UNCAPPED. This used to return 0 without ?dpr=, so production ran
    at whatever the device reported up to the 2 set at construction — and a diagnostic that only
    works when someone types a URL parameter is one nobody runs, which is exactly what the comment
@@ -4148,9 +4155,6 @@ if (DPR_CAP) renderer.setPixelRatio(Math.min(renderer.getPixelRatio(), DPR_CAP))
 
 const composer = new EffectComposer(renderer);
 composer.setPixelRatio(renderer.getPixelRatio());
-if (location.search.includes('msaa=0')){
-  [composer.renderTarget1, composer.renderTarget2].forEach(t => { if (t) t.samples = 0; });
-}
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight), 0.60, 0.55, 0.46);
