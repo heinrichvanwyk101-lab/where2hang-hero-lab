@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v264';
+export const BUILD = 'world v265';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2326,10 +2326,15 @@ const ROAD_KERB = 1.20;                      // the casing the painter strokes u
    the carriageway's shoulder once the exaggeration factor was applied to the offsets as well as
    the widths. Everything steps out: the track clears the road properly, and the strip and the
    promenade follow it rather than being compressed against it. */
-const XSEC_M = { verge: 2.2, foot: 5.4, footW: 4.0,
-                 cycle: 8.0, cycleW: 3.0,
-                 green: 14.0, greenW: 6.0,
-                 prom: 22.0, promW: 8.0 };
+/* THE ABU DHABI CONVENTION (world v265), outward from the kerb face: a landscaped transit strip
+   against the kerb with the lamp columns and palms standing in it, then the cycle lane, then the
+   walkway. The seafront's green strip and promenade follow beyond the walkway on the seaward
+   side of a coastal major. Offsets are the INNER edge of each band; widths are separate. */
+const XSEC_M = { transitW: 4.0, verge: 2.2, palm: 3.1,
+                 cycle: 4.0, cycleW: 2.5,
+                 foot: 6.5, footW: 3.0,
+                 green: 9.5, greenW: 6.0,
+                 prom: 15.5, promW: 8.0 };
 const XSEC_PATH_M = { lamp: 3.4, palm: 5.5, lampStep: 25, palmStep: 18 };
 /* Road spacing, also in metres, also shared. The old walk stepped 0.052 in normalised units for
    both lamps and palms, which is a different real distance on every island. */
@@ -3359,32 +3364,126 @@ function paintGround(d, plan){
 
   /* SECONDARY. One carriageway, still kerbed, edge lines and a dashed centre. Narrower casing
      than the ring so the hierarchy shows even where the two run parallel. */
-  function roadSecondary(pts){
-    const W = pts.major ? corridor(ROAD_MAJOR_M, MIN_PX.major)
-                        : corridor(ROAD_ART_M,   MIN_PX.minor);
+  /* ===========================================================================
+     THE CROSS-SECTION, BY CLASS, FROM THE TAGS — world v265.
+
+     Every real major dispatched to roadPrimary, which is the synthetic ring's dual carriageway:
+     two bands and a planted median at the ring's 31 m. OSM maps a real dual carriageway as TWO
+     one-way ways twenty to thirty metres apart, so each carriageway of the E10 was painted as a
+     dual carriageway of its own — four bands, two medians, and the real median between them
+     painted as a third strip. The bake has carried `oneway` and `lanes` for every way since the
+     roads sidecar existed and the painter read neither.
+
+     Now: a one-way way is ONE directional carriageway, its width from its lane count, lane dashes
+     between lanes and no centre line; a two-way major with four or more lanes is a dual with a
+     median; anything else is a single two-way carriageway with a centre dash. The real median of
+     a real dual is the gap between the two ways, and it is landscaped by the strip below.
+
+     THE SECTION FOLLOWS THE ABU DHABI CONVENTION, outward from the kerb face:
+
+       transit   0.0   4.0 m   the landscaped strip against the kerb; lamp columns and palms
+                               stand in it (XSEC_M.verge, XSEC_M.palm)
+       cycle     4.0   2.5 m   segregated cycle lane — majors only
+       foot      6.5   3.0 m   the walkway, outermost
+
+     On a one-way carriageway the full section goes on the OUTER side (right of travel — the UAE
+     drives on the right) and the median side gets the landscaped strip alone. A minor street gets
+     the strip and the walkway on both sides and no cycle lane: cycle lanes off a minor come from
+     the surveyed chains, painted later. Locals stay kerb and tarmac. The seafront promenade and
+     its green strip sit beyond the walkway on the seaward side of a coastal major, as before, at
+     offsets that now start where the walkway ends. */
+  const LANE_M = 3.5;
+  function lanesOf(pts, cls){
+    const L = pts.lanes | 0;
+    if (L > 0) return Math.min(8, L);
+    return cls === 'major' ? (pts.oneway ? 3 : 4) : 2;
+  }
+  function carriageM(pts, cls){
+    return lanesOf(pts, cls) * LANE_M + (pts.oneway ? 1.5 : 2.0);
+  }
+  /* px per metre at this road's own exaggeration: the corridor W over what the metres would be */
+  function exagFor(W, trueM){
+    const trueW = U * roadW(d, trueM);
+    return trueW > 0.01 ? W / trueW : 1;
+  }
+  function sectionBands(pts, W, trueM, opts){
+    const exag = exagFor(W, trueM);
+    const kerbO = W * ROAD_KERB * 0.5;
+    const wpx = m => Math.max(1, U * roadW(d, m) * exag);
+    const at  = m => kerbO + U * roadW(d, m) * exag;
+    // outermost first, so each inner surface laps the edge of the one outside it
+    for (const sgn of opts.sides){
+      strokePx(offsetPath(pts, sgn * at(XSEC_M.foot + XSEC_M.footW / 2)), SURF.foot, wpx(XSEC_M.footW));
+      if (opts.cycle)
+        strokePx(offsetPath(pts, sgn * at(XSEC_M.cycle + XSEC_M.cycleW / 2)), SURF.cycle, wpx(XSEC_M.cycleW));
+      strokePx(offsetPath(pts, sgn * at(XSEC_M.transitW / 2)), SURF.lawn + '0.55)', wpx(XSEC_M.transitW));
+    }
+    for (const sgn of (opts.stripOnly || []))
+      strokePx(offsetPath(pts, sgn * at(XSEC_M.transitW / 2)), SURF.lawn + '0.55)', wpx(XSEC_M.transitW));
+  }
+  function seafrontBands(pts, W, trueM, sea){
+    const exag = exagFor(W, trueM);
+    const kerbO = W * ROAD_KERB * 0.5;
+    const wpx = m => Math.max(1, U * roadW(d, m) * exag);
+    const at  = m => sea * (kerbO + U * roadW(d, m) * exag);
+    strokePx(offsetPath(pts, at(XSEC_M.prom + XSEC_M.promW / 2)), SURF.paving, wpx(XSEC_M.promW));
+    strokePx(offsetPath(pts, at(XSEC_M.green + XSEC_M.greenW / 2)), SURF.lawn + '0.92)', wpx(XSEC_M.greenW));
+  }
+  function laneMarkings(pts, W, lanes, oneway){
+    [-1, 1].forEach(sgn => strokePx(offsetPath(pts, sgn * W * 0.44), SURF.line, Math.max(1, W * 0.035)));
+    if (oneway){
+      for (let k = 1; k < lanes; k++)
+        strokePx(offsetPath(pts, -W / 2 + W * k / lanes), SURF.line, Math.max(1, W * 0.030), [U * 0.026, U * 0.030]);
+    } else {
+      strokePx(offsetPath(pts, 0), SURF.line, Math.max(1, W * 0.040), [U * 0.022, U * 0.026]);
+    }
+  }
+  function roadMajor(pts){
+    const lanes = lanesOf(pts, 'major'), oneway = !!pts.oneway;
+    const dual = !oneway && lanes >= 4;
+    const m = carriageM(pts, 'major') + (dual ? 4 : 0);
+    const W = corridor(m, MIN_PX.major);
+    const sea = seawardSign(pts);
     g.lineCap = 'butt'; g.lineJoin = 'round';
+    if (sea) seafrontBands(pts, W, m, sea);
+    // canvas y is flipped, so +1 here is the right-hand side of travel on screen
+    sectionBands(pts, W, m, oneway ? { sides: [1], cycle: true, stripOnly: [-1] }
+                                   : { sides: [1, -1], cycle: true });
+    strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
+    if (dual){
+      const med = W * 0.16, car = (W - med) / 2, halfC = (med + car) / 2;
+      [-1, 1].forEach(sgn => {
+        strokePx(offsetPath(pts, sgn * (halfC + car * 0.56)), SURF.sandDk, car * 0.30);
+        strokeAsphalt(offsetPath(pts, sgn * halfC), SURF.road, car);
+        strokePx(offsetPath(pts, sgn * (halfC + car * 0.40)), SURF.line, Math.max(1, W * 0.035));
+        strokePx(offsetPath(pts, sgn * halfC), SURF.line, Math.max(1, W * 0.030), [U * 0.026, U * 0.030]);
+      });
+      strokePx(offsetPath(pts, 0), SURF.kerb, med);
+      const mp = offsetPath(pts, 0);
+      const bed = Math.max(3, Math.round(mp.length / 7));
+      for (let i = 0; i < mp.length - 1; i += bed){
+        const run = mp.slice(i, Math.min(mp.length, i + Math.round(bed * 0.74)));
+        if (run.length > 1) strokePx(run, SURF.lawn + '0.92)', med * 0.52);
+      }
+    } else {
+      strokePx(offsetPath(pts, 0), SURF.sandDk, W * 1.06);        // shoulder, both edges
+      strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
+      laneMarkings(pts, W, lanes, oneway);
+    }
+  }
+  function roadSecondary(pts){
+    const lanes = lanesOf(pts, 'minor'), oneway = !!pts.oneway;
+    const m = carriageM(pts, 'minor');
+    const W = corridor(m, MIN_PX.minor);
+    g.lineCap = 'butt'; g.lineJoin = 'round';
+    sectionBands(pts, W, m, { sides: [1, -1], cycle: false });
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
-    [-1, 1].forEach(sgn => strokePx(offsetPath(pts, sgn * W * 0.40), SURF.line,
-                                    Math.max(1, W * 0.045)));
-    strokePx(offsetPath(pts, 0), SURF.line, Math.max(1, W * 0.040), [U * 0.022, U * 0.026]);
-
-    /* PARKING BAYS. A side street in Abu Dhabi is lined with echelon parking, and the ticks
-       between the bays are the finest regular detail visible from the district camera — the thing
-       that says "cars park here" without drawing a single car.
-
-       Placed in RUNS with gaps rather than continuously, because a bay run stops at every
-       crossing and driveway, and a perfectly continuous comb would be the same repetition the
-       palms were just taken off. */
-    /* A side street gets a footway on both sides and no cycle track: the track is a seafront and
-       main-road facility, and putting one down every residential street would be as wrong as
-       leaving it off the Corniche. */
-    {
-      const vergeO = W * ROAD_KERB * 0.5, footW = U * roadW(d, 3.0);
-      [-1, 1].forEach(sgn =>
-        strokePx(offsetPath(pts, sgn * (vergeO + footW * 0.6)), SURF.foot, footW));
-    }
-
+    laneMarkings(pts, W, lanes, oneway);
+    /* PARKING BAYS on a two-way side street only: echelon parking is what a residential collector
+       has, and a one-way carriageway of a divided road has none. Placed in runs with gaps, since
+       a bay run stops at every crossing and driveway. */
+    if (oneway) return;
     const bay = offsetPath(pts, 0);
     const kw = Math.max(0.8, W * 0.05);
     g.strokeStyle = SURF.line; g.lineWidth = kw;
@@ -3401,7 +3500,6 @@ function paintGround(d, plan){
     }
     g.stroke();
   }
-
   /* SERVICE ROADS ARE GONE, and their absence is the point.
 
      They existed because the lattice had no streets: a service road was defined as "the gap
@@ -3502,7 +3600,7 @@ function paintGround(d, plan){
 
      So cls is read first and the boolean is the fallback. The generated skeleton has no cls and
      keeps working untouched; the real network has one and gets three widths instead of two. */
-  const strokeFor = a => a.cls === 'major' ? roadPrimary
+  const strokeFor = a => a.cls === 'major' ? roadMajor
                        : a.cls === 'minor' ? roadSecondary
                        : a.cls === 'local' ? roadLocal
                        : a.major ? roadPrimary : roadSecondary;
@@ -3535,6 +3633,15 @@ function paintGround(d, plan){
       /* Half the painted corridor, so a prop offset is measured from the KERB FACE the way the
          table says it is, rather than from the centreline it was accidentally measured from. */
       halfRoad: corridor(ROAD_RING_M, MIN_PX.ring) * ROAD_KERB * 0.5 / U,
+      /* PER CLASS (v265). One half-width for every road put a local street's lamp line at the
+         ring road's kerb offset — thirty-odd metres into the block on Corniche. These are the
+         painted corridors of a default two-way road of each class, kerb casing included. */
+      halfBy: {
+        major: corridor(4 * LANE_M + 2.0 + 4, MIN_PX.major) * ROAD_KERB * 0.5 / U,
+        minor: corridor(2 * LANE_M + 2.0,     MIN_PX.minor) * ROAD_KERB * 0.5 / U,
+        local: corridor(ROAD_LOCAL_M,          MIN_PX.local) * ROAD_KERB * 0.5 / U,
+      },
+      palm: o(XSEC_M.palm),
       stepLamp: XSEC_STEP_M.lamp * perM,
       stepPalm: XSEC_STEP_M.palm * perM,
       stepHedge: XSEC_STEP_M.hedge * perM,
@@ -3621,6 +3728,15 @@ function paintGround(d, plan){
       const m = typeof location !== 'undefined' && location.search.match(/[?&]cycol=([0-9a-fA-F]{6})/);
       return m ? '#' + m[1] : SURF.cycle;
     })();
+    /* THE SURVEYED FOOTWAYS, AT LAST (v265). Every baked chain is already 500 m or longer — the
+       length grading the note above waited for is the bake's own MIN_PATH_M — so these are the
+       promenades, the corniche walks and the long park paths, not the 40 m stubs. Under the cycle
+       tracks, in the walkway tone, narrow: a line, not a surface. */
+    const footPx = Math.max(1.2, U * roadW(d, XSEC_M.footW));
+    for (const p of paths){
+      if (!p || p.length < 2 || p.kind !== 'foot') continue;
+      strokePx(offsetPath(p, 0), SURF.foot, footPx);
+    }
     for (const p of paths){
       if (!p || p.length < 2 || p.kind !== 'cycle') continue;
       const line = offsetPath(p, 0);

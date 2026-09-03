@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v32';
+export const BUILD = 'props v33';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -818,14 +818,21 @@ function addProps(d, layer, plan, budget = {}){
       const dx = b[0] - a[0], dy = b[1] - a[1];
       return (Math.abs(dx) > Math.abs(dy) ? (dx >= 0 ? 1 : -1) : (dy >= 0 ? 1 : -1));
     };
-    const s = sideFor(rd.pts);
+    /* A ONE-WAY CARRIAGEWAY IS LIT FROM ITS OUTER KERB (v33): the right of travel, since the UAE
+       drives on the right, which puts the columns in the transit strip on the far side from the
+       median. Two-way roads keep the bearing rule. */
+    const s = rd.pts.oneway ? -1 : sideFor(rd.pts);
+    /* Half the painted corridor of THIS class (world v265), falling back to the ring's for an
+       older world file. */
+    const half = (XS_ && XS_.halfBy && XS_.halfBy[rd.cls] !== undefined) ? XS_.halfBy[rd.cls]
+               : XS_ ? XS_.halfRoad : null;
     const stepL = XS_ ? XS_.stepLamp : 0.052;
     walk(rd.pts, stepL, (x, y, tx, ty, i) => {
       const nx = -ty, ny = tx;
       /* Kerb face plus the verge offset, which is the table's own definition. The old o1/o2 were
          multiples of a made-up corridor width and meant nothing in metres. */
-      const o1 = XS_ ? (XS_.halfRoad + XS_.verge) : rd.w * 1.45;
-      const o2 = XS_ ? (XS_.halfRoad + XS_.green) : rd.w * 2.35;
+      const o1 = XS_ ? (half + XS_.verge) : rd.w * 1.45;
+      const o2 = XS_ ? (half + (XS_.palm !== undefined ? XS_.palm : XS_.green)) : rd.w * 2.35;
       const lx = x + nx * o1 * s, ly = y + ny * o1 * s;
       /* NOT IN THE JUNCTION. Lamps are walked along the road at a fixed spacing with no idea
          where the crossings are, so roughly one in eight landed inside an intersection — standing
@@ -842,6 +849,8 @@ function addProps(d, layer, plan, budget = {}){
          where one has been replaced, and a metre or two of slop in the setback. Each side is now
          rolled independently, a third of the steps are skipped, and where planting does happen it
          is sometimes a small group rather than a single tree. */
+      /* PALMS STAND IN THE TRANSIT STRIP OF MAJORS AND MINORS. A local street has no strip. */
+      if (rd.cls === 'local') return;
       [1, -1].forEach(sgn => {
         if (R() < 0.34) return;                        // a gap: a crossing, an entrance
         const n = R() < 0.18 ? 2 + Math.floor(R() * 2) : 1;

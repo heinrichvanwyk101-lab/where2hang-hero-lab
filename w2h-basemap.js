@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v18';
+export const BUILD = 'basemap v19';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -271,6 +271,10 @@ export function roadsNormalised(entry, roads){
        painter at all. */
     pts.cls = r.cls;
     pts.major = r.cls === 'major';
+    /* THE TAGS THE PAINTER READS NOW (basemap v19): a one-way way is one carriageway of a divided
+       road, and the lane count sets its width. */
+    pts.oneway = !!r.oneway;
+    pts.lanes  = r.lanes || 0;
     return pts;
   });
 }
