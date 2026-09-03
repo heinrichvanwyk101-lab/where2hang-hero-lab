@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v261';
+export const BUILD = 'world v262';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5542,7 +5542,10 @@ DISTRICTS.forEach(d => {
       const L = PROF[PROF.length - 1]; return [L[1], L[2]];
     };
     {
-      const oc = outlineClosed(d.id);
+      /* EVERY RING, not the primary one: an island the coastline splits (Al Raha, now nine
+         landmasses from the clip) needs its lattice to cover every shore, and isleGridOf's own
+         point list is exactly that set. */
+      const oc = isleGridOf(d.id).pts;
       let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
       for (const [x, y] of oc){
         if (x < bx0) bx0 = x; if (x > bx1) bx1 = x;

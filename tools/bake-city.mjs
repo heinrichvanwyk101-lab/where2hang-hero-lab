@@ -933,9 +933,10 @@ function nearRing(ring, px, py, margin){
 }
 
 function clipToOutline(buildings, outline, margin){
-  if (!outline || outline.length < 4) return buildings;
+  if (!outline || outline.length < 1) return buildings;
+  const rings = Array.isArray(outline[0][0]) ? outline : [outline];   // one landmass or several
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const [x, y] of outline){
+  for (const [x, y] of rings.flat()){
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
@@ -944,7 +945,7 @@ function clipToOutline(buildings, outline, margin){
     /* The cheap rejection first. Most of what Corniche's box drags in is nowhere near Corniche's
        coast, and a bounding-box test settles those without touching two thousand segments. */
     if (b.x < x0 - margin || b.x > x1 + margin || b.y < y0 - margin || b.y > y1 + margin) continue;
-    if (contains(outline, [b.x, b.y]) || nearRing(outline, b.x, b.y, margin)) out.push(b);
+    if (rings.some(r => contains(r, [b.x, b.y]) || nearRing(r, b.x, b.y, margin))) out.push(b);
   }
   return out;
 }
@@ -968,9 +969,10 @@ function clipToOutline(buildings, outline, margin){
    never approaches — Khor Al Raha's own traced outline is itself only 4.7 km at its longest, so a
    feature meant to sit inside that has no legitimate reason to span 15+. */
 function clipWaterToOutline(water, outline, maxSpanRatio = 3){
-  if (!outline || outline.length < 4) return water;
+  if (!outline || outline.length < 1) return water;
+  const rings = Array.isArray(outline[0][0]) ? outline : [outline];
   let ox0=Infinity, ox1=-Infinity, oy0=Infinity, oy1=-Infinity;
-  for (const [x,y] of outline){
+  for (const [x,y] of rings.flat()){
     if (x<ox0) ox0=x; if (x>ox1) ox1=x; if (y<oy0) oy0=y; if (y>oy1) oy1=y;
   }
   const outlineSpan = Math.max(ox1-ox0, oy1-oy0);
@@ -984,7 +986,7 @@ function clipWaterToOutline(water, outline, maxSpanRatio = 3){
     }
     const waterSpan = Math.max(wx1-wx0, wy1-wy0);
     if (waterSpan > outlineSpan * maxSpanRatio) continue;   // the sea-polygon guard
-    const overlaps = ring.some(p => contains(outline, p)) || contains(ring, centre);
+    const overlaps = ring.some(p => rings.some(r => contains(r, p))) || contains(ring, centre);
     if (overlaps) out.push(ring);
   }
   return out;
@@ -1014,6 +1016,158 @@ function bufferLineToRing(pts, width){
     right.push([pts[i][0] - nx*half, pts[i][1] - ny*half]);
   }
   return left.concat(right.reverse());
+}
+
+/* ---------- LAND FROM A COASTLINE, INSIDE A DRAWN BOUNDARY -------------------------------------
+
+   A MAINLAND PATCH HAS NO RING OF ITS OWN, but it does have a coast. OSM's natural=coastline is one
+   continuous, consistently directed line around every sea in the world — land on the LEFT, water
+   on the right — and it runs into every canal and around every reclaimed island exactly as
+   surveyed. Al Raha Beach was never an island to pick out of it; it is a stretch of that line, and
+   the land it bounds is whatever lies to the left of it within the area we choose to show.
+
+   So the traced shape is no longer the land. It is the BOUNDARY of what to show: its inland edges
+   (along the E10, the west cut at Aldar HQ, the east cut) are where the district stops, and its
+   seaward edge is drawn generously out in the water on purpose, because the coastline itself
+   decides where the water starts. Land = clip polygon ∩ left-of-coastline. Everything the hand
+   trace of the canal and its eight islands was trying to reproduce falls out of that one
+   intersection, from the survey rather than from a screenshot.
+
+   HOW. Every stitched coastline chain is cut where it crosses the clip polygon into RUNS that lie
+   inside, each remembering the perimeter position where it entered and where it left. Rings that
+   sit wholly inside are islands (counter-clockwise, land on the left is inside) or lagoons
+   (clockwise). Then the runs are sewn: leave a run at its exit, walk the clip's perimeter
+   COUNTER-CLOCKWISE — the direction that keeps the polygon's own interior on the left, which is
+   also the side the coast keeps its land — until the next run's entry, follow that run, and so
+   on until the loop closes. Each loop is one landmass. A perimeter stretch between an entry and
+   the next exit is never walked: that is where the clip boundary crosses open water.
+
+   The clip polygon is forced counter-clockwise first, since the trace was drawn by hand and its
+   winding is whatever geojson.io happened to record. Segment/edge intersections are found for
+   every coastline segment against every clip edge, split in order, and each piece classified by
+   its midpoint, so a concave clip and a segment that leaves and re-enters both come out right. */
+function signedArea(ring){
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
+    a += (ring[j][0] * ring[i][1]) - (ring[i][0] * ring[j][1]);
+  return a / 2;
+}
+
+function landFromCoast(clipIn, chains, log = () => {}){
+  if (!clipIn || clipIn.length < 3) return { rings: [], water: [], why: 'no clip polygon' };
+  let clip = clipIn.slice();
+  if (Math.hypot(clip[0][0] - clip[clip.length-1][0], clip[0][1] - clip[clip.length-1][1]) < 0.01) clip.pop();
+  if (signedArea(clip) < 0) clip.reverse();
+  const n = clip.length;
+  const cum = [0];
+  for (let i = 0; i < n; i++){
+    const a = clip[i], b = clip[(i + 1) % n];
+    cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+  }
+  const per = cum[n];
+  const inside = p => contains(clip, p);
+
+  /* every crossing of segment a->b with the clip's edges: t along the segment, param along the
+     perimeter */
+  const crossings = (a, b) => {
+    const out = [];
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    for (let e = 0; e < n; e++){
+      const c = clip[e], d = clip[(e + 1) % n];
+      const ex = d[0] - c[0], ey = d[1] - c[1];
+      const den = dx * ey - dy * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      const t = ((c[0] - a[0]) * ey - (c[1] - a[1]) * ex) / den;
+      const s = ((c[0] - a[0]) * dy - (c[1] - a[1]) * dx) / den;
+      if (t < 0 || t > 1 || s < 0 || s > 1) continue;
+      out.push({ t, param: cum[e] + s * (cum[e + 1] - cum[e]), pt: [a[0] + dx * t, a[1] + dy * t] });
+    }
+    return out.sort((p, q) => p.t - q.t);
+  };
+
+  const islands = [], lagoons = [], runs = [];
+  let dangling = 0;
+  for (const chRaw of chains){
+    if (chRaw.length < 2) continue;
+    const ch = chRaw.slice();
+    const closed = ch.length > 3 &&
+      Math.hypot(ch[0][0] - ch[ch.length-1][0], ch[0][1] - ch[ch.length-1][1]) < 60;
+    if (closed && Math.hypot(ch[0][0] - ch[ch.length-1][0], ch[0][1] - ch[ch.length-1][1]) > 0.01) ch.push(ch[0]);
+    const chainRuns = [];
+    let cur = null;                       // { pts, entry, exit } — entry/exit are perimeter params
+    const open  = (pt, param) => { cur = { pts: [pt], entry: param, exit: null }; };
+    const close = param => { cur.exit = param; chainRuns.push(cur); cur = null; };
+    const piece = (p0, p1, param0) => {
+      if (Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 1e-6) return;
+      const mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+      if (inside(mid)){ if (!cur) open(p0, param0); cur.pts.push(p1); }
+      else if (cur) close(param0);
+    };
+    for (let i = 0; i < ch.length - 1; i++){
+      const a = ch[i], b = ch[i + 1];
+      let from = a, fromParam = null, lastT = -1;
+      for (const x of crossings(a, b)){
+        if (x.t - lastT < 1e-9) continue;
+        piece(from, x.pt, fromParam);
+        from = x.pt; fromParam = x.param; lastT = x.t;
+      }
+      piece(from, b, fromParam);
+    }
+    if (cur){ cur.exit = null; chainRuns.push(cur); cur = null; }
+
+    if (closed){
+      const whole = chainRuns.length === 1 && chainRuns[0].entry === null && chainRuns[0].exit === null;
+      if (whole){
+        const ring = ch.slice(0, -1);
+        (signedArea(ring) > 0 ? islands : lagoons).push(ring);
+        continue;
+      }
+      if (!chainRuns.length) continue;   // wholly outside
+      /* a ring with crossings: the run that begins at vertex 0 and the run that ends at the last
+         vertex are one run, wrapped */
+      if (chainRuns.length >= 2 && chainRuns[0].entry === null && chainRuns[chainRuns.length-1].exit === null){
+        const last = chainRuns.pop(), first = chainRuns.shift();
+        chainRuns.push({ pts: last.pts.concat(first.pts.slice(1)), entry: last.entry, exit: first.exit });
+      }
+    }
+    for (const r of chainRuns){
+      if (r.entry === null || r.exit === null){ dangling++; continue; }
+      if (r.pts.length >= 2) runs.push(r);
+    }
+  }
+
+  if (!runs.length){
+    return { rings: islands, water: lagoons, why: `no coastline crosses the boundary (${islands.length} island ring(s) inside)` , dangling };
+  }
+
+  /* sew: exit -> counter-clockwise along the perimeter -> next entry */
+  const byEntry = runs.slice().sort((a, b) => a.entry - b.entry);
+  const nextEntryAfter = p => byEntry.find(r => r.entry > p) || byEntry[0];
+  const verticesBetween = (p0, p1) => {
+    const out = [];
+    if (p1 > p0){ for (let i = 0; i < n; i++) if (cum[i] > p0 && cum[i] < p1) out.push(clip[i]); }
+    else { for (let i = 0; i < n; i++) if (cum[i] > p0) out.push(clip[i]); for (let i = 0; i < n; i++) if (cum[i] < p1) out.push(clip[i]); }
+    return out;
+  };
+  const rings = [];
+  const visited = new Set();
+  for (const start of runs){
+    if (visited.has(start)) continue;
+    const ring = [];
+    let cur = start, guard = 0;
+    while (cur && !visited.has(cur) && guard++ < runs.length + 2){
+      visited.add(cur);
+      ring.push(...cur.pts);
+      const nxt = nextEntryAfter(cur.exit);
+      ring.push(...verticesBetween(cur.exit, nxt.entry));
+      cur = nxt;
+    }
+    if (ring.length >= 3) rings.push(ring);
+  }
+  const wrong = rings.filter(r => signedArea(r) < 0).length;
+  log(`land rings ${rings.length} (${wrong} clockwise — expected 0), islands inside ${islands.length}, ` +
+      `lagoons ${lagoons.length}, runs ${runs.length}, dangling ${dangling}`);
+  return { rings: rings.concat(islands), water: lagoons, why: `${runs.length} coast run(s) sewn to the boundary`, dangling, wrong };
 }
 
 function pickIsland(chains, centre){
@@ -1405,15 +1559,42 @@ async function bakeIsland(isle, proj){
      computation, the renderer's ground shape — reads `outline` the same way regardless of which
      path produced it, so nothing else in this file needs to know the difference. */
   let outline, pickedWhy;
+  /* THE TRACED SHAPE IS THE BOUNDARY, THE COASTLINE IS THE SHORE — see landFromCoast. For a
+     mainland patch the trace (or the fetch box) says how much of the mainland to show, and OSM's
+     own coastline, cut to that boundary, says where the land ends: shore, canals and every
+     reclaimed island, from the survey. The trace stays what it always was — the frame. The
+     island's extent is measured from it rather than from the land that comes out, so cx/cy and
+     the half-span do not move under the hand-placed coordinates (LM_RAHA, KIT_ZONES) that were
+     read off in that frame.
+
+     Falls back to the plain trace when no coastline crosses it — an area OSM has not surveyed
+     — or when the sewing comes out with a clockwise land ring, which means a chain arrived
+     against the land-on-the-left convention and the result cannot be trusted. Both are logged. */
+  let clipPoly = null, coastClipped = false;
   if (isle.noCoastline){
     if (isle.outlineLL && isle.outlineLL.length){
-      outline = isle.outlineLL.map(([lo, la]) => rd1(proj.fwd(la, lo)));
-      pickedWhy = `traced outlineLL shape (${outline.length} pts) — pickIsland not run`;
+      clipPoly = isle.outlineLL.map(([lo, la]) => proj.fwd(la, lo));
     } else {
       const [s, w, n, e] = isle.bbox;
-      const corners = [[s,w],[s,e],[n,e],[n,w]].map(([la,lo]) => proj.fwd(la, lo));
-      outline = corners.map(rd1);
-      pickedWhy = `fetch bbox as a rectangle (no outlineLL) — pickIsland not run`;
+      clipPoly = [[s,w],[s,e],[n,e],[n,w]].map(([la,lo]) => proj.fwd(la, lo));
+    }
+    const chains = stitch(coastWays);
+    const land = landFromCoast(clipPoly, chains, m => process.stderr.write(`  ${isle.id}: coast clip — ${m}\n`));
+    const MIN_LAND_M2 = 5000;
+    const rings = land.rings
+      .map(r => simplify(r, SIMPLIFY_M * 3).map(rd1))
+      .filter(r => r.length >= 4 && area(r) >= MIN_LAND_M2)
+      .sort((a, b) => area(b) - area(a));
+    if (rings.length && !land.wrong){
+      outline = rings.length > 1 ? rings : rings[0];
+      coastClipped = true;
+      for (const lg of land.water) water.push(simplify(lg, SIMPLIFY_M).map(rd1));
+      pickedWhy = `${chains.length} coast chains, ${land.why}: ${rings.length} landmass(es) inside the traced boundary ` +
+        `(${land.rings.length - rings.length} sliver(s) under ${MIN_LAND_M2} m² dropped, ${land.water.length} lagoon(s) to water)`;
+    } else {
+      outline = clipPoly.map(rd1);
+      pickedWhy = `traced shape as drawn (${outline.length} pts) — ${land.why}` +
+        (land.wrong ? `; ${land.wrong} land ring(s) came out clockwise, clip result discarded` : '');
     }
   } else {
     const chains = stitch(coastWays);
@@ -1422,11 +1603,15 @@ async function bakeIsland(isle, proj){
     pickedWhy = `${chains.length} coast chains, took the ${picked.why}`;
   }
   process.stderr.write(`  ${isle.id}: ${pickedWhy}\n`);
+  /* One ring or several: outline is a flat ring for five islands and a list of rings for a
+     landmass the coastline splits. Everything below that measures or clips works on the list. */
+  const outlineRings = !outline.length ? [] : Array.isArray(outline[0][0]) ? outline : [outline];
+  const outlinePts = outlineRings.reduce((n, r) => n + r.length, 0);
 
   /* The first moment the coastline exists, which is the first moment a building can be told it is
      not on this island. Reported rather than silent: the number dropped here is the overlap
      between the fetch boxes, and if it ever comes out near zero on Corniche the boxes have moved. */
-  if (outline.length){
+  if (outlineRings.length){
     const before = buildings.length;
     /* Kept on the island object, not just logged. This is the number the probe's `Overture` column
        measures and the number the renderer's fp row calls `raw`, and having all three name the same
@@ -1446,17 +1631,17 @@ async function bakeIsland(isle, proj){
      literal — which is the whole reason the drawn islands were a third of true size and nobody
      noticed for seventy versions. */
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const [x, y] of outline){
+  for (const [x, y] of (clipPoly || outlineRings.flat())){
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  const extent = outline.length
+  const extent = outlineRings.length
     ? { x0:rd1(x0), y0:rd1(y0), x1:rd1(x1), y1:rd1(y1),
         w:rd1(x1 - x0), d:rd1(y1 - y0),
         cx:rd1((x0 + x1) / 2), cy:rd1((y0 + y1) / 2) }
     : null;
 
-  process.stderr.write(`  ${isle.id}: outline ${outline.length}pt, roads ${roads.length}, ` +
+  process.stderr.write(`  ${isle.id}: outline ${outlinePts}pt in ${outlineRings.length} ring(s), roads ${roads.length}, ` +
                        `buildings ${buildings.length} (${buildings.filter(b => b.h).length} with height), ` +
                        `parks ${parks.length} (max ${Math.round(Math.max(0, ...parks.map(p => p.a))/1e4)}ha), ` +
                        `golf ${golf.length}, raceway ${raceway.length}, water ${water.length}` +
@@ -1527,6 +1712,14 @@ async function bakeIsland(isle, proj){
     }
   }
 
+  /* NOT MERGED WHEN THE COASTLINE CLIP SUPPLIED THE SHORE. The hand trace of the canal and its
+     eight islands existed because the coastline was never consulted for this patch; once it is,
+     the canal is simply the water outside the land rings and the islands are land rings of their
+     own. Merging the trace on top would paint a second, hand-drawn canal across surveyed ground. */
+  if (handWater && coastClipped){
+    process.stderr.write(`  ${isle.id}: hand-traced water NOT merged — the coastline clip supplies the shore\n`);
+    handWater = null;
+  }
   const finalWater = handWater ? water.concat(handWater.water) : water;
   const waterIslands = handWater ? handWater.waterIslands : [];
   /* A SEPARATE, EXPLICIT LINE, not folded into the summary above — that line runs before this
@@ -1804,8 +1997,10 @@ async function main(){
 
        Keeping the previous file is the right failure: a district one release out of date is worth
        far more than a district that is not there. */
-    if (!baked.outline || baked.outline.length < 8 || !baked.extent){
-      process.stderr.write(`  ${baked.id}: NOT WRITTEN — outline ${baked.outline ? baked.outline.length : 0} pt, ` +
+    const outlinePts = !baked.outline || !baked.outline.length ? 0
+      : Array.isArray(baked.outline[0][0]) ? baked.outline.reduce((n, r) => n + r.length, 0) : baked.outline.length;
+    if (outlinePts < 8 || !baked.extent){
+      process.stderr.write(`  ${baked.id}: NOT WRITTEN — outline ${outlinePts} pt, ` +
         `extent ${baked.extent ? 'ok' : 'null'}. Overpass almost certainly failed for this island; ` +
         `the previous ${path} is left in place. Re-run the bake.\n`);
       failed.push(baked.id);
@@ -1869,7 +2064,9 @@ async function main(){
                             as a fall of sixty per cent when the on-island stock had tripled. A
                             count is only comparable to a count measured the same way, and the only
                             reliable way to guarantee that is to write down which way it was. */
-                         counts:{ outline:baked.outline.length, roads:baked.roads.length,
+                         counts:{ outline:outlinePts,
+                                  landmasses:Array.isArray(baked.outline[0][0]) ? baked.outline.length : 1,
+                                  roads:baked.roads.length,
                                   buildings:baked.buildings.length,
                                   inBox:baked.inBox,
                                   withHeight:baked.buildings.filter(b => b.h).length,
