@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v256';
+export const BUILD = 'world v257';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5502,6 +5502,53 @@ DISTRICTS.forEach(d => {
       const cellS = cellW / d.r;
       const NX = Math.min(440, Math.ceil((bx1 - bx0) / cellS));
       const NY = Math.min(440, Math.ceil((by1 - by0) / cellS));
+      /* TRIM POLYGONS, CONVERTED FROM LON/LAT INTO THIS ISLAND'S SHAPE UNITS.
+
+         Drawn on geojson.io in w2h-beach-masks.js; each feature names its island and whether it
+         removes beach or confines it. The projection is the bake's own — local equirectangular
+         about the one origin in data/index.json — followed by the same (bake - centre) / half
+         that turns bake metres into the shape units this lattice and insideIsle already use. It
+         is tools/pin.mjs's transform with one more division, and pin.mjs's self-test is the
+         guarantee that it lands where the map says. */
+      const MASK = (() => {
+        const fc = opts.beachMasks, ix = opts.basemapIndex;
+        if (!fc || !fc.features || !ix || !ix.origin) return null;
+        const ent = (ix.islands || []).find(i => i.id === d.id);
+        if (!ent || !ent.extent) return null;
+        const { cx, cy } = ent.extent, half = Math.max(ent.extent.w, ent.extent.d) / 2;
+        const kx = 111320 * Math.cos(ix.origin.lat * Math.PI / 180), ky = 110574;
+        const toShape = ([lon, lat]) => [
+          ((lon - ix.origin.lon) * kx - cx) / half,
+          ((lat - ix.origin.lat) * ky - cy) / half ];
+        const remove = [], only = [];
+        for (const f of fc.features){
+          const pr = f.properties || {}, g = f.geometry;
+          if (pr.island !== d.id || !g) continue;
+          const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+          for (const rings of polys){
+            const outer = (rings[0] || []).map(toShape);
+            if (outer.length < 3) continue;
+            (pr.mode === 'only' ? only : remove).push(outer);
+          }
+        }
+        if (!remove.length && !only.length) return null;
+        const pip = (poly, x, y) => {
+          let c = false;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+            const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c;
+          }
+          return c;
+        };
+        return { remove, only,
+          keep: (x, y) => {
+            for (const p of remove) if (pip(p, x, y)) return false;
+            if (!only.length) return true;
+            for (const p of only) if (pip(p, x, y)) return true;
+            return false;
+          } };
+      })();
+      if (MASK) console.info('beach ' + d.id + ': masks remove=' + MASK.remove.length + ' only=' + MASK.only.length);
       const csx = (bx1 - bx0) / NX, csy = (by1 - by0) / NY;
       const LIP_W = Math.hypot(csx, csy) * d.r;             // one cell diagonal, world units
       const W = NX + 1;
@@ -5531,6 +5578,7 @@ DISTRICTS.forEach(d => {
              ground just inland of the coast, at GROUND + 0.02; with the cell size tied to beach
              width, halving the width halves that too. */
           if (sgnd < -(D_IN + LIP_W) || sgnd > D_MAX) continue;
+          if (MASK && !MASK.keep(sx, sy)) continue;
           const [y, sh] = profAt(sgnd);
           vIdx[j * W + i] = pos.length / 3;
           pos.push(sx * d.r, y, -sy * d.r);

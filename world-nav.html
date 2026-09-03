@@ -599,6 +599,7 @@ const BMAP  = await import('./w2h-basemap.js' + V);
    as every other module, because w2h-world.js deliberately imports nothing local — a static
    specifier cannot carry ?v= and would be served from cache forever. */
 const DIST  = await import('./w2h-districts.js' + V);
+const MASKS = await import('./w2h-beach-masks.js' + V);   // beach trim polygons, lon/lat
 phase('import');
 
 /* THE BASEMAP, FETCHED BEFORE THE WORLD IS BUILT.
@@ -667,7 +668,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v186', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v187', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1250,6 +1251,11 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     props: propKit,
     C, rnd,
     basemap,
+    /* The beach's trim polygons and the index they are converted against. The index carries the
+       bake origin and each island's extent, which is everything lon/lat needs to become the
+       shape units the beach lattice already works in. */
+    beachMasks: MASKS.BEACH_MASKS,
+    basemapIndex: window.__basemapIndex || null,
     PALACE_FOOT: CITY.PALACE_FOOT,
     /* ?prog — the progressive reveal. Off by default: this reorders when the world-zoom buildings
        appear, and that is a visible change to the opening shot, not a silent optimisation. */
