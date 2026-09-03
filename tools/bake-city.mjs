@@ -698,6 +698,8 @@ function query(bbox){
      the sand actually is; marina, quay, pier and breakwater are where it certainly is not. The
      renderer draws its beach band only where the first says beach and never where the second
      says wall, so the coast stops being a guess made from the outline alone. */
+  way["amenity"="parking"](${b});
+  relation["amenity"="parking"](${b});
   way["natural"="beach"](${b});
   relation["natural"="beach"](${b});
   way["leisure"="marina"](${b});
@@ -1311,6 +1313,7 @@ async function bakeIsland(isle, proj){
   const rawPaths = { cycle: [], foot: [] };
   const plazas = [];
   const beaches = [], hardEdge = [];      // shore tags, see the query
+  const parking = [];                      // amenity=parking surface lots, see the query
   /* let, not const — clipWaterToOutline reassigns this below, the same way `buildings` (further
      down) gets reassigned by clipToOutline rather than filtered in place. */
   let water = [];
@@ -1369,6 +1372,19 @@ async function bakeIsland(isle, proj){
        in hardEdge as well as in water — so it is filed here first and NOT continued past, except
        for beach, which is exclusive. Line-mapped piers and quays are buffered to a thin ring the
        same way a canal centreline is; area-mapped ones come through as rings directly. */
+    /* CAR PARKS, SURFACE ONLY. amenity=parking that is a building (multi-storey, underground,
+       rooftop) falls through to the building branch as the structure it is; an open lot becomes
+       a ring the painter lays bays on and the props fill with parked cars. 600 m² floor: a
+       dozen spaces or fewer is under a pixel of paving at district range. */
+    if (t.amenity === 'parking' && !t.building && !/underground|multi-storey|rooftop|garage_boxes/.test(t.parking || '')){
+      const geom = el.geometry ||
+        (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
+      if (geom && geom.length >= 4){
+        const ring = toXY(geom);
+        if (area(ring) >= 600) parking.push(simplify(ring, SIMPLIFY_M).map(rd1));
+      }
+      continue;
+    }
     if (t.natural === 'beach'){
       const geom = el.geometry ||
         (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
@@ -1701,7 +1717,7 @@ async function bakeIsland(isle, proj){
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
            paths, plazas:plazasKept,
            golf, raceway, water:finalWater, waterIslands,
-           beaches, hardEdge,
+           beaches, hardEdge, parking,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
@@ -2020,6 +2036,7 @@ async function main(){
                                   waterIslands:baked.waterIslands.length,
                                   beaches:(baked.beaches||[]).length,
                                   hardEdge:(baked.hardEdge||[]).length,
+                                  parking:(baked.parking||[]).length,
                                   withVenues:baked.buildings.filter(b => b.v).length } });
     process.stderr.write(`  ${baked.id}: wrote ${path}  ${(bytes/1048576).toFixed(2)} MB\n`);
 
