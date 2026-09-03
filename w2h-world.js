@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v260';
+export const BUILD = 'world v261';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -959,22 +959,48 @@ function isleShape(id, r){
      keeps a surveyed coastline unsmoothed applies just as hard to a hand-traced one — Al Dana's
      spiral is a real feature, not a corner to round off. Raw BASE water rings, straight through. */
   if (BASE && BASE[id] && BASE[id].water && BASE[id].water.length){
-    for (const ring of BASE[id].water){
+    for (let ring of BASE[id].water){
       if (ring.length < 3) continue;
-      const hole = new THREE.Path();
-      hole.moveTo(ring[0][0]*r, ring[0][1]*r);
-      for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i][0]*r, ring[i][1]*r);
-      hole.closePath();
+      const cxr = ring.reduce((a,p) => a + p[0], 0) / ring.length;
+      const cyr = ring.reduce((a,p) => a + p[1], 0) / ring.length;
       let host = 0;
       if (ringsN.length > 1){
-        const cxr = ring.reduce((a,p) => a + p[0], 0) / ring.length;
-        const cyr = ring.reduce((a,p) => a + p[1], 0) / ring.length;
         host = -1;
         for (let k = 0; k < ringsN.length; k++){
           if (pointInRing(ringsN[k], cxr, cyr)){ host = k; break; }
         }
         if (host < 0) continue;          // a hole inside no landmass is not a hole, it is open sea
       }
+      /* A HOLE THAT LEAVES ITS LANDMASS BREAKS THE TRIANGULATION. Earcut takes holes that lie
+         inside the outer ring; a water ring with vertices outside the drawn coast — a basin the
+         smoothed outline cuts across, a lagoon open to the sea — produces triangles spanning
+         from the coast out over open water, which is the "land into the sea" seen from the air.
+         Four such rings were counted: Al Reem one, Saadiyat one, Yas two. A ring that is mostly
+         outside is open sea the coastline already draws, and is dropped; a ring that merely
+         pokes out is pulled back in, each stray vertex walked toward the ring's centroid until
+         it is inside the landmass, and dropped from the ring if it never gets there. */
+      const hostRing = ringsN[host];
+      let strays = 0;
+      for (const p of ring) if (!pointInRing(hostRing, p[0], p[1])) strays++;
+      if (strays){
+        console.info('water ' + id + ': ring of ' + ring.length + ' has ' + strays + ' vertices outside the landmass — ' +
+          (strays > ring.length * 0.25 ? 'dropped' : 'pulled in'));
+        if (strays > ring.length * 0.25) continue;
+        const fixed = [];
+        for (const p of ring){
+          if (pointInRing(hostRing, p[0], p[1])){ fixed.push(p); continue; }
+          for (const t of [0.15, 0.3, 0.45, 0.6, 0.8]){
+            const q = [p[0] + (cxr - p[0]) * t, p[1] + (cyr - p[1]) * t];
+            if (pointInRing(hostRing, q[0], q[1])){ fixed.push(q); break; }
+          }
+        }
+        if (fixed.length < 3) continue;
+        ring = fixed;
+      }
+      const hole = new THREE.Path();
+      hole.moveTo(ring[0][0]*r, ring[0][1]*r);
+      for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i][0]*r, ring[i][1]*r);
+      hole.closePath();
       shapes[host].holes.push(hole);
     }
   }
@@ -1452,8 +1478,12 @@ function insideWaterHole(id, nx, ny){
 /* Distance to the coast, searched outward one ring of cells at a time. The loop stops as soon as
    the best distance found is closer than the nearest unexamined ring can possibly be, so a point
    well inland examines a handful of cells and a point near the shore examines nine. */
+/* WHICH SEGMENT WON the last distToOutlineFast call, and where along it. Read by the beach
+   classifier straight after the distance call; -1 when nothing was found. */
+let nearestSegIdx = -1, nearestSegT = 0;
 function distToOutlineFast(id, x, y){
   const g = isleGridOf(id), P = g.pts;
+  nearestSegIdx = -1; nearestSegT = 0;
   const cx = Math.floor((x - g.x0) / g.cw), cy = Math.floor((y - g.y0) / g.ch);
   const step = Math.min(g.cw, g.ch);
   let best = Infinity;
@@ -1478,7 +1508,7 @@ function distToOutlineFast(id, x, y){
           t = t < 0 ? 0 : t > 1 ? 1 : t;
           const px = ax + t*dx - x, py = ay + t*dy - y;
           const d = Math.sqrt(px*px + py*py);
-          if (d < best) best = d;
+          if (d < best){ best = d; nearestSegIdx = i; nearestSegT = t; }
         }
       }
     }
@@ -4062,6 +4092,13 @@ const beachSand = {
   day:   stdMat({ color:0xC9B896, roughness:1, metalness:0, vertexColors:true }),
   dusk:  stdMat({ color:0xB8A582, roughness:1, metalness:0, vertexColors:true }),
 };
+/* THE QUAY, for every stretch of coast that is not beach: concrete grey, darkening down the
+   face through the same vertex shade the sand uses. */
+const quayGrey = {
+  night: stdMat({ color:0x3E4146, roughness:0.95, metalness:0, vertexColors:true }),
+  day:   stdMat({ color:0xB4B0A8, roughness:0.95, metalness:0, vertexColors:true }),
+  dusk:  stdMat({ color:0x8F8A84, roughness:0.95, metalness:0, vertexColors:true }),
+};
 const matLandFlat = stdMat({ color:0x424E58, roughness:1, metalness:0 });
 /* THE GROUND'S OWN NIGHT MULTIPLIER, against the city's 5.0. Applies to the painted island floor
    and to the untextured platform an island wears before it has been built — which is the version
@@ -5273,7 +5310,7 @@ DISTRICTS.forEach(d => {
      data. Deferred islands build after their payload and get it right first time. */
   buildBeachFor = function(d){
     const g = d.group;
-    for (const old of g.children.filter(c => c.userData && c.userData.beachField)){
+    for (const old of g.children.filter(c => c.userData && (c.userData.beachField || c.userData.quayField))){
       g.remove(old); old.geometry.dispose();
     }
     /* THE FIRST PROFILE WAS INVISIBLE, FOR TWO REASONS WORTH RECORDING.
@@ -5517,100 +5554,124 @@ DISTRICTS.forEach(d => {
       const cellS = cellW / d.r;
       const NX = Math.min(440, Math.ceil((bx1 - bx0) / cellS));
       const NY = Math.min(440, Math.ceil((by1 - by0) / cellS));
-      /* TRIM POLYGONS, CONVERTED FROM LON/LAT INTO THIS ISLAND'S SHAPE UNITS.
+      /* THE COAST IS CLASSIFIED, NOT MASKED. v260 rasterised the beach polygons onto this lattice
+         and dilated them by the band's width, and the dilation was isotropic: it grew across a
+         marina basin as readily as out to sea, so the Corniche's boat harbour came back full of
+         sand. And wherever the mask said "no beach" it said nothing else — the band was simply
+         not emitted, and the platform's dark bevel showed through: "ring walls not hidden where no
+         beach generated", "holes at the land edge".
 
-         Drawn on geojson.io in w2h-beach-masks.js; each feature names its island and whether it
-         removes beach or confines it. The projection is the bake's own — local equirectangular
-         about the one origin in data/index.json — followed by the same (bake - centre) / half
-         that turns bake metres into the shape units this lattice and insideIsle already use. It
-         is tools/pin.mjs's transform with one more division, and pin.mjs's self-test is the
-         guarantee that it lands where the map says. */
-      const MASK = (() => {
+         So the rule "the nearest stretch of coast is a beach" is now applied AS the rule. Every
+         sample of the drawn coastline (all rings — isleGridOf's own point list) is classified
+         once: BEACH when it lies inside or within T_B of a natural=beach polygon (OSM maps the
+         sand landward of the water's edge, so the coast sample sits on or just seaward of it);
+         HARD when it lies inside or within T_H of a marina, quay, pier, breakwater or dock, which
+         wins over beach where both apply; PLAIN otherwise. A lattice vertex takes the class of the
+         coast sample nearest to it — the same nearest-segment search distToOutline already runs,
+         which now also reports which segment won — so a basin's own walls classify the basin and
+         the beach on the far side of the mole never reaches across.
+
+         And nothing is left uncovered: a vertex that is not beach is emitted as QUAY instead, a
+         narrow grey face from the same inland lip at GROUND - 0.06 straight down past the water
+         line. Cells whose four corners are all beach go to the sand mesh, every other cell to the
+         quay mesh; both read the same per-vertex position, so a beach meeting a quay is a ramp
+         within one cell and never a crack.
+
+         The hand-drawn layer keeps its meaning: an "only" feature replaces the island's beach
+         polygon set, a "remove" feature is one more hard polygon. An island with no beach polygon
+         from either source is all beach, minus its hard edges, as before. */
+      const SHORE = (() => {
         const fc = opts.beachMasks || { features: [] }, ix = opts.basemapIndex;
-        if (!ix || !ix.origin) return null;
-        const ent = (ix.islands || []).find(i => i.id === d.id);
-        if (!ent || !ent.extent) return null;
-        const { cx, cy } = ent.extent, half = Math.max(ent.extent.w, ent.extent.d) / 2;
-        const kx = 111320 * Math.cos(ix.origin.lat * Math.PI / 180), ky = 110574;
-        const toShape = ([lon, lat]) => [
-          ((lon - ix.origin.lon) * kx - cx) / half,
-          ((lat - ix.origin.lat) * ky - cy) / half ];
         const remove = [], only = [];
-        for (const f of fc.features){
-          const pr = f.properties || {}, g = f.geometry;
-          if (pr.island !== d.id || !g) continue;
-          const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
-          for (const rings of polys){
-            const outer = (rings[0] || []).map(toShape);
-            if (outer.length < 3) continue;
-            (pr.mode === 'only' ? only : remove).push(outer);
+        const ent = ix && ix.origin && (ix.islands || []).find(i => i.id === d.id);
+        if (ent && ent.extent){
+          const { cx, cy } = ent.extent, half = Math.max(ent.extent.w, ent.extent.d) / 2;
+          const kx = 111320 * Math.cos(ix.origin.lat * Math.PI / 180), ky = 110574;
+          const toShape = ([lon, lat]) => [
+            ((lon - ix.origin.lon) * kx - cx) / half,
+            ((lat - ix.origin.lat) * ky - cy) / half ];
+          for (const f of fc.features){
+            const pr = f.properties || {}, g = f.geometry;
+            if (pr.island !== d.id || !g) continue;
+            const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+            for (const rings of polys){
+              const outer = (rings[0] || []).map(toShape);
+              if (outer.length < 3) continue;
+              (pr.mode === 'only' ? only : remove).push(outer);
+            }
           }
         }
-        /* THE AUTOMATIC LAYER, from the bake's own shore tags, already in shape units via the
-           basemap loader. natural=beach becomes the "only" set when the island has any, so the
-           beach is drawn where the map says beach and nowhere else; marina, quay, pier and
-           breakwater rings are always "remove". Hand-drawn features in w2h-beach-masks.js sit on
-           top: an "only" drawn by hand replaces the automatic set for that island, a "remove"
-           adds to it. An island with no data and no features keeps its full band. */
         const B = BASE && BASE[d.id];
-        const autoBeach = (B && B.beaches) || [], autoHard = (B && B.hardEdge) || [];
-        for (const r of autoHard) if (r.length >= 3) remove.push(r);
-        if (!only.length) for (const r of autoBeach) if (r.length >= 3) only.push(r);
-        if (!remove.length && !only.length) return null;
-        const pip = (poly, x, y) => {
-          let c = false;
-          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
-            const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
-            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c;
-          }
-          return c;
+        const hard = remove.concat(((B && B.hardEdge) || []).filter(r => r.length >= 3));
+        const beach = only.length ? only : ((B && B.beaches) || []).filter(r => r.length >= 3);
+        // bbox per polygon so the classifier can skip almost every polygon for almost every sample
+        const box = poly => {
+          let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+          for (const [x, y] of poly){ if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          return { poly, x0, y0, x1, y1 };
         };
-        return { remove, only, pip,
-          keep: (x, y) => {
-            for (const p of remove) if (pip(p, x, y)) return false;
-            if (!only.length) return true;
-            for (const p of only) if (pip(p, x, y)) return true;
-            return false;
-          } };
+        return { beach: beach.map(box), hard: hard.map(box), manual: remove.length + only.length };
       })();
-      if (MASK) console.info('beach ' + d.id + ': masks remove=' + MASK.remove.length + ' only=' + MASK.only.length);
+      /* distance from a point to a polygon's boundary, zero when inside */
+      const polyNear = (b, x, y, T) => {
+        if (x < b.x0 - T || x > b.x1 + T || y < b.y0 - T || y > b.y1 + T) return false;
+        const p = b.poly; let inside = false, best = Infinity;
+        for (let i = 0, j = p.length - 1; i < p.length; j = i++){
+          const xi = p[i][0], yi = p[i][1], xj = p[j][0], yj = p[j][1];
+          if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+          const dx = xj - xi, dy = yj - yi, L2 = dx * dx + dy * dy;
+          let t = L2 > 0 ? ((x - xi) * dx + (y - yi) * dy) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const px = xi + t * dx - x, py = yi + t * dy - y, dd = px * px + py * py;
+          if (dd < best) best = dd;
+        }
+        return inside || best <= T * T;
+      };
+      const GRID = isleGridOf(d.id), CP = GRID.pts;
+      const T_B = 8.0 / d.r, T_H = 3.0 / d.r;             // ~60 m and ~23 m, in shape units
+      const cls = new Uint8Array(CP.length);              // 1 beach, 0 quay (plain or hard)
+      let nBeach = 0, nHard = 0;
+      for (let k = 0; k < CP.length; k++){
+        const [x, y] = CP[k];
+        let c = SHORE.beach.length ? 0 : 1;
+        if (!c) for (const b of SHORE.beach) if (polyNear(b, x, y, T_B)){ c = 1; break; }
+        let h = false;
+        for (const b of SHORE.hard) if (polyNear(b, x, y, T_H)){ h = true; break; }
+        if (h){ c = 0; nHard++; }
+        cls[k] = c; nBeach += c;
+      }
+      console.info('beach ' + d.id + ': coast samples=' + CP.length + ' beach=' + (100 * nBeach / CP.length).toFixed(1) +
+        '% hard=' + (100 * nHard / CP.length).toFixed(1) + '% polys beach=' + SHORE.beach.length +
+        ' hard=' + SHORE.hard.length + ' manual=' + SHORE.manual);
       const csx = (bx1 - bx0) / NX, csy = (by1 - by0) / NY;
       const LIP_W = Math.hypot(csx, csy) * d.r;             // one cell diagonal, world units
-      /* THE "ONLY" SET IS DILATED ACROSS THE LATTICE, AND THAT IS THE DIFFERENCE BETWEEN A MAP
-         AND A RENDER. OSM's natural=beach polygons sit LANDWARD of the OSM coastline — the beach
-         is land, the coastline is the water's edge — while the band this lattice draws runs
-         SEAWARD of the outline by D_MAX. Tested point-in-polygon, the two barely overlap: on the
-         first bake Corniche's beach fell from 27,575 vertices to 409 and Al Maryah and Al Raha
-         lost theirs outright. The rule that means what was intended is "the nearest stretch of
-         coast is a beach", which is the polygon raster grown seaward by the band's own width.
-         Rasterised once per island onto this lattice and dilated with a separable max filter, so
-         the cost is a few million comparisons rather than a distance-to-polygon per vertex.
-         "remove" stays as drawn: a marina basin or a buffered pier is already where it should
-         bite. */
-      const W_ = NX + 1, H_ = NY + 1;
-      let onlyMask = null;
-      if (MASK && MASK.only.length){
-        const raw = new Uint8Array(W_ * H_);
-        const pipO = (x, y) => { for (const p of MASK.only) if (MASK.pip(p, x, y)) return true; return false; };
-        for (let j = 0; j < H_; j++){ const sy = by0 + j * csy;
-          for (let i = 0; i < W_; i++) if (pipO(bx0 + i * csx, sy)) raw[j * W_ + i] = 1; }
-        const K = Math.ceil((D_MAX + LIP_W) / (Math.min(csx, csy) * d.r)) + 1;
-        const tmp = new Uint8Array(W_ * H_); onlyMask = new Uint8Array(W_ * H_);
-        for (let j = 0; j < H_; j++) for (let i = 0; i < W_; i++){          // rows
-          let v = 0; for (let k = -K; k <= K && !v; k++){ const ii = i + k; if (ii >= 0 && ii < W_ && raw[j * W_ + ii]) v = 1; }
-          tmp[j * W_ + i] = v; }
-        for (let j = 0; j < H_; j++) for (let i = 0; i < W_; i++){          // columns
-          let v = 0; for (let k = -K; k <= K && !v; k++){ const jj = j + k; if (jj >= 0 && jj < H_ && tmp[jj * W_ + i]) v = 1; }
-          onlyMask[j * W_ + i] = v; }
-      }
+      /* THE QUAY PROFILE: the same inland lip, a short flat top standing in for the promenade
+         edge, then a face dropping past the water line within two units. Read as a function of
+         signed distance exactly like P, and held at its last row out to the band's edge so the
+         quay mesh has a vertex wherever the beach mesh would — a mixed cell needs all four. */
+      const Q = [
+        [-1.8, GROUND - 0.06, 1.00],
+        [ 0.9, GROUND - 0.06, 1.00],
+        [ 1.6, SEA_Y - 0.35, 0.72],
+        [ 4.0, SEA_Y - 1.60, 0.55],
+      ];
+      const quayAt = s => {
+        if (s <= Q[0][0]) return [Q[0][1], Q[0][2]];
+        for (let k = 0; k < Q.length - 1; k++){
+          const [o0, y0, s0] = Q[k], [o1, y1, s1] = Q[k + 1];
+          if (s <= o1){ const t = (s - o0) / ((o1 - o0) || 1); return [y0 + (y1 - y0) * t, s0 + (s1 - s0) * t]; }
+        }
+        const L = Q[Q.length - 1]; return [L[1], L[2]];
+      };
       const W = NX + 1;
       const vIdx = new Int32Array(W * (NY + 1)).fill(-1);
+      const vCls = new Uint8Array(W * (NY + 1));           // 1 beach vertex, 2 quay vertex
       const pos = [], col = [];
       for (let j = 0; j <= NY; j++){
         const sy = by0 + j * csy;
         for (let i = 0; i <= NX; i++){
           const sx = bx0 + i * csx;
           const dW = distToOutline(d.id, sx, sy) * d.r;
+          const seg = nearestSegIdx, segT = nearestSegT;
           const sgnd = insideIsle(d.id, sx, sy) ? -dW : dW;
           /* THE INLAND EDGE IS EXTENDED BY ONE CELL DIAGONAL, AND THAT IS THE GAP AT THE LAND.
 
@@ -5630,40 +5691,50 @@ DISTRICTS.forEach(d => {
              ground just inland of the coast, at GROUND + 0.02; with the cell size tied to beach
              width, halving the width halves that too. */
           if (sgnd < -(D_IN + LIP_W) || sgnd > D_MAX) continue;
-          if (MASK){
-            if (onlyMask && !onlyMask[j * W_ + i]) continue;
-            let cut = false; for (const p of MASK.remove) if (MASK.pip(p, sx, sy)){ cut = true; break; }
-            if (cut) continue;
-          }
-          const [y, sh] = profAt(sgnd);
+          const isBeach = seg >= 0 && cls[segT < 0.5 ? seg : seg + 1] === 1;
+          const [y, sh] = isBeach ? profAt(sgnd) : quayAt(sgnd);
           vIdx[j * W + i] = pos.length / 3;
+          vCls[j * W + i] = isBeach ? 1 : 2;
           pos.push(sx * d.r, y, -sy * d.r);
           col.push(sh, sh, sh);
         }
       }
-      const idx = [];
+      const idxB = [], idxQ = [];
       for (let j = 0; j < NY; j++){
         for (let i = 0; i < NX; i++){
-          const a = vIdx[j * W + i],       b = vIdx[j * W + i + 1];
-          const c = vIdx[(j + 1) * W + i + 1], e = vIdx[(j + 1) * W + i];
+          const la = j * W + i, lb = la + 1, lc = la + W + 1, le = la + W;
+          const a = vIdx[la], b = vIdx[lb], c = vIdx[lc], e = vIdx[le];
           if (a < 0 || b < 0 || c < 0 || e < 0) continue;
+          const allBeach = vCls[la] === 1 && vCls[lb] === 1 && vCls[lc] === 1 && vCls[le] === 1;
           // +Y facing: world X follows i, world Z runs against j (Z = -sy)
-          idx.push(a, b, c, a, c, e);
+          (allBeach ? idxB : idxQ).push(a, b, c, a, c, e);
         }
       }
-      if (idx.length){
+      /* Each mesh gets its own compacted vertex set, so normals are computed from its own
+         triangles only; shared coast vertices carry the same position in both. */
+      const emit = (idx, mats, tag) => {
+        if (!idx.length) return;
+        const map = new Int32Array(pos.length / 3).fill(-1);
+        const p2 = [], c2 = [], i2 = [];
+        for (const v of idx){
+          if (map[v] < 0){ map[v] = p2.length / 3; p2.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]); c2.push(col[v * 3], col[v * 3 + 1], col[v * 3 + 2]); }
+          i2.push(map[v]);
+        }
         const bg = new THREE.BufferGeometry();
-        bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        bg.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
-        bg.setIndex(idx);
+        bg.setAttribute('position', new THREE.Float32BufferAttribute(p2, 3));
+        bg.setAttribute('color',    new THREE.Float32BufferAttribute(c2, 3));
+        bg.setIndex(i2);
         bg.computeVertexNormals();
-        const beach = new THREE.Mesh(bg, beachSand.night);
-        beach.userData.dayMats  = beachSand.day;
-        beach.userData.duskMats = beachSand.dusk;
-        beach.userData.noShadow = true;
-        beach.userData.beachField = { cells: NX * NY, verts: pos.length / 3, tris: idx.length / 3, cellW };
-        g.add(beach);
-      }
+        const m = new THREE.Mesh(bg, mats.night);
+        m.userData.dayMats  = mats.day;
+        m.userData.duskMats = mats.dusk;
+        m.userData.noShadow = true;
+        m.userData[tag] = { cells: NX * NY, verts: p2.length / 3, tris: i2.length / 3, cellW,
+          coastBeachPct: +(100 * nBeach / CP.length).toFixed(1) };
+        g.add(m);
+      };
+      emit(idxB, beachSand, 'beachField');
+      emit(idxQ, quayGrey,  'quayField');
     }
   };
   buildBeachFor(d);

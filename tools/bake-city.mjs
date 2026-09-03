@@ -703,6 +703,12 @@ function query(bbox){
   way["leisure"="marina"](${b});
   relation["leisure"="marina"](${b});
   way["man_made"~"^(quay|pier|breakwater)$"](${b});
+  way["water"~"^(harbour|marina|dock)$"](${b});
+  relation["water"~"^(harbour|marina|dock)$"](${b});
+  way["waterway"="dock"](${b});
+  relation["waterway"="dock"](${b});
+  way["landuse"~"^(port|harbour)$"](${b});
+  relation["landuse"~"^(port|harbour)$"](${b});
   way["natural"="water"](${b});
   relation["natural"="water"](${b});
   way["water"~"^(lagoon|basin|canal)$"](${b});
@@ -1215,7 +1221,9 @@ async function bakeIsland(isle, proj){
       if (geom && geom.length >= 3) beaches.push(simplify(toXY(geom), SIMPLIFY_M).map(rd1));
       continue;
     }
-    if (t.leisure === 'marina' || /^(quay|pier|breakwater)$/.test(t.man_made || '')){
+    /* v261: harbours and docks too — a boat basin is a wall on every side, whatever it is tagged. */
+    if (t.leisure === 'marina' || /^(quay|pier|breakwater)$/.test(t.man_made || '') ||
+        /^(harbour|marina|dock)$/.test(t.water || '') || t.waterway === 'dock' || /^(port|harbour)$/.test(t.landuse || '')){
       const geom = el.geometry ||
         (el.members || []).filter(m => m.role === 'outer' && m.geometry).flatMap(m => m.geometry);
       if (geom && geom.length >= 2){
