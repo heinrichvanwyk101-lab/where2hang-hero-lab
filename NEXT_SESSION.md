@@ -137,21 +137,26 @@ part, so keep it with the geometry it produced.
   follows it again.
 - **The built band is extruded.** 8.72 ha at Yas Bay is real mass with courtyards
   cut, built from the survey above rather than painted onto the ground.
+- **The jetty is instanced** (`city v96`). 42 meshes and 42 geometries became 5
+  and 5; 504 triangles unchanged. The old note was exactly right about the
+  counts — 22 piles, 9 fingers, 9 cleats — and it was `yasBayJetty` in
+  **w2h-city.js**, NOT the shore kit in w2h-world.js, which has been instanced
+  for a while. Anyone re-reading this: check which jetty before acting.
+- **The bench can draw InstancedMesh** as of the same pass. `render.mjs` read
+  only `matrixWorld`, so it collapsed every instance onto one spot — instanced
+  geometry rendered as a single copy and the bench silently disagreed with the
+  scene. Fixed, and that is what made the jetty change verifiable by pixel
+  comparison rather than by argument.
 
 ## OPEN
 
 1. **Verify `b`.** Still the lead item — see THE ONE NUMBER THAT MATTERS above.
    Everything on the Yas ground bands waits on it.
-2. **The jetty is 42 separate meshes for 504 triangles** — 22 piles, 9 fingers,
-   9 cleats, each its own draw. Should be three instanced meshes, about 5 total.
-   Worth weighting higher than its size suggests: phone performance is a live
-   complaint, and it is what `nav v176`'s idle/wake fix was chasing from the
-   other direction.
-3. **2,419 venues city-wide have no geometry** — no footprint over them and none
+2. **2,419 venues city-wide have no geometry** — no footprint over them and none
    within 25 m. 261 on Yas, 1,902 on Corniche. Agreed shape: one unit per venue but
    built as three or four shopfronts of jittered width under a shared canopy.
    The Corniche figure is the one that bites, since the embed opens on Corniche.
-4. **The pier still reads as land** because OSM maps it as island — the four corners
+3. **The pier still reads as land** because OSM maps it as island — the four corners
    match the baked coastline to 4 m. Making it read as a deck over water means cutting
    the outline, which also feeds isleShape, isleCoast and groundPlan. **Not done
    silently; ask first.** Still deliberately unresolved, not merely undone.
