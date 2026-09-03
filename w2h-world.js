@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v262';
+export const BUILD = 'world v263';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5730,6 +5730,11 @@ DISTRICTS.forEach(d => {
         bg.setIndex(i2);
         bg.computeVertexNormals();
         const m = new THREE.Mesh(bg, mats.night);
+        /* origMat IS WHAT THE NIGHT VIEW ASSIGNS, and world-nav's snapshotMats only stamps it on
+           meshes that exist at registration. These are rebuilt by refreshBeach after the island
+           payload lands, so without it a night applyView set material to undefined and the
+           renderer threw on the first frame — the whole page blank, reported from the device. */
+        m.userData.origMat  = mats.night;
         m.userData.dayMats  = mats.day;
         m.userData.duskMats = mats.dusk;
         m.userData.noShadow = true;
