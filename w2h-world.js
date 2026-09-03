@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v263';
+export const BUILD = 'world v264';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3858,18 +3858,22 @@ function paintGround(d, plan){
       const px = PX(c.x), py = PY(c.y);
       const setback = cw * 1.20;
       const axes = [c.th, c.th2 === undefined ? c.th + Math.PI / 2 : c.th2];
-      for (let q = 0; q < 4; q++){
+      /* A REAL JUNCTION CARRIES ITS OWN ARMS — three at a T, five at a skewed crossing — and the
+         markings go on each of them. The generated lattice still describes a junction as two axes
+         and four arms, so both forms are read here. */
+      const armN = c.arms ? c.arms.length : 4;
+      for (let q = 0; q < armN; q++){
         // PY negates, so the canvas angle runs the other way round from the world one. Arms 0 and
         // 2 run along the first axis, 1 and 3 along the second — which for a ring junction is the
         // ring's own tangent rather than a right angle off the street.
-        const a = -axes[q % 2] + (q >= 2 ? Math.PI : 0);
+        const a = c.arms ? -c.arms[q] : -axes[q % 2] + (q >= 2 ? Math.PI : 0);
         const dx = Math.cos(a), dy = Math.sin(a);
         const nx = -dy, ny = dx;
         const bx = px + dx * setback, by = py + dy * setback;
         // The street ARRIVES at a ring junction and does not continue past it, so arm 2 — the
         // continuation of the street on the far side — does not exist. Marking it puts a zebra in
         // the coastal park.
-        if (c.ring && q === 2) continue;
+        if (!c.arms && c.ring && q === 2) continue;
         if (c.major){
           /* A zebra: bars ACROSS the direction of travel, drawn along the approach. Six bars is
              what fits a two-lane arm at this scale, and they are derived from the road half-width
@@ -5135,6 +5139,123 @@ for (const d of DISTRICTS){
 
    Idempotent, so calling it twice costs a property write. The generated skeleton is untouched:
    ring and arterials still feed onRoad and the fabric, draw* feed the painter. */
+/* REAL JUNCTIONS FROM THE SURVEYED CENTRELINES — shared code for the world module and the bench. */
+function realCrossings(roads, mPerUnit){
+  const RANK = { major: 2, minor: 1, local: 0 };
+  const key = p => Math.round(p[0] * 2e5) + ',' + Math.round(p[1] * 2e5);
+  const nodes = new Map();
+  roads.forEach((pts, ri) => {
+    if (!pts || pts.length < 2) return;
+    const cls = pts.cls || (pts.major ? 'major' : 'minor');
+    const rank = RANK[cls] ?? 1;
+    if (rank === 0) return;                                  // locals never make a crossing
+    for (let i = 0; i < pts.length; i++){
+      const k = key(pts[i]);
+      let n = nodes.get(k);
+      if (!n){ n = { x: pts[i][0], y: pts[i][1], arms: [], roads: new Set(), rank: 0 }; nodes.set(k, n); }
+      n.roads.add(ri);
+      if (rank > n.rank) n.rank = rank;
+      if (i > 0) n.arms.push({ ang: Math.atan2(pts[i-1][1] - pts[i][1], pts[i-1][0] - pts[i][0]), rank });
+      if (i < pts.length - 1) n.arms.push({ ang: Math.atan2(pts[i+1][1] - pts[i][1], pts[i+1][0] - pts[i][0]), rank });
+    }
+  });
+  /* T-JUNCTIONS THE SIMPLIFIER UNSTITCHED. A side road that ends on an unsplit main road shares
+     a node with it in OSM, but the bake's Douglas-Peucker pass keeps only the main road's corner
+     vertices, so that node is gone from the main road and the two no longer touch. Measured:
+     1,246 such endpoints on Corniche against 7,308 that still share a vertex. Each free endpoint
+     is snapped to the nearest segment of another non-local road within 4 m and becomes a node
+     there, with the side road's own bearing and both bearings along the main road as its arms. */
+  const SNAP = 4 / mPerUnit, SNAP2 = SNAP * SNAP;
+  const cell = Math.max(SNAP * 4, 1e-4), gk = (x, y) => Math.floor(x / cell) + ',' + Math.floor(y / cell);
+  const grid = new Map();
+  roads.forEach((pts, ri) => {
+    if (!pts || pts.length < 2) return;
+    const rank = RANK[pts.cls || (pts.major ? 'major' : 'minor')] ?? 1;
+    if (rank === 0) return;
+    for (let i = 0; i < pts.length - 1; i++){
+      const a = pts[i], b = pts[i + 1];
+      const x0 = Math.floor(Math.min(a[0], b[0]) / cell), x1 = Math.floor(Math.max(a[0], b[0]) / cell);
+      const y0 = Math.floor(Math.min(a[1], b[1]) / cell), y1 = Math.floor(Math.max(a[1], b[1]) / cell);
+      for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++){
+        const k = gx + ',' + gy; (grid.get(k) || grid.set(k, []).get(k)).push([ri, a, b, rank]);
+      }
+    }
+  });
+  roads.forEach((pts, ri) => {
+    if (!pts || pts.length < 2) return;
+    const rank = RANK[pts.cls || (pts.major ? 'major' : 'minor')] ?? 1;
+    if (rank === 0) return;
+    for (const end of [0, pts.length - 1]){
+      const p = pts[end];
+      const own = nodes.get(key(p));
+      if (own && own.roads.size >= 2) continue;                 // already a shared vertex
+      const q = pts[end === 0 ? 1 : pts.length - 2];
+      let best = null, bd = SNAP2;
+      const cx = Math.floor(p[0] / cell), cy = Math.floor(p[1] / cell);
+      for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++){
+        for (const seg of (grid.get(gx + ',' + gy) || [])){
+          if (seg[0] === ri) continue;
+          const [ , a, b, r2] = seg;
+          const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy;
+          let t = L2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const hx = a[0] + t * dx - p[0], hy = a[1] + t * dy - p[1], dd = hx * hx + hy * hy;
+          if (dd < bd){ bd = dd; best = { x: a[0] + t * dx, y: a[1] + t * dy, a, b, r2, ri2: seg[0] }; }
+        }
+      }
+      if (!best) continue;
+      const k = key([best.x, best.y]);
+      let n = nodes.get(k);
+      if (!n){ n = { x: best.x, y: best.y, arms: [], roads: new Set(), rank: 0 }; nodes.set(k, n); }
+      n.roads.add(ri); n.roads.add(best.ri2);
+      n.rank = Math.max(n.rank, rank, best.r2);
+      n.arms.push({ ang: Math.atan2(q[1] - best.y, q[0] - best.x), rank });
+      n.arms.push({ ang: Math.atan2(best.a[1] - best.y, best.a[0] - best.x), rank: best.r2 });
+      n.arms.push({ ang: Math.atan2(best.b[1] - best.y, best.b[0] - best.x), rank: best.r2 });
+    }
+  });
+  const cand = [];
+  for (const n of nodes.values()){
+    if (n.roads.size < 2 || n.arms.length < 3) continue;
+    const ranks = n.arms.map(a => a.rank).sort((a, b) => b - a);
+    n.major = ranks[0] === 2;
+    cand.push(n);
+  }
+  /* MERGE within 45 m: a dual carriageway meets another as four nodes a few tens of metres apart,
+     and that is one junction with one set of signals, not four. */
+  const R = 45 / mPerUnit, R2 = R * R;
+  cand.sort((a, b) => a.x - b.x);
+  const parent = cand.map((_, i) => i);
+  const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+  for (let i = 0; i < cand.length; i++){
+    for (let j = i + 1; j < cand.length && cand[j].x - cand[i].x <= R; j++){
+      const dx = cand[j].x - cand[i].x, dy = cand[j].y - cand[i].y;
+      if (dx*dx + dy*dy <= R2) parent[find(i)] = find(j);
+    }
+  }
+  const groups = new Map();
+  cand.forEach((n, i) => { const r = find(i); (groups.get(r) || groups.set(r, []).get(r)).push(n); });
+  const out = [];
+  for (const g of groups.values()){
+    let x = 0, y = 0, major = false; const arms = [];
+    for (const n of g){ x += n.x; y += n.y; major = major || n.major;
+      for (const a of n.arms){
+        /* one arm per direction: both carriageways of one road leave at the same bearing */
+        let dup = false;
+        for (const b of arms){ let dd = Math.abs(((a.ang - b.ang) % (2*Math.PI) + 3*Math.PI) % (2*Math.PI) - Math.PI); if (dd < 0.45){ dup = true; if (a.rank > b.rank) b.rank = a.rank; break; } }
+        if (!dup) arms.push({ ang: a.ang, rank: a.rank });
+      }
+    }
+    x /= g.length; y /= g.length;
+    if (arms.length < 3) continue;
+    arms.sort((a, b) => b.rank - a.rank || a.ang - b.ang);
+    const th = arms[0].ang;
+    let th2 = th + Math.PI / 2, best = -1;
+    for (const a of arms){ const s = Math.abs(Math.sin(a.ang - th)); if (s > best){ best = s; th2 = a.ang; } }
+    out.push({ x, y, th, th2, major, arms: arms.map(a => a.ang), n: g.length });
+  }
+  return out;
+}
+
 function attachRealRoads(d){
   const b = BASE && BASE[d.id];
   if (!b || !b.roads || !d.roads) return false;
@@ -5144,10 +5265,14 @@ function attachRealRoads(d){
      Kept apart so a later call can still fill them rather than concluding there are none. */
   if (b.paths)  d.roads.drawPaths  = b.paths;
   if (b.plazas) d.roads.drawPlazas = b.plazas;
-  /* Junction pads, signals and zebras were placed at generated crossings, which the real network
-     does not have. Empty rather than left in place: a signalised junction drawn where two real
-     roads do not meet is worse than no signal at all. Real junctions come with stage 3. */
-  d.roads.crossings = [];
+  /* REAL JUNCTIONS, FROM THE CENTRELINES THEMSELVES. This was an empty list with a note that real
+     junctions would "come with stage 3", and stage 3 never came: every island that painted its
+     surveyed roads had no signals, no zebras, no junction pads and no keep-clear for lamps and
+     palms, while the islands that fell back to the lattice had all four at invented crossings.
+     realCrossings above finds where two non-local roads share a node, re-attaches the T-junctions
+     the simplifier unstitched, and merges the four nodes of a dual-carriageway crossing into one.
+     Corniche: 686 junctions, 292 of them where a major road is involved. */
+  d.roads.crossings = realCrossings(b.roads, d.r * M_PER_UNIT);
   return true;
 }
 

@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v31';
+export const BUILD = 'props v32';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -1019,10 +1019,16 @@ function addProps(d, layer, plan, budget = {}){
        second axis is the ring's tangent and not a right angle off the first — signals placed on an
        assumed 90 degrees would stand in the coastal park at every seafront junction. */
     const axes = [c.th, c.th2 === undefined ? c.th + Math.PI / 2 : c.th2];
-    for (let q = 0; q < 4; q++){
+    /* A REAL JUNCTION LISTS ITS ARMS (world v264) and gets one head per arm, whatever their
+       number or angle; the generated lattice still gives two axes and four arms. An arm's aspect
+       group is whichever of the two axes it runs closer to, so opposite arms still share a phase
+       and the perpendicular pair gets the complement. */
+    const armN = c.arms ? c.arms.length : 4;
+    for (let q = 0; q < armN; q++){
       // Arm 2 is the street continuing past a ring junction, and it does not.
-      if (c.ring && q === 2) continue;
-      const a = axes[q % 2] + (q >= 2 ? Math.PI : 0);
+      if (!c.arms && c.ring && q === 2) continue;
+      const a = c.arms ? c.arms[q] : axes[q % 2] + (q >= 2 ? Math.PI : 0);
+      const axisOf = c.arms ? (Math.abs(Math.sin(a - c.th)) < Math.abs(Math.sin(a - axes[1])) ? 0 : 1) : q % 2;
       const dx = Math.cos(a), dy = Math.sin(a);
       // Right-hand kerb of this approach: along the arm's own direction, offset across it.
       const nx = -dy, ny = dx;
@@ -1033,7 +1039,7 @@ function addProps(d, layer, plan, budget = {}){
          which of the two crossing streets this head controls: opposite arms share an aspect and
          the perpendicular pair is its complement, which is what makes a junction legible rather
          than four independent lights. */
-      signals.push({ x:sx, y:sy, rot: Math.atan2(-nx, -ny), axis: q % 2, phase, period });
+      signals.push({ x:sx, y:sy, rot: Math.atan2(-nx, -ny), axis: axisOf, phase, period });
     }
   });
 

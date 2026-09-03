@@ -634,6 +634,17 @@ if (!location.search.includes('drawn')){
        does not stall waiting for it. */
     try { await BMAP.loadRoads(idx, 'corniche'); }
     catch (e){ console.warn('roads corniche:', e.message); }
+    /* EVERY OTHER ISLAND'S ROADS START DOWNLOADING NOW, NOT A LEG BEFORE THEY ARE NEEDED.
+
+       whenRoads was the only thing that ever called loadRoads for the outer islands, and it did so
+       at the prefetch leg with a four-second ceiling — so the fetch and the countdown started
+       together, on a main thread that was busy building Corniche. Measured headless, Reem,
+       Saadiyat and Yas lost that race every run and painted the generated lattice; on a phone it
+       depended on the network. The ground is painted once, so a lost race is permanent.
+
+       Fired and forgotten: about a megabyte across five islands, cached on the index entry, and
+       the first prefetch leg is many seconds away. */
+    for (const e of (idx.islands || [])) if (e.id !== 'corniche') BMAP.loadRoads(idx, e.id).catch(() => {});
 
     const isles = BMAP.sceneIslands(idx, 0);
     window.__basemapIndex = idx;
@@ -668,7 +679,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v188', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v189', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2704,13 +2715,23 @@ function setDistrict(d){
   /* The island's glow light now lives in `world`, outside every visibility rule here, so this
      can go back to hiding the whole group and the light count is unaffected — see w2h-world.js. */
   if (buildIsland && d && d !== corniche && d.pending) d.group.visible = false;
-  if (buildIsland && d && buildIsland(d.id)){
-    snapshotMats(d.group);
-    registerLift(d.group);
-    fitClip();
-    applyView(view);
+  /* A TAP INTO AN UNBUILT ISLAND WHOSE ROADS ARE STILL IN FLIGHT WAITS FOR THEM, briefly. The
+     build is synchronous and the ground is painted once, so building now with the roads two
+     seconds away meant a generated lattice for the rest of the session. The camera flight takes
+     about that long anyway; the island is hidden until it settles either way, and the ceiling
+     keeps a dead fetch from stalling the move. Everything else in setDistrict — the shot, the
+     labels, the view — proceeds on this call as before. */
+  if (buildIsland && d && d.pending && typeof roadsIn === 'function' && !roadsIn(d.id)){
+    whenRoads(d.id, 2500).then(() => buildAndRegister(d));
+  } else {
+    if (buildIsland && d && buildIsland(d.id)){
+      snapshotMats(d.group);
+      registerLift(d.group);
+      fitClip();
+      applyView(view);
+    }
+    if (d){ addFootprints(d); addGroundFeatures(d); addWaterGeometry(d); }
   }
-  if (d){ addFootprints(d); addGroundFeatures(d); addWaterGeometry(d); }
 
   /* Every state change composes a shot, so a leftover angle from the last one would arrive as a
      camera that lands somewhere the transition did not intend. orbit.on stays as it is: once the
@@ -4863,7 +4884,7 @@ function roadsIn(id){
    seconds is comfortably longer than any of these files has taken and comfortably shorter than a
    leg, so in the normal case it is never reached and in the pathological case it degrades to
    exactly the old behaviour. */
-function whenRoads(id, ms = 4000){
+function whenRoads(id, ms = 30000){
   const idx = window.__basemapIndex;
   if (!idx || !BMAP.loadRoads) return Promise.resolve(false);
   return Promise.race([
