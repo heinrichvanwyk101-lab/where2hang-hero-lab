@@ -661,7 +661,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v176', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v177', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1813,38 +1813,73 @@ function placeResultMarkers(pts){
    on screen without either the code or a config value having to know why — the camera did that
    part for free. This is the same principle fitDist/worldExtent already lean on elsewhere in
    this file: let the projection carry the work instead of re-deriving it by hand per state. */
-function worldToScreen(x, y, z){
-  const v = new THREE.Vector3(x, y, z);
-  v.project(camera);
-  return {
-    x: (v.x * 0.5 + 0.5) * window.innerWidth,
-    y: (-v.y * 0.5 + 0.5) * window.innerHeight,
-    behind: v.z > 1 || v.z < -1,
-  };
+/* ONE SCRATCH VECTOR AND A CALLER-SUPPLIED RESULT, NOT TWO OBJECTS PER POINT. This is called
+   once per result pin per overlay pass and used to allocate a fresh THREE.Vector3 AND a fresh
+   object literal every single call — at ~300 pins (an island's full venue set, which the area
+   rail now pushes routinely) that is 600 objects a pass, roughly fifteen passes a second.
+   Same bug class as the pin-element churn fixed just below, one level further down: making a
+   new object every frame where one reused object would do.
+   `out` is optional so the old call shape still works if a second caller is ever added. */
+const _w2sV = new THREE.Vector3();
+function worldToScreen(x, y, z, out){
+  _w2sV.set(x, y, z).project(camera);
+  const o = out || {};
+  o.x = (_w2sV.x * 0.5 + 0.5) * window.innerWidth;
+  o.y = (-_w2sV.y * 0.5 + 0.5) * window.innerHeight;
+  o.behind = _w2sV.z > 1 || _w2sV.z < -1;
+  return o;
 }
 
 const PIN_CLUSTER_PX = 46; // screen-space radius; two points closer than this on screen merge
 const pinEls = new Map();  // stable key -> DOM element, reused across frames to avoid thrash
+const _keyBuf = [];        // scratch for building a cluster's identity key without allocating
+const _seenKeys = new Set(); // reused per pass; cleared rather than rebuilt
 let pinFrameCounter = 0;
 
+/* The per-point projection records and the visited flags are REUSED across passes: both are
+   overwritten from scratch every call, so nothing can survive to go stale. Previously each pass
+   built one wrapper object per pin plus a fresh `used` array.
+
+   WHAT IS DELIBERATELY NOT POOLED IS THE CLUSTER ITSELF. renderPinOverlay hands a cluster's pin
+   list to that pin's click handler, and a tap can land between passes — a recycled array would
+   have been rewritten underneath it and the tap would open whatever venue happened to take that
+   slot. So a cluster carries direct references to the REAL pin objects, never to a pooled
+   record, and those two allocations per cluster are the ones worth paying for. Clusters are few
+   by definition; that is what clustering is for. */
+const _projPool = [];
+const _projected = [];
+let _usedFlags = new Uint8Array(0);
+
 function clusterScreenPoints(pts){
-  const projected = [];
-  for (const p of pts){
-    const s = worldToScreen(p.x, GROUND + 6, p.z);
-    if (!s.behind) projected.push({ p, s });
+  _projected.length = 0;
+  for (let k = 0; k < pts.length; k++){
+    const p = pts[k];
+    const slot = _projected.length;
+    let rec = _projPool[slot];
+    if (!rec) rec = _projPool[slot] = { p:null, x:0, y:0, behind:false };
+    worldToScreen(p.x, GROUND + 6, p.z, rec);
+    if (rec.behind) continue;          // slot is simply reused by the next point
+    rec.p = p;
+    _projected.push(rec);
   }
+  const n = _projected.length;
+  if (_usedFlags.length < n) _usedFlags = new Uint8Array(n);
+  _usedFlags.fill(0, 0, n);
   const clusters = [];
-  const used = new Array(projected.length).fill(false);
-  for (let i = 0; i < projected.length; i++){
-    if (used[i]) continue;
-    const group = [projected[i]];
-    used[i] = true;
-    for (let j = i + 1; j < projected.length; j++){
-      if (used[j]) continue;
-      const dx = projected[i].s.x - projected[j].s.x, dy = projected[i].s.y - projected[j].s.y;
-      if (Math.hypot(dx, dy) < PIN_CLUSTER_PX){ group.push(projected[j]); used[j] = true; }
+  for (let i = 0; i < n; i++){
+    if (_usedFlags[i]) continue;
+    _usedFlags[i] = 1;
+    const a = _projected[i];
+    const pins = [a.p];
+    let cx = a.x, cy = a.y;
+    for (let j = i + 1; j < n; j++){
+      if (_usedFlags[j]) continue;
+      const b = _projected[j];
+      if (Math.hypot(a.x - b.x, a.y - b.y) < PIN_CLUSTER_PX){
+        pins.push(b.p); cx += b.x; cy += b.y; _usedFlags[j] = 1;
+      }
     }
-    clusters.push(group);
+    clusters.push({ pins, cx: cx / pins.length, cy: cy / pins.length });
   }
   return clusters;
 }
@@ -1857,8 +1892,10 @@ function renderPinOverlay(){
     return;
   }
   const clusters = clusterScreenPoints(resultPins);
-  const seen = new Set();
-  clusters.forEach((group) => {
+  _seenKeys.clear();
+  const seen = _seenKeys;
+  clusters.forEach((c) => {
+    const pins = c.pins;
     /* IDENTITY-BASED, NOT POSITIONAL — THE ACTUAL FIX. The old key was 'p' + this cluster's
        INDEX in this frame's freshly-rebuilt array. That looked stable (same index → same
        element) but wasn't: the moment any cluster anywhere merges or splits, every cluster
@@ -1873,28 +1910,43 @@ function renderPinOverlay(){
        happens elsewhere on screen — only an actual merge or split (rare, momentary) changes a
        key. venueId first since it's the real identity; name is the fallback for a pin with none
        (matches the "degrades gracefully" contract ResultsWorldSync's own header describes). */
-    const key = group.map((g) => g.p.venueId || g.p.name || '?').sort().join(',');
+    /* Built through a REUSED scratch array rather than group.map().sort().join(). The mapped
+       array was thrown away the moment the string existed, once per cluster per pass. The
+       string itself is unavoidable — it is the Map key — but the array behind it is not. */
+    _keyBuf.length = 0;
+    for (let i = 0; i < pins.length; i++) _keyBuf.push(pins[i].venueId || pins[i].name || '?');
+    _keyBuf.sort();
+    const key = _keyBuf.join(',');
     seen.add(key);
-    const cx = group.reduce((s, g) => s + g.s.x, 0) / group.length;
-    const cy = group.reduce((s, g) => s + g.s.y, 0) / group.length;
     let el = pinEls.get(key);
     if (!el){
       el = document.createElement('div');
+      /* HANDLER BOUND ONCE, AT CREATION, READING WHAT THE ELEMENT CURRENTLY CARRIES. The old
+         form reassigned a brand-new arrow function to onclick on EVERY pass for EVERY pin. The
+         element was correctly reused — that was the churn fix — and then handed fresh garbage
+         anyway, which quietly gave back a slice of what that fix had won. The payload moves to
+         a property instead, so a pass is one assignment rather than one closure allocation.
+         el.__pins holds REAL pin objects (see clusterScreenPoints), never pooled records, so a
+         tap landing between passes cannot read a recycled slot. */
+      el.onclick = () => {
+        const ps = el.__pins;
+        if (!ps || !ps.length) return;
+        if (ps.length > 1) zoomToPinCluster(ps); else tapResultPin(ps[0]);
+      };
       layer.appendChild(el);
       pinEls.set(key, el);
     }
-    el.style.left = cx + 'px';
-    el.style.top = cy + 'px';
-    if (group.length > 1){
+    el.__pins = pins;
+    el.style.left = c.cx + 'px';
+    el.style.top = c.cy + 'px';
+    if (pins.length > 1){
       el.className = 'w2hPin cluster';
-      el.textContent = String(group.length);
-      el.onclick = () => zoomToPinCluster(group.map(g => g.p));
+      el.textContent = String(pins.length);
     } else {
-      const venue = group[0].p;
+      const venue = pins[0];
       const isActive = !!(activeVenue && venue.venueId && activeVenue.venueId === venue.venueId);
       el.className = 'w2hPin single' + (isActive ? ' active' : '');
       el.textContent = '';
-      el.onclick = () => tapResultPin(venue);
     }
   });
   for (const [key, el] of pinEls){
