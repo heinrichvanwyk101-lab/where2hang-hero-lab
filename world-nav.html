@@ -667,7 +667,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v184', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v185', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3550,13 +3550,13 @@ function applyView(next){
 
        Handled before the mesh guard rather than by loosening it — everything after this line
        reads o.material as a surface material, which a SpriteMaterial is not. */
-    if (o.userData.planOnly){ o.visible = plan; return; }
+    if (o.userData.planOnly){ o.userData.vBranch='planOnly'; o.visible = plan; return; }
     if (!o.isMesh) return;
     /* HELPERS ARE NOT SCENERY. The district tap targets are horizontal discs wider than the
        coastline, held off screen by material.visible = false — and this loop was overwriting that
        material with a visible one in Day and Silhouette, laying a solid lid over every island.
        Anything that exists for input rather than for looking at is skipped outright. */
-    if (o.userData.helper) return;
+    if (o.userData.helper){ o.userData.vBranch='helper'; return; }
     /* HIDDEN BY THE FOOTPRINTS PASS, AND IT STAYS HIDDEN.
 
        This is where the second city came from. hideFabric wrote o.visible = false and this
@@ -3569,10 +3569,10 @@ function applyView(next){
        ahead of nightOnly and ahead of the plan/ground line because both of those write visible,
        and this flag outranks a view: a mesh the footprints replaced has no version in any
        lighting mode. */
-    if (o.userData.fpHidden){ o.visible = false; return; }
+    if (o.userData.fpHidden){ o.userData.vBranch='fpHidden'; o.visible = false; return; }
     /* Same durability argument as fpHidden: warm-up hides a mesh so its first upload can be paid on
        a later frame, and applyView writing visible=true underneath would undo that silently. */
-    if (o.userData.warmHidden){ o.visible = false; return; }
+    if (o.userData.warmHidden){ o.userData.vBranch='warmHidden'; o.visible = false; return; }
     /* NIGHT-ONLY MESHES EXIST OR THEY DO NOT — there is no daytime version of them.
 
        The lamp pools are additive quads standing in for 628 point lights that could not be real
@@ -3588,6 +3588,7 @@ function applyView(next){
        in. Checked ahead of the ground test below, which would otherwise hide them along with the
        buildings. */
     if (o.userData.nightOnly){
+      o.userData.vBranch='nightOnly';
       o.visible = night || dusk;
       if (o.visible) o.material = dusk && o.userData.duskMats ? o.userData.duskMats
                                                              : o.userData.origMat;
@@ -3597,6 +3598,7 @@ function applyView(next){
        can occlude or shade the surface under examination. */
     o.visible = plan ? o.userData.ground === true : true;
     if (plan){
+      o.userData.vBranch='plan';
       if (o.userData.ground) o.material = o.userData.planMats;
       return;
     }
@@ -3605,6 +3607,7 @@ function applyView(next){
        material — no dusk warmth, no night emissive, no silhouette flattening — because a building
        has to be distinguishable from the tarmac it is sitting on and from the building beside it. */
     if (check){
+      o.userData.vBranch='check';
       o.material = o.userData.ground ? (o.userData.planMats || o.material)
                  : (o.userData.litMat ? o.userData.origMat : (o.userData.dayMats || dayMat));
       return;
@@ -3613,13 +3616,19 @@ function applyView(next){
        palm frond should be under any light in this scene, and turning it into pale stone in the
        one mode built to judge a daytime render would be a strange thing to have built. */
     if (o.userData.litMat){
+      o.userData.vBranch='litMat';
       o.material = sil ? silMat : o.userData.origMat;
       return;
     }
     if (night || dusk){
+      o.userData.vBranch='night/dusk';
       o.material = (dusk && o.userData.duskMats) ? o.userData.duskMats : o.userData.origMat;
       return;
     }
+    /* THE BRANCH THAT WAS SUPPOSED TO RUN. Marked like every other exit above so the probe can
+       say which one actually did, instead of the flags being read off a grep — which has now
+       twice reported a branch impossible when the render says otherwise. */
+    o.userData.vBranch = sil ? 'sil' : (o.userData.dayMats ? 'DAY-dayMats' : 'DAY-fallback');
     o.material = sil ? silMat : (o.userData.dayMats || dayMat);
   });
 
@@ -4029,7 +4038,8 @@ canvas.addEventListener('pointerup', e => {
         : '';
       return i + ') ' + chain.join('<') + ' y=' + h.point.y.toFixed(2) +
              '\n   col=' + cols + ' mats=' + sets +
-             '\n   seen=' + seen + ' runs=' + viewSeq + px + order;
+             '\n   seen=' + seen + ' runs=' + viewSeq + px + order +
+             '\n   branch=' + (o.userData.vBranch || '-') + ' vis=' + o.visible;
     }).join('\n');
     paintDiag();
     return;
