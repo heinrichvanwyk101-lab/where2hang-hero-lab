@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v238';
+export const BUILD = 'world v239';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5065,10 +5065,21 @@ DISTRICTS.forEach(d => {
      still reads as a strait; anything past 11 and they would merge into a sandbar joining two
      islands that are meant to be separate.
 
-     THE PROFILE IS FIVE RINGS, and the two near y = 0 are the ones doing the work. A pale band
+     THE PROFILE IS TEN RINGS, and the two near y = 0 are the ones doing the work. A pale band
      just above the waterline and a dark one just below it is what the eye reads as wet sand, and
-     it costs a vertex colour rather than a texture. The lowest ring sits at -1.2, below the
-     -0.97 wave trough, so the sand always terminates under water rather than in mid-air. */
+     it costs a vertex colour rather than a texture.
+
+     THE LOWEST RING MUST SIT BELOW THE -0.97 WAVE TROUGH, and for a while it did not. This text
+     has said "-1.2, below the -0.97 wave trough, so the sand always terminates under water
+     rather than in mid-air" since the profile had five rings. The rewrite to ten kept the
+     sentence and set the bottom ring to -0.95 — which is 0.02 ABOVE the trough, so every time a
+     wave dipped there the skirt's open bottom edge came out of the water and the sand ended in
+     mid-air, exactly what the sentence exists to prevent. Restored to -1.2.
+
+     THIS IS THE SAME FAULT farSea ALREADY RECORDS, and its note is worth reading next to this
+     one: it sat at -0.45, "punched through" the animated surface, and produced "a seam that had
+     been there all along". It was moved to -1.15 to "clear the trough by 0.18". Anything in this
+     scene meant to terminate under water clears -0.97 with margin or it will show an edge. */
   {
     /* THE FIRST PROFILE WAS INVISIBLE, FOR TWO REASONS WORTH RECORDING.
 
@@ -5141,7 +5152,7 @@ DISTRICTS.forEach(d => {
       [ 8.6, 0.10,   1.55],   // FOAM, lower edge
       [ 9.4, 0.00,   0.78],   // wet
       [10.8, -0.35,  0.58],
-      [12.0, -0.95,  0.38],
+      [12.0, -1.20,  0.38],   // MUST clear the -0.97 wave trough — see the note above
     ];
     const o = isleOutline(d.id);
     const n = o.length - 1;
