@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v106';
+export const BUILD = 'city v107';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4458,11 +4458,80 @@ function yasCircuit(x0, z0, rot, gx, gz){
   g.add(cg);
   return g;
 }
+
+/* NATION TOWERS (city v107) — two curved glass towers on the Corniche, 237 m and 200 m, their
+   broad convex faces to the sea, joined near the top of the shorter one by the skybridge, on a
+   long podium. The survey has no footprint for them (a 95 by 51 m plot and nothing tall), so
+   they stand on the published coordinates, forty metres back from the shore. */
+function nationTowers(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const at = (ax, az) => [x0 + ax * cs + az * sn, z0 - ax * sn + az * cs];
+  const glass = new THREE.MeshStandardMaterial({ color:0x2A3A4C, map:TEX_TOWER, roughness:0.3, metalness:0.5 });
+  glass.userData.glassOverride = true; glass.userData.duskColor = 0xB9CBDA;
+  /* Low metalness by day: a reflective glass reads as a dark slab against the sand, and the
+     towers are pale blue-green in every photograph. */
+  glass.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xBCD3E0, roughness:0.35, metalness:0.12, envMapIntensity:0.6 });
+  const towers = [[-38, 237, 60, 34], [42, 200, 54, 32]];
+  towers.forEach(([off, hm, w, d], i) => {
+    const H = hm / M;
+    const geo = new THREE.CylinderGeometry(1, 1, H, 40, 1);
+    const pos = geo.attributes.position;
+    for (let v = 0; v < pos.count; v++){
+      const t = (pos.getY(v) + H / 2) / H;
+      pos.setX(v, pos.getX(v) * (w / 2) * (1 - 0.12 * t) / M);       // elliptical, tapering a little
+      pos.setZ(v, pos.getZ(v) * (d / 2) * (1 - 0.12 * t) / M);
+    }
+    pos.needsUpdate = true; geo.computeVertexNormals();
+    const [tx, tz] = at(off / M, 0);
+    const tower = new THREE.Mesh(geo, glass);
+    tower.position.set(tx, H / 2, tz); tower.rotation.y = rot;
+    if (i === 0) tower.userData.hero = tower.userData.kitName = 'nationTowers';
+    g.add(tower);
+  });
+  const [bx, bz] = at(2 / M, 0);
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(60 / M, 9 / M, 14 / M), saadKitMat(0xC9CED3, 0xEEF1F3, 0.4, 0.4, 0xFFE0B0, 0.12));
+  bridge.position.set(bx, 190 / M, bz); bridge.rotation.y = rot; g.add(bridge);
+  const [px, pz] = at(0, 12 / M);
+  const podium = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 18 / M, 70 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
+  podium.position.set(px, 9 / M, pz); podium.rotation.y = rot; g.add(podium);
+  return g;
+}
+/* WARNER BROS. WORLD — the indoor park east of Ferrari World: a 420 by 300 m hall under a
+   ridged roof, the domed rotunda at the entrance, the portal in the studio's blue and gold. On
+   the survey's 713 by 694 m footprint, which the kit zone replaces. */
+function warnerBrosWorld(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const at = (ax, az) => [x0 + ax * cs + az * sn, z0 - ax * sn + az * cs];
+  const sand = saadKitMat(0xD9D0BC, 0xEDE5D3, 0.85, 0);
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(420 / M, 26 / M, 300 / M), sand);
+  hall.position.set(x0, 13 / M, z0); hall.rotation.y = rot; g.add(hall);
+  for (const off of [-95, 0, 95]){
+    const [rx, rz] = at(0, off / M);
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(400 / M, 8 / M, 50 / M), saadKitMat(0xE8E1CF, 0xF7F2E6, 0.8, 0));
+    ridge.position.set(rx, 30 / M, rz); ridge.rotation.y = rot; g.add(ridge);
+  }
+  const [dx, dz] = at(-180 / M, 0);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xC9D6E2, 0xE3EDF5, 0.35, 0.3));
+  dome.scale.set(38 / M, 30 / M, 38 / M);
+  dome.position.set(dx, 26 / M, dz);
+  dome.userData.hero = dome.userData.kitName = 'warnerBrosWorld';
+  g.add(dome);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(40 / M, 40 / M, 26 / M, 32), sand);
+  drum.position.set(dx, 13 / M, dz); g.add(drum);
+  const [px, pz] = at(-225 / M, 0);
+  const portal = new THREE.Mesh(new THREE.BoxGeometry(14 / M, 40 / M, 70 / M), saadKitMat(0x1B3A7A, 0x2450A8, 0.5, 0.2));
+  portal.position.set(px, 20 / M, pz); portal.rotation.y = rot; g.add(portal);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(15 / M, 6 / M, 72 / M), saadKitMat(0xC99A18, 0xF2C230, 0.5, 0.2, 0xFFD060, 0.2));
+  band.position.set(px, 34 / M, pz); band.rotation.y = rot; g.add(band);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
-         capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit };
+         capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld };
 }
 
 

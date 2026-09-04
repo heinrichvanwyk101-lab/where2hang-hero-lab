@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v286';
+export const BUILD = 'world v287';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4981,6 +4981,7 @@ const DISTRICTS = [
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
       { label:'ADNOC HQ',        osm:'ADNOC Headquarters', x: LM.adnoc.x, z: LM.adnoc.z, h:26, r:22 },
       { label:'Capital Gate', x:527.5, z:715.2, h:20, r:26 },
+      { label:'Nation Towers', x:-836.1, z:28.1, h:24, r:26 },
       /* No osm match will ever come back for this one — see LM.mosque above — so it never gets
          overwritten by the bake refit and always frames from the hand-placed anchor. h and r are
          framing choices, not measurements: r wide enough to hold all four corners in shot, h set
@@ -5267,6 +5268,7 @@ const DISTRICTS = [
          where collisions start. */
       { label:'Yas Marina',    osm:'Yas Marina Circuit',      x:-10, z: 18, h: 5, r:42 },
       { label:'W Abu Dhabi',   x:7.3, z:266.4, h: 8, r:30 },
+      { label:'Warner Bros. World', x:74.8, z:-26.3, h: 6, r:40 },
       { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
       { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
@@ -7546,6 +7548,8 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const capgate = kit.capitalGate ? kit.capitalGate(527.5, 715.2) : new THREE.Group();
   /* Qasr Al Hosn on its surveyed landmark (bake (-6580, -861) m, the 91 by 88 m footprint). */
   const hosn = kit.qasrAlHosn ? kit.qasrAlHosn(-506.9, -192.1, 0.18) : new THREE.Group();
+  /* Nation Towers on the published coordinates (24.4672 N, 54.3297 E), forty metres back from the Corniche shore. */
+  const nation = kit.nationTowers ? kit.nationTowers(-836.1, 28.1, 0.57) : new THREE.Group();
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7568,7 +7572,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -7585,7 +7589,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
@@ -7863,6 +7867,8 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (kit.seaWorldYas) built.push(kit.seaWorldYas(211.4, 11.9));
   /* The circuit's pit building and main grandstand on their surveyed footprints along the straight. */
   if (kit.yasCircuit) built.push(kit.yasCircuit(35.0, 230.7, 0.14, 37.2, 239.5));
+  /* Warner Bros. World on its surveyed footprint (713 by 694 m at bake (19122, -191) m, rot 1.25). */
+  if (kit.warnerBrosWorld) built.push(kit.warnerBrosWorld(74.8, -26.3, 1.25));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
