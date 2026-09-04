@@ -206,6 +206,13 @@
     transition:transform .26s cubic-bezier(.22,.9,.3,1),opacity .2s ease;
     pointer-events:none;padding:0 12px}
   #venueCard.on{transform:translateY(-50%);opacity:1;pointer-events:auto}
+  /* LIST MODE SITS BELOW THE RAIL (nav v209). A centred card is right for a single venue, but a
+     group list is tall, and centring a tall card pushed its top up under the app's island rail,
+     where the first rows hid behind the cards. In list mode the card hangs from 43vh instead —
+     just under the rail's caption — and the list caps so the card clears the bottom bar. */
+  #venueCard.list{top:43vh;transform:translateY(24px)}
+  #venueCard.list.on{transform:none}
+  #venueCard.list .vcList{max-height:calc(57vh - 200px)}
   #venueCard .vcInner{background:#1B1E22;border:1px solid rgba(255,255,255,.10);
     border-radius:16px;padding:14px 16px;box-shadow:0 10px 34px rgba(0,0,0,.55);
     max-width:460px;margin:0 auto;position:relative;font-family:Inter,sans-serif}
@@ -724,7 +731,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v208', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v209', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2162,6 +2169,7 @@ function zoomToPinCluster(pts){
 function showVenueCard(v){
   const card = document.getElementById('venueCard');
   if (!card) return;
+  card.classList.remove('list');
   activeVenue = v;
   const photo = document.getElementById('vcPhoto');
   if (photo){
@@ -2215,6 +2223,7 @@ function showGroupList(pts, title){
   document.getElementById('vcMeta').textContent = title ? (n + (n === 1 ? ' venue' : ' venues') + ' inside — pick one')
                                                         : 'Too close together to separate — pick one';
   document.getElementById('vcOpen').style.display = 'none';
+  card.classList.add('list');
   const list = document.getElementById('vcList');
   list.innerHTML = '';
   list.style.display = '';
@@ -2242,6 +2251,7 @@ function showGroupList(pts, title){
   card.classList.add('on');
 }
 function hideVenueCard(){
+  { const c = document.getElementById('venueCard'); if (c) c.classList.remove('list'); }
   const card = document.getElementById('venueCard');
   if (card) card.classList.remove('on');
   activeVenue = null;
