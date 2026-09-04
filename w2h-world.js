@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v284';
+export const BUILD = 'world v285';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5200,7 +5200,7 @@ const DISTRICTS = [
          two the shot needs, so Al Reem falls back to framing its coastline, which is honest:
          better a wide island than three labels stacked on its centre pretending to be venues. */
       { label:'Sky Tower',   osm:'Sky Tower',   x:  0, z:  0, h:16, r:36 },
-      { label:'Gate Towers', osm:'Gate Towers', x:-22, z: -8, h:16, r:36 },
+      { label:'Gate Towers', x:-3.3, z:-98.4, h:30, r:36 },   // on the kit; the survey has no name for it
     ] },
   /* AND SAADIYAT OUT BY EIGHT, for the same reason. Widening the skirt shifts which pair is
      tightest: Reem moving east fixed Corniche to Reem, and Al Maryah to Saadiyat then became the
@@ -7857,6 +7857,8 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* W Abu Dhabi over the circuit, on the nearest track segment to the hotel's coordinates
      (bake (18596, -2475) m, bearing 166 degrees). */
   if (kit.wAbuDhabi) built.push(kit.wAbuDhabi(7.3, 266.4, 2.897));
+  /* SeaWorld on its surveyed landmark (the 327 by 320 m footprint at bake (20188, -489) m). */
+  if (kit.seaWorldYas) built.push(kit.seaWorldYas(211.4, 11.9));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
@@ -7990,6 +7992,15 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-360, x1:-330, z0:288, z1:314 },   // Natural History Museum, 130 x 100 m plus a margin
   { x0:-322, x1:-290, z0:283, z1:310 },   // teamLab Phenomena, 190 x 140 m plus a margin
 ];
+/* ---------- AL REEM: GATE TOWERS (world v285) — on the survey's 256 by 50 m slab (bake
+   (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
+const reem = DISTRICTS.find(d => d.id === 'reem');
+KIT_ZONES[reem.id] = [{ x0:-24, x1:18, z0:-108, z1:-88 }];
+if (!NO_KIT && reem && kit.gateTowers){
+  const gt = kit.gateTowers(-3.3, -98.4, -0.57);
+  gt.position.y = GROUND;
+  reem.detail.add(gt);
+}
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
                                 ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim], ['naturalHistoryMuseum', LM_SAADIYAT.nhm],

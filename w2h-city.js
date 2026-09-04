@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v104';
+export const BUILD = 'city v105';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4339,11 +4339,67 @@ function wAbuDhabi(x0, z0, bearing){
   g.add(veil);
   return g;
 }
+
+/* GATE TOWERS (city v105) — three 66-storey towers on Al Reem joined at the top by a penthouse
+   bridge, the arch you see from the mainland. The survey holds them as one 256 by 50 m slab;
+   the kit splits it into the three towers, leans the outer two outward a little, and lays the
+   bridge across the top three floors. Pale stone and glass bands. */
+function gateTowers(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const H = 240 / M, W = 60 / M, D = 46 / M;
+  const mat = new THREE.MeshStandardMaterial({ color:0x6B7278, map:TEX_TOWER, roughness:0.5, metalness:0.3 });
+  mat.userData.duskColor = 0xD9D2C6; mat.userData.glassOverride = false;
+  /* TEX_TOWER is the night window sheet — dark with lit cells — so the day material goes without it. */
+  mat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE9E3D8, roughness:0.5, metalness:0.25 });
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  [-1, 0, 1].forEach((k, i) => {
+    const off = k * 96 / M;
+    const t = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), mat);
+    t.position.set(x0 + cs * off, H / 2, z0 - sn * off);
+    t.rotation.set(0, rot, k * 0.035);                          // the outer two lean out
+    if (i === 1) t.userData.hero = t.userData.kitName = 'gateTowers';
+    g.add(t);
+  });
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 14 / M, D * 1.05), saadKitMat(0x9AA3AA, 0xF1EDE5, 0.45, 0.35, 0xFFE0B0, 0.12));
+  bridge.position.set(x0, H - 7 / M, z0);
+  bridge.rotation.y = rot;
+  g.add(bridge);
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 3 / M, D * 1.15), saadKitMat(0xC9CED3, 0xFFFFFF, 0.5, 0.3));
+  arch.position.set(x0, H + 1.5 / M, z0);
+  arch.rotation.y = rot;
+  g.add(arch);
+  return g;
+}
+/* SEAWORLD YAS ISLAND — a round building 320 m across under five stacked shell tiers, each
+   stepping in, dark glass between them: from the air it is a pale layered disc, and that is the
+   whole identification. */
+function seaWorldYas(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  const tierMat = saadKitMat(0xD8D3C9, 0xF0ECE4, 0.8, 0.05);
+  const glassMat = saadKitMat(0x1F2A33, 0x2F3E4C, 0.25, 0.5);
+  const radii = [160, 135, 108, 80, 52], step = 9 / M;
+  let y = 0;
+  radii.forEach((r, i) => {
+    const gl = new THREE.Mesh(new THREE.CylinderGeometry((r - 4) / M, (r - 4) / M, step * 0.55, 48), glassMat);
+    gl.position.set(x0 + (i * 6) / M, y + step * 0.275, z0 - (i * 4) / M);
+    g.add(gl);
+    const tier = new THREE.Mesh(new THREE.CylinderGeometry(r / M, (r + 6) / M, step * 0.55, 48), tierMat);
+    tier.position.set(x0 + (i * 6) / M, y + step * 0.55 + step * 0.275, z0 - (i * 4) / M);
+    if (i === 0) tier.userData.hero = tier.userData.kitName = 'seaWorldYas';
+    g.add(tier);
+    y += step;
+  });
+  const crown = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), tierMat);
+  crown.scale.set(40 / M, 14 / M, 40 / M);
+  crown.position.set(x0 + 30 / M, y, z0 - 20 / M);
+  g.add(crown);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
-         capitalGate, wAbuDhabi };
+         capitalGate, wAbuDhabi, gateTowers, seaWorldYas };
 }
 
 
