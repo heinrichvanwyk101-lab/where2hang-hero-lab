@@ -705,7 +705,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v202', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v203', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2664,7 +2664,22 @@ if (/[?&]embed=1/.test(location.search)){
           (moved ? ', ' + moved + ' re-islanded' : '') + (dropped ? ', ' + dropped + ' off land' : '') +
           (offIsland ? ', ' + offIsland + ' not on ' + m.island : '');
         console.log(lastResultsDiag);
-        if (converted.length){
+        /* THE FLY-OUT WAS HERE (nav v203). Every set descended through the world view and then
+           framed the pins — right for a search that spans islands, wrong for the area rail, which
+           has just flown the camera to the island it names and only wants that island's venues
+           shown. So a set that names an island keeps the district shot the rail already composed:
+           the pins go up, the camera stays. setDistrict cleared the previous set synchronously on
+           its way in, so the order here is safe whatever the island's build is still waiting on. */
+        const railIsle = m.island && DISTRICTS.find(x => x.id === m.island);
+        if (converted.length && railIsle){
+          attractStop();
+          const glc = document.getElementById('gl');
+          if (glc) glc.classList.add('ready');
+          if (activeDistrict !== railIsle || state !== STATE.DISTRICT) setDistrict(railIsle);
+          resultPins = converted;
+          resultsLabel = m.label || railIsle.name;
+        }
+        else if (converted.length){
           attractStop();
           /* The canvas must be visible before this composes anything. setResultsReal is the exact
              message the blank-out was observed immediately after — it calls attractStop() and
@@ -4028,13 +4043,16 @@ const mapGesture = () => view === 'plan' || view === 'check';
 let panMode = false;
 {
   const panBtn = document.getElementById('panBtn'), camout = document.getElementById('camout');
-  if (panBtn) panBtn.addEventListener('click', () => {
-    panMode = !panMode;
-    panBtn.classList.toggle('on', panMode);
-    panBtn.setAttribute('aria-pressed', panMode ? 'true' : 'false');
+  const setPan = on => {
+    panMode = on;
+    if (panBtn){ panBtn.classList.toggle('on', panMode); panBtn.setAttribute('aria-pressed', panMode ? 'true' : 'false'); }
     if (camout) camout.classList.toggle('on', panMode);
-    orbit.on = true;
-  });
+  };
+  if (panBtn) panBtn.addEventListener('click', () => { setPan(!panMode); orbit.on = true; });
+  /* ?cam=1 — the debug address: the hand and the readout on from the first frame, so the world
+     can be opened on its own from GitHub Pages and a framing reported without finding a button
+     under the app's chrome. */
+  if (/[?&]cam=1/.test(location.search)) setPan(true);
 }
 /* THE NUMBERS A SCREENSHOT NEEDS TO BECOME A SHOT. Azimuth is the nav's own convention (the
    camera sits at target + (sin a, cos a) * horiz), so the angle printed here is the seaAngle to
@@ -4048,7 +4066,7 @@ function paintCamOut(){
   const d = activeDistrict;
   const tx = cur.target.x + orbit.panX, tz = cur.target.z + orbit.panZ;
   el.textContent =
-    (d ? d.id : 'world') + '  ' + view + '\n' +
+    B_NAV + '  ' + (d ? d.id : 'world') + '  ' + view + '\n' +
     'angle ' + deg.toFixed(0) + '\u00b0  dist ' + Math.round(cur.dist * orbit.zoom) +
     '  elev ' + Math.round(cur.elev) + '\n' +
     'zoom ' + orbit.zoom.toFixed(2) + '  lift ' + orbit.lift.toFixed(2) + '\n' +
@@ -5993,21 +6011,21 @@ function frame(){
      camera fell onto the target, spun, and climbed back out. Now the eye flies its straight line
      while distance and elevation ease between the shots and the azimuth turns the shortest way;
      the target is read back from those, so it can never come closer than the shots themselves. */
+  /* WHAT YOU LOOK AT SLIDES FROM ISLAND TO ISLAND (nav v203). v202 flew the eye straight and read
+     the target back, which left the camera staring at open sea for the middle of every move. The
+     target itself is eased now, so the view pans across the water from the island it was on to
+     the island it is going to; distance and elevation ease between the shots, and the azimuth
+     turns the shortest way at no more than 90 degrees a second — damping alone front-loads a
+     137-degree change of station at 270 degrees a second, which was the lurch. The actual
+     fly-out was never the easing: it was the results handler descending through the world view,
+     fixed in setResultsReal. */
   {
-    const gx = goal.target.x + Math.sin(goal.angle) * goal.dist, gz = goal.target.z + Math.cos(goal.angle) * goal.dist, gy = goal.elev;
-    const cx = cur.target.x + Math.sin(cur.angle) * cur.dist, cz = cur.target.z + Math.cos(cur.angle) * cur.dist, cy = cur.elev;
-    const nx = cx + (gx - cx) * e, ny = cy + (gy - cy) * e, nz = cz + (gz - cz) * e;
-    /* The turn is rate-limited as well as damped. Damping alone front-loads it — a 137-degree
-       change of station turns at 270 degrees a second in its first frames, which is the lurch
-       — so the head turns at most 90 degrees a second and finishes the turn as it arrives. */
+    cur.target.lerp(goal.target, e);
     const da = Math.atan2(Math.sin(goal.angle - cur.angle), Math.cos(goal.angle - cur.angle));
     const step = da * e, cap = (Math.PI / 2) * dt;
     cur.angle += Math.abs(step) > cap ? Math.sign(step) * cap : step;
     cur.dist  += (goal.dist - cur.dist) * e;
-    cur.elev  = ny;
-    cur.target.x = nx - Math.sin(cur.angle) * cur.dist;
-    cur.target.z = nz - Math.cos(cur.angle) * cur.dist;
-    cur.target.y += (goal.target.y - cur.target.y) * e;
+    cur.elev  += (goal.elev - cur.elev) * e;
   }
   cur.fov   += (goal.fov   - cur.fov)   * e;
 
