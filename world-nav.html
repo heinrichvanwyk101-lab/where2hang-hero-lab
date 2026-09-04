@@ -240,6 +240,21 @@
     border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
     border-radius:999px;backdrop-filter:blur(8px);cursor:pointer;padding:0}
   .tiltBtn.on{background:rgba(0,194,168,.92);color:#06241f;border-color:transparent}
+  /* PAN, IN THE LIT VIEWS TOO (nav v200). One finger orbits the diorama and there was no way to
+     slide the shot sideways outside Plan and Check, so a framing could be reported only as "not
+     this". The hand toggles one finger between orbit and pan; while it is on, the readout above it
+     carries the camera numbers, so a screenshot of a good framing is a framing that can be set. */
+  .panBtn{position:fixed;right:12px;bottom:66px;z-index:6;appearance:none;
+    width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(255,255,255,.16);background:rgba(16,22,28,.85);color:#E7EDF3;
+    border-radius:999px;backdrop-filter:blur(8px);cursor:pointer;padding:0}
+  .panBtn.on{background:rgba(0,194,168,.92);color:#06241f;border-color:transparent}
+  .camout{display:none;position:fixed;right:12px;bottom:114px;z-index:6;pointer-events:none;
+    font:600 10px/1.4 ui-monospace,monospace;color:rgba(255,224,150,.95);
+    text-shadow:0 1px 2px rgba(0,0,0,.9);white-space:pre;text-align:right;
+    background:rgba(6,10,13,.72);border-radius:6px;padding:5px 7px;
+    border:1px solid rgba(255,255,255,.08)}
+  .camout.on{display:block}
   /* SHOW ALL RESULTS — the way back out. Tapping pins walks the camera inward with no reverse
      gear: .back is hidden in embed mode, and each tap tightens the shot further. Sits left of
      the tilt button, same row, same visual language. Hidden entirely unless there's actually a
@@ -258,6 +273,8 @@
      same change or the buttons end up either buried again or floating with a gap above the
      composer. */
   body.hasChromeInset .allBtn, body.hasChromeInset .tiltBtn{bottom:calc(42vh + 18px)}
+  body.hasChromeInset .panBtn{bottom:calc(42vh + 66px)}
+  body.hasChromeInset .camout{bottom:calc(42vh + 114px)}
   .isle{position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;
     font:600 12px Inter,sans-serif;color:#DCE8F0;text-shadow:0 1px 8px rgba(0,0,0,.95);
     white-space:nowrap;opacity:0;transition:opacity .35s;letter-spacing:.04em}
@@ -419,6 +436,12 @@
 
 <button class="back" id="back">Back</button>
 <button class="allBtn" id="allBtn" aria-label="Show all results">All results</button>
+<div class="camout" id="camout"></div>
+<button class="panBtn" id="panBtn" aria-label="Pan with one finger" aria-pressed="false">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>
+  </svg>
+</button>
 <button class="tiltBtn" id="tiltBtn" aria-label="Tilt to top view">
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
     <rect x="4" y="4" width="16" height="16" rx="2"/>
@@ -679,7 +702,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v199', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v200', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3958,6 +3981,39 @@ canvas.addEventListener('pointerdown', e => {
    pinching, which is where I started, is unusable on a folded Fold — the fingers are two
    centimetres apart and every pan reads as a pinch. */
 const mapGesture = () => view === 'plan' || view === 'check';
+/* THE HAND TOGGLE. Declared here, before the pointer handlers that read it, and read only from
+   inside them, so there is no synchronous call site ahead of it. */
+let panMode = false;
+{
+  const panBtn = document.getElementById('panBtn'), camout = document.getElementById('camout');
+  if (panBtn) panBtn.addEventListener('click', () => {
+    panMode = !panMode;
+    panBtn.classList.toggle('on', panMode);
+    panBtn.setAttribute('aria-pressed', panMode ? 'true' : 'false');
+    if (camout) camout.classList.toggle('on', panMode);
+    orbit.on = true;
+  });
+}
+/* THE NUMBERS A SCREENSHOT NEEDS TO BECOME A SHOT. Azimuth is the nav's own convention (the
+   camera sits at target + (sin a, cos a) * horiz), so the angle printed here is the seaAngle to
+   pin, and the target is the island-space point the shot should aim at. Painted only while the
+   hand is on; the string is rebuilt every frame then, which is nothing next to the scene. */
+function paintCamOut(){
+  const el = document.getElementById('camout');
+  if (!el || !panMode) return;
+  const a = cur.angle + orbit.yaw;
+  const deg = ((a * 180 / Math.PI) % 360 + 360) % 360;
+  const d = activeDistrict;
+  const tx = cur.target.x + orbit.panX, tz = cur.target.z + orbit.panZ;
+  el.textContent =
+    (d ? d.id : 'world') + '  ' + view + '\n' +
+    'angle ' + deg.toFixed(0) + '\u00b0  dist ' + Math.round(cur.dist * orbit.zoom) +
+    '  elev ' + Math.round(cur.elev) + '\n' +
+    'zoom ' + orbit.zoom.toFixed(2) + '  lift ' + orbit.lift.toFixed(2) + '\n' +
+    'target ' + Math.round(tx) + ',' + Math.round(tz) +
+    '  pan ' + Math.round(orbit.panX) + ',' + Math.round(orbit.panZ) +
+    (d ? '\nisland ' + Math.round(d.x) + ',' + Math.round(d.z) + '  r ' + Math.round(d.r) : '');
+}
 
 canvas.addEventListener('pointermove', e => {
   if (!pointers.has(e.pointerId)) return;
@@ -4007,7 +4063,7 @@ canvas.addEventListener('pointermove', e => {
     return;
   }
 
-  if (mapGesture()){
+  if (mapGesture() || panMode){
     /* PAN, IN WORLD UNITS RATHER THAN PIXELS.
 
        The conversion is the height of the view frustum at the target distance divided by the
@@ -5998,6 +6054,7 @@ function frame(){
     elev,
     tz + Math.cos(a) * horiz
   );
+  if (panMode) paintCamOut();
   /* THE LAST LINE OF DEFENCE, AND IT IS CHEAP. One NaN anywhere upstream — an aspect, a radius,
      a lerp against an Infinity — propagates into camera.position and every frame after it draws
      nothing. Three comparisons per frame buys a scene that recovers rather than one that is black
