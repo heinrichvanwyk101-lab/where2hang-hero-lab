@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v279';
+export const BUILD = 'world v280';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5221,7 +5221,14 @@ const DISTRICTS = [
          lookup to fix, not a name to change here, so it stays declared and reads as a miss until
          it resolves. Saadiyat Beach was never asked for; Zayed National Museum and Berklee both
          return and were going unused. */
-      { label:'Louvre Abu Dhabi', osm:'Louvre Abu Dhabi',      x: 18, z: 14, h: 6, r:40 },
+      /* THE CULTURAL DISTRICT ANCHORS SIT ON THE KIT (world v280): the survey has no Louvre
+         footprint (its platform is in the water off the drawn coast) and nothing at all for the
+         three newer museums, so these are placed, not resolved. Island units from the extent
+         centre; see LM_SAADIYAT. */
+      { label:'Louvre Abu Dhabi',        x:-478.8, z:172.6, h: 5, r:34 },
+      { label:'Guggenheim Abu Dhabi',    x:-480.4, z: 74.7, h: 8, r:30 },
+      { label:'Natural History Museum',  x:-328.2, z:199.7, h: 5, r:26 },
+      { label:'teamLab Phenomena',       x:-243.2, z:194.0, h: 3, r:26 },
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
@@ -7933,6 +7940,39 @@ if (!NO_KIT && kit.rahaMall){
   const mall = kit.rahaMall(LM_RAHA.rahaMall.x, LM_RAHA.rahaMall.z);
   mall.position.y = GROUND;
   raha.detail.add(mall);
+}
+
+/* ---------- SAADIYAT CULTURAL DISTRICT (world v280) ------------------------------------------
+   Five museums placed as one composition. Zayed National Museum sits on its surveyed landmark
+   (-1351, 4846 m); the Louvre on its published coordinates, 840 m west and in the water off the
+   drawn coast, on its own platform; the Guggenheim at the peninsula's tip; the Natural History
+   Museum and teamLab east of the Zayed, between it and the Manarat. Island units from the
+   extent centre (x - 1547.3) / 7.8, -(y - 6233) / 7.8. The kit zones clear the generated fabric
+   and the survey's flat parcels from under them. */
+const saadiyat = DISTRICTS.find(d => d.id === 'saadiyat');
+const LM_SAADIYAT = {
+  louvre:     { x:-478.8, z:172.6 },
+  znm:        { x:-371.6, z:177.8 },
+  guggenheim: { x:-480.4, z: 74.7 },
+  nhm:        { x:-328.2, z:199.7 },
+  teamlab:    { x:-243.2, z:194.0 },
+};
+KIT_ZONES[saadiyat.id] = [
+  { x0:-497, x1:-460, z0:158, z1:187 },   // Louvre platform, 260 x 210 m
+  { x0:-388, x1:-355, z0:167, z1:189 },   // Zayed National Museum mound, 220 x 150 m
+  { x0:-491, x1:-470, z0: 65, z1: 85 },   // Guggenheim, 140 x 100 m plus cones
+  { x0:-336, x1:-320, z0:194, z1:206 },   // Natural History Museum
+  { x0:-253, x1:-233, z0:187, z1:201 },   // teamLab Phenomena
+];
+if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
+  for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
+                                ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim], ['naturalHistoryMuseum', LM_SAADIYAT.nhm],
+                                ['teamLabPhenomena', LM_SAADIYAT.teamlab]]){
+    if (!kit[fn]) continue;
+    const m = kit[fn](at.x, at.z, bear);
+    m.position.y = GROUND;
+    saadiyat.detail.add(m);
+  }
 }
 
 /* ===========================================================================

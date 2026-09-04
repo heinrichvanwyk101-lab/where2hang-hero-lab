@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v97';
+export const BUILD = 'city v98';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3957,9 +3957,172 @@ function aldarHQ(x0, z0){
   return g;
 }
 
+
+/* =============================================================================================
+   SAADIYAT CULTURAL DISTRICT (city v98) — five museums as one composition.
+
+   Positions come from the survey where it has them (Zayed National Museum, Manarat) and from the
+   published coordinates where it does not (the Louvre sits in the water off a coastline the
+   survey draws without its platform; the Guggenheim is a site). Each piece is a silhouette first:
+   the Louvre's flat perforated dome over white boxes on a platform in the sea, the five falcon
+   wings of the Zayed National Museum on their mound, the Guggenheim's cluster of leaning cones,
+   the Natural History Museum's stack of rounded rock, teamLab's low pale blob. Materials carry
+   duskColor and dayMats on the material, the kit's convention. All dimensions in metres over M. */
+function saadKitMat(dusk, day, rough, metal, emis, ei){
+  const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough, metalness:metal || 0 });
+  if (emis !== undefined){ m.emissive = new THREE.Color(emis); m.emissiveIntensity = ei; }
+  m.userData.duskColor = dusk;
+  m.userData.glassOverride = false;
+  m.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, roughness:rough, metalness:metal || 0 });
+  return m;
+}
+function louvreAbuDhabi(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  const R_DOME = 90 / M, SAG = 30 / M, RIM_Y = 9 / M, PL_H = 3 / M;
+  /* THE PLATFORM IN THE SEA. The museum stands on its own plinth surrounded by water; the survey
+     coastline stops at the old shore, so the plinth is the land here. */
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(260 / M, PL_H, 210 / M), saadKitMat(0xCFC6B4, 0xE2DACB, 0.9, 0));
+  plinth.position.set(x0, PL_H / 2, z0);
+  g.add(plinth);
+  /* THE WHITE BOXES — the galleries, a loose medina of cubes under the dome. */
+  const boxMat = saadKitMat(0xE6E1D8, 0xF4F1EA, 0.85, 0);
+  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  for (let i = 0; i < 26; i++){
+    const w = (9 + rnd() * 26) / M, d = (9 + rnd() * 22) / M, h = (7 + rnd() * 7) / M;
+    const a = rnd() * 6.2832, rr = rnd() * 70 / M;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxMat);
+    m.position.set(x0 + Math.cos(a) * rr, PL_H + h / 2, z0 + Math.sin(a) * rr);
+    m.rotation.y = rnd() * 0.6 - 0.3;
+    g.add(m);
+  }
+  /* THE DOME: a shallow cap, 180 m across, 30 m of rise, perforated. A sphere cap of the radius
+     that gives that sag; the texture carries the layered star lattice as dark cells on silver,
+     and the underside glows warm at night — the rain of light. */
+  const Rs = (R_DOME * R_DOME + SAG * SAG) / (2 * SAG);
+  const theta = Math.acos((Rs - SAG) / Rs);
+  const tex = (() => {
+    const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#CDD1D5'; c.fillRect(0, 0, N, N);
+    c.fillStyle = 'rgba(52,58,64,0.45)';
+    const step = N / 24;
+    for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){
+      const cx = x * step + step / 2 + ((y % 2) ? step / 2 : 0), cy = y * step + step / 2;
+      c.beginPath();
+      for (let k = 0; k < 8; k++){ const ang = k * Math.PI / 4, rr = (k % 2 ? 0.11 : 0.26) * step; c.lineTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr); }
+      c.closePath(); c.fill();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 4);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  })();
+  const domeMat = new THREE.MeshStandardMaterial({ color:0x8E949A, map:tex, roughness:0.5, metalness:0.55, side:THREE.DoubleSide,
+                                                   emissive:0xFFC98A, emissiveIntensity:0.18 });
+  domeMat.userData.duskColor = 0xC9CDD1; domeMat.userData.glassOverride = false;
+  domeMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xDADEE2, map:tex, roughness:0.5, metalness:0.5, side:THREE.DoubleSide });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(Rs, 72, 20, 0, Math.PI * 2, 0, theta), domeMat);
+  dome.position.set(x0, PL_H + RIM_Y - Rs * Math.cos(theta), z0);
+  dome.userData.hero = true;
+  g.add(dome);
+  /* THE CAUSEWAY — the platform joins the shore to the east by a promenade deck; without it the
+     museum floats off the coast. */
+  const way = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 2 / M, 36 / M), saadKitMat(0xCFC6B4, 0xE2DACB, 0.9, 0));
+  way.position.set(x0 + (130 + 85) / M, 1 / M, z0 + 20 / M);
+  g.add(way);
+  const colMat = saadKitMat(0x9A9C9E, 0xB8BABC, 0.6, 0.3);
+  for (const [dx, dz] of [[-40, -30], [40, -30], [-40, 34], [40, 34]]){
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(1.6 / M, 1.6 / M, RIM_Y, 8), colMat);
+    col.position.set(x0 + dx / M, PL_H + RIM_Y / 2, z0 + dz / M);
+    g.add(col);
+  }
+  return g;
+}
+function zayedNationalMuseum(x0, z0, bearing){
+  const g = new THREE.Group(), M = M_PER_U;
+  const rot = bearing || 0;
+  /* THE MOUND — a landscaped berm the galleries sit inside, 220 by 150 m, 24 m high. */
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), saadKitMat(0xC4B48E, 0xD6C8A4, 0.95, 0));
+  mound.scale.set(110 / M, 24 / M, 75 / M);
+  mound.position.set(x0, 0, z0);
+  mound.rotation.y = rot;
+  g.add(mound);
+  /* THE FIVE WINGS. Feathers of steel, the tallest 123 m, in a row along the mound, each a lathe
+     with the feather's swell two-thirds of the way up, pressed thin and leaning a little. */
+  const wingMat = saadKitMat(0x8C7C60, 0xB9A47C, 0.32, 0.8, 0xFFE0B0, 0.05);
+  const heights = [123, 110, 98, 88, 76];
+  const spacing = 40 / M;
+  heights.forEach((hm, i) => {
+    const H = hm / M;
+    const prof = [];
+    for (let k = 0; k <= 12; k++){
+      const t = k / 12;
+      const half = (t < 0.62 ? 7 + 9 * (t / 0.62) : 16 - 15.2 * ((t - 0.62) / 0.38)) / M;
+      prof.push(new THREE.Vector2(Math.max(0.2 / M, half), t * H));
+    }
+    const wing = new THREE.Mesh(new THREE.LatheGeometry(prof, 18), wingMat);
+    wing.scale.set(1, 1, 0.3);
+    const off = (i - 2) * spacing;
+    wing.position.set(x0 + Math.cos(rot) * off, 14 / M, z0 + Math.sin(rot) * off);
+    /* Broad face along the row, so the fan reads from the sea and the road, not edge-on. */
+    wing.rotation.set(0, rot, 0.14 - i * 0.02);
+    if (i === 0) wing.userData.hero = true;
+    g.add(wing);
+  });
+  return g;
+}
+function guggenheimAbuDhabi(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  const base = new THREE.Mesh(new THREE.BoxGeometry(140 / M, 24 / M, 100 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
+  base.position.set(x0, 12 / M, z0);
+  base.rotation.y = 0.35;
+  g.add(base);
+  /* THE CONES — eleven of them, no two alike, leaning off a low mass: the Gehry silhouette. */
+  const cMat = [saadKitMat(0xD8D3CB, 0xEDE9E2, 0.8, 0.05), saadKitMat(0xB6C3CE, 0xD0DCE6, 0.55, 0.25), saadKitMat(0xC9C2B6, 0xE0DACF, 0.85, 0)];
+  let seed = 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  for (let i = 0; i < 11; i++){
+    const a = i / 11 * 6.2832 + rnd() * 0.4, rr = (i % 3 === 0 ? 18 : 42 + rnd() * 16) / M;
+    const H = (28 + rnd() * 32) / M, rb = (8 + rnd() * 8) / M, rt = rb * (0.25 + rnd() * 0.3);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, H, 12, 1, false), cMat[i % 3]);
+    cone.position.set(x0 + Math.cos(a) * rr, 24 / M + H / 2 - 2 / M, z0 + Math.sin(a) * rr);
+    cone.rotation.set((rnd() - 0.5) * 0.4, rnd() * 6.2832, (rnd() - 0.5) * 0.4);
+    if (i === 1) cone.userData.hero = true;
+    g.add(cone);
+  }
+  return g;
+}
+function naturalHistoryMuseum(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  /* ROCK — five rounded strata blocks stacked and offset, sandstone, low and heavy. */
+  const rockMat = saadKitMat(0xB9A382, 0xD2BE9B, 0.95, 0);
+  const blocks = [[95, 30, 62, 0, 0, 0.1], [72, 26, 52, 22, 26, -0.25], [58, 24, 46, -26, 22, 0.35], [56, 40, 40, 8, -18, 0.6], [44, 20, 34, -30, -16, -0.5]];
+  blocks.forEach(([w, h, d, dx, dz, r], i) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), rockMat);
+    m.scale.set(w / 2 / M, h / 2 / M, d / 2 / M);
+    m.position.set(x0 + dx / M, h / 2 / M * 0.85, z0 + dz / M);
+    m.rotation.y = r;
+    if (i === 3) m.userData.hero = true;
+    g.add(m);
+  });
+  return g;
+}
+function teamLabPhenomena(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  const mat = saadKitMat(0xE3D9C8, 0xF0E9DC, 0.9, 0, 0xFFE2C0, 0.12);
+  const blobs = [[130, 20, 95, 0, 0], [92, 16, 72, 40, 24], [66, 12, 56, -44, -20]];
+  blobs.forEach(([w, h, d, dx, dz], i) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), mat);
+    m.scale.set(w / 2 / M, h / M, d / 2 / M);
+    m.position.set(x0 + dx / M, 0, z0 + dz / M);
+    if (i === 0) m.userData.hero = true;
+    g.add(m);
+  });
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
-         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall };
+         hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
+         louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena };
 }
 
 
