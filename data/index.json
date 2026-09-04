@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-03T17:53:23.505Z",
+ "generated": "2026-09-04T01:02:54.354Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -10816,14 +10816,14 @@
      "y": 4815.5
     }
    },
-   "bytes": 625398,
+   "bytes": 623037,
    "counts": {
     "outline": 408,
     "landmasses": 1,
     "roads": 1556,
-    "buildings": 1839,
+    "buildings": 1826,
     "inBox": 2597,
-    "withHeight": 500,
+    "withHeight": 499,
     "parks": 94,
     "paths": 87,
     "plazas": 1,
@@ -10834,7 +10834,7 @@
     "beaches": 6,
     "hardEdge": 38,
     "parking": 59,
-    "withVenues": 55
+    "withVenues": 54
    }
   },
   {
@@ -12727,12 +12727,12 @@
      "y": -3306.2
     }
    },
-   "bytes": 1191785,
+   "bytes": 1183838,
    "counts": {
     "outline": 462,
     "landmasses": 1,
     "roads": 2528,
-    "buildings": 3937,
+    "buildings": 3894,
     "inBox": 5673,
     "withHeight": 32,
     "parks": 351,
@@ -12745,7 +12745,7 @@
     "beaches": 7,
     "hardEdge": 86,
     "parking": 118,
-    "withVenues": 84
+    "withVenues": 82
    }
   },
   {
