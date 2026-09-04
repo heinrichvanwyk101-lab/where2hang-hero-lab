@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v283';
+export const BUILD = 'world v284';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4980,6 +4980,7 @@ const DISTRICTS = [
       { label:'Fairmont Marina Residences', osm:'Fairmont Marina Residences', x:LM.fairmont.x, z:LM.fairmont.z, h: 10, r:16 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
       { label:'ADNOC HQ',        osm:'ADNOC Headquarters', x: LM.adnoc.x, z: LM.adnoc.z, h:26, r:22 },
+      { label:'Capital Gate', x:527.5, z:715.2, h:20, r:26 },
       /* No osm match will ever come back for this one — see LM.mosque above — so it never gets
          overwritten by the bake refit and always frames from the hand-placed anchor. h and r are
          framing choices, not measurements: r wide enough to hold all four corners in shot, h set
@@ -5265,6 +5266,7 @@ const DISTRICTS = [
          bake's table too; it is held back only to keep the label count at five, which is already
          where collisions start. */
       { label:'Yas Marina',    osm:'Yas Marina Circuit',      x:-10, z: 18, h: 5, r:42 },
+      { label:'W Abu Dhabi',   x:7.3, z:266.4, h: 8, r:30 },
       { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
       { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
@@ -7540,6 +7542,8 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const qasr   = kit.qasrAlWatan(LM.qasr.x, LM.qasr.z);
   const marina = kit.marinaMall(LM.marina.x, LM.marina.z);
   const fairmont = kit.fairmontMarina(LM.fairmont.x, LM.fairmont.z);
+  /* Capital Gate on its surveyed footprint (72 x 49 m, 160 m; bake (1488, -7937) m). */
+  const capgate = kit.capitalGate ? kit.capitalGate(527.5, 715.2) : new THREE.Group();
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7562,7 +7566,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -7579,7 +7583,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
@@ -7850,6 +7854,9 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      suppressed, which is what every other landmark in this function does and what this one never
      did. Its scale is corrected in w2h-city.js; it was 25 per cent oversized. */
 
+  /* W Abu Dhabi over the circuit, on the nearest track segment to the hotel's coordinates
+     (bake (18596, -2475) m, bearing 166 degrees). */
+  if (kit.wAbuDhabi) built.push(kit.wAbuDhabi(7.3, 266.4, 2.897));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

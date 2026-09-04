@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v103';
+export const BUILD = 'city v104';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4237,10 +4237,113 @@ function teamLabPhenomena(x0, z0){
   });
   return g;
 }
+
+/* =============================================================================================
+   CAPITAL GATE (city v104) — the leaning tower at ADNEC, 160 m, 18 degrees off vertical, the
+   easiest silhouette in the city to name. An elliptical shaft that narrows as it rises, every
+   vertex pushed sideways by the square of its height so the lean grows with the height and the
+   base stays where the survey puts it (72 by 49 m, 160 m). Blue glass in a white diagrid. */
+function capitalGate(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  const H = 160 / M, LEAN = 33 / M;
+  const tex = (() => {
+    const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#3B72B8'; c.fillRect(0, 0, N, N);
+    c.strokeStyle = 'rgba(240,244,247,0.95)'; c.lineWidth = 9;
+    const step = N / 6;
+    for (let k = -8; k <= 14; k++){
+      c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step + N * 0.577, N); c.stroke();
+      c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step - N * 0.577, N); c.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 6);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  })();
+  const glass = new THREE.MeshStandardMaterial({ color:0x2F3E52, map:tex, roughness:0.22, metalness:0.45, emissive:0xFFFFFF, emissiveMap:tex, emissiveIntensity:0.18 });
+  glass.userData.glassOverride = true; glass.userData.duskColor = 0xCFDCEC;
+  glass.userData.duskRough = 0.2; glass.userData.duskMetal = 0.4; glass.userData.duskEnv = 1.3;
+  glass.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xFFFFFF, map:tex, roughness:0.2, metalness:0.35, envMapIntensity:1.0 });
+  const geo = new THREE.CylinderGeometry(1, 1, H, 36, 24, false);
+  const pos = geo.attributes.position;
+  for (let v = 0; v < pos.count; v++){
+    const y = pos.getY(v), t = (y + H / 2) / H;                  // 0 at the base, 1 at the top
+    const ax = (25 - 6 * t) / M, az = (17.5 - 4.5 * t) / M;       // the ellipse narrows as it rises
+    pos.setX(v, pos.getX(v) * ax + LEAN * t * t);
+    pos.setZ(v, pos.getZ(v) * az);
+  }
+  pos.needsUpdate = true; geo.computeVertexNormals();
+  const tower = new THREE.Mesh(geo, glass);
+  tower.position.set(x0, H / 2, z0);
+  tower.rotation.y = 0.60 + Math.PI / 2;                          // the survey's rotation; the lean runs north-east
+  tower.userData.hero = true; tower.userData.kitName = 'capitalGate';
+  g.add(tower);
+  /* THE SPLASH — the wave of sunscreen that wraps the lower half on the south side. */
+  const splashMat = saadKitMat(0xC9CED3, 0xEEF1F3, 0.5, 0.3);
+  const splash = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12, 0, Math.PI, 0.9, 1.0), splashMat);
+  splash.scale.set(31 / M, 70 / M, 24 / M);
+  splash.position.set(x0, 52 / M, z0);
+  splash.rotation.y = 0.60 + Math.PI / 2;
+  g.add(splash);
+  const podium = new THREE.Mesh(new THREE.BoxGeometry(96 / M, 8 / M, 64 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
+  podium.position.set(x0 + 8 / M, 4 / M, z0);
+  podium.rotation.y = 0.60;
+  g.add(podium);
+  return g;
+}
+/* W ABU DHABI — the hotel over the Yas Marina Circuit: two blocks either side of the track, a
+   bridge between them, and the grid-shell veil draped over the lot, lit in colour at night. The
+   veil is an open lattice, like the Louvre's dome: an alpha-tested diamond grid on a stretched
+   hemisphere, glowing violet through the cells after dark. Bearing is the track's own. */
+function wAbuDhabi(x0, z0, bearing){
+  const g = new THREE.Group(), M = M_PER_U;
+  const rot = bearing || 0;
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const at = (ax, az) => [x0 + ax * cs + az * sn, z0 - ax * sn + az * cs];
+  const blockMat = saadKitMat(0x9AA3AA, 0xE4E8EB, 0.5, 0.3, 0xFFE0B0, 0.10);
+  for (const side of [-1, 1]){
+    const [bx, bz] = at(0, side * 40 / M);
+    const blk = new THREE.Mesh(new THREE.BoxGeometry(100 / M, 46 / M, 34 / M), blockMat);
+    blk.position.set(bx, 23 / M, bz);
+    blk.rotation.y = rot;
+    g.add(blk);
+  }
+  const [brx, brz] = at(10 / M, 0);
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(26 / M, 8 / M, 50 / M), blockMat);
+  bridge.position.set(brx, 40 / M, brz);
+  bridge.rotation.y = rot;
+  g.add(bridge);
+  const lat = (() => {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#000'; c.fillRect(0, 0, N, N);
+    c.strokeStyle = '#FFF'; c.lineWidth = 10;
+    for (let k = -4; k <= 8; k++){
+      c.beginPath(); c.moveTo(k * 64, 0); c.lineTo(k * 64 + N, N); c.stroke();
+      c.beginPath(); c.moveTo(k * 64, 0); c.lineTo(k * 64 - N, N); c.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 4); t.anisotropy = 8;
+    return t;
+  })();
+  const veilMat = new THREE.MeshStandardMaterial({ color:0x8E96A0, alphaMap:lat, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.4, metalness:0.6,
+                                                   emissive:0x7A5CFF, emissiveIntensity:0.55 });
+  veilMat.userData.duskColor = 0xD9DEE3; veilMat.userData.glassOverride = false;
+  veilMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE9ECEF, alphaMap:lat, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.4, metalness:0.5 });
+  const veil = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2), veilMat);
+  veil.scale.set(118 / M, 36 / M, 66 / M);
+  veil.position.set(x0, 42 / M, z0);
+  veil.rotation.y = rot;
+  veil.userData.hero = true; veil.userData.kitName = 'wAbuDhabi';
+  g.add(veil);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
-         louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena };
+         louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
+         capitalGate, wAbuDhabi };
 }
 
 
