@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v113';
+export const BUILD = 'city v114';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3943,19 +3943,23 @@ function rahaMall(x0, z0){
 
   const stoneMat = new THREE.MeshStandardMaterial({ color:0x6E5A55, roughness:0.9 });
   stoneMat.userData.glassOverride = false;
+  stoneMat.userData.nightAlbedo = 1.5;   // stays pink at night instead of lifting to white (city v114)
   stoneMat.userData.duskColor = 0xC9A79C;
   stoneMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE0BDB2, roughness:0.9 });
 
   const paleMat = new THREE.MeshStandardMaterial({ color:0x7A6A62, roughness:0.85 });
   paleMat.userData.glassOverride = false;
+  paleMat.userData.nightAlbedo = 1.6;
   paleMat.userData.duskColor = 0xE4D3C8;
   paleMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF0E2D6, roughness:0.85 });
 
   /* THE TEAL. This is the only saturated colour on the building and it is what the eye locks
      onto, so it is carried through all three views exactly as Aldar HQ's blue-green is. */
   const glassMat = new THREE.MeshStandardMaterial({
-    color:0x0C2A2C, roughness:0.25, metalness:0.30, envMapIntensity:1.2 });
+    color:0x0C2A2C, roughness:0.25, metalness:0.30, envMapIntensity:1.2,
+    emissive:0x2E9296, emissiveIntensity:0.55 });   // the arches glow teal at night: the mall's identity after dark
   glassMat.userData.duskColor = 0x2E9296;
+  glassMat.userData.nightAlbedo = 1.0;
   glassMat.userData.duskRough = 0.24; glassMat.userData.duskMetal = 0.26;
   glassMat.userData.duskEnv = 1.5;
   glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
@@ -4150,11 +4154,17 @@ function aldarHQ(x0, z0){
    wings of the Zayed National Museum on their mound, the Guggenheim's cluster of leaning cones,
    the Natural History Museum's stack of rounded rock, teamLab's low pale blob. Materials carry
    duskColor and dayMats on the material, the kit's convention. All dimensions in metres over M. */
-function saadKitMat(dusk, day, rough, metal, emis, ei){
+function saadKitMat(dusk, day, rough, metal, emis, ei, nightAlb){
   const m = new THREE.MeshStandardMaterial({ color:dusk, roughness:rough, metalness:metal || 0 });
   if (emis !== undefined){ m.emissive = new THREE.Color(emis); m.emissiveIntensity = ei; }
   m.userData.duskColor = dusk;
   m.userData.glassOverride = false;
+  /* NIGHT ALBEDO (city v114). The night view multiplies every non-glass material's base colour
+     by five, because the city's own stock carries near-black base colours that need it. This
+     helper's base colour is the DUSK tone, already light, so five times it saturated to white:
+     SeaWorld's tiers, the Louvre's rim, the circuit canopy and the Galleria roof all rendered as
+     white blobs at night. 0.42 of the dusk tone lands where the lifted city stock lands. */
+  m.userData.nightAlbedo = nightAlb != null ? nightAlb : 0.42;
   m.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, roughness:rough, metalness:metal || 0 });
   return m;
 }
@@ -4225,8 +4235,9 @@ function louvreAbuDhabi(x0, z0){
   for (const [rot, radius, night, day] of caps){
     const t = latticeTex(rot);
     const mat = new THREE.MeshStandardMaterial({ color:night, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.5,
-                                                 emissive:0xFFD9A0, emissiveIntensity:0.10 });
+                                                 emissive:0xFFD9A0, emissiveIntensity:0.30 });   // lit from beneath at night (city v114)
     mat.userData.duskColor = day; mat.userData.glassOverride = false;
+    mat.userData.nightAlbedo = 0.55;   // the lattice reads as lines only if it is not blown to white
     mat.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.45 });
     const th = Math.acos((radius - (SAG - (Rs - radius))) / radius);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 24, 0, Math.PI * 2, 0, th), mat);
@@ -4558,7 +4569,7 @@ function gateTowers(x0, z0, rot){
 function seaWorldYas(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
   const tierMat = saadKitMat(0xD8D3C9, 0xF0ECE4, 0.8, 0.05);
-  const glassMat = saadKitMat(0x1F2A33, 0x2F3E4C, 0.25, 0.5);
+  const glassMat = saadKitMat(0x1F2A33, 0x2F3E4C, 0.25, 0.5, 0xBFD8EA, 0.22, 1.0);   // the glass bands glow at night
   const radii = [160, 135, 108, 80, 52], step = 9 / M;
   let y = 0;
   radii.forEach((r, i) => {
@@ -5173,24 +5184,36 @@ function mamshaSaadiyat(){
 function yasBayWaterfront(){
   const g = new THREE.Group(), M = M_PER_U;
   const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), white = saadKitMat(0xE2E0DA, 0xF4F2EC, 0.8, 0);
-  const glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3), canopy = saadKitMat(0xD9C9A6, 0xEFE3C6, 0.7, 0);
-  const umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  /* The pier's restaurants are the lit strip of Yas Bay after dark: warm emissive on the
+     pavilion glass and the canopies so the promontory reads at night (city v114). */
+  const pavGlass = saadKitMat(0x3A3A2E, 0x5C7A8C, 0.3, 0.3, 0xFFC878, 0.45, 1.0);
+  const canopy = saadKitMat(0xD9C9A6, 0xEFE3C6, 0.7, 0, 0xFFD9A0, 0.18, 0.8);
+  const umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0, 0xFFE4B8, 0.12, 0.9);
   const DECK = 1.4 / M;
-  // PIER71: ten glass pavilions in two rows down the promontory, each under a cream canopy on
-  // posts, with umbrellas on the water side; a paved spine between the rows.
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 0.3 / M, 150 / M), pave); spine.position.set(-27.5, DECK + 0.15 / M, 415); g.add(spine);
+  /* PIER71: ten glass pavilions in two rows down the promontory, each under a cream canopy on
+     posts, with umbrellas on the water side; a paved spine between the rows. ALIGNED TO THE
+     PROMONTORY (city v114): the spit runs at 1.45 rad from +x in island units (outline
+     (-40,408)->(-35,428) and (-27,404)->(-27,426)); the first pass laid the rows along +z and
+     they sat askew against the deck, which is turned to the same axis in w2h-world.js. */
+  const PA = 1.45, at = _placeRot(-31.5, 415, -PA), PR = -PA;
+  const [sx, sz] = at(0, 0);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(150 / M, 0.3 / M, 6 / M), pave); spine.position.set(sx, DECK + 0.15 / M, sz); spine.rotation.y = PR; g.add(spine);
   const palms = [];
   for (let i = 0; i < 5; i++){
-    const z = 406 + i * 4.4;
-    [[-31.5, -1], [-23.5, 1]].forEach(([x, side], k) => {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(18 / M, 5.5 / M, 13 / M), glassD);
-      b.position.set(x, DECK + 2.75 / M, z); if (i === 2 && k === 0) b.userData.hero = b.userData.kitName = 'yasBayWaterfront'; g.add(b);
-      const c = new THREE.Mesh(new THREE.BoxGeometry(24 / M, 0.5 / M, 18 / M), canopy); c.position.set(x + side * 0.4, DECK + 6.2 / M, z); g.add(c);
-      for (const [ux, uz] of [[side * 2.6, -1.2], [side * 2.6, 1.2], [side * 3.4, 0]]){
-        const u = new THREE.Mesh(new THREE.CylinderGeometry(2 / M, 2 / M, 0.3 / M, 10), umbrella); u.position.set(x + ux, DECK + 2.6 / M, z + uz); g.add(u);
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15 / M, 0.15 / M, 2.6 / M, 6), canopy); pole.position.set(x + ux, DECK + 1.3 / M, z + uz); g.add(pole);
+    const ax = (i - 2) * 34 / M;
+    [[-3.6, -1], [3.6, 1]].forEach(([azU, side], k) => {
+      const [px, pz] = at(ax, azU);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(13 / M, 5.5 / M, 18 / M), pavGlass);
+      b.position.set(px, DECK + 2.75 / M, pz); b.rotation.y = PR; if (i === 2 && k === 0) b.userData.hero = b.userData.kitName = 'yasBayWaterfront'; g.add(b);
+      const [cx, cz] = at(ax, azU + side * 0.4);
+      const c = new THREE.Mesh(new THREE.BoxGeometry(18 / M, 0.5 / M, 24 / M), canopy); c.position.set(cx, DECK + 6.2 / M, cz); c.rotation.y = PR; g.add(c);
+      for (const [uxU, uzU] of [[-1.2, side * 2.6], [1.2, side * 2.6], [0, side * 3.4]]){
+        const [ux, uz] = at(ax + uxU, azU + uzU);
+        const u = new THREE.Mesh(new THREE.CylinderGeometry(2 / M, 2 / M, 0.3 / M, 10), umbrella); u.position.set(ux, DECK + 2.6 / M, uz); g.add(u);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15 / M, 0.15 / M, 2.6 / M, 6), canopy); pole.position.set(ux, DECK + 1.3 / M, uz); g.add(pole);
       }
-      palms.push([x, z + 2.2]);
+      palms.push(at(ax + 2.2, azU));
     });
   }
   // THE BAY PROMENADE: a paved band one unit inside the shore, from the Hilton round past the

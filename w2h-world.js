@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v292';
+export const BUILD = 'world v293';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7898,7 +7898,7 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
-  if (kit.yasBayPier) built.push(kit.yasBayPier(-27.3, 412.9, Math.PI / 2));
+  if (kit.yasBayPier) built.push(kit.yasBayPier(-31.5, 415.0, 1.45));   // world v293: down the spit's own axis
   if (kit.yasBayWaterfront) built.push(kit.yasBayWaterfront());
   for (const o of built){
     o.position.y = GROUND;
