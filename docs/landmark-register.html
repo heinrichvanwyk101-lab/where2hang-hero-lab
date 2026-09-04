@@ -1,0 +1,164 @@
+<title>Abu Dhabi Landmark Register</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#F4EFE4; --paper:#FBF8F1; --ink:#1E2A32; --ink2:#55636D; --rule:#DDD3BF;
+    --teal:#0D7F71; --teal-ink:#0A5F55; --teal-bg:#D9F0EA;
+    --gold:#B8912F; --gold-bg:#F5E7C1; --gold-ink:#6E5410;
+    --red:#B4472F; --red-bg:#F6DCD3; --red-ink:#7A2C1A;
+    --water:#B9CFD4;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#141B20; --paper:#1B242B; --ink:#E8E4DA; --ink2:#A2ACB3; --rule:#2E3A43;
+      --teal:#3DD3BD; --teal-ink:#BFF1E8; --teal-bg:#123B36;
+      --gold:#E1B84F; --gold-bg:#3C3113; --gold-ink:#F2DEA4;
+      --red:#E4816A; --red-bg:#3F1F17; --red-ink:#F6C9BC;
+      --water:#25414A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#141B20; --paper:#1B242B; --ink:#E8E4DA; --ink2:#A2ACB3; --rule:#2E3A43;
+    --teal:#3DD3BD; --teal-ink:#BFF1E8; --teal-bg:#123B36;
+    --gold:#E1B84F; --gold-bg:#3C3113; --gold-ink:#F2DEA4;
+    --red:#E4816A; --red-bg:#3F1F17; --red-ink:#F6C9BC;
+    --water:#25414A;
+  }
+  body{background:var(--ground);color:var(--ink);font:16px/1.5 "Source Sans 3","Segoe UI",system-ui,sans-serif;margin:0}
+  main{max-width:720px;margin:0 auto;padding:28px 18px 64px}
+  h1{font:600 34px/1.1 Fraunces,Georgia,serif;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+  .sub{color:var(--ink2);margin:0 0 22px;max-width:60ch}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;padding:14px 16px;background:var(--paper);border:1px solid var(--rule);border-radius:10px;margin-bottom:26px}
+  .legend div{display:flex;align-items:flex-start;gap:8px;font-size:14px;color:var(--ink2);flex:1 1 200px}
+  .pill{display:inline-block;font:500 11px/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;padding:5px 7px 4px;border-radius:4px;white-space:nowrap;margin-top:2px}
+  .built{background:var(--teal-bg);color:var(--teal-ink)}
+  .massed{background:var(--gold-bg);color:var(--gold-ink)}
+  .missing{background:var(--red-bg);color:var(--red-ink)}
+  .totals{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 30px}
+  .totals div{background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:12px 14px}
+  .totals b{display:block;font:600 28px/1 Fraunces,Georgia,serif;font-variant-numeric:tabular-nums;margin-bottom:4px}
+  .totals span{font-size:13px;color:var(--ink2)}
+  section{margin:0 0 30px}
+  h2{font:600 22px/1.2 Fraunces,Georgia,serif;margin:0 0 2px;display:flex;align-items:baseline;gap:10px}
+  h2 small{font:500 12px/1 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.06em;color:var(--ink2)}
+  .isle{color:var(--ink2);font-size:14px;margin:0 0 12px;max-width:62ch}
+  ul{list-style:none;margin:0;padding:0;background:var(--paper);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+  li{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;padding:11px 14px;border-top:1px solid var(--rule);align-items:start}
+  li:first-child{border-top:0}
+  li b{font-weight:600}
+  li p{margin:2px 0 0;color:var(--ink2);font-size:14px}
+  .note{background:var(--water);border-radius:10px;padding:14px 16px;font-size:15px;margin:34px 0 0}
+  .note p{margin:0 0 8px}
+  .note p:last-child{margin:0}
+  @media (max-width:420px){ li{grid-template-columns:1fr} .pill{margin-top:0} .totals{grid-template-columns:1fr 1fr 1fr;gap:8px} .totals b{font-size:22px} }
+</style>
+<main>
+  <h1>Abu Dhabi Landmark Register</h1>
+  <p class="sub">Every landmark the world knows about today, island by island, with what actually stands there. Mark each one keep, upgrade, add or skip.</p>
+
+  <div class="legend">
+    <div><span class="pill built">Built</span><span>A hand-modelled kit piece with its own geometry.</span></div>
+    <div><span class="pill massed">Massed</span><span>A name and a place only. The surveyed footprint extrudes as a plain block, or a generic marker stands in.</span></div>
+    <div><span class="pill missing">Missing</span><span>Not in the world at all. Where the bake asks for it by name, the survey returned nothing.</span></div>
+  </div>
+
+  <div class="totals">
+    <div><b>47</b><span>built kit pieces</span></div>
+    <div><b>0</b><span>named places, massed</span></div>
+    <div><b>0</b><span>on your list, missing</span></div>
+  </div>
+
+  <section>
+    <h2>Corniche <small>17 built</small></h2>
+    <p class="isle">The mainland city. The kit's oldest and densest set, all on the western end and the waterfront.</p>
+    <ul>
+      <li><span class="pill built">Built</span><div><b>Sheikh Zayed Grand Mosque</b><p>Hand model with domes and minarets. Worth checking that the silhouette still reads at the opening city shot.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Qasr Al Watan</b><p>Palace mass with dome and wings on the measured footprint.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Emirates Palace</b><p>Palace and its estate grounds, forecourt included.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Etihad Towers</b><p>Five-tower composition from the authored layout table.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>ADNOC HQ</b><p>The rectangular frame tower, matched to its surveyed footprint.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Marina Mall</b><p>Kit model on the breakwater. Two place labels carry this name, so the rail shows it twice.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Fairmont Marina Residences</b><p>Kit model beside Marina Mall.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Qasr Al Hosn</b><p>White walls round the courtyard, the round watchtower with its crenellations, the palace block inside.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Palace District</b><p>The presidential precinct is Qasr Al Watan and its grounds, built above. The label stays as the district name.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Capital Gate</b><p>The 18-degree lean built by bending the shaft, blue glass in a white diagrid, the sunscreen splash on the lower half.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>ADNEC</b><p>Six vaulted halls behind a glass concourse on the surveyed plot beside Capital Gate.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Nation Towers</b><p>Two elliptical tapering towers, 237 m and 200 m, joined by the sky bridge, on a podium. Named anchor.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Bab Al Qasr</b><p>Twin sandstone towers with pointed-arch crowns and a gold-domed link, on the survey&#39;s 140 m record between the palace and Etihad Towers. The Conrad is inside Etihad Towers, already built.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>World Trade Center</b><p>Burj Mohammed bin Rashid at 381 m with its curved crown and mast, the Trust Tower and the souk podium, on the survey&#39;s records. Mass proxy for the far view.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Landmark Tower</b><p>The 324 m oval with the long sloping crown.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Founder&#39;s Memorial</b><p>The open steel pavilion with the cable constellation over a raised garden, on the 95 by 51 m plot next to ADNOC HQ.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Observation Deck at 300</b><p>Inside Etihad Towers, built above.</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Saadiyat <small>11 built</small></h2>
+    <p class="isle">The Cultural District is now one composition: five museums on their real sites, the fabric between them white and stepped.</p>
+    <ul>
+      <li><span class="pill built">Built</span><div><b>Louvre Abu Dhabi</b><p>An open two-layer lattice dome over white galleries on a turquoise platform in the sea, pool frames and a causeway. Light comes through the cells at night.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Zayed National Museum</b><p>Five curved silver-lattice sails bowing over a lagoon on a white faceted podium, the tallest 123 m, glowing through the cells at night.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Manarat Al Saadiyat</b><p>The low white gallery with its deep overhanging roof and dark glass base, on the surveyed footprint.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Berklee Abu Dhabi</b><p>The white cube with the glass drum, next to Manarat.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Natural History Museum</b><p>Stepped white cubes with planted terraces and glazed bands, on the channel by the bridge landing.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Guggenheim Abu Dhabi</b><p>A leaning heap of white slabs and cones on its platform at the tip, honeycomb cells along the water.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>teamLab Phenomena</b><p>Two merged white shells 150 m across with openings cut in, east of the Natural History Museum on the same shore.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Park Hyatt, Jumeirah Saadiyat</b><p>Low white resort wings with terracotta roofs round a pool court, on the two big beach parcels the survey carries. Names are the best reading of the beach&#39;s order.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>St. Regis Saadiyat</b><p>Cream palace-hotel with a dome and two terracotta-roofed arms stepping down to the beach, pool, beach walk and palms. Its parcel is not in the survey, so the site was grid-searched against the outline and roads, west of Park Hyatt.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Mamsha Al Saadiyat</b><p>Seven stepped white blocks on the beach parcel with a paved promenade, restaurant pavilions under canopies, umbrellas, pools, lawn and two palm rows.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>NYU Abu Dhabi</b><p>Nine pale campus blocks with dark glass bands round a quad, with the taller library block, on the survey&#39;s own records.</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Yas Island <small>9 built</small></h2>
+    <p class="isle">Yas Bay, the circuit and the parks are all authored now.</p>
+    <ul>
+      <li><span class="pill built">Built</span><div><b>Ferrari World</b><p>Red roof kit model. Built as one structure with Yas Mall, which is how the survey has it.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Yas Mall</b><p>Kit model on the surveyed footprint.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Etihad Arena</b><p>Kit model on Yas Bay.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Hilton Yas Bay, pier and jetty</b><p>Kit models along the waterfront frontage.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Yas Marina Circuit</b><p>Pit building with control tower along the straight, the main grandstand under its curved canopy opposite, the track painted from the survey.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>SeaWorld</b><p>Five stepping shell tiers with dark glass between them on the 320 m round building.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Yas Waterworld</b><p>The pearl-shell canopy, three slide towers with coloured spirals, the wave pool and the lazy river.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>W Abu Dhabi, Yas Island</b><p>Two blocks either side of the track with the grid-shell veil draped over them, lit violet at night.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Warner Bros. World</b><p>The 420 m hall with its three ridges, the domed rotunda and the blue portal with gold band. Named anchor.</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Al Maryah <small>4 built</small></h2>
+    <p class="isle">Small island, tall towers. Everything here comes from survey footprints with heights, so the massing is already close.</p>
+    <ul>
+      <li><span class="pill built">Built</span><div><b>The Galleria</b><p>The rippled white roof on a glass band over the podium, between the four towers.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>ADGM towers</b><p>Four glass towers at their surveyed heights (155, 155, 131, 131 m) and positions, with sloped crowns.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Cleveland Clinic</b><p>White podium under the stepped 110 m tower with dark glass bands.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Four Seasons, Rosewood</b><p>Four Seasons as a banded stone-and-glass block with a light crown; Rosewood as a bronze glass slab narrowing to a sloping top with a white fin. Both on their surveyed records.</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Al Reem <small>3 built</small></h2>
+    <p class="isle">Towers from the survey, east half dressed as construction.</p>
+    <ul>
+      <li><span class="pill built">Built</span><div><b>Gate Towers</b><p>Three 240 m towers, the outer two leaning out, joined by the penthouse bridge, in place of the survey's single slab.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Sky Tower and Sun Tower</b><p>The 292 m oval and the 247 m slab, both with sloping crowns, on their surveyed records.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Reem Mall</b><p>Cream box with a glazed spine and the blue snow-park vault, on the 188 by 179 m record at Najmat.</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Al Raha <small>3 built</small></h2>
+    <p class="isle">The strip along the E10. As of today its unmeasured blocks extrude at their band height instead of flattening to hard standing.</p>
+    <ul>
+      <li><span class="pill built">Built</span><div><b>Aldar HQ</b><p>The circular building, vertex-measured kit model.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Al Raha Mall</b><p>Kit model on the surveyed footprint.</p></div></li>
+      <li><span class="pill built">Built</span><div><b>Al Raha Beach Hotel</b><p>Low arcaded sandstone hotel with the gold-domed pavilion, on both surveyed footprints.</p></div></li>
+    </ul>
+  </section>
+
+  <div class="note">
+    <p><b>Against your priority list.</b> Every Tier 1 item is now built except Warner Bros. World and the Hilton frontage detail. The open second tier is Nation Towers, Bab Al Qasr, Conrad, Landmark, WTC, Founder's Memorial, the Saadiyat resorts, Mamsha, NYU, Four Seasons, Rosewood, Reem Mall and ADNEC.</p>
+    <p>Two placements are from published coordinates rather than the survey: the Louvre (its platform is in the water off the drawn coast) and the Guggenheim. The Natural History Museum and teamLab sit on spots found against the road and shoreline data, to within a plot.</p>
+  </div>
+</main>

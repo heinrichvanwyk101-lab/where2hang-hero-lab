@@ -56,3 +56,10 @@ the OSM footprint underneath it has been excluded. Those still need `world-nav.h
 
 Ferrari World passed every numeric check written for it and came out a starfish. Numbers describe
 size. Only looking describes shape.
+
+## The browser bench (tools/bench)
+
+`preview.mjs` renders one builder in Node. `tools/bench/` opens the whole world in headless
+Chromium instead: the boot check that gates every push (`errcheck3.mjs`), and per-building
+frames from the real scene (`kitview.mjs`, `placeview.mjs`, `coordview.mjs`). See
+`tools/bench/README.md` for setup, the conventions the kit relies on, and how sites are found.

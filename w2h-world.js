@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v290';
+export const BUILD = 'world v291';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5178,6 +5178,8 @@ const DISTRICTS = [
       { label:'The Galleria', osm:'The Galleria Al Maryah Island', x:-10, z:  6, h:10, r:30 },
       { label:'ADGM',         osm:'Abu Dhabi Global Market',       x: 12, z:-10, h:12, r:30 },
       { label:'Cleveland Clinic', osm:'Cleveland Clinic Abu Dhabi', x: 2, z: 18, h: 8, r:32 },
+      { label:'Four Seasons', x:-40.2, z:-14.4, h:18, r:20 },   // on the kit (world v291)
+      { label:'Rosewood',     x:-46.3, z: 34.6, h:18, r:20 },
     ] },
   /* MOVED EAST BY EIGHT. The beach width was never a design choice — it was set by the tightest
      channel in the world, Corniche to Al Reem at 22.8 units. Two beaches have to fit in that with
@@ -5242,6 +5244,9 @@ const DISTRICTS = [
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
       { label:'Park Hyatt Saadiyat', x:-35.8, z:34.0, h: 3, r:30 },   // on the kit (world v290)
       { label:'Jumeirah Saadiyat',   x: -4.9, z:11.4, h: 3, r:30 },
+      { label:'St. Regis Saadiyat',  x:-112.0, z:62.0, h: 4, r:34 },   // world v291
+      { label:'NYU Abu Dhabi',       x: -8.0, z:310.0, h: 4, r:34 },
+      { label:'Mamsha Al Saadiyat',  x:-227.8, z:92.1, h: 3, r:28 },
     ] },
   /* CONDITION TWO: THE MARINA. A quay wall down one wall of the inlet with pontoon fingers off
      it, and a mound across the mouth. The inlet is the only place on any island where the coast
@@ -8030,6 +8035,9 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-227, x1:-213, z0:175, z1:188 },   // Berklee Abu Dhabi, 80 x 74 m
   { x0:-57, x1:-14, z0:13, z1:55 },       // Park Hyatt parcel, 240 x 225 m (world v290)
   { x0:-24, x1:14, z0:-6, z1:29 },        // Jumeirah parcel, 249 x 164 m
+  { x0:-136, x1:-88, z0:48, z1:78 },      // St. Regis, grid-searched site (world v291)
+  { x0:-46, x1:22, z0:286, z1:346 },      // NYU Abu Dhabi campus records
+  { x0:-244, x1:-211, z0:84, z1:101 },    // Mamsha Al Saadiyat parcel, 219 x 91 m
 ];
 /* ---------- AL REEM: GATE TOWERS (world v285) — on the survey's 256 by 50 m slab (bake
    (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
@@ -8052,9 +8060,11 @@ const maryah = DISTRICTS.find(d => d.id === 'maryah');
 KIT_ZONES[maryah.id] = [
   { x0:-50, x1:-8, z0:-8, z1:30 },       // the Galleria podium and the four ADGM towers
   { x0:-56, x1:-26, z0:52, z1:80 },      // Cleveland Clinic podium and tower
+  { x0:-50, x1:-30, z0:-22, z1:-7 },     // Four Seasons, 86.6 x 39 m (world v291)
+  { x0:-55, x1:-38, z0:28, z1:41 },      // Rosewood, 78.7 x 31 m
 ];
 if (!NO_KIT && maryah && kit.adgmSquare){
-  for (const fn of ['adgmSquare', 'clevelandClinic']){
+  for (const fn of ['adgmSquare', 'clevelandClinic', 'maryahHotels']){
     if (!kit[fn]) continue;
     const m = kit[fn](); m.position.y = GROUND; maryah.detail.add(m);
   }
@@ -8070,6 +8080,8 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   }
   if (kit.manaratSaadiyat){ const m = kit.manaratSaadiyat(); m.position.y = GROUND; saadiyat.detail.add(m); }
   if (kit.saadiyatResorts){ const m = kit.saadiyatResorts(); m.position.y = GROUND; saadiyat.detail.add(m); }
+  if (kit.stRegisSaadiyat){ const m = kit.stRegisSaadiyat(-112, 62, 0.43); m.position.y = GROUND; saadiyat.detail.add(m); }   // world v291
+  for (const fn of ['nyuCampus', 'mamshaSaadiyat']) if (kit[fn]){ const m = kit[fn](); m.position.y = GROUND; saadiyat.detail.add(m); }
 }
 
 /* ===========================================================================

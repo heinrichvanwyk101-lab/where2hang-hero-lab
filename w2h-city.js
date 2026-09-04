@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v110';
+export const BUILD = 'city v111';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4712,6 +4712,25 @@ function warnerBrosWorld(x0, z0, rot){
    divided by M_PER_U once; saadKitMat / kitGlass for materials; the world file measures the
    kit zone off the object.
    ========================================================================================= */
+/* PALMS FOR THE KIT. One instanced trunk and crown per call, seated at the island-unit points
+   given, with a hashed jitter so a row never reads as a comb. Same recipe as the palace's
+   allees. */
+function kitPalms(g, pts, scale){
+  if (!pts.length) return;
+  const sc0 = scale || 1;
+  const trunkMat = saadKitMat(0x9C8A70, 0xA89478, 0.95, 0), crownMat = saadKitMat(0x4F6A2E, 0x6E7A3E, 0.9, 0);
+  const trunkG = new THREE.CylinderGeometry(0.055, 0.085, 1.15, 5); trunkG.translate(0, 0.575, 0);
+  const crownG = new THREE.IcosahedronGeometry(0.42, 0); crownG.scale(1, 0.55, 1); crownG.translate(0, 1.28, 0);
+  const trunks = new THREE.InstancedMesh(trunkG, trunkMat, pts.length), crowns = new THREE.InstancedMesh(crownG, crownMat, pts.length);
+  const m4 = new THREE.Matrix4();
+  pts.forEach(([px, pz], i) => {
+    const h = Math.sin(px * 12.9898 + pz * 78.233) * 43758.5453, j = h - Math.floor(h), sc = sc0 * (0.86 + j * 0.32);
+    m4.makeRotationY(j * Math.PI * 2); m4.scale(new THREE.Vector3(sc, sc, sc)); m4.setPosition(px, 0, pz);
+    trunks.setMatrixAt(i, m4); crowns.setMatrixAt(i, m4);
+  });
+  trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
+  g.add(trunks); g.add(crowns);
+}
 function kitGlass(dusk, day, rough, metal){
   const m = new THREE.MeshStandardMaterial({ color:dusk, map:TEX_TOWER, roughness:0.3, metalness:0.5 });
   m.userData.glassOverride = true; m.userData.duskColor = dusk;
@@ -5019,7 +5038,127 @@ function saadiyatResorts(){
     wing(at,  W / 2 - 22, 20, 30, D * 0.6, 16, rot);
     const [px, pz] = at(0, 30 / M);
     const pool = new THREE.Mesh(new THREE.BoxGeometry(W * 0.3 / M, 0.6 / M, D * 0.3 / M), water); pool.position.set(px, 1.4 / M, pz); pool.rotation.y = rot; g.add(pool);
+    const palms = [];
+    for (let ax = -W / 2 + 10; ax <= W / 2 - 10; ax += 10) palms.push(at(ax / M, (D / 2 - 6) / M)), palms.push(at(ax / M, (-D / 2 + 6) / M));
+    for (let ax = -W * 0.18; ax <= W * 0.18; ax += 9) palms.push(at(ax / M, (30 + D * 0.18) / M)), palms.push(at(ax / M, (30 - D * 0.18) / M));
+    kitPalms(g, palms, 0.8);
   }
+  return g;
+}
+
+/* FOUR SEASONS AND ROSEWOOD, AL MARYAH — the two hotel towers on the island's west and north
+   edges, on their surveyed records (144 m and 140 m). Four Seasons is a banded stone-and-glass
+   block with a light crown; Rosewood a bronze glass slab that narrows to a sloping top. */
+function maryahHotels(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const stone = saadKitMat(0xD7D2C8, 0xECE8E0, 0.8, 0), glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3);
+  // Four Seasons: 86.6 x 39 m, 144 m, rot -0.371
+  { const x = -40.2, z = -14.4, rot = -0.371;
+    const t = new THREE.Mesh(new THREE.BoxGeometry(86.6 / M, 144 / M, 39 / M), stone);
+    t.position.set(x, 72 / M, z); t.rotation.y = rot; t.userData.hero = t.userData.kitName = 'fourSeasonsMaryah'; g.add(t);
+    for (let i = 0; i < 9; i++){
+      const b = new THREE.Mesh(new THREE.BoxGeometry(87.2 / M, 9 / M, 39.6 / M), glassD);
+      b.position.set(x, (12 + i * 15) / M, z); b.rotation.y = rot; g.add(b);
+    }
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(92 / M, 4 / M, 44 / M), stone);
+    crown.position.set(x, 146 / M, z); crown.rotation.y = rot; g.add(crown);
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(110 / M, 12 / M, 60 / M), stone);
+    pod.position.set(x, 6 / M, z); pod.rotation.y = rot; g.add(pod); }
+  // Rosewood: 78.7 x 31 m, 140 m, rot -0.187
+  { const x = -46.3, z = 34.6, rot = -0.187;
+    const t = new THREE.Mesh(ellipTower(79, 31, 140, 0.18, 12, 36), kitGlass(0x3A2E22, 0xB39A78, 0.3, 0.15));
+    t.position.set(x, 70 / M, z); t.rotation.y = rot; t.userData.hero = t.userData.kitName = 'rosewoodMaryah'; g.add(t);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 148 / M, 34 / M), stone);
+    fin.position.set(x, 74 / M, z); fin.rotation.y = rot; g.add(fin);
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(100 / M, 10 / M, 56 / M), stone);
+    pod.position.set(x, 5 / M, z); pod.rotation.y = rot; g.add(pod); }
+  return g;
+}
+/* ST. REGIS SAADIYAT — the cream palace-hotel with its two arms curving down to the beach and
+   a dome over the centre. Its parcel is not in the survey, so the site was found by grid search:
+   inside the outline, 21 units from the shore, 30 from the nearest road, west of Park Hyatt. */
+function stRegisSaadiyat(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, at = _placeRot(x0, z0, rot);
+  const cream = saadKitMat(0xE0D4BE, 0xF1E8D6, 0.85, 0), roof = saadKitMat(0xA8654A, 0xC2775A, 0.85, 0);
+  const water = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.15), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const box = (ax, az, w, d, h, r, mat) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, h / M / 2, pz); m.rotation.y = rot + r; g.add(m); return m; };
+  const ground = box(0, 0, 330, 170, 1.2, 0, lawn);
+  const main = box(0, 30, 70, 46, 32, 0, cream); main.userData.hero = main.userData.kitName = 'stRegisSaadiyat';
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(13 / M, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2), roof);
+  const [dx, dz] = at(0, 30 / M); dome.position.set(dx, 32 / M, dz); g.add(dome);
+  // the arms: four bays each side, stepping forward (toward -z, the sea) and turning as they go
+  [-1, 1].forEach(sg => {
+    for (let i = 0; i < 4; i++){
+      const ax = sg * (50 + i * 34), az = 26 - i * i * 4.5, turn = -sg * i * 0.18;
+      const b = box(ax, az, 38, 22, 22 - i * 2, turn, cream);
+      const [rx, rz] = at(ax / M, az / M);
+      const r = new THREE.Mesh(new THREE.BoxGeometry(41 / M, 2 / M, 25 / M), roof); r.position.set(rx, (23 - i * 2) / M, rz); r.rotation.y = rot + turn; g.add(r);
+    }
+  });
+  const pool = box(0, -30, 90, 30, 0.6, 0, water); pool.position.y = 1.5 / M;
+  box(0, -62, 300, 10, 0.5, 0, saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0));   // the beach walk
+  const palms = [];
+  for (let ax = -150; ax <= 150; ax += 9) palms.push(at(ax / M, -70 / M));
+  for (let ax = -60; ax <= 60; ax += 8) palms.push(at(ax / M, -20 / M)), palms.push(at(ax / M, -42 / M));
+  for (let az = 40; az <= 80; az += 8) palms.push(at(-12 / M, az / M)), palms.push(at(12 / M, az / M));
+  kitPalms(g, palms, 0.8);
+  return g;
+}
+/* NYU ABU DHABI — the campus: a grid of pale blocks round a central quad, with the taller
+   library block, on the survey's own records (they all carry a placeholder 6.4 m). */
+function nyuCampus(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const pale = saadKitMat(0xD9D6CE, 0xEDEAE3, 0.8, 0), glassD = saadKitMat(0x22303A, 0x4E6878, 0.3, 0.3), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const quad = new THREE.Mesh(new THREE.BoxGeometry(150 / M, 1 / M, 90 / M), lawn); quad.position.set(-8, 0.5 / M, 314); quad.rotation.y = -0.66; g.add(quad);
+  [[6.4, 320.3, 205, 102, -0.66, 18], [-8.7, 308.3, 166, 96, -0.69, 14], [-8.4, 308.3, 90, 57, -0.82, 34],
+   [-26.2, 309.9, 119, 75, -0.72, 16], [-35.1, 302, 112, 64, -0.79, 20], [-3.6, 335.9, 108, 97, 0.01, 16],
+   [-7.4, 323.6, 117, 105, 0.23, 12], [-22.1, 297.9, 178, 88, -0.63, 18], [4.5, 325.6, 143, 31, -0.58, 22]].forEach(([x, z, w, d, rot, h], i) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w * 0.86 / M, h / M, d * 0.86 / M), pale);
+    b.position.set(x, h / M / 2, z); b.rotation.y = rot; if (i === 2) b.userData.hero = b.userData.kitName = 'nyuCampus'; g.add(b);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(w * 0.87 / M, (h * 0.35) / M, d * 0.87 / M), glassD);
+    gl.position.set(x, h * 0.55 / M, z); gl.rotation.y = rot; g.add(gl);
+  });
+  return g;
+}
+/* MAMSHA AL SAADIYAT — the beachfront row: stepped white apartment blocks with terraces facing
+   the sea, on the survey's 219 by 91 m parcel. */
+function mamshaSaadiyat(){
+  const g = new THREE.Group(), M = M_PER_U, rot = 0.24, at = _placeRot(-227.8, 92.1, rot);
+  const white = saadKitMat(0xE2E0DA, 0xF4F2EC, 0.8, 0), glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3);
+  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const canopy = saadKitMat(0xC9A96A, 0xD9BC7A, 0.7, 0), umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0), pool = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.15);
+  const slab = (ax, az, w, d, h, mat, y) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, (y || 0) / M + h / M / 2, pz); m.rotation.y = rot; g.add(m); return m; };
+  /* THE HARDSCAPE FIRST: the beach promenade along the sea side (local -z), a lawn strip on the
+     street side, and the paved lanes between the blocks. */
+  slab(0, -42, 232, 14, 0.5, pave);
+  slab(0, 42, 232, 8, 0.5, lawn);
+  for (let i = 0; i < 7; i++){
+    const ax = (i - 3) * 30;
+    slab(ax, 0, 30, 90, 0.3, pave);
+    // the block: five storeys at the back, three in the middle, and the restaurant terrace on the promenade
+    [[0, 22, 18, 34], [1, -6, 12, 18]].forEach(([k, az, h, dep]) => {
+      const b = slab(ax, az, 24, dep, h, white);
+      if (i === 3 && k === 0) b.userData.hero = b.userData.kitName = 'mamshaSaadiyat';
+      const [gx, gz] = at(ax / M, (az - dep / 2 - 0.3) / M);
+      const gl = new THREE.Mesh(new THREE.BoxGeometry(20 / M, (h - 2) / M, 0.4 / M), glassD);
+      gl.position.set(gx, h / M / 2, gz); gl.rotation.y = rot; g.add(gl);
+    });
+    // the restaurant: a glass pavilion under a wide canopy, tables under umbrellas on the promenade
+    slab(ax, -24, 20, 14, 5, glassD);
+    slab(ax, -25, 26, 20, 0.6, canopy, 5);
+    for (const [ux, uz] of [[-7, -38], [0, -40], [7, -38], [-4, -45], [4, -45]]){
+      const [px, pz] = at((ax + ux) / M, uz / M);
+      const u = new THREE.Mesh(new THREE.CylinderGeometry(2.2 / M, 2.2 / M, 0.3 / M, 10), umbrella); u.position.set(px, 2.6 / M, pz); g.add(u);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15 / M, 0.15 / M, 2.6 / M, 6), canopy); pole.position.set(px, 1.3 / M, pz); g.add(pole);
+    }
+    if (i % 2 === 0){ const p = slab(ax, 4, 14, 8, 0.4, pool); p.position.y = 0.5 / M; }
+  }
+  /* SOFTSCAPE: two palm rows, promenade edge and street edge, and a few in the lanes. */
+  const palms = [];
+  for (let ax = -112; ax <= 112; ax += 9) palms.push(at(ax / M, -48.5 / M));
+  for (let ax = -108; ax <= 108; ax += 12) palms.push(at(ax / M, 46 / M));
+  for (let i = 0; i < 7; i++) for (const az of [-14, 12]) palms.push(at(((i - 3) * 30 + 14) / M, az / M));
+  kitPalms(g, palms, 0.75);
   return g;
 }
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
@@ -5028,7 +5167,8 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
-         yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts };
+         yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat };
 }
 
 
