@@ -702,7 +702,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v200', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v201', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1278,7 +1278,7 @@ phase('propKit');
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, insideIsle } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, insideIsle, distToOutline } =
   buildWorld(scene, kit, {
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -2630,11 +2630,24 @@ if (/[?&]embed=1/.test(location.search)){
         const idx = window.__basemapIndex;
         const raw = Array.isArray(m.points) ? m.points : [];
         const converted = [];
+        let moved = 0, dropped = 0, offIsland = 0;
         for (const p of raw){
-          if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z) || !p.id) continue;
-          const d = DISTRICTS.find(x => x.id === p.id);
-          const entry = idx && (idx.islands || []).find(x => x.id === p.id);
-          if (!d || !entry) continue;
+          if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z)) continue;
+          /* THE ISLAND IS DECIDED HERE, NOT TAKEN FROM THE APP (nav v201). The app classifies a
+             venue by the bake's bounding boxes, and those overlap: Al Maryah's box takes in the
+             west of Al Reem and the channel between, Yas's box is mostly sea. A venue filed on
+             the wrong island was then drawn relative to that island's diorama position — in the
+             water beside it. locateReal tests the real outlines instead and drops what is on no
+             modelled land. */
+          const id = locateReal(p.x, p.z, p.id);
+          if (!id){ dropped++; continue; }
+          if (id !== p.id) moved++;
+          /* ONE ISLAND ONLY, WHEN THE HOST SAYS SO. The area rail browses one island at a time
+             and names it; a search set spans islands and does not. */
+          if (m.island && id !== m.island){ offIsland++; continue; }
+          const d = DISTRICTS.find(x => x.id === id);
+          const entry = idx && (idx.islands || []).find(x => x.id === id);
+          if (!d || !entry){ dropped++; continue; }
           const [ox, oy] = BMAP.islandOrigin(entry);
           const local = { x: (p.x - ox) / BMAP.M_PER_UNIT, z: -(p.z - oy) / BMAP.M_PER_UNIT, h: 0 };
           const w = anchorWorld(d, local);
@@ -2644,7 +2657,10 @@ if (/[?&]embed=1/.test(location.search)){
         // message is about to trigger) can append it rather than have its own crumb-write
         // silently erase the one piece of evidence that would show whether this message ever
         // arrived with usable points at all.
-        lastResultsDiag = 'setResultsReal: ' + raw.length + ' received, ' + converted.length + ' classified';
+        lastResultsDiag = 'setResultsReal: ' + raw.length + ' received, ' + converted.length + ' classified' +
+          (moved ? ', ' + moved + ' re-islanded' : '') + (dropped ? ', ' + dropped + ' off land' : '') +
+          (offIsland ? ', ' + offIsland + ' not on ' + m.island : '');
+        console.log(lastResultsDiag);
         if (converted.length){
           attractStop();
           /* The canvas must be visible before this composes anything. setResultsReal is the exact
@@ -2888,6 +2904,29 @@ function setDistrict(d){
 
    y takes the scale too: the island's top face is a local 2.9 and the group scales uniformly,
    so on Al Maryah the ground the user can see is at 21.5. */
+/* WHICH MODELLED ISLAND A REAL-METRE POINT IS ON. Candidates are the islands whose bake extent
+   holds the point, smallest first so Corniche's mainland box is asked last; each is tested against
+   its surveyed outline in the normalised frame the roads use, with 60 m of grace past the shore
+   for a quay, a pontoon or a beach club. The app's own guess is taken only when no outline
+   claims the point and the guess's box does — an island whose outline is not built yet. */
+function locateReal(x, z, hint){
+  const idx = window.__basemapIndex;
+  const isles = (idx && idx.islands) || [];
+  const cands = isles.filter(e => e.extent && x >= e.extent.x0 && x <= e.extent.x1 && z >= e.extent.y0 && z <= e.extent.y1)
+    .sort((a, b) => a.extent.w * a.extent.d - b.extent.w * b.extent.d);
+  let fallback = null;
+  for (const e of cands){
+    if (!DISTRICTS.some(d => d.id === e.id)) continue;
+    const half = Math.max(e.extent.w, e.extent.d) / 2;
+    const nx = (x - e.extent.cx) / half, ny = (z - e.extent.cy) / half;
+    try {
+      if (insideIsle(e.id, nx, ny)) return e.id;
+      if (distToOutline(e.id, nx, ny) * half < 60) return e.id;
+    } catch (err){ if (e.id === hint) fallback = e.id; }
+  }
+  return fallback;
+}
+window.__locateReal = locateReal;
 function anchorWorld(d, a){
   const s = d.dispScale || 1;
   const c = Math.cos(d.rot), n = Math.sin(d.rot);

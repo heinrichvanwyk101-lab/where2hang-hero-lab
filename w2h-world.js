@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v275';
+export const BUILD = 'world v276';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -9952,6 +9952,11 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
             the ring loop already trusts, and it is what a sampled point needs — not a coarser
             copy of the ring-level check repeated in a second file. */
          insideIsle,
+         /* THE SHORE DISTANCE, FOR THE SAME CALLER (world v276). A venue on a marina pontoon or a
+            beach club sits a few metres past the surveyed outline; insideIsle alone would drop
+            it. Normalised units, like insideIsle: multiply by the island's half-extent for
+            metres. */
+         distToOutline,
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
             of them have junctions. */
