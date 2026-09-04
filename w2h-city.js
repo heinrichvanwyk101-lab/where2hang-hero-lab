@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v98';
+export const BUILD = 'city v99';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3981,7 +3981,7 @@ function louvreAbuDhabi(x0, z0){
   const R_DOME = 90 / M, SAG = 30 / M, RIM_Y = 9 / M, PL_H = 3 / M;
   /* THE PLATFORM IN THE SEA. The museum stands on its own plinth surrounded by water; the survey
      coastline stops at the old shore, so the plinth is the land here. */
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(260 / M, PL_H, 210 / M), saadKitMat(0xCFC6B4, 0xE2DACB, 0.9, 0));
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(260 / M, PL_H, 210 / M), saadKitMat(0xD8D1C2, 0xE9E3D6, 0.9, 0));
   plinth.position.set(x0, PL_H / 2, z0);
   g.add(plinth);
   /* THE WHITE BOXES — the galleries, a loose medina of cubes under the dome. */
@@ -4003,8 +4003,8 @@ function louvreAbuDhabi(x0, z0){
   const tex = (() => {
     const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
     const c = cv.getContext('2d');
-    c.fillStyle = '#CDD1D5'; c.fillRect(0, 0, N, N);
-    c.fillStyle = 'rgba(52,58,64,0.45)';
+    c.fillStyle = '#D6DADD'; c.fillRect(0, 0, N, N);
+    c.fillStyle = 'rgba(52,58,64,0.40)';
     const step = N / 24;
     for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){
       const cx = x * step + step / 2 + ((y % 2) ? step / 2 : 0), cy = y * step + step / 2;
@@ -4041,51 +4041,69 @@ function louvreAbuDhabi(x0, z0){
 function zayedNationalMuseum(x0, z0, bearing){
   const g = new THREE.Group(), M = M_PER_U;
   const rot = bearing || 0;
-  /* THE MOUND — a landscaped berm the galleries sit inside, 220 by 150 m, 24 m high. */
-  const mound = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), saadKitMat(0xC4B48E, 0xD6C8A4, 0.95, 0));
-  mound.scale.set(110 / M, 24 / M, 75 / M);
-  mound.position.set(x0, 0, z0);
-  mound.rotation.y = rot;
-  g.add(mound);
-  /* THE FIVE WINGS. Feathers of steel, the tallest 123 m, in a row along the mound, each a lathe
-     with the feather's swell two-thirds of the way up, pressed thin and leaning a little. */
-  const wingMat = saadKitMat(0x8C7C60, 0xB9A47C, 0.32, 0.8, 0xFFE0B0, 0.05);
-  const heights = [123, 110, 98, 88, 76];
-  const spacing = 40 / M;
+  /* THE PODIUM — a white faceted mound the sails rise out of, 150 by 110 m and 26 m high, low-poly
+     on purpose so its facets catch the light the way the render's do. The lagoon lies against
+     its north side: a shallow pool 240 by 150 m the museum is reflected in. */
+  const podium = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xDCD8D0, 0xEFEDE7, 0.8, 0.05));
+  podium.scale.set(75 / M, 26 / M, 55 / M);
+  podium.position.set(x0, 0, z0);
+  podium.rotation.y = rot;
+  g.add(podium);
+  const lagoon = new THREE.Mesh(new THREE.CircleGeometry(1, 40), saadKitMat(0x6FB8CC, 0x86CCE0, 0.15, 0.1));
+  lagoon.scale.set(120 / M, 75 / M, 1);
+  lagoon.rotation.x = -Math.PI / 2;
+  lagoon.position.set(x0 - Math.sin(rot) * 70 / M, 0.06, z0 - Math.cos(rot) * 70 / M);
+  g.add(lagoon);
+  /* THE FIVE SAILS. Curved wings, the tallest 123 m in the middle, each a lathe whose swell sits
+     two-fifths of the way up at a fifth of its height, pressed to a third of that in thickness
+     and leaning toward the lagoon. Silver lattice by day, dark with a warm interior glow at night. */
+  const wingMat = saadKitMat(0x4E5258, 0xC9CED3, 0.35, 0.6, 0xFFA860, 0.30);
+  const heights = [76, 110, 123, 98, 88];
+  const spacing = 36 / M;
   heights.forEach((hm, i) => {
     const H = hm / M;
     const prof = [];
-    for (let k = 0; k <= 12; k++){
-      const t = k / 12;
-      const half = (t < 0.62 ? 7 + 9 * (t / 0.62) : 16 - 15.2 * ((t - 0.62) / 0.38)) / M;
-      prof.push(new THREE.Vector2(Math.max(0.2 / M, half), t * H));
+    for (let k = 0; k <= 14; k++){
+      const t = k / 14;
+      const swell = 0.20 * hm, base = 0.10 * hm;
+      const half = (t < 0.4 ? base + (swell - base) * (t / 0.4) : swell * (1 - (t - 0.4) / 0.6) + 0.4) / M;
+      prof.push(new THREE.Vector2(Math.max(0.25 / M, half), t * H));
     }
-    const wing = new THREE.Mesh(new THREE.LatheGeometry(prof, 18), wingMat);
-    wing.scale.set(1, 1, 0.3);
+    const wing = new THREE.Mesh(new THREE.LatheGeometry(prof, 20), wingMat);
+    wing.scale.set(1, 1, 0.34);
     const off = (i - 2) * spacing;
-    wing.position.set(x0 + Math.cos(rot) * off, 14 / M, z0 + Math.sin(rot) * off);
-    /* Broad face along the row, so the fan reads from the sea and the road, not edge-on. */
-    wing.rotation.set(0, rot, 0.14 - i * 0.02);
-    if (i === 0) wing.userData.hero = true;
+    wing.position.set(x0 + Math.cos(rot) * off, 16 / M, z0 + Math.sin(rot) * off);
+    wing.rotation.set(-0.22, rot, 0.06 - i * 0.03);
+    if (i === 2) wing.userData.hero = true;
     g.add(wing);
   });
   return g;
 }
 function guggenheimAbuDhabi(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
-  const base = new THREE.Mesh(new THREE.BoxGeometry(140 / M, 24 / M, 100 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
-  base.position.set(x0, 12 / M, z0);
-  base.rotation.y = 0.35;
+  /* A CLUSTER OF WHITE BLOCKS AND CONES on a 220 by 170 m platform at the water — the aerial of
+     the site under construction is a heap of white boxes over honeycomb cells, the renders add
+     the leaning cones. Both are here: blocks for the mass, cones for the silhouette. */
+  const base = new THREE.Mesh(new THREE.BoxGeometry(220 / M, 6 / M, 170 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
+  base.position.set(x0, 3 / M, z0);
   g.add(base);
-  /* THE CONES — eleven of them, no two alike, leaning off a low mass: the Gehry silhouette. */
-  const cMat = [saadKitMat(0xD8D3CB, 0xEDE9E2, 0.8, 0.05), saadKitMat(0xB6C3CE, 0xD0DCE6, 0.55, 0.25), saadKitMat(0xC9C2B6, 0xE0DACF, 0.85, 0)];
+  const white = saadKitMat(0xE0DCD3, 0xF3F0EA, 0.85, 0.02);
+  const stone = saadKitMat(0xCFC6B7, 0xE4DDD0, 0.85, 0);
   let seed = 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
-  for (let i = 0; i < 11; i++){
-    const a = i / 11 * 6.2832 + rnd() * 0.4, rr = (i % 3 === 0 ? 18 : 42 + rnd() * 16) / M;
-    const H = (28 + rnd() * 32) / M, rb = (8 + rnd() * 8) / M, rt = rb * (0.25 + rnd() * 0.3);
-    const cone = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, H, 12, 1, false), cMat[i % 3]);
-    cone.position.set(x0 + Math.cos(a) * rr, 24 / M + H / 2 - 2 / M, z0 + Math.sin(a) * rr);
-    cone.rotation.set((rnd() - 0.5) * 0.4, rnd() * 6.2832, (rnd() - 0.5) * 0.4);
+  for (let i = 0; i < 16; i++){
+    const w = (22 + rnd() * 40) / M, d = (22 + rnd() * 36) / M, h = (12 + rnd() * 34) / M;
+    const bx = x0 + (rnd() - 0.5) * 150 / M, bz = z0 + (rnd() - 0.5) * 110 / M;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), i % 3 ? white : stone);
+    m.position.set(bx, 6 / M + h / 2, bz);
+    m.rotation.y = rnd() * 0.9 - 0.45;
+    g.add(m);
+  }
+  for (let i = 0; i < 7; i++){
+    const a = i / 7 * 6.2832 + rnd() * 0.5, rr = (30 + rnd() * 40) / M;
+    const H = (30 + rnd() * 30) / M, rb = (11 + rnd() * 9) / M, rt = rb * (0.2 + rnd() * 0.3);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, H, 12, 1, false), i % 2 ? white : stone);
+    cone.position.set(x0 + Math.cos(a) * rr, 6 / M + H / 2 + 8 / M, z0 + Math.sin(a) * rr);
+    cone.rotation.set((rnd() - 0.5) * 0.5, rnd() * 6.2832, (rnd() - 0.5) * 0.5);
     if (i === 1) cone.userData.hero = true;
     g.add(cone);
   }
@@ -4093,25 +4111,41 @@ function guggenheimAbuDhabi(x0, z0){
 }
 function naturalHistoryMuseum(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
-  /* ROCK — five rounded strata blocks stacked and offset, sandstone, low and heavy. */
-  const rockMat = saadKitMat(0xB9A382, 0xD2BE9B, 0.95, 0);
-  const blocks = [[95, 30, 62, 0, 0, 0.1], [72, 26, 52, 22, 26, -0.25], [58, 24, 46, -26, 22, 0.35], [56, 40, 40, 8, -18, 0.6], [44, 20, 34, -30, -16, -0.5]];
-  blocks.forEach(([w, h, d, dx, dz, r], i) => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), rockMat);
-    m.scale.set(w / 2 / M, h / 2 / M, d / 2 / M);
-    m.position.set(x0 + dx / M, h / 2 / M * 0.85, z0 + dz / M);
-    m.rotation.y = r;
-    if (i === 3) m.userData.hero = true;
+  /* WHITE CUBES, STEPPED — the render is a heap of pale blocks with planted terraces on the
+     channel by the bridge landing, not a rock. Fourteen boxes over a 160 by 120 m footprint,
+     taller toward the middle, green on the ledges. */
+  const white = saadKitMat(0xE3E0D8, 0xF4F2EC, 0.85, 0.02);
+  const green = saadKitMat(0x5E7D45, 0x6F9452, 0.95, 0);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 4 / M, 130 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
+  plinth.position.set(x0, 2 / M, z0);
+  g.add(plinth);
+  let seed = 23; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  for (let i = 0; i < 14; i++){
+    const w = (18 + rnd() * 26) / M, d = (18 + rnd() * 24) / M;
+    const dx = (rnd() - 0.5) * 130, dz = (rnd() - 0.5) * 95;
+    const cen = 1 - Math.min(1, Math.hypot(dx / 65, dz / 48));
+    const h = (10 + cen * 34 + rnd() * 6) / M;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), white);
+    m.position.set(x0 + dx / M, 4 / M + h / 2, z0 + dz / M);
+    m.rotation.y = rnd() * 0.5 - 0.25;
+    if (i === 0) m.userData.hero = true;
     g.add(m);
-  });
+    const t = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 1.2 / M, d * 0.7), green);
+    t.position.set(m.position.x, 4 / M + h + 0.6 / M, m.position.z);
+    t.rotation.y = m.rotation.y;
+    g.add(t);
+  }
   return g;
 }
 function teamLabPhenomena(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
-  const mat = saadKitMat(0xE3D9C8, 0xF0E9DC, 0.9, 0, 0xFFE2C0, 0.12);
-  const blobs = [[130, 20, 95, 0, 0], [92, 16, 72, 40, 24], [66, 12, 56, -44, -20]];
+  /* TWO WHITE SHELLS merged, 150 m across and 30 m high, smooth — the render is a single
+     continuous white skin with openings cut into it; two rounded domes read as that at this
+     scale. Glows softly at night. */
+  const mat = saadKitMat(0xE8E4DC, 0xF6F3EE, 0.75, 0, 0xFFE6C8, 0.14);
+  const blobs = [[150, 30, 120, 0, 0], [110, 26, 90, 62, 22], [80, 18, 70, -56, -26]];
   blobs.forEach(([w, h, d, dx, dz], i) => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), mat);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), mat);
     m.scale.set(w / 2 / M, h / M, d / 2 / M);
     m.position.set(x0 + dx / M, 0, z0 + dz / M);
     if (i === 0) m.userData.hero = true;

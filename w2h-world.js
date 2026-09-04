@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v280';
+export const BUILD = 'world v281';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5227,8 +5227,8 @@ const DISTRICTS = [
          centre; see LM_SAADIYAT. */
       { label:'Louvre Abu Dhabi',        x:-478.8, z:172.6, h: 5, r:34 },
       { label:'Guggenheim Abu Dhabi',    x:-480.4, z: 74.7, h: 8, r:30 },
-      { label:'Natural History Museum',  x:-328.2, z:199.7, h: 5, r:26 },
-      { label:'teamLab Phenomena',       x:-243.2, z:194.0, h: 3, r:26 },
+      { label:'Natural History Museum',  x:-352.2, z:299.1, h: 5, r:26 },
+      { label:'teamLab Phenomena',       x:-313.8, z:317.1, h: 4, r:26 },
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
@@ -7954,15 +7954,15 @@ const LM_SAADIYAT = {
   louvre:     { x:-478.8, z:172.6 },
   znm:        { x:-371.6, z:177.8 },
   guggenheim: { x:-480.4, z: 74.7 },
-  nhm:        { x:-328.2, z:199.7 },
-  teamlab:    { x:-243.2, z:194.0 },
+  nhm:        { x:-352.2, z:299.1 },   // on the channel by the bridge landing (-1200, 3900 m)
+  teamlab:    { x:-313.8, z:317.1 },   // east of it on the same shore (-900, 3760 m)
 };
 KIT_ZONES[saadiyat.id] = [
   { x0:-497, x1:-460, z0:158, z1:187 },   // Louvre platform, 260 x 210 m
-  { x0:-388, x1:-355, z0:167, z1:189 },   // Zayed National Museum mound, 220 x 150 m
-  { x0:-491, x1:-470, z0: 65, z1: 85 },   // Guggenheim, 140 x 100 m plus cones
-  { x0:-336, x1:-320, z0:194, z1:206 },   // Natural History Museum
-  { x0:-253, x1:-233, z0:187, z1:201 },   // teamLab Phenomena
+  { x0:-388, x1:-355, z0:160, z1:189 },   // Zayed National Museum podium and lagoon
+  { x0:-495, x1:-466, z0: 63, z1: 87 },   // Guggenheim, 220 x 170 m
+  { x0:-364, x1:-340, z0:290, z1:308 },   // Natural History Museum, 170 x 130 m
+  { x0:-326, x1:-301, z0:307, z1:327 },   // teamLab Phenomena, 190 x 140 m
 ];
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
