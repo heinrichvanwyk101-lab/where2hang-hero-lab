@@ -1238,7 +1238,17 @@ function addProps(d, layer, plan, budget = {}){
      same matrices. Stopping at a red signal is deliberately not here yet: continuous flow first,
      then the junction rule. */
   const traffic = [];
-  const trafficRoads = roads.filter(rd => rd.cls !== 'local' && rd.pts.length >= 2);
+  /* ON-ISLAND ROADS ONLY (props v36). The sidecar holds every road in the island's fetch box, and
+     Al Maryah's box reaches across the channel: without this the traffic drove those roads over
+     open water, headlights and all. A road qualifies when four in five of its samples are on the
+     island — the same test the lamps and kerbside cars have always made per point. */
+  const trafficRoads = roads.filter(rd => {
+    if (rd.cls === 'local' || rd.pts.length < 2) return false;
+    let n = 0, ok = 0;
+    const step = Math.max(1, Math.floor(rd.pts.length / 8));
+    for (let i = 0; i < rd.pts.length; i += step){ n++; if (inside(rd.pts[i][0], rd.pts[i][1])) ok++; }
+    return ok >= n * 0.8;
+  });
   const trafficCum = new Map();
   const trafficNodes = new Map();
   const ROAD_KERB_F = 1.20;                                 // the painter's kerb casing factor
