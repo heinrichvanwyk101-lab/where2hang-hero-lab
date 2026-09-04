@@ -388,7 +388,7 @@ function osmIdOf(sources){
   for (const s of sources || []){
     const ds = s && s.dataset, rid = s && s.record_id;
     if (!rid || !/openstreetmap/i.test(String(ds))) continue;
-    const m = String(rid).match(/^([wrn])(\d+)$/);
+    const m = String(rid).match(/^([wrn])(\d+)(?:@\d+)?$/);   // Overture suffixes the OSM version: w123@5
     if (m) return m[1] === 'r' ? -Number(m[2]) : Number(m[2]);
   }
   return null;

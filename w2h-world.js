@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v277';
+export const BUILD = 'world v278';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8994,7 +8994,12 @@ function footprintsFor(d, list){
 
          AND THE ACTION IS THE PODIUM, NOT DELETION, for the reason Yas Bay taught: hiding a merge
          removed the site. A parcel flattened to 6 m is hard standing, which is what it is. */
-      if (A >= PARCEL_MIN_M2 && b.h == null && !b.p && !(b.v > 0)) merged.add(i);
+      /* NOT ON A DISTRICT THAT IS BUILT OUT (world v278). Al Raha's big blocks come from
+         Overture without a height, and this rule flattened ten of its eighteen largest
+         footprints to hard standing — the strip read as vacant. A district flagged fillAll is
+         one the eye knows to be built up, so its unmeasured parcels extrude at the band
+         height like everything else. */
+      if (A >= PARCEL_MIN_M2 && b.h == null && !b.p && !(b.v > 0) && !d.fillAll) merged.add(i);
     });
   }
   let hidMerge = 0;
