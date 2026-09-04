@@ -679,7 +679,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v198', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v199', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -5882,10 +5882,23 @@ function frame(){
      the usual reason camera feel differs between devices. Damping also means a tap during a
      transition simply re-aims, with no timeline to cancel. */
   const e = 1 - Math.exp(-2.0 * dt);
-  cur.target.lerp(goal.target, e);
-  cur.dist  += (goal.dist  - cur.dist)  * e;
-  cur.elev  += (goal.elev  - cur.elev)  * e;
-  cur.angle += (goal.angle - cur.angle) * e;
+  /* A STRAIGHT FLIGHT, NOT A SWING (nav v199). Easing distance, elevation and azimuth as three
+     separate numbers made the camera orbit the target on a wide arc whenever the azimuth
+     changed — from Yas's eastern station to Saadiyat's northern one it swept out over open sea
+     and came back in, and an unwrapped angle sometimes took the long way round. The camera's
+     own position is eased now, in a straight line from where it is to where the shot wants it,
+     with the target sliding alongside; azimuth, distance and elevation are read back off that
+     position, so every consumer downstream sees exactly the numbers it always did. */
+  {
+    const gx = goal.target.x + Math.sin(goal.angle) * goal.dist, gz = goal.target.z + Math.cos(goal.angle) * goal.dist, gy = goal.elev;
+    const cx = cur.target.x + Math.sin(cur.angle) * cur.dist, cz = cur.target.z + Math.cos(cur.angle) * cur.dist, cy = cur.elev;
+    cur.target.lerp(goal.target, e);
+    const nx = cx + (gx - cx) * e, ny = cy + (gy - cy) * e, nz = cz + (gz - cz) * e;
+    const dx = nx - cur.target.x, dz = nz - cur.target.z;
+    cur.dist  = Math.max(1, Math.hypot(dx, dz));
+    cur.elev  = ny;
+    cur.angle = Math.atan2(dx, dz);
+  }
   cur.fov   += (goal.fov   - cur.fov)   * e;
 
   /* THE TILT BUTTON'S OWN EASING, separate from cur/goal — orbit.lift is a live gesture value
