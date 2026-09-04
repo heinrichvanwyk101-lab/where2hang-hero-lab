@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v289';
+export const BUILD = 'world v290';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4984,6 +4984,7 @@ const DISTRICTS = [
       { label:'Landmark Tower',     x:-564.0, z:-228.7, h:42, r:22 },
       { label:'ADNEC',              x: 561.5, z: 702.8, h: 3, r:40 },
       { label:"Founder's Memorial", x:-866.0, z:  47.6, h: 4, r:18 },
+      { label:'Bab Al Qasr',        x:-960.6, z: 153.1, h:16, r:16 },
       { label:'Capital Gate', x:527.5, z:715.2, h:20, r:26 },
       { label:'Nation Towers', x:-836.1, z:28.1, h:24, r:26 },
       /* No osm match will ever come back for this one — see LM.mosque above — so it never gets
@@ -5239,6 +5240,8 @@ const DISTRICTS = [
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
+      { label:'Park Hyatt Saadiyat', x:-35.8, z:34.0, h: 3, r:30 },   // on the kit (world v290)
+      { label:'Jumeirah Saadiyat',   x: -4.9, z:11.4, h: 3, r:30 },
     ] },
   /* CONDITION TWO: THE MARINA. A quay wall down one wall of the inlet with pontoon fingers off
      it, and a mound across the mouth. The inlet is the only place on any island where the coast
@@ -7562,6 +7565,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const landmark = kit.landmarkTower    ? kit.landmarkTower(-564.0, -228.7, -0.433) : new THREE.Group();
   const adnec    = kit.adnecHalls       ? kit.adnecHalls(561.5, 702.8, -0.29)     : new THREE.Group();
   const founder  = kit.foundersMemorial ? kit.foundersMemorial(-866.0, 47.6, 0.6)  : new THREE.Group();
+  const babqasr  = kit.babAlQasr        ? kit.babAlQasr(-960.6, 153.1, -1.27)     : new THREE.Group();   // world v290
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7584,7 +7588,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder, babqasr].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -7601,7 +7605,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder, babqasr]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
@@ -8024,6 +8028,8 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-322, x1:-290, z0:283, z1:310 },   // teamLab Phenomena, 190 x 140 m plus a margin
   { x0:-232, x1:-197, z0:156, z1:171 },   // Manarat Al Saadiyat, 245 x 92 m (world v289)
   { x0:-227, x1:-213, z0:175, z1:188 },   // Berklee Abu Dhabi, 80 x 74 m
+  { x0:-57, x1:-14, z0:13, z1:55 },       // Park Hyatt parcel, 240 x 225 m (world v290)
+  { x0:-24, x1:14, z0:-6, z1:29 },        // Jumeirah parcel, 249 x 164 m
 ];
 /* ---------- AL REEM: GATE TOWERS (world v285) — on the survey's 256 by 50 m slab (bake
    (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
@@ -8063,6 +8069,7 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
     saadiyat.detail.add(m);
   }
   if (kit.manaratSaadiyat){ const m = kit.manaratSaadiyat(); m.position.y = GROUND; saadiyat.detail.add(m); }
+  if (kit.saadiyatResorts){ const m = kit.saadiyatResorts(); m.position.y = GROUND; saadiyat.detail.add(m); }
 }
 
 /* ===========================================================================
