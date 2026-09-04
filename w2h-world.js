@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v291';
+export const BUILD = 'world v292';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5285,6 +5285,7 @@ const DISTRICTS = [
       { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
       { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
+      { label:'Pier71',        x:-27.3, z:412.9, h: 3, r:24 },   // on the kit (world v292)
       { label:'SeaWorld',      osm:'SeaWorld Abu Dhabi',      x: 22, z: 14, h: 8, r:38 },
     ] },
   /* AL RAHA. A mainland patch — data/isle-raha.json says so via noCoastline in the bake. Its
@@ -7894,6 +7895,11 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* Warner Bros. World on its surveyed footprint (713 by 694 m at bake (19122, -191) m, rot 1.25). */
   if (kit.warnerBrosWorld) built.push(kit.warnerBrosWorld(74.8, -26.3, 1.25));
   if (kit.yasWaterworld) built.push(kit.yasWaterworld(-45.0, -42.0));   // world v289, on the park's centre
+  /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
+     turned so its length runs down the promontory, and the waterfront kit — the restaurant row
+     on that deck, the bay promenade and the parcels behind the arena. */
+  if (kit.yasBayPier) built.push(kit.yasBayPier(-27.3, 412.9, Math.PI / 2));
+  if (kit.yasBayWaterfront) built.push(kit.yasBayWaterfront());
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

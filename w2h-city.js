@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v111';
+export const BUILD = 'city v113';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -805,7 +805,11 @@ function etihadTowers(x0, z0){
        reflective material goes dark under this sky. */
     const day = new THREE.MeshStandardMaterial({ color:0xCDD9E1, roughness:0.38, metalness:0.08 });
     day.userData.glassOverride = false;
-    const em = m.clone(); em.userData = { ...m.userData, dayMats: day, duskColor: 0xB8C7D1, glassOverride:false };
+    /* CLONE THE MATERIAL, NOT THE MESH. The first version of this line cloned `m` — a Mesh — and
+       assigned it as the material, which day view survived (the swap reads dayMats off whatever
+       is there) and night view did not: three's program cache asks the material for
+       customProgramCacheKey and a Mesh has none. Visible on the phone as the red error panel. */
+    const em = m.material.clone(); em.userData = { ...m.material.userData, dayMats: day, duskColor: 0xB8C7D1, glassOverride:false };
     m.material = em;
     m.position.set(x0 + s.dx, shaft/2, z0 + s.dz);
     /* A FAN, NOT A ROW. Each lens turns a little further than the last so the five faces catch
@@ -5161,6 +5165,62 @@ function mamshaSaadiyat(){
   kitPalms(g, palms, 0.75);
   return g;
 }
+
+/* YAS BAY WATERFRONT (city v112) — the piece of Yas people actually walk: Pier71's restaurant
+   row on the promontory deck (the deck itself is kit.yasBayPier, placed alongside), the bay
+   promenade running from the Hilton past the arena to the eastern parcels, and the white
+   mid-rise blocks on the parcels behind the arena that the survey carries only as outlines. */
+function yasBayWaterfront(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), white = saadKitMat(0xE2E0DA, 0xF4F2EC, 0.8, 0);
+  const glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3), canopy = saadKitMat(0xD9C9A6, 0xEFE3C6, 0.7, 0);
+  const umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const DECK = 1.4 / M;
+  // PIER71: ten glass pavilions in two rows down the promontory, each under a cream canopy on
+  // posts, with umbrellas on the water side; a paved spine between the rows.
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 0.3 / M, 150 / M), pave); spine.position.set(-27.5, DECK + 0.15 / M, 415); g.add(spine);
+  const palms = [];
+  for (let i = 0; i < 5; i++){
+    const z = 406 + i * 4.4;
+    [[-31.5, -1], [-23.5, 1]].forEach(([x, side], k) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(18 / M, 5.5 / M, 13 / M), glassD);
+      b.position.set(x, DECK + 2.75 / M, z); if (i === 2 && k === 0) b.userData.hero = b.userData.kitName = 'yasBayWaterfront'; g.add(b);
+      const c = new THREE.Mesh(new THREE.BoxGeometry(24 / M, 0.5 / M, 18 / M), canopy); c.position.set(x + side * 0.4, DECK + 6.2 / M, z); g.add(c);
+      for (const [ux, uz] of [[side * 2.6, -1.2], [side * 2.6, 1.2], [side * 3.4, 0]]){
+        const u = new THREE.Mesh(new THREE.CylinderGeometry(2 / M, 2 / M, 0.3 / M, 10), umbrella); u.position.set(x + ux, DECK + 2.6 / M, z + uz); g.add(u);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15 / M, 0.15 / M, 2.6 / M, 6), canopy); pole.position.set(x + ux, DECK + 1.3 / M, z + uz); g.add(pole);
+      }
+      palms.push([x, z + 2.2]);
+    });
+  }
+  // THE BAY PROMENADE: a paved band one unit inside the shore, from the Hilton round past the
+  // arena to the eastern parcels, with a palm row on its landward edge.
+  const path = [[-42, 404], [-14, 406], [17, 395], [22, 386], [31, 377], [49, 374], [60, 381], [66, 391]];
+  for (let i = 0; i + 1 < path.length; i++){
+    const [ax, az] = path[i], [bx, bz] = path[i + 1];
+    const L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bz - az, bx - ax);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(L + 1.2, 0.3 / M, 12 / M), pave);
+    seg.position.set((ax + bx) / 2, 0.15 / M, (az + bz) / 2); seg.rotation.y = -ang; g.add(seg);
+    const nx = -Math.sin(ang), nz = Math.cos(ang);   // landward normal (the sea is at +z of this shore)
+    for (let t = 0.6; t < L; t += 1.3) palms.push([ax + Math.cos(ang) * t - nx * 1.1 * Math.sign(nz || 1), az + Math.sin(ang) * t - nz * 1.1 * Math.sign(nz || 1)]);
+  }
+  // THE PARCELS BEHIND THE ARENA: white residential blocks with terraces and a glass band, on
+  // the survey's own outlines, lawns between them; the long strip on the shore is a two-storey
+  // restaurant row.
+  [[41.5, 352.7, 100, 86, 1.12, 34], [52.9, 358.8, 77, 36, 1.15, 28], [30.5, 366.1, 62, 43, 1.08, 30],
+   [39.6, 371.4, 52, 37, 1.11, 26], [27.6, 347, 53, 36, -0.4, 30], [21.4, 364.1, 71, 29, -0.01, 24],
+   [72.9, 392.2, 79, 71, -0.44, 32], [58.5, 377.2, 127, 24, -0.62, 8]].forEach(([x, z, w, d, rot, h]) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w * 0.82 / M, h / M, d * 0.82 / M), white);
+    b.position.set(x, h / M / 2, z); b.rotation.y = rot; g.add(b);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(w * 0.83 / M, h * 0.5 / M, d * 0.83 / M), glassD);
+    gl.position.set(x, h * 0.45 / M, z); gl.rotation.y = rot; g.add(gl);
+    if (h > 12){ const t = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6 / M, 6 / M, d * 0.6 / M), white); t.position.set(x, (h + 3) / M, z); t.rotation.y = rot; g.add(t); }
+    else { const c = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9 / M, 0.5 / M, (d + 10) / M), canopy); c.position.set(x, (h + 0.5) / M, z); c.rotation.y = rot; g.add(c); }
+    const gr = new THREE.Mesh(new THREE.BoxGeometry((w + 10) / M, 0.6 / M, (d + 10) / M), lawn); gr.position.set(x, 0.3 / M, z); gr.rotation.y = rot; g.add(gr);
+  });
+  kitPalms(g, palms, 0.75);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -5168,7 +5228,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront };
 }
 
 
