@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v100';
+export const BUILD = 'city v101';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3979,10 +3979,9 @@ function saadKitMat(dusk, day, rough, metal, emis, ei){
 function louvreAbuDhabi(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
   const R_DOME = 90 / M, SAG = 30 / M, RIM_Y = 9 / M, PL_H = 3 / M;
-  /* THE PLATFORM IN THE SEA. The museum stands on its own plinth surrounded by water; the survey
-     coastline stops at the old shore, so the plinth is the land here. */
-  /* The platform is mostly water between the galleries: a pool-coloured slab with pale quay
-     edges, which is what the aerials show — white boxes standing in shallow turquoise. */
+  /* THE PLATFORM IN THE SEA. The museum stands in shallow water on its own plinth; the survey
+     coastline stops at the old shore, so the plinth is the land here — turquoise between pale
+     quays, which is what the aerials show. */
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(260 / M, PL_H, 210 / M), saadKitMat(0x5FA9BE, 0x74C3D8, 0.2, 0.05));
   plinth.position.set(x0, PL_H / 2, z0);
   g.add(plinth);
@@ -3992,56 +3991,76 @@ function louvreAbuDhabi(x0, z0){
     q.position.set(x0 + dx / M, (PL_H + 0.6 / M) / 2, z0 + dz / M);
     g.add(q);
   }
-  /* THE WHITE BOXES — the galleries, a loose medina of cubes under the dome. */
-  const boxMat = saadKitMat(0xE6E1D8, 0xF4F1EA, 0.85, 0);
+  /* THE POOL FRAMES — the thin white rectangles standing in the water off the seaward side. */
+  for (const [dx, dz, w, d] of [[-60, 150, 70, 40], [30, 165, 50, 34], [110, 140, 60, 38]]){
+    for (const [ex, ez, ew, ed] of [[0, -d / 2, w, 3], [0, d / 2, w, 3], [-w / 2, 0, 3, d], [w / 2, 0, 3, d]]){
+      const f = new THREE.Mesh(new THREE.BoxGeometry(ew / M, 1.6 / M, ed / M), quayMat);
+      f.position.set(x0 + (dx + ex) / M, 0.8 / M, z0 + (dz + ez) / M);
+      g.add(f);
+    }
+  }
+  /* THE WHITE BOXES — the galleries, a loose medina of cubes under the dome, one large hall
+     among them. Their windows glow at night, and the glow is what comes through the lattice. */
+  const boxMat = saadKitMat(0xE6E1D8, 0xF4F1EA, 0.85, 0, 0xFFE0B0, 0.22);
   let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(46 / M, 13 / M, 40 / M), boxMat);
+  hall.position.set(x0 + 10 / M, PL_H + 6.5 / M, z0 - 8 / M);
+  hall.rotation.y = 0.2;
+  g.add(hall);
   for (let i = 0; i < 34; i++){
     const w = (9 + rnd() * 30) / M, d = (9 + rnd() * 24) / M, h = (6 + rnd() * 8) / M;
-    const a = rnd() * 6.2832, rr = rnd() * 70 / M;
+    const a = rnd() * 6.2832, rr = (20 + rnd() * 60) / M;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxMat);
     m.position.set(x0 + Math.cos(a) * rr, PL_H + h / 2, z0 + Math.sin(a) * rr);
     m.rotation.y = rnd() * 0.6 - 0.3;
     g.add(m);
   }
-  /* THE DOME: a shallow cap, 180 m across, 30 m of rise, perforated. A sphere cap of the radius
-     that gives that sag; the texture carries the layered star lattice as dark cells on silver,
-     and the underside glows warm at night — the rain of light. */
+  /* THE DOME: 180 m across, 30 m of rise, and OPEN — an alpha-tested lattice, two caps a couple
+     of metres apart with the pattern turned between them, so the layers beat against each other
+     the way the eight real layers do and the galleries and their light show through the cells.
+     alphaMap reads green: ribs white, cells black. */
   const Rs = (R_DOME * R_DOME + SAG * SAG) / (2 * SAG);
   const theta = Math.acos((Rs - SAG) / Rs);
-  const tex = (() => {
+  const latticeTex = (rot) => {
     const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
     const c = cv.getContext('2d');
-    c.fillStyle = '#D6DADD'; c.fillRect(0, 0, N, N);
-    c.fillStyle = 'rgba(52,58,64,0.40)';
-    const step = N / 24;
-    for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++){
-      const cx = x * step + step / 2 + ((y % 2) ? step / 2 : 0), cy = y * step + step / 2;
-      c.beginPath();
-      for (let k = 0; k < 8; k++){ const ang = k * Math.PI / 4, rr = (k % 2 ? 0.11 : 0.26) * step; c.lineTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr); }
-      c.closePath(); c.fill();
-    }
+    c.fillStyle = '#000'; c.fillRect(0, 0, N, N);
+    c.strokeStyle = '#FFF'; c.lineCap = 'round';
+    const star = (cx, cy, r, w) => {
+      c.lineWidth = w; c.beginPath();
+      for (let k = 0; k < 8; k++){ const ang = k * Math.PI / 4 + rot, rr = (k % 2 ? 0.42 : 1) * r; const px = cx + Math.cos(ang) * rr, py = cy + Math.sin(ang) * rr; if (k) c.lineTo(px, py); else c.moveTo(px, py); }
+      c.closePath(); c.stroke();
+    };
+    const big = N / 6, small = N / 14;
+    for (let y = -1; y <= 6; y++) for (let x = -1; x <= 6; x++) star(x * big + big / 2 + ((y % 2) ? big / 2 : 0), y * big + big / 2, big * 0.56, 7);
+    for (let y = -1; y <= 14; y++) for (let x = -1; x <= 14; x++) star(x * small + small / 2 + ((y % 2) ? small / 2 : 0), y * small + small / 2, small * 0.55, 3);
     const t = new THREE.CanvasTexture(cv);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 4);
-    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 3);
+    t.anisotropy = 8;
     return t;
-  })();
-  const domeMat = new THREE.MeshStandardMaterial({ color:0x8E949A, map:tex, roughness:0.5, metalness:0.55, side:THREE.DoubleSide,
-                                                   emissive:0xFFC98A, emissiveIntensity:0.18 });
-  domeMat.userData.duskColor = 0xC9CDD1; domeMat.userData.glassOverride = false;
-  domeMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xDADEE2, map:tex, roughness:0.5, metalness:0.5, side:THREE.DoubleSide });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(Rs, 72, 20, 0, Math.PI * 2, 0, theta), domeMat);
-  dome.position.set(x0, PL_H + RIM_Y - Rs * Math.cos(theta), z0);
-  dome.userData.hero = true;
-  g.add(dome);
+  };
+  const caps = [[0, Rs, 0xA9AEB3, 0xE3E6E9], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xC9CDD1]];
+  for (const [rot, radius, night, day] of caps){
+    const t = latticeTex(rot);
+    const mat = new THREE.MeshStandardMaterial({ color:night, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.5,
+                                                 emissive:0xFFD9A0, emissiveIntensity:0.10 });
+    mat.userData.duskColor = day; mat.userData.glassOverride = false;
+    mat.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.45 });
+    const th = Math.acos((radius - (SAG - (Rs - radius))) / radius);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 24, 0, Math.PI * 2, 0, th), mat);
+    dome.position.set(x0, PL_H + RIM_Y - radius * Math.cos(th), z0);
+    dome.userData.hero = true;
+    g.add(dome);
+  }
   /* The rim: a pale ring where the lattice ends, the edge every photograph draws. */
-  const rimGeo = new THREE.TorusGeometry(R_DOME, 1.2 / M, 8, 96);
+  const rimGeo = new THREE.TorusGeometry(R_DOME, 1.4 / M, 8, 96);
   rimGeo.rotateX(Math.PI / 2);
   const rim = new THREE.Mesh(rimGeo, saadKitMat(0xC9CDD1, 0xEEF1F3, 0.5, 0.4));
   rim.position.set(x0, PL_H + RIM_Y, z0);
   g.add(rim);
   /* THE CAUSEWAY — the platform joins the shore to the east by a promenade deck; without it the
      museum floats off the coast. */
-  const way = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 2 / M, 36 / M), saadKitMat(0xCFC6B4, 0xE2DACB, 0.9, 0));
+  const way = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 2 / M, 36 / M), quayMat);
   way.position.set(x0 + (130 + 85) / M, 1 / M, z0 + 20 / M);
   g.add(way);
   const colMat = saadKitMat(0x9A9C9E, 0xB8BABC, 0.6, 0.3);
