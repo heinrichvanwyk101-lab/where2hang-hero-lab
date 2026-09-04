@@ -176,6 +176,16 @@
     letter-spacing:.04em;text-transform:uppercase;
     box-shadow:0 2px 8px rgba(0,0,0,.45),0 0 0 2px rgba(0,194,168,.85)}
   .w2hPin.dest b{color:#3DE9CD;font-weight:800;margin-left:6px}
+  /* YOU ARE HERE (nav v208): a gold dot with a breathing ring, always on once the host has a
+     position, with a small label. Off the modelled land it sits on the nearest island's edge
+     and the label says how far away you really are. */
+  .w2hPin.here{width:16px;height:16px;border-radius:50%;background:#E8B547;pointer-events:none;
+    box-shadow:0 1px 6px rgba(0,0,0,.55),0 0 0 3px rgba(232,181,71,.35)}
+  .w2hPin.here::before{content:'';position:absolute;left:50%;top:50%;width:16px;height:16px;border-radius:50%;
+    border:2px solid rgba(232,181,71,.9);transform:translate(-50%,-50%);animation:w2hHere 1.8s ease-out infinite}
+  .w2hPin.here .lbl{position:absolute;left:50%;top:22px;transform:translateX(-50%);white-space:nowrap;
+    font:800 11px/1 Inter,sans-serif;color:#F8E7BF;text-shadow:0 1px 6px rgba(0,0,0,.9);letter-spacing:.02em}
+  @keyframes w2hHere{0%{transform:translate(-50%,-50%) scale(1);opacity:.9}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0}}
   /* THE VENUE CARD. Not a bubble pinned to the marker: a bubble anchored to a pin has to be
      repositioned every frame as the camera eases, can end up off-screen when the pin is near an
      edge, and competes for space with the pins around it. A fixed panel is stable, always fully
@@ -518,6 +528,8 @@ let resultsLabel = 'Results';
 // every piece of this kind of shared state declared in one place, this early, means that
 // safety doesn't have to be re-verified by hand for each new addition.
 let resultPins = [];
+/* The visitor's own position in display space, once the host has sent one; null until then. */
+let here = null;
 /* SEPARATE FROM THE EMBED-BLOCK'S OWN post(), NOT A DUPLICATE OF IT BY ACCIDENT. That post is
    a const arrow function declared inside `if (embed=1){...}`, block-scoped there and nowhere
    else — genuinely unreachable from code defined outside that block, not a TDZ timing issue
@@ -712,7 +724,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v207', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v208', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1977,6 +1989,28 @@ function clusterScreenPoints(pts){
   return clusters;
 }
 
+/* THE HERE PIN, drawn on the same layer as the result pins but outside their bookkeeping, so a
+   new result set never removes it and it never counts in a cluster. */
+let hereEl = null;
+const _hereRec = { x:0, y:0, behind:false };
+function renderHerePin(){
+  const layer = document.getElementById('pinLayer');
+  if (!layer) return;
+  if (!here){ if (hereEl){ hereEl.remove(); hereEl = null; } return; }
+  if (!hereEl){
+    hereEl = document.createElement('div');
+    hereEl.className = 'w2hPin here';
+    const l = document.createElement('div'); l.className = 'lbl'; hereEl.appendChild(l);
+    layer.appendChild(hereEl);
+  }
+  hereEl.firstChild.textContent = here.off
+    ? ('You · ' + (here.distKm != null ? here.distKm.toFixed(1) + ' km ' + (here.bearing || '') : 'off the map'))
+    : 'You';
+  worldToScreen(here.x, GROUND + 4, here.z, _hereRec);
+  hereEl.style.display = _hereRec.behind ? 'none' : '';
+  hereEl.style.left = _hereRec.x + 'px';
+  hereEl.style.top = _hereRec.y + 'px';
+}
 function renderPinOverlay(){
   const layer = document.getElementById('pinLayer');
   if (!layer) return;
@@ -2662,6 +2696,47 @@ if (/[?&]embed=1/.test(location.search)){
          to the untouched setResults(). Points whose island the app could not classify (most
          of the database — outside the six modelled islands) are simply dropped rather than
          guessed at, same rule locateVenueInWorld already follows on the app side. */
+      /* setHere IS THE VISITOR'S OWN POSITION, real metres like setVenue, kept as a persistent pin.
+         off:true means the host clamped a position outside the modelled islands to the nearest
+         island's edge, and distKm/bearing say where the visitor really is. goHere flies to it. */
+      else if (m.type === 'setHere'){
+        const d = DISTRICTS.find(x => x.id === m.id);
+        const idx = window.__basemapIndex;
+        const entry = idx && (idx.islands || []).find(x => x.id === m.id);
+        if (d && entry && Number.isFinite(m.x) && Number.isFinite(m.z)){
+          const [ox, oy] = BMAP.islandOrigin(entry);
+          const w = anchorWorld(d, { x: (m.x - ox) / BMAP.M_PER_UNIT, z: -(m.z - oy) / BMAP.M_PER_UNIT, h: 0 });
+          here = { x: w.x, z: w.z, id: d.id, name: d.name, off: !!m.off, distKm: m.distKm, bearing: m.bearing };
+          renderHerePin();
+        } else if (m.id == null){ here = null; renderHerePin(); }
+      }
+      else if (m.type === 'goHere'){
+        if (!here) return;
+        const d = DISTRICTS.find(x => x.id === here.id);
+        if (!d) return;
+        attractStop();
+        const glc = document.getElementById('gl');
+        if (glc) glc.classList.add('ready');
+        if (activeDistrict !== d || state !== STATE.DISTRICT) setDistrict(d);
+        if (here.off){
+          /* Outside the model: the island shot, and the card says how far away you are. */
+          const card = document.getElementById('venueCard');
+          if (card){
+            activeVenue = null;
+            document.getElementById('vcName').textContent = 'You are off the modelled map';
+            document.getElementById('vcMeta').textContent = (here.distKm != null ? here.distKm.toFixed(1) + ' km ' + (here.bearing || '') + ' of ' : 'Near ') + here.name + ' — that area is not built yet';
+            document.getElementById('vcOpen').style.display = 'none';
+            const list = document.getElementById('vcList'); if (list){ list.innerHTML = ''; list.style.display = 'none'; }
+            card.classList.add('on');
+          }
+        } else {
+          resetOrbit();
+          goal.target.set(here.x, GROUND + 8, here.z);
+          goal.dist = fitDist(CLUSTER_FLOOR_R * 3, goal.fov || 46);
+          goal.elev = goal.dist * PITCH_PLACE;
+          hideVenueCard();
+        }
+      }
       else if (m.type === 'setResultsReal'){
         const idx = window.__basemapIndex;
         const raw = Array.isArray(m.points) ? m.points : [];
@@ -6939,7 +7014,7 @@ function frame(){
      renderPinOverlay's own first check is cheap enough that skipping the call entirely would
      save nothing worth the extra branch. */
   pinFrameCounter++;
-  if (pinFrameCounter % 4 === 0) renderPinOverlay();
+  if (pinFrameCounter % 4 === 0){ renderPinOverlay(); if (here) renderHerePin(); }
 }
 frame();
 
