@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v39';
+export const BUILD = 'props v40';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -399,7 +399,11 @@ const craneGeo = (() => {
   const lamp = new THREE.BoxGeometry(0.9 * U, 0.9 * U, 0.9 * U); lamp.translate(0, H + 1.4 * U, 0);
   return mergeGeometries([body, lamp], true);
 })();
-const matCrane = new THREE.MeshStandardMaterial({ color:0xE2B424, roughness:0.7, metalness:0.2 });
+const matCrane = new THREE.MeshStandardMaterial({ color:0xFFC61A, roughness:0.6, metalness:0.15 });
+/* A HALF-BUILT FRAME: bare concrete, a unit box scaled to the plot and to however many storeys
+   are up, sometimes with a narrower core rising above the slabs. */
+const frameGeo = (() => { const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, 0.5, 0); return g; })();
+const matFrame = new THREE.MeshStandardMaterial({ color:0x9C9689, roughness:1, metalness:0 });
 const matCraneLamp = new THREE.MeshStandardMaterial({ color:0x300000, emissive:0xFF2418, emissiveIntensity:2.2, toneMapped:false });
 const cabinGeo = (() => { const g = new THREE.BoxGeometry(7 * U_PER_M, 3 * U_PER_M, 3 * U_PER_M); g.translate(0, 1.5 * U_PER_M, 0); return g; })();
 const matCabin = new THREE.MeshStandardMaterial({ color:0xE8E4DA, roughness:0.85 });
@@ -1249,20 +1253,34 @@ function addProps(d, layer, plan, budget = {}){
      one or two cabins along an edge, a sand heap or two inside. */
   {
     const sites = plan.sites || [];
-    const cranes = [], cabins = [], heaps = [];
+    const cranes = [], cabins = [], heaps = [], frames = [];
+    const U = U_PER_M;
     for (const st of sites){
       const c = Math.cos(st.rot), s = Math.sin(st.rot);
       const at = (u, v) => [st.x + u * c - v * s, st.y + u * s + v * c];
-      if (R() < 0.36){ const q = at((R() < 0.5 ? -1 : 1) * st.w * 0.38, (R() < 0.5 ? -1 : 1) * st.h * 0.36); cranes.push({ x:q[0], y:q[1], rot: R() * 6.2832 }); }
-      const nc = 1 + (R() < 0.5 ? 1 : 0);
-      for (let k = 0; k < nc; k++){ const q = at((k - 0.5) * st.w * 0.3, -st.h * 0.42); cabins.push({ x:q[0], y:q[1], rot: st.rot }); }
-      const nh = 1 + (R() < 0.6 ? 1 : 0);
-      for (let k = 0; k < nh; k++){ const q = at((R() - 0.5) * st.w * 0.5, (R() - 0.3) * st.h * 0.4); heaps.push({ x:q[0], y:q[1], s: 0.6 + R() * 0.8 }); }
+      /* THE BUILDING GOING UP (props v40): two in three sites carry a bare frame at some stage —
+         a slab or two, a mid-rise shell, or a tower core with the crane beside it. Plot in the
+         pad's own frame, height in storeys of 3.2 m. */
+      const stage = R();
+      if (stage < 0.66){
+        const storeys = stage < 0.22 ? 1 + Math.floor(R() * 3) : stage < 0.5 ? 4 + Math.floor(R() * 8) : 10 + Math.floor(R() * 18);
+        const fw = st.w * (0.35 + R() * 0.25), fd = st.h * (0.35 + R() * 0.25);
+        const q = at((R() - 0.5) * st.w * 0.2, (R() - 0.5) * st.h * 0.2);
+        frames.push({ x:q[0], y:q[1], rot: st.rot, w: fw, d: fd, h: storeys * 3.2 * U });
+        if (storeys >= 10 && R() < 0.6) frames.push({ x:q[0], y:q[1], rot: st.rot, w: fw * 0.35, d: fd * 0.35, h: (storeys + 4 + Math.floor(R() * 6)) * 3.2 * U });
+        // a crane stands by anything above a few storeys
+        if (storeys >= 4){ const cq = at((R() < 0.5 ? -1 : 1) * st.w * 0.36, (R() < 0.5 ? -1 : 1) * st.h * 0.34); cranes.push({ x:cq[0], y:cq[1], rot: R() * 6.2832 }); }
+      } else if (R() < 0.3){
+        const cq = at((R() < 0.5 ? -1 : 1) * st.w * 0.36, (R() < 0.5 ? -1 : 1) * st.h * 0.34); cranes.push({ x:cq[0], y:cq[1], rot: R() * 6.2832 });
+      }
+      const cb = at(-st.w * 0.3, -st.h * 0.42); cabins.push({ x:cb[0], y:cb[1], rot: st.rot });
+      if (R() < 0.7){ const q = at(st.w * 0.3, (R() - 0.5) * st.h * 0.5); heaps.push({ x:q[0], y:q[1], s: 0.6 + R() * 0.8 }); }
     }
+    build(frameGeo, matFrame, frames, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, p.rot, 0); M.scale.set(p.w * r, p.h, p.d * r); });
     build(craneGeo, [matCrane, matCraneLamp], cranes, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, p.rot, 0); M.scale.set(1, 1, 1); });
     build(cabinGeo, matCabin, cabins, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, p.rot, 0); M.scale.set(1, 1, 1); });
     build(heapGeo, matHeap, heaps, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, R() * 6.2832, 0); M.scale.set(p.s, p.s, p.s); });
-    if (sites.length) console.info('construction props ' + d.id + ': cranes ' + cranes.length + ', cabins ' + cabins.length + ', heaps ' + heaps.length);
+    if (sites.length) console.info('construction props ' + d.id + ': frames ' + frames.length + ', cranes ' + cranes.length + ', cabins ' + cabins.length + ', heaps ' + heaps.length);
   }
 
   /* ---------- TRAFFIC (props v34) ----------

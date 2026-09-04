@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v274';
+export const BUILD = 'world v275';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -9561,6 +9561,138 @@ let propCount = { palms:0, lamps:0, cars:0, boats:0, shrubs:0, signals:0 };
 const signalTicks = [];
 const trafficTicks = [];
 /* PER-ISLAND, AND CALLABLE LATER. Was a forEach; the body is unchanged. */
+/* A LANDMASS WITH NO SURVEYED ROADS GETS A PLOT GRID (world v275). The fabric generator lays its
+   blocks between roads, so a reclaimed islet the survey has not mapped yet — three of Al Raha's
+   nine carry under 400 m of road and a handful of footprints — stays bare however "fully built"
+   the district is declared. Here such a landmass gets rows of mid-rise plots aligned to its own
+   long axis, inset from the shore, in the fabric's own materials and window classes, as ordinary
+   instanced stock: cullFabric still yields to any real footprint that lands on one. */
+function fillRoadless(d){
+  const B = BASE && BASE[d.id];
+  if (!d.fillAll || !B || !B.shapes || B.shapes.length < 2 || !d.detail) return 0;
+  const roads = (d.roads && d.roads.drawArterials) || [];
+  const perM = 1 / (d.r * M_PER_UNIT);
+  const rnd = localRnd(hashId(d.id + ':fill'));
+  const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
+  const MATS = fabricMats(cool);
+  const distRing = (ring, x, y) => {
+    let best = Infinity;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+      const ax = ring[j][0], ay = ring[j][1], dx = ring[i][0] - ax, dy = ring[i][1] - ay;
+      const L2 = dx * dx + dy * dy; let t = L2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = ax + t * dx - x, py = ay + t * dy - y; const dd = px * px + py * py; if (dd < best) best = dd;
+    }
+    return Math.sqrt(best);
+  };
+  const plots = [];
+  let filledRings = 0;
+  for (const ring of B.shapes){
+    if (!ring || ring.length < 4) continue;
+    let roadLen = 0;
+    for (const rd of roads){
+      const m = rd[rd.length >> 1];
+      if (!pointInRing(ring, m[0], m[1])) continue;
+      for (let i = 1; i < rd.length; i++) roadLen += Math.hypot(rd[i][0] - rd[i-1][0], rd[i][1] - rd[i-1][1]);
+    }
+    if (roadLen / perM > 400) continue;
+    filledRings++;
+    let best = 0, ux = 1, uy = 0;
+    for (let i = 0; i < ring.length; i++){
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (L > best){ best = L; ux = (b[0] - a[0]) / L; uy = (b[1] - a[1]) / L; }
+    }
+    const vx = -uy, vy = ux;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const p of ring){ const u = p[0] * ux + p[1] * uy, v = p[0] * vx + p[1] * vy;
+      if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v; }
+    const pitchU = 46 * perM, pitchV = 38 * perM, inset = 24 * perM;
+    for (let v = v0 + pitchV * 0.7; v < v1; v += pitchV){
+      for (let u = u0 + pitchU * 0.7; u < u1; u += pitchU){
+        const x = ux * u + vx * v, y = uy * u + vy * v;
+        if (!pointInRing(ring, x, y) || distRing(ring, x, y) < inset) continue;
+        if (rnd() < 0.18) continue;
+        const wM = 18 + rnd() * 14, dM = 14 + rnd() * 10;
+        const storeys = rnd() < 0.15 ? 12 + Math.floor(rnd() * 10) : 4 + Math.floor(rnd() * 6);
+        plots.push({ x: x * d.r, z: -y * d.r, rot: Math.atan2(uy, ux), w: wM / M_PER_UNIT, dp: dM / M_PER_UNIT, h: storeys * 3.2 / M_PER_UNIT });
+      }
+    }
+  }
+  if (!plots.length) return 0;
+  const buckets = new Map();
+  for (const p of plots){
+    const t = p.h * M_PER_UNIT <= 20 ? 'rend' : 'clad';
+    const c = wClass(p.h);
+    const k = t + '#' + c;
+    (buckets.get(k) || buckets.set(k, []).get(k)).push(p);
+  }
+  const M = new THREE.Object3D();
+  for (const [k, list] of buckets){
+    const [t, c] = k.split('#');
+    const mats = MATS[t] || MATS.rend;
+    const m = new THREE.InstancedMesh(PROFILES.box, mats[+c], list.length);
+    m.userData.dayMats = mats.day[+c];
+    m.castShadow = true; m.receiveShadow = true;
+    m.name = 'fill';
+    list.forEach((p, i) => {
+      M.position.set(p.x, GROUND, p.z); M.rotation.set(0, p.rot, 0); M.scale.set(p.w, p.h, p.dp);
+      M.updateMatrix(); m.setMatrixAt(i, M.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    d.detail.add(m);
+  }
+  console.info('fill ' + d.id + ': ' + plots.length + ' plots on ' + filledRings + ' roadless landmass(es)');
+  return plots.length;
+}
+
+/* BRIDGES (world v275): a surveyed major or minor road segment whose midpoint is over water gets a
+   deck — a flat dark box the segment's length at the class's width, its top at ground level — so
+   the roads that already carry traffic between Al Raha's islands are visibly carried. */
+const deckMat = {
+  night: stdMat({ color:0x2E3136, roughness:0.95, metalness:0 }),
+  day:   stdMat({ color:0x6F7379, roughness:0.95, metalness:0 }),
+  dusk:  stdMat({ color:0x4A4D52, roughness:0.95, metalness:0 }),
+};
+function bridgesFor(d){
+  const B = BASE && BASE[d.id];
+  if (!B || !B.shapes || B.shapes.length < 2 || !d.detail) return 0;
+  const roads = (d.roads && d.roads.drawArterials) || [];
+  const decks = [];
+  for (const rd of roads){
+    if (rd.cls === 'local' || rd.length < 2) continue;
+    for (let i = 1; i < rd.length; i++){
+      const a = rd[i-1], b = rd[i];
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      if (Math.abs(mx) > 1.05 || Math.abs(my) > 1.05) continue;
+      if (insideIsle(d.id, mx, my)) continue;
+      /* A CROSSING, NOT A ROAD ON THE MAINLAND THE MODEL LEAVES AS WATER. Both ends must touch a
+         landmass (inside it or within 40 m of its shore) and the span must be a bridge's length,
+         under 450 m. The first cut without this laid 513 decks over Khalifa City's streets south
+         of the strip. */
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]) * d.r;
+      if (len < 0.4 || len * M_PER_UNIT > 450) continue;
+      const nearLand = p => insideIsle(d.id, p[0], p[1]) || distToOutline(d.id, p[0], p[1]) * d.r * M_PER_UNIT < 40;
+      if (!nearLand(a) || !nearLand(b)) continue;
+      decks.push({ x: mx * d.r, z: -my * d.r, rot: Math.atan2(b[1] - a[1], b[0] - a[0]),
+                   len: len * 1.08, w: (rd.cls === 'major' ? 26 : 15) / M_PER_UNIT });
+    }
+  }
+  if (!decks.length) return 0;
+  const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+  const m = new THREE.InstancedMesh(geo, deckMat.night, decks.length);
+  m.userData.dayMats = deckMat.day; m.userData.duskMats = deckMat.dusk; m.userData.origMat = deckMat.night;
+  m.name = 'bridges';
+  m.castShadow = false; m.receiveShadow = true;
+  const M = new THREE.Object3D();
+  decks.forEach((p, i) => {
+    M.position.set(p.x, GROUND - 0.32, p.z); M.rotation.set(0, p.rot, 0); M.scale.set(p.len, 0.36, p.w);
+    M.updateMatrix(); m.setMatrixAt(i, M.matrix);
+  });
+  m.instanceMatrix.needsUpdate = true;
+  d.detail.add(m);
+  console.info('bridges ' + d.id + ': ' + decks.length + ' deck(s)');
+  return decks.length;
+}
 function buildGroundFor(d){
   const f = d.fabric;
   if (!f) return;
@@ -9610,6 +9742,10 @@ function buildGroundFor(d){
      four hundred of them per island at exactly the moment five islands are on screen would be
      paying for invisible geometry. The LOD swap already exists and this is what it is for. */
   if (props){
+    /* ROADLESS LANDMASSES AND THE BRIDGES BETWEEN THEM (world v275), before the props so the
+       cull sees the fill like any other generated stock. */
+    fillRoadless(d);
+    bridgesFor(d);
     const n = props.addProps(d, d.detail, plan);
     /* tickSignals is a FUNCTION, not a count, so the blind key sum would turn propCount.signals
        into NaN the moment it tried to add it. Collected separately and called from the frame

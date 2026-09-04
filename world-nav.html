@@ -679,7 +679,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v196', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v198', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2050,6 +2050,15 @@ function zoomToPinCluster(pts){
   const halfDiagRaw = Math.hypot(x1-x0, z1-z0)/2;
   if (halfDiagRaw * 1.6 <= CLUSTER_FLOOR_R){ showGroupList(pts); return; }
   const cx=(x0+x1)/2, cz=(z0+z1)/2;
+  /* ALREADY THERE MEANS LIST, NOT ANOTHER FLIGHT (nav v197). A group whose spread is above the
+     floor asked for a zoom every time it was tapped, including when the camera was already at
+     the distance that zoom would land on — so the badge stayed a badge, the tap looked like it
+     did nothing or bounced, and there was no list. If the camera is at or inside the shot this
+     group would request, the answer is the list of what is in it. */
+  const wantDist = fitDist(Math.max(CLUSTER_FLOOR_R, Math.max(6, halfDiagRaw) * 1.6), goal.fov || 46);
+  const nowDist = cur.dist * (orbit.zoom || 1);
+  const sameSpot = Math.hypot(goal.target.x - cx, goal.target.z - cz) < Math.max(6, halfDiagRaw) * 2;
+  if (sameSpot && nowDist <= wantDist * 1.15){ showGroupList(pts); return; }
   /* FLOORS REDUCED SUBSTANTIALLY FROM THE FIRST VERSION — 30 world units minimum spread, then
      a further floor of SHOT_MIN_DISP*0.4 on top of that. Both exist for good reason elsewhere
      in this file (a district or place shot genuinely shouldn't crowd the camera into geometry)
@@ -2800,7 +2809,7 @@ function setDistrict(d){
      on the landmark side, so the attractions sit in the foreground with the island behind them.
      Corniche keeps its tuned city framing. */
   const outer = d !== corniche;
-  const fr = Math.max(SHOT_MIN_DISP, outer ? Math.max(shot.r * s, d.r * s * 0.8) : shot.r * s);
+  const fr = Math.max(SHOT_MIN_DISP, outer ? Math.max(shot.r * s, d.r * s * 0.68) : shot.r * s);
   const mix = outer ? 0.5 : 1;
   goal.target.set(d.x + shot.x * s * mix, GROUND + 8, d.z + shot.z * s * mix);
   /* THE PORTRAIT FIELD CAUGHT ME TWICE. I corrected the world view for it and then set the
@@ -2825,6 +2834,16 @@ function setDistrict(d){
      every island's own coastline and takes the one with the least land under it, leaning toward
      the side that puts the island behind the landmarks the shot is aimed at. */
   goal.angle = sunSafe(seawardAngle(d, goal.target, goal.dist));
+  /* THE ISLAND SITS IN THE LOWER TWO THIRDS OF THE SCREEN (nav v197). The look target is the
+     screen centre, and on the phone the top third is the header and the rail, so an island
+     centred on the target hung just under the cards with open water filling the bottom half.
+     Pushing the target past the island along the view direction drops the island into the
+     window the cards leave, without moving the camera off its seaward station. */
+  if (outer){
+    const push = goal.dist * 0.16;
+    goal.target.x -= Math.sin(goal.angle) * push;
+    goal.target.z -= Math.cos(goal.angle) * push;
+  }
   applyLOD();
   ui('Abu Dhabi <span>&rsaquo; ' + d.name + '</span>',
      d.built ? 'Tap a place, or Back' : 'Placeholder island — Back');
@@ -5244,7 +5263,7 @@ function cullGreens(d){
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
-      if (!o.isInstancedMesh || o.name === 'footprints') return;
+      if (!o.isInstancedMesh || o.name === 'footprints' || o.name === 'bridges') return;
       let dirty = false;
       for (let i = 0; i < o.count; i++){
         o.getMatrixAt(i, m);
@@ -5369,7 +5388,7 @@ function cullFabric(d, list){
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
-      if (!o.isInstancedMesh || o.name === 'footprints') return;
+      if (!o.isInstancedMesh || o.name === 'footprints' || o.name === 'bridges') return;
       for (let i = 0; i < o.count; i++){
         o.getMatrixAt(i, m);
         /* Elements 12 and 14 are the translation's x and z. Cheaper than decompose, and this runs
