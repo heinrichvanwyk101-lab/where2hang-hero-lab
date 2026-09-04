@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v285';
+export const BUILD = 'world v286';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7544,6 +7544,8 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const fairmont = kit.fairmontMarina(LM.fairmont.x, LM.fairmont.z);
   /* Capital Gate on its surveyed footprint (72 x 49 m, 160 m; bake (1488, -7937) m). */
   const capgate = kit.capitalGate ? kit.capitalGate(527.5, 715.2) : new THREE.Group();
+  /* Qasr Al Hosn on its surveyed landmark (bake (-6580, -861) m, the 91 by 88 m footprint). */
+  const hosn = kit.qasrAlHosn ? kit.qasrAlHosn(-506.9, -192.1, 0.18) : new THREE.Group();
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7566,7 +7568,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -7583,7 +7585,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
@@ -7859,6 +7861,8 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (kit.wAbuDhabi) built.push(kit.wAbuDhabi(7.3, 266.4, 2.897));
   /* SeaWorld on its surveyed landmark (the 327 by 320 m footprint at bake (20188, -489) m). */
   if (kit.seaWorldYas) built.push(kit.seaWorldYas(211.4, 11.9));
+  /* The circuit's pit building and main grandstand on their surveyed footprints along the straight. */
+  if (kit.yasCircuit) built.push(kit.yasCircuit(35.0, 230.7, 0.14, 37.2, 239.5));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

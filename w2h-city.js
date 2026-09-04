@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v105';
+export const BUILD = 'city v106';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4395,11 +4395,74 @@ function seaWorldYas(x0, z0){
   g.add(crown);
   return g;
 }
+
+/* QASR AL HOSN (city v106) — the fort: white walls round a courtyard, the round watchtower at
+   the corner with its crenellated top, a square tower opposite, the palace block inside. On the
+   survey's 91 by 88 m footprint. */
+function qasrAlHosn(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const white = saadKitMat(0xE8E1D2, 0xF6F2EA, 0.9, 0);
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const at = (ax, az) => [x0 + ax * cs + az * sn, z0 - ax * sn + az * cs];
+  const S = 88 / M, WH = 8 / M, WT = 2.4 / M;
+  for (const [ax, az, w, d] of [[0, -S / 2, S, WT], [0, S / 2, S, WT], [-S / 2, 0, WT, S], [S / 2, 0, WT, S]]){
+    const [wx, wz] = at(ax, az);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, WH, d), white);
+    wall.position.set(wx, WH / 2, wz); wall.rotation.y = rot; g.add(wall);
+  }
+  const [tx, tz] = at(-S / 2, -S / 2);
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(6.5 / M, 7.5 / M, 17 / M, 20), white);
+  tower.position.set(tx, 8.5 / M, tz); tower.userData.hero = tower.userData.kitName = 'qasrAlHosn'; g.add(tower);
+  for (let k = 0; k < 10; k++){
+    const a = k / 10 * 6.2832;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(2 / M, 1.6 / M, 1.4 / M), white);
+    m.position.set(tx + Math.cos(a) * 6.2 / M, 17.8 / M, tz + Math.sin(a) * 6.2 / M); m.rotation.y = -a; g.add(m);
+  }
+  const [sx, sz] = at(S / 2, S / 2);
+  const sq = new THREE.Mesh(new THREE.BoxGeometry(12 / M, 14 / M, 12 / M), white);
+  sq.position.set(sx, 7 / M, sz); sq.rotation.y = rot; g.add(sq);
+  const [px, pz] = at(8 / M, 6 / M);
+  const palace = new THREE.Mesh(new THREE.BoxGeometry(44 / M, 11 / M, 30 / M), white);
+  palace.position.set(px, 5.5 / M, pz); palace.rotation.y = rot; g.add(palace);
+  return g;
+}
+/* YAS MARINA CIRCUIT — the pit building along the main straight with its control tower, and the
+   main grandstand opposite under the sweeping white canopy. Both on the survey's long footprints
+   (381 by 25 m and 374 by 34 m, rot 0.14), which the kit zone replaces. */
+function yasCircuit(x0, z0, rot, gx, gz){
+  const g = new THREE.Group(), M = M_PER_U;
+  const white = saadKitMat(0xD9D4CB, 0xF0EDE6, 0.8, 0.05);
+  const glass = saadKitMat(0x1F2A33, 0x2F3E4C, 0.25, 0.5);
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const pit = new THREE.Mesh(new THREE.BoxGeometry(380 / M, 12 / M, 24 / M), white);
+  pit.position.set(x0, 6 / M, z0); pit.rotation.y = rot; g.add(pit);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(382 / M, 3 / M, 25 / M), glass);
+  band.position.set(x0, 7 / M, z0); band.rotation.y = rot; g.add(band);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(392 / M, 1.2 / M, 34 / M), white);
+  roof.position.set(x0, 12.6 / M, z0); roof.rotation.y = rot; g.add(roof);
+  const ctl = new THREE.Mesh(new THREE.BoxGeometry(18 / M, 42 / M, 18 / M), glass);
+  ctl.position.set(x0 + cs * 150 / M, 21 / M, z0 - sn * 150 / M); ctl.rotation.y = rot; g.add(ctl);
+  /* the grandstand: three tiers stepping back, a canopy curved over them */
+  const tiers = [[0, 6], [12, 12], [24, 18]];
+  for (const [back, h] of tiers){
+    const t = new THREE.Mesh(new THREE.BoxGeometry(370 / M, h / M, 12 / M), white);
+    t.position.set(gx + sn * back / M, h / 2 / M, gz + cs * back / M); t.rotation.y = rot; g.add(t);
+  }
+  const canopy = new THREE.Mesh(new THREE.CylinderGeometry(46 / M, 46 / M, 380 / M, 24, 1, true, 0.15, 0.95), white);
+  canopy.rotation.set(0, 0, Math.PI / 2);
+  const cg = new THREE.Group();
+  cg.add(canopy);
+  cg.position.set(gx + sn * 22 / M, 4 / M, gz + cs * 22 / M);
+  cg.rotation.y = rot;
+  canopy.userData.hero = canopy.userData.kitName = 'yasCircuit';
+  g.add(cg);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
-         capitalGate, wAbuDhabi, gateTowers, seaWorldYas };
+         capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit };
 }
 
 
