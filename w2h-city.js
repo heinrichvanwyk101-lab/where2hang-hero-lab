@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v99';
+export const BUILD = 'city v100';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3981,14 +3981,22 @@ function louvreAbuDhabi(x0, z0){
   const R_DOME = 90 / M, SAG = 30 / M, RIM_Y = 9 / M, PL_H = 3 / M;
   /* THE PLATFORM IN THE SEA. The museum stands on its own plinth surrounded by water; the survey
      coastline stops at the old shore, so the plinth is the land here. */
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(260 / M, PL_H, 210 / M), saadKitMat(0xD8D1C2, 0xE9E3D6, 0.9, 0));
+  /* The platform is mostly water between the galleries: a pool-coloured slab with pale quay
+     edges, which is what the aerials show — white boxes standing in shallow turquoise. */
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(260 / M, PL_H, 210 / M), saadKitMat(0x5FA9BE, 0x74C3D8, 0.2, 0.05));
   plinth.position.set(x0, PL_H / 2, z0);
   g.add(plinth);
+  const quayMat = saadKitMat(0xD8D1C2, 0xE9E3D6, 0.9, 0);
+  for (const [w, d, dx, dz] of [[260, 14, 0, -98], [260, 14, 0, 98], [14, 210, -123, 0], [14, 210, 123, 0]]){
+    const q = new THREE.Mesh(new THREE.BoxGeometry(w / M, PL_H + 0.6 / M, d / M), quayMat);
+    q.position.set(x0 + dx / M, (PL_H + 0.6 / M) / 2, z0 + dz / M);
+    g.add(q);
+  }
   /* THE WHITE BOXES — the galleries, a loose medina of cubes under the dome. */
   const boxMat = saadKitMat(0xE6E1D8, 0xF4F1EA, 0.85, 0);
   let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
-  for (let i = 0; i < 26; i++){
-    const w = (9 + rnd() * 26) / M, d = (9 + rnd() * 22) / M, h = (7 + rnd() * 7) / M;
+  for (let i = 0; i < 34; i++){
+    const w = (9 + rnd() * 30) / M, d = (9 + rnd() * 24) / M, h = (6 + rnd() * 8) / M;
     const a = rnd() * 6.2832, rr = rnd() * 70 / M;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boxMat);
     m.position.set(x0 + Math.cos(a) * rr, PL_H + h / 2, z0 + Math.sin(a) * rr);
@@ -4025,6 +4033,12 @@ function louvreAbuDhabi(x0, z0){
   dome.position.set(x0, PL_H + RIM_Y - Rs * Math.cos(theta), z0);
   dome.userData.hero = true;
   g.add(dome);
+  /* The rim: a pale ring where the lattice ends, the edge every photograph draws. */
+  const rimGeo = new THREE.TorusGeometry(R_DOME, 1.2 / M, 8, 96);
+  rimGeo.rotateX(Math.PI / 2);
+  const rim = new THREE.Mesh(rimGeo, saadKitMat(0xC9CDD1, 0xEEF1F3, 0.5, 0.4));
+  rim.position.set(x0, PL_H + RIM_Y, z0);
+  g.add(rim);
   /* THE CAUSEWAY — the platform joins the shore to the east by a promenade deck; without it the
      museum floats off the coast. */
   const way = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 2 / M, 36 / M), saadKitMat(0xCFC6B4, 0xE2DACB, 0.9, 0));
@@ -4057,7 +4071,25 @@ function zayedNationalMuseum(x0, z0, bearing){
   /* THE FIVE SAILS. Curved wings, the tallest 123 m in the middle, each a lathe whose swell sits
      two-fifths of the way up at a fifth of its height, pressed to a third of that in thickness
      and leaning toward the lagoon. Silver lattice by day, dark with a warm interior glow at night. */
-  const wingMat = saadKitMat(0x4E5258, 0xC9CED3, 0.35, 0.6, 0xFFA860, 0.30);
+  /* THE LATTICE on the sails: a diagonal grid drawn once, carried as the colour map by day and
+     as the emissive map at night, so the glow comes through the cells and not the ribs. */
+  const lat = (() => {
+    const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#6E7378'; c.fillRect(0, 0, N, N);
+    c.strokeStyle = '#E9ECEF'; c.lineWidth = 6;
+    for (let k = -8; k <= 16; k++){
+      c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 + N * 0.5, N); c.stroke();
+      c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 - N * 0.5, N); c.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 6);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  })();
+  const wingMat = new THREE.MeshStandardMaterial({ color:0x8A8F94, map:lat, roughness:0.4, metalness:0.5, emissive:0xFFA860, emissiveIntensity:0.35, emissiveMap:lat });
+  wingMat.userData.duskColor = 0xC9CED3; wingMat.userData.glassOverride = false;
+  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6E9EC, map:lat, roughness:0.4, metalness:0.45 });
   const heights = [76, 110, 123, 98, 88];
   const spacing = 36 / M;
   heights.forEach((hm, i) => {
@@ -4098,6 +4130,13 @@ function guggenheimAbuDhabi(x0, z0){
     m.rotation.y = rnd() * 0.9 - 0.45;
     g.add(m);
   }
+  /* The honeycomb: two rows of hexagonal cells along the seaward edge, as in the site aerial. */
+  const cellMat = saadKitMat(0xD9D4CC, 0xEDE9E2, 0.85, 0);
+  for (let row = 0; row < 2; row++) for (let i = 0; i < 12; i++){
+    const cell = new THREE.Mesh(new THREE.CylinderGeometry(8 / M, 8 / M, 7 / M, 6, 1, false), cellMat);
+    cell.position.set(x0 + (-96 + i * 17.5 + (row ? 8.5 : 0)) / M, 6 / M + 3.5 / M, z0 + (-70 - row * 15) / M);
+    g.add(cell);
+  }
   for (let i = 0; i < 7; i++){
     const a = i / 7 * 6.2832 + rnd() * 0.5, rr = (30 + rnd() * 40) / M;
     const H = (30 + rnd() * 30) / M, rb = (11 + rnd() * 9) / M, rt = rb * (0.2 + rnd() * 0.3);
@@ -4116,20 +4155,24 @@ function naturalHistoryMuseum(x0, z0){
      taller toward the middle, green on the ledges. */
   const white = saadKitMat(0xE3E0D8, 0xF4F2EC, 0.85, 0.02);
   const green = saadKitMat(0x5E7D45, 0x6F9452, 0.95, 0);
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 4 / M, 130 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(130 / M, 4 / M, 100 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
   plinth.position.set(x0, 2 / M, z0);
   g.add(plinth);
   let seed = 23; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
   for (let i = 0; i < 14; i++){
     const w = (18 + rnd() * 26) / M, d = (18 + rnd() * 24) / M;
-    const dx = (rnd() - 0.5) * 130, dz = (rnd() - 0.5) * 95;
-    const cen = 1 - Math.min(1, Math.hypot(dx / 65, dz / 48));
+    const dx = (rnd() - 0.5) * 96, dz = (rnd() - 0.5) * 70;
+    const cen = 1 - Math.min(1, Math.hypot(dx / 48, dz / 35));
     const h = (10 + cen * 34 + rnd() * 6) / M;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), white);
     m.position.set(x0 + dx / M, 4 / M + h / 2, z0 + dz / M);
     m.rotation.y = rnd() * 0.5 - 0.25;
     if (i === 0) m.userData.hero = true;
     g.add(m);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 2.4 / M, d * 1.02), saadKitMat(0x2E3A44, 0x3C4A56, 0.3, 0.4));
+    band.position.set(m.position.x, 4 / M + h * 0.55, m.position.z);
+    band.rotation.y = m.rotation.y;
+    g.add(band);
     const t = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 1.2 / M, d * 0.7), green);
     t.position.set(m.position.x, 4 / M + h + 0.6 / M, m.position.z);
     t.rotation.y = m.rotation.y;
@@ -4144,6 +4187,13 @@ function teamLabPhenomena(x0, z0){
      scale. Glows softly at night. */
   const mat = saadKitMat(0xE8E4DC, 0xF6F3EE, 0.75, 0, 0xFFE6C8, 0.14);
   const blobs = [[150, 30, 120, 0, 0], [110, 26, 90, 62, 22], [80, 18, 70, -56, -26]];
+  /* The openings cut into the shell: dark recesses on the seaward faces. */
+  const dark = saadKitMat(0x1E262C, 0x2A343C, 0.6, 0.2);
+  for (const [dx, dz, w] of [[10, 58, 34], [72, 62, 26], [-30, 50, 22]]){
+    const o = new THREE.Mesh(new THREE.BoxGeometry(w / M, 9 / M, 12 / M), dark);
+    o.position.set(x0 + dx / M, 8 / M, z0 + dz / M);
+    g.add(o);
+  }
   blobs.forEach(([w, h, d, dx, dz], i) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), mat);
     m.scale.set(w / 2 / M, h / M, d / 2 / M);

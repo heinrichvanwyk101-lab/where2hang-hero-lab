@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v281';
+export const BUILD = 'world v282';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5227,8 +5227,8 @@ const DISTRICTS = [
          centre; see LM_SAADIYAT. */
       { label:'Louvre Abu Dhabi',        x:-478.8, z:172.6, h: 5, r:34 },
       { label:'Guggenheim Abu Dhabi',    x:-480.4, z: 74.7, h: 8, r:30 },
-      { label:'Natural History Museum',  x:-352.2, z:299.1, h: 5, r:26 },
-      { label:'teamLab Phenomena',       x:-313.8, z:317.1, h: 4, r:26 },
+      { label:'Natural History Museum',  x:-345.2, z:301.0, h: 5, r:26 },
+      { label:'teamLab Phenomena',       x:-306.1, z:296.5, h: 4, r:26 },
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
@@ -6882,6 +6882,15 @@ function buildingSpec(rnd, ctx){
     if      (u < 0.30){ mat = 'stone'; tAmount = 0.38; tWarm = 0.95; }
     else              { mat = 'clad';  tAmount = 0.30; tWarm = 0.55; }
   }
+  /* A DISTRICT STYLE overrides the roll (world v282). The Saadiyat Cultural District is white
+     contemporary mid-rise — Saadiyat Grove, Mamsha — and the fabric around the museums was
+     rolling terracotta render and clay roofs like a villa estate, which is what the eye caught
+     first. A style zone says white for everything under the tower classes, pale cladding above,
+     and a cooler, fainter tint. No random numbers consumed: the roll stays, only its answer moves. */
+  if (ctx.style === 'white'){
+    mat = (villaAbs || frac < 0.62) ? 'white' : 'clad';
+    tAmount = 0.18; tWarm = 0.55;
+  }
   const tint = { v:R.tintV, w:R.tintW, amount:tAmount, warm:tWarm };
 
   /* ---- PODIUM ----
@@ -7321,8 +7330,10 @@ function urbanFabric(d, layer, opts){
   const VILLA_CAP = 11 / M_PER_UNIT;
   const CORE_FLOOR = 7 / M_PER_UNIT, CORE_ABS = 16 / M_PER_UNIT;
   const coreCap = cap => Math.max(CORE_FLOOR, Math.min(CORE_ABS, cap * 0.32));
+  const styleAt = (x, z) => { for (const zn of (d.styleZones || [])) if (x >= zn.x0 && x <= zn.x1 && z >= zn.z0 && z <= zn.z1) return zn.style; return null; };
   const specs = cells.map(c => buildingSpec(rnd, {
     jx:c.jx, jy:c.jy, x:c.jx * d.r, z:-c.jy * d.r, rot:c.rot,
+    style: styleAt(c.jx * d.r, -c.jy * d.r),
     plotW:c.w, plotD:c.dp, tallest,
     /* CORE_CAP is a FRACTION of the island ceiling, not a fixed height, because back-of-house is
        relative: a service block behind a Corniche tower is taller than a whole villa. A third,
@@ -7441,7 +7452,7 @@ function urbanFabric(d, layer, opts){
     /* A HOUSE, AND THEREFORE A ROOF. Plain boxes only: a plant room, a parapet or a podium tier is
        low by nature and putting clay tiles on one would cap a tower with a cottage. */
     if (!o.raw && o.t !== 'roof' && (o.g || 'box') === 'box' &&
-        o.h * M_PER_UNIT <= VILLA_ABS_M){
+        o.h * M_PER_UNIT <= VILLA_ABS_M && styleAt(sp.x, sp.z) !== 'white'){   // no clay in a white district
       villaRoofs.push({ x:M.position.x, z:M.position.z, y:M.position.y + o.h,
                         w:o.w, d:o.d, rot:sp.rot });
     }
@@ -7950,19 +7961,22 @@ if (!NO_KIT && kit.rahaMall){
    extent centre (x - 1547.3) / 7.8, -(y - 6233) / 7.8. The kit zones clear the generated fabric
    and the survey's flat parcels from under them. */
 const saadiyat = DISTRICTS.find(d => d.id === 'saadiyat');
+/* The fabric between the museums is white contemporary (buildingSpec reads styleZones): the
+   cultural district and Saadiyat Grove, x -2500..-600 m, y 4200..5500 m, in island units. */
+saadiyat.styleZones = [{ x0:-520, x1:-275, z0:94, z1:262, style:'white' }];
 const LM_SAADIYAT = {
   louvre:     { x:-478.8, z:172.6 },
   znm:        { x:-371.6, z:177.8 },
   guggenheim: { x:-480.4, z: 74.7 },
-  nhm:        { x:-352.2, z:299.1 },   // on the channel by the bridge landing (-1200, 3900 m)
-  teamlab:    { x:-313.8, z:317.1 },   // east of it on the same shore (-900, 3760 m)
+  nhm:        { x:-345.2, z:301.0 },   // on the channel by the bridge landing (-1145, 3885 m), clear of the shore road
+  teamlab:    { x:-306.1, z:296.5 },   // east of it, 190 m back from the shore and off the road (-840, 3920 m)
 };
 KIT_ZONES[saadiyat.id] = [
   { x0:-497, x1:-460, z0:158, z1:187 },   // Louvre platform, 260 x 210 m
   { x0:-388, x1:-355, z0:160, z1:189 },   // Zayed National Museum podium and lagoon
   { x0:-495, x1:-466, z0: 63, z1: 87 },   // Guggenheim, 220 x 170 m
-  { x0:-364, x1:-340, z0:290, z1:308 },   // Natural History Museum, 170 x 130 m
-  { x0:-326, x1:-301, z0:307, z1:327 },   // teamLab Phenomena, 190 x 140 m
+  { x0:-360, x1:-330, z0:288, z1:314 },   // Natural History Museum, 130 x 100 m plus a margin
+  { x0:-322, x1:-290, z0:283, z1:310 },   // teamLab Phenomena, 190 x 140 m plus a margin
 ];
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
@@ -9248,7 +9262,13 @@ function footprintsFor(d, list){
   const VK_MAX_M2 = 2500, VK_MAX_V = 4;
   const vkOf   = sp => (sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT > VK_MAX_M2 || sp.v >= VK_MAX_V)
                      ? null : sp.vk;
-  const matOf  = sp => (vkOf(sp) && VK_MAT[vkOf(sp)]) || typeOf(sp.h);
+  /* THE DISTRICT STYLE APPLIES TO SURVEYED BUILDINGS TOO (world v282): the terracotta round the
+     Zayed came from real footprints on the villa rule, not from the fabric. In a white zone a
+     surveyed building is white under the tower classes and pale cladding above, and no clay. */
+  const styleAtF = (x, z) => { for (const zn of (d.styleZones || [])) if (x >= zn.x0 && x <= zn.x1 && z >= zn.z0 && z <= zn.z1) return zn.style; return null; };
+  const matOf  = sp => styleAtF(sp.x, sp.z) === 'white'
+                     ? (sp.h > tallest * 0.62 ? 'clad' : 'white')
+                     : ((vkOf(sp) && VK_MAT[vkOf(sp)]) || typeOf(sp.h));
   /* THE VILLA FLOOR BEATS BOTH BRANCHES. A house gets class 0 windows whether or not a restaurant
      is joined to it — the dine bump exists to light a ground-floor unit under offices, and there
      are no offices above a villa. */
@@ -9338,7 +9358,7 @@ function footprintsFor(d, list){
 
      THE TONE IS DETERMINISTIC IN POSITION, not drawn from a stream, so it does not depend on the
      order the specs happen to arrive in and a reload rebuilds the identical estate. */
-  const villas = boxed.filter(sp => !sp.vk &&
+  const villas = boxed.filter(sp => !sp.vk && styleAtF(sp.x, sp.z) !== 'white' &&
     sp.h * M_PER_UNIT <= VILLA_H &&
     sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT <= VILLA_AREA);
   if (villas.length){
