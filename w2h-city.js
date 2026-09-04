@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v102';
+export const BUILD = 'city v103';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4095,8 +4095,8 @@ function zayedNationalMuseum(x0, z0, bearing){
   const lat = (() => {
     const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
     const c = cv.getContext('2d');
-    c.fillStyle = '#6E7378'; c.fillRect(0, 0, N, N);
-    c.strokeStyle = '#E9ECEF'; c.lineWidth = 6;
+    c.fillStyle = '#B9BFC5'; c.fillRect(0, 0, N, N);
+    c.strokeStyle = '#F4F6F8'; c.lineWidth = 6;
     for (let k = -8; k <= 16; k++){
       c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 + N * 0.5, N); c.stroke();
       c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 - N * 0.5, N); c.stroke();
@@ -4106,9 +4106,9 @@ function zayedNationalMuseum(x0, z0, bearing){
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     return t;
   })();
-  const wingMat = new THREE.MeshStandardMaterial({ color:0x8A8F94, map:lat, roughness:0.4, metalness:0.5, emissive:0xFFA860, emissiveIntensity:0.35, emissiveMap:lat });
+  const wingMat = new THREE.MeshStandardMaterial({ color:0x5C6268, map:lat, roughness:0.4, metalness:0.5, emissive:0xFFA860, emissiveIntensity:0.40, emissiveMap:lat });
   wingMat.userData.duskColor = 0xC9CED3; wingMat.userData.glassOverride = false;
-  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE6E9EC, map:lat, roughness:0.4, metalness:0.45 });
+  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2F4F6, map:lat, roughness:0.38, metalness:0.4 });
   const heights = [76, 110, 123, 98, 88];
   const spacing = 36 / M;
   heights.forEach((hm, i) => {
@@ -4120,11 +4120,20 @@ function zayedNationalMuseum(x0, z0, bearing){
       const half = (t < 0.4 ? base + (swell - base) * (t / 0.4) : swell * (1 - (t - 0.4) / 0.6) + 0.4) / M;
       prof.push(new THREE.Vector2(Math.max(0.25 / M, half), t * H));
     }
-    const wing = new THREE.Mesh(new THREE.LatheGeometry(prof, 20), wingMat);
+    const wingGeo = new THREE.LatheGeometry(prof, 20);
+    /* THE CURVE. A lathe is straight; a falcon's wing is not. Each vertex is pushed sideways by
+       the square of its height, so the sail bows toward the lagoon and its tip hooks over, the
+       way the render's do. */
+    {
+      const pos = wingGeo.attributes.position;
+      for (let v = 0; v < pos.count; v++){ const y = pos.getY(v); pos.setZ(v, pos.getZ(v) - 0.7 * y * y / H); }   // z is pressed to a third afterwards
+      pos.needsUpdate = true; wingGeo.computeVertexNormals();
+    }
+    const wing = new THREE.Mesh(wingGeo, wingMat);
     wing.scale.set(1, 1, 0.34);
     const off = (i - 2) * spacing;
     wing.position.set(x0 + Math.cos(rot) * off, 16 / M, z0 + Math.sin(rot) * off);
-    wing.rotation.set(-0.22, rot, 0.06 - i * 0.03);
+    wing.rotation.set(0, rot, 0.04 - i * 0.02);   // broad face along the row; the bow leans to -z, the lagoon side
     if (i === 2) wing.userData.hero = true;
     g.add(wing);
   });
