@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v273';
+export const BUILD = 'world v274';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5176,6 +5176,10 @@ const DISTRICTS = [
        hole in the data. Ground with no road within 200 m and clear of the shore is dressed as
        works — hoarded hardcore pads, tower cranes, cabins, sand heaps. */
     underConstruction:true,
+    /* The district shot comes from the north-west: Al Reem sits near the archipelago's centre, so
+       the away-from-centre rule has no clear answer for it, and its open water is the channel
+       out to the Gulf between Saadiyat and Corniche. */
+    seaAngle: Math.PI * 1.25,
     built:false, coreN:[-0.25, 0.05], places:[
       /* THE ONE ISLAND THE BAKE CANNOT CARRY YET. Of the three names asked for, Overpass returns
          only Sky Tower — Gate Towers and Reem Mall are in the bake's LANDMARKS table and come
