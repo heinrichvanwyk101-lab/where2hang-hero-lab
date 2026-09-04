@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v271';
+export const BUILD = 'world v273';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3824,6 +3824,73 @@ function paintGround(d, plan){
       }
     }
 
+    /* CONSTRUCTION PADS (world v272), on islands flagged underConstruction. A 160 m lattice over
+       the island; a cell is a site when it is on land, has no road within about 200 m, sits more
+       than 220 m from the shore and is not in a park or golf course. Each site gets a hoarded
+       hardcore pad — pale grey-beige with a dark hoarding line — rotated to the island's own
+       grid, and a darker worked-earth blotch around it. The pads go to the props as plan.sites. */
+    plan.sites = [];
+    if (d.underConstruction){
+      const cellN = roadW(d, 160), shoreN = roadW(d, 220);
+      const gridRot = (plan.gridRot !== undefined ? plan.gridRot : (d.rot || 0));
+      const inGreen = (x, y) => (d.realGolf || []).concat((d.realParks || []).filter(r => r.kind === 'park' || r.kind === 'garden'))
+        .some(rg => { let c = false; for (let i = 0, j = rg.length - 1; i < rg.length; j = i++){ const xi = rg[i][0], yi = rg[i][1], xj = rg[j][0], yj = rg[j][1]; if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c; } return c; });
+      /* DISTANCE TO THE NEAREST SURVEYED CENTRELINE, not onRoad: that grid falls back to the
+         generated ring road on an island whose real network has no ring, and the ring's clearance
+         swallowed every cell on Al Reem — 130 of 130. Real roads only, brute force; a few hundred
+         cells against a few thousand segments, once. */
+      const realRoads = (d.roads && d.roads.drawArterials) || [];
+      const nearRealRoad = (x, y, lim) => {
+        const L2 = lim * lim;
+        for (const rd of realRoads){
+          for (let i = 1; i < rd.length; i++){
+            const ax = rd[i-1][0], ay = rd[i-1][1], dx = rd[i][0] - ax, dy = rd[i][1] - ay;
+            const s2 = dx * dx + dy * dy; let t = s2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / s2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+            const px = ax + t * dx - x, py = ay + t * dy - y;
+            if (px * px + py * py < L2) return true;
+          }
+        }
+        return false;
+      };
+      const roadN = roadW(d, 200);
+      const hx = isleHalf(d.id);
+      for (let gy = -hx.y; gy <= hx.y; gy += cellN){
+        for (let gx = -hx.x; gx <= hx.x; gx += cellN){
+          const cx = gx + (R() - 0.5) * cellN * 0.4, cy = gy + (R() - 0.5) * cellN * 0.4;
+          if (!insideIsle(d.id, cx, cy)) continue;
+          if (distToOutline(d.id, cx, cy) < shoreN) continue;
+          if (nearRealRoad(cx, cy, roadN)) continue;
+          if (inGreen(cx, cy)) continue;
+          if (R() < 0.28) continue;                                    // a plot not started yet
+          const pw = roadW(d, 60 + R() * 70), ph = roadW(d, 45 + R() * 55);
+          const rot = gridRot + (R() < 0.5 ? 0 : Math.PI / 2) + (R() - 0.5) * 0.12;
+          plan.sites.push({ x: cx, y: cy, w: pw, h: ph, rot });
+          const c = Math.cos(rot), s = Math.sin(rot);
+          const corner = (u, v) => [PX(cx + u * c - v * s), PY(cy + u * s + v * c)];
+          // worked earth around the pad
+          g.save();
+          g.translate(PX(cx), PY(cy));
+          g.fillStyle = 'rgba(120, 96, 66, 0.30)';
+          g.beginPath(); g.ellipse(0, 0, (pw + roadW(d, 40)) * U, (ph + roadW(d, 40)) * U, -rot, 0, Math.PI * 2); g.fill();
+          g.restore();
+          g.beginPath();
+          const q = [corner(-pw/2, -ph/2), corner(pw/2, -ph/2), corner(pw/2, ph/2), corner(-pw/2, ph/2)];
+          g.moveTo(q[0][0], q[0][1]); for (let k = 1; k < 4; k++) g.lineTo(q[k][0], q[k][1]); g.closePath();
+          g.fillStyle = '#BDB19C'; g.fill();
+          g.strokeStyle = '#4A4A46'; g.lineWidth = Math.max(0.8, U * roadW(d, 2.5)); g.stroke();
+          // excavation scratches
+          g.strokeStyle = 'rgba(90,80,64,0.55)'; g.lineWidth = Math.max(0.6, U * roadW(d, 1.5));
+          g.beginPath();
+          for (let k = -1; k <= 1; k++){
+            const a = corner(-pw * 0.38, k * ph * 0.25), b = corner(pw * 0.38, k * ph * 0.25);
+            g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]);
+          }
+          g.stroke();
+        }
+      }
+      console.info('construction ' + d.id + ': ' + plan.sites.length + ' sites');
+    }
+
     /* THE FLOOR IS 2.4, NOT 4.0, AND THE FIRST VALUE BROKE THE HIERARCHY.
 
        MIN_PX gives ring 10, major 9, minor 6 and local 3.5 pixels for corridors of 31, 28, 18 and
@@ -4848,6 +4915,8 @@ function glazed(base, tex){
    =========================================================================== */
 const DISTRICTS = [
   { id:'corniche', name:'Corniche',   x:-40*ISLE_SCALE, z:66*ISLE_SCALE, r:76*ISLE_SCALE, rot: 0.10, tint:C.gold,
+    /* The district shot comes from the Gulf, north of the Corniche itself; the mainland is south. */
+    seaAngle: Math.PI,
     built:true,
     /* Re-placed onto the island. Emirates Palace west, Etihad centre, ADNOC at the eastern end,
        all in a band just inland of the north coast, with the supporting city behind them to the
@@ -5102,6 +5171,11 @@ const DISTRICTS = [
      the camera heading is derived from it, and every rule on the island is relative to its own
      centre. */
   { id:'reem',     name:'Al Reem',    x:88*ISLE_SCALE, z:34*ISLE_SCALE, r:44*ISLE_SCALE, rot:-0.20, tint:0xBFD3E0,
+    /* UNDER CONSTRUCTION (world v272): the east and south of Al Reem carry no surveyed roads or
+       buildings because they are still being built, and desert on a reclaimed island reads as a
+       hole in the data. Ground with no road within 200 m and clear of the shore is dressed as
+       works — hoarded hardcore pads, tower cranes, cabins, sand heaps. */
+    underConstruction:true,
     built:false, coreN:[-0.25, 0.05], places:[
       /* THE ONE ISLAND THE BAKE CANNOT CARRY YET. Of the three names asked for, Overpass returns
          only Sky Tower — Gate Towers and Reem Mall are in the bake's LANDMARKS table and come
@@ -5182,6 +5256,9 @@ const DISTRICTS = [
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
   { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+    /* The district shot comes from the north: the Gulf. South of the strip is Khalifa City and
+       the E10, which the model leaves as water. */
+    seaAngle: Math.PI,
     /* FULLY BUILT, per the brief: the generated fill is kept everywhere the survey has nothing,
        not only within 160 m of a surveyed footprint (world-nav cullFabric). */
     fillAll:true,

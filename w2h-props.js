@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v38';
+export const BUILD = 'props v39';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -385,6 +385,26 @@ const matSignal = LENS.map(l => new THREE.MeshStandardMaterial({
   color:0x1A1610, roughness:0.35, emissive:l.hex, emissiveIntensity:3.6 }));
 const matCar   = new THREE.MeshStandardMaterial({ color:0xBFC4C8, roughness:0.42, metalness:0.25 });
 const matBoat  = new THREE.MeshStandardMaterial({ color:0xE2E4E0, roughness:0.5 });
+/* ---------- construction (props v39) ----------
+   A tower crane: mast, jib, counter-jib and a red aircraft light at the top; a site cabin; a sand
+   heap. Instanced per island from plan.sites. The light is emissive on its own material so it
+   reads at night without a lamp pool. */
+const craneGeo = (() => {
+  const U = U_PER_M, H = 48 * U;
+  const mast = new THREE.BoxGeometry(1.8 * U, H, 1.8 * U); mast.translate(0, H / 2, 0);
+  const jib  = new THREE.BoxGeometry(42 * U, 1.2 * U, 1.4 * U); jib.translate(14 * U, H, 0);
+  const cjib = new THREE.BoxGeometry(12 * U, 1.6 * U, 1.6 * U); cjib.translate(-6 * U, H - 0.4 * U, 0);
+  const cab  = new THREE.BoxGeometry(2.6 * U, 2.6 * U, 2.6 * U); cab.translate(1.6 * U, H - 2.2 * U, 0);
+  const body = mergeGeometries([mast, jib, cjib, cab]);
+  const lamp = new THREE.BoxGeometry(0.9 * U, 0.9 * U, 0.9 * U); lamp.translate(0, H + 1.4 * U, 0);
+  return mergeGeometries([body, lamp], true);
+})();
+const matCrane = new THREE.MeshStandardMaterial({ color:0xE2B424, roughness:0.7, metalness:0.2 });
+const matCraneLamp = new THREE.MeshStandardMaterial({ color:0x300000, emissive:0xFF2418, emissiveIntensity:2.2, toneMapped:false });
+const cabinGeo = (() => { const g = new THREE.BoxGeometry(7 * U_PER_M, 3 * U_PER_M, 3 * U_PER_M); g.translate(0, 1.5 * U_PER_M, 0); return g; })();
+const matCabin = new THREE.MeshStandardMaterial({ color:0xE8E4DA, roughness:0.85 });
+const heapGeo = (() => { const g = new THREE.ConeGeometry(7 * U_PER_M, 4 * U_PER_M, 7, 1); g.translate(0, 2 * U_PER_M, 0); return g; })();
+const matHeap = new THREE.MeshStandardMaterial({ color:0xC8B48E, roughness:1 });
 
 /* ---------- polyline walking ----------
    Props follow the SAME road polylines the ground painter strokes, so a lamp is never in the
@@ -1224,6 +1244,26 @@ function addProps(d, layer, plan, budget = {}){
     const s = 0.75 + R() * 0.75;
     M.scale.set(s, s, s);
   });
+
+  /* CONSTRUCTION SITES (props v39): on each pad a crane at a corner for about a third of them,
+     one or two cabins along an edge, a sand heap or two inside. */
+  {
+    const sites = plan.sites || [];
+    const cranes = [], cabins = [], heaps = [];
+    for (const st of sites){
+      const c = Math.cos(st.rot), s = Math.sin(st.rot);
+      const at = (u, v) => [st.x + u * c - v * s, st.y + u * s + v * c];
+      if (R() < 0.36){ const q = at((R() < 0.5 ? -1 : 1) * st.w * 0.38, (R() < 0.5 ? -1 : 1) * st.h * 0.36); cranes.push({ x:q[0], y:q[1], rot: R() * 6.2832 }); }
+      const nc = 1 + (R() < 0.5 ? 1 : 0);
+      for (let k = 0; k < nc; k++){ const q = at((k - 0.5) * st.w * 0.3, -st.h * 0.42); cabins.push({ x:q[0], y:q[1], rot: st.rot }); }
+      const nh = 1 + (R() < 0.6 ? 1 : 0);
+      for (let k = 0; k < nh; k++){ const q = at((R() - 0.5) * st.w * 0.5, (R() - 0.3) * st.h * 0.4); heaps.push({ x:q[0], y:q[1], s: 0.6 + R() * 0.8 }); }
+    }
+    build(craneGeo, [matCrane, matCraneLamp], cranes, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, p.rot, 0); M.scale.set(1, 1, 1); });
+    build(cabinGeo, matCabin, cabins, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, p.rot, 0); M.scale.set(1, 1, 1); });
+    build(heapGeo, matHeap, heaps, (p) => { M.position.set(p.x * r, Y, -p.y * r); M.rotation.set(0, R() * 6.2832, 0); M.scale.set(p.s, p.s, p.s); });
+    if (sites.length) console.info('construction props ' + d.id + ': cranes ' + cranes.length + ', cabins ' + cabins.length + ', heaps ' + heaps.length);
+  }
 
   /* ---------- TRAFFIC (props v34) ----------
 

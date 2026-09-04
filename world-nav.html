@@ -679,7 +679,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v195', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v196', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1654,16 +1654,29 @@ function seawardAngle(d, target, dist){
     const nx = (x - o.x) / R, ny = -(z - o.z) / R;
     return Math.abs(nx) < 1.25 && Math.abs(ny) < 1.25 && insideIsle(o.id, nx, ny);
   });
-  const aOut = Math.atan2(target.x - d.x, target.z - d.z);   // island centre -> shot target
+  /* AWAY FROM THE ARCHIPELAGO, NOT MERELY OFF THE RAY (nav v196). The first version scored the
+     camera ray alone, and a ray can thread clear water while the frame beside it is full of city:
+     Saadiyat's shot came from the channel west-south-west and looked across the whole of Corniche.
+     The open sea is on the side facing away from the other islands, so the preferred azimuth is
+     the direction from the archipelago's weighted centre to this island, and a fan of three rays
+     (±20°) is what gets tested for land. d.seaAngle overrides it outright for islands whose
+     modelled water is real land — Corniche and Al Raha both have the mainland to their south. */
+  if (d.seaAngle !== undefined){ d._seaAngle = d.seaAngle; d._seaAngleDist = dist; d._seaLand = 0; return d.seaAngle; }
+  let cx = 0, cz = 0, wsum = 0;
+  for (const o of DISTRICTS){ const wgt = o.r * (o.dispScale || 1); cx += o.x * wgt; cz += o.z * wgt; wsum += wgt; }
+  cx /= wsum || 1; cz /= wsum || 1;
+  const aAway = Math.atan2(d.x - cx, d.z - cz);
   let best = null;
   for (let k = 0; k < 36; k++){
     const a = k / 36 * Math.PI * 2;
     let hits = 0, n = 0;
-    for (let f = 0.35; f <= 1.6; f += 0.125){
-      n++;
-      if (land(target.x + Math.sin(a) * dist * f, target.z + Math.cos(a) * dist * f)) hits++;
+    for (const da of [-0.35, 0, 0.35]){
+      for (let f = 0.3; f <= 1.6; f += 0.13){
+        n++;
+        if (land(target.x + Math.sin(a + da) * dist * f, target.z + Math.cos(a + da) * dist * f)) hits++;
+      }
     }
-    const score = hits / n - 0.25 * Math.cos(a - aOut);
+    const score = hits / n + 0.35 * (1 - Math.cos(a - aAway));
     if (!best || score < best.score) best = { a, score, hits, n };
   }
   d._seaAngle = best.a; d._seaAngleDist = dist; d._seaLand = best.hits / best.n;
