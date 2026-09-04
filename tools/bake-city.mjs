@@ -1714,6 +1714,15 @@ async function bakeIsland(isle, proj){
   process.stderr.write(`  ${isle.id}: plazas — ${plazas.length} closed pedestrian ways, ` +
                        `kept ${plazasKept.length} over ${MIN_PLAZA_M2} m2\n`);
 
+  /* NO MACHINE-DERIVED FOOTPRINTS ON A GOLF COURSE. Overture's ML fill reads bunkers, tee boxes
+     and maintenance sheds as buildings: Yas Links carried 43 of them and Saadiyat Beach 13, not
+     one with an OSM id. A surveyed clubhouse keeps its id and stays. */
+  {
+    const before = buildings.length;
+    buildings = buildings.filter(bd => bd.osm || !golf.some(g => contains(g, [bd.x, bd.y])));
+    if (before !== buildings.length)
+      process.stderr.write(`  ${isle.id}: dropped ${before - buildings.length} machine-derived footprint(s) on golf courses\n`);
+  }
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
            paths, plazas:plazasKept,
            golf, raceway, water:finalWater, waterIslands,

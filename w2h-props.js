@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v36';
+export const BUILD = 'props v37';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -677,6 +677,12 @@ function addProps(d, layer, plan, budget = {}){
     const m = typeof location !== 'undefined' && location.search.match(/[?&]lamps=(\d+)/);
     const ceil = m ? Math.min(40000, parseInt(m[1], 10)) : 12000;
     B.lamps = Math.max(B.lamps, Math.min(need, ceil));
+    /* PALMS TOO (props v37). A flat 420 lit the first few polylines and left every boulevard after
+       them bare — "long boulevards, roadside landscape missing". Sized from the main-road length
+       at the palm step, both sides at two-thirds take-up, capped where the frond geometry (264
+       triangles a tree) starts to cost more than the buildings. */
+    const needPalms = Math.ceil(plan.mainRoadLen / XS_.stepPalm * 1.35);
+    B.palms = Math.max(B.palms, Math.min(needPalms, 2600));
   }
   // Metres from the junction centre to the signal mast, across and along the approach.
   const SIGNAL_SETBACK = 16 / 7.8 / d.r;

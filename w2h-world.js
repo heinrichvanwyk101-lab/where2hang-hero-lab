@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v269';
+export const BUILD = 'world v270';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2082,6 +2082,20 @@ function cellCap(d, nx, ny, cap){
   return c;
 }
 
+/* THE PAINTED CORRIDOR, KNOWN BEFORE THE PAINT (world v270). The fabric cleared roads at their true
+   width while the painter floors every class at MIN_PX and draws Corniche's roads at about twice
+   true scale, so generated plots sat on the painted tarmac — "buildings built on roads". The
+   same canvas arithmetic paintGround uses, so the skeleton clears exactly what will be drawn. */
+const MIN_PX_CLS = { ring: 10, major: 9, minor: 6, local: 3.5 };
+function groundPxPerUnit(d){
+  const h = isleHalf(d.id);
+  const m = typeof location !== 'undefined' && location.search.match(/[?&]gpx=(\d+(?:\.\d+)?)/);
+  const v = m ? parseFloat(m[1]) : 6;
+  const T = isFinite(v) && v >= 2 && v <= 40 ? v : 6;
+  const spanM = 2 * d.r * M_PER_UNIT * h.x * GROUND_PAD;
+  const W = d.r >= 50 ? Math.min(3072, Math.max(GROUND_W, Math.round(spanM / T))) : 768;
+  return W * 0.5 / (h.x * GROUND_PAD);
+}
 function roadSkeleton(d){
   const rndPlan = localRnd(hashId(d.id));
   const outline = isleOutline(d.id);
@@ -2444,9 +2458,13 @@ function roadGrid(d){
   const useRing = (R.drawRing && R.drawRing.length) ? R.drawRing : (R.ring || []);
   const useArts = (R.drawArterials && R.drawArterials.length) ? R.drawArterials
                                                               : (R.arterials || []);
-  for (const r of useRing) push(r, ringClear);
-  for (const a of useArts)
-    push(a, roadW(d, a.major ? ROAD_MAJOR_M : ROAD_ART_M) * 0.5 * ROAD_KERB);
+  const Upx = groundPxPerUnit(d);
+  const paintedHalf = cls => (MIN_PX_CLS[cls] || MIN_PX_CLS.minor) * ROAD_KERB * 0.5 / Upx;
+  for (const r of useRing) push(r, Math.max(ringClear, paintedHalf('ring')));
+  for (const a of useArts){
+    const cls = a.cls || (a.major ? 'major' : 'minor');
+    push(a, Math.max(roadW(d, a.major ? ROAD_MAJOR_M : ROAD_ART_M) * 0.5 * ROAD_KERB, paintedHalf(cls)));
+  }
 
   let maxClear = 0;
   for (const s of segs) if (s[4] > maxClear) maxClear = s[4];
@@ -3268,7 +3286,7 @@ function paintGround(d, plan){
      they are a floor, never a ceiling: an island fine enough to draw a road at true width still
      does. Everything derived from W — median, edge lines, footways, parking bays — is a fraction
      of it, so it all scales with the exaggeration rather than drifting off the carriageway. */
-  const MIN_PX = { ring: 10, major: 9, minor: 6, local: 3.5 };
+  const MIN_PX = MIN_PX_CLS;
   const corridor = (m, minPx) => Math.max(minPx, U * roadW(d, m));
 
   /* WHICH SIDE IS THE SEA ON, derived rather than declared.
@@ -8236,6 +8254,7 @@ function groundFeaturesFor(d, feats){
   /* ---- the golf course ---- */
   const fairway = flatSet(0x354E32, 0x657E3F, 0x6E8F4E, 0.9, 2);
   let golfN = 0;
+  d.realGolf = [];                       // the accepted rings, for the fabric cull (nav v192)
   for (const ring of (feats.golf || [])){
     if (ring.length < 4) continue;
     let inside = 0;
@@ -8244,6 +8263,7 @@ function groundFeaturesFor(d, feats){
        neighbouring island's bounding box, not one of ours. Majority test rather than all, because
        a links course legitimately runs right down to the waterline and clips it. */
     if (inside < ring.length * 0.5) continue;
+    d.realGolf.push(ring);
     const shape = new THREE.Shape();
     shape.moveTo(ring[0][0], -ring[0][1]);
     for (let i = 1; i < ring.length; i++) shape.lineTo(ring[i][0], -ring[i][1]);
