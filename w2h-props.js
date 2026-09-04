@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v35';
+export const BUILD = 'props v36';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -251,6 +251,18 @@ const carLightGeo = (() => {
 })();
 const matHeadlight = new THREE.MeshBasicMaterial({ color: 0xFFF1C2, toneMapped: false });
 const matTaillight = new THREE.MeshBasicMaterial({ color: 0xFF2A18, toneMapped: false });
+/* LIGHT POOLS FOR THE MOVING CARS (props v36). The lamp pools are what make the roads read from
+   the city camera — a 30 m disc of additive warmth on the ground — and a head lamp the size of a
+   shoebox is nothing at that range. So each car drags a beam pool ahead of it and a red pool
+   behind, flat on the ground, on the same matrices as the body; nightOnly like the lamp pools. */
+const carPoolGeo = (() => {
+  const beam = new THREE.PlaneGeometry(1.5, 2.6); beam.rotateX(-Math.PI / 2); beam.translate(1.7, 0.05, 0);
+  const tail = new THREE.PlaneGeometry(0.9, 0.9); tail.rotateX(-Math.PI / 2); tail.translate(-0.7, 0.05, 0);
+  return mergeGeometries([beam, tail], true);
+})();
+/* SIGNAL HALOS: a flat additive disc at head height in the aspect's colour, toggled with the lens
+   so a junction shows its state from the city camera, where the lens itself is under a pixel. */
+const haloGeo = (() => { const g = new THREE.PlaneGeometry(1.4, 1.4); g.rotateX(-Math.PI / 2); g.translate(0, 0.9, 0); return g; })();
 
 /* ---------- shrub ----------
 
@@ -326,6 +338,9 @@ const matPoolNight = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFB35C,
    it too far: in the dusk place render it was not subtle, it was absent. 0.52 is the compromise —
    present on the promenade, not competing with the sun. */
 const matPoolDusk  = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFC27A, opacity: 0.52 });
+const matCarBeam   = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFFE6B8, opacity: 0.62 });
+const matCarTail   = new THREE.MeshBasicMaterial({ ...poolBase, color: 0xFF3A28, opacity: 0.55 });
+const matHalo = [0xFF3A2A, 0xFFB030, 0x30FF70].map(c => new THREE.MeshBasicMaterial({ ...poolBase, color: c, opacity: 0.75 }));
 
 /* ---------- boat ----------
    A hull with a raked bow, done by shearing the front of a box rather than modelling one. At
@@ -1146,6 +1161,16 @@ function addProps(d, layer, plan, budget = {}){
     M.rotation.set(0, p.rot, 0);
     M.scale.set(1, 1, 1);
   }));
+  const haloMeshes = matHalo.map(mat => {
+    const hm = build(haloGeo, mat, signals, (p) => {
+      M.position.set(p.x * r, Y, -p.y * r);
+      M.rotation.set(0, p.rot, 0);
+      M.scale.set(1, 1, 1);
+    });
+    if (hm){ hm.castShadow = hm.receiveShadow = false; hm.userData.litMat = false;
+             hm.userData.nightOnly = true; hm.userData.duskMats = mat; }
+    return hm;
+  });
 
   build(lampGeo, [matPost, matGlow], lamps, (p) => {
     M.position.set(p.x * r, Y, -p.y * r);
@@ -1266,6 +1291,16 @@ function addProps(d, layer, plan, budget = {}){
   const lightsMesh = build(carLightGeo, [matHeadlight, matTaillight], traffic, () => {
     M.position.set(0, -1000, 0); M.rotation.set(0, 0, 0); M.scale.set(1, 1, 1);
   });
+  const carPoolMesh = build(carPoolGeo, [matCarBeam, matCarTail], traffic, () => {
+    M.position.set(0, -1000, 0); M.rotation.set(0, 0, 0); M.scale.set(1, 1, 1);
+  });
+  if (carPoolMesh){
+    carPoolMesh.frustumCulled = false;
+    carPoolMesh.castShadow = carPoolMesh.receiveShadow = false;
+    carPoolMesh.userData.litMat = false;
+    carPoolMesh.userData.nightOnly = true;
+    carPoolMesh.userData.duskMats = [matCarBeam, matCarTail];
+  }
   if (trafficMesh){ trafficMesh.frustumCulled = false; }
   if (lightsMesh){
     lightsMesh.frustumCulled = false;
@@ -1313,9 +1348,11 @@ function addProps(d, layer, plan, budget = {}){
       TM.updateMatrix();
       trafficMesh.setMatrixAt(i, TM.matrix);
       if (lightsMesh) lightsMesh.setMatrixAt(i, TM.matrix);
+      if (carPoolMesh) carPoolMesh.setMatrixAt(i, TM.matrix);
     }
     trafficMesh.instanceMatrix.needsUpdate = true;
     if (lightsMesh) lightsMesh.instanceMatrix.needsUpdate = true;
+    if (carPoolMesh) carPoolMesh.instanceMatrix.needsUpdate = true;
   }
 
   /* ---------- the signal clock ----------
@@ -1348,11 +1385,15 @@ function addProps(d, layer, plan, budget = {}){
         SM.scale.set(on, on, on);
         SM.updateMatrix();
         m.setMatrixAt(i, SM.matrix);
+        if (haloMeshes[k]) haloMeshes[k].setMatrixAt(i, SM.matrix);
         dirty[k] = true;
       }
     }
     for (let k = 0; k < 3; k++)
-      if (dirty[k] && lensMeshes[k]) lensMeshes[k].instanceMatrix.needsUpdate = true;
+      if (dirty[k] && lensMeshes[k]){
+        lensMeshes[k].instanceMatrix.needsUpdate = true;
+        if (haloMeshes[k]) haloMeshes[k].instanceMatrix.needsUpdate = true;
+      }
   }
   tickSignals(0);
 

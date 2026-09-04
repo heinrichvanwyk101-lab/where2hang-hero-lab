@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v268';
+export const BUILD = 'world v269';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4349,6 +4349,38 @@ const GROUND_NIGHT_EMI = (typeof location !== 'undefined' &&
   (location.search.match(/[?&]gemi=(\d*\.?\d+)/) || [])[1] !== undefined)
   ? parseFloat(location.search.match(/[?&]gemi=(\d*\.?\d+)/)[1]) : 0.10;
 const GROUND_EMI_HEX = 0x5A4632;                 // warm sand, not moonlight
+/* ROAD GLOW AT NIGHT (world v269): the carriageways read from the city camera as lit ribbons, not
+   as black lines on black sand. Derived from the finished day canvas rather than repainted: any
+   pixel that is dark and neutral is asphalt (the road strokes run 0x33383E aged ±25 per cent, the
+   junction pads and car parks a shade either side; sand, kerbs, lawn and paving are all lighter
+   or more saturated). Written at half resolution into an emissive map — roads at full value, the
+   rest at a quarter — with the emissive intensity raised four-fold so the sand's own floor stays
+   exactly where groundNightFloor put it and only the roads rise above it. */
+function roadGlowMap(cv){
+  if (!cv || !cv.getContext) return null;
+  const W = cv.width, H = cv.height;
+  const src = cv.getContext('2d', { willReadFrequently: true });
+  let img; try { img = src.getImageData(0, 0, W, H).data; } catch (e) { return null; }
+  const w2 = W >> 1, h2 = H >> 1;
+  const out = document.createElement('canvas'); out.width = w2; out.height = h2;
+  const og = out.getContext('2d');
+  const o = og.createImageData(w2, h2), od = o.data;
+  for (let y = 0; y < h2; y++){
+    for (let x = 0; x < w2; x++){
+      const i = ((y * 2) * W + x * 2) * 4;
+      const r = img[i], g = img[i+1], b = img[i+2];
+      const lum = (r + g + b) / 3, sat = Math.max(r, g, b) - Math.min(r, g, b);
+      const v = (lum < 100 && sat < 26) ? 255 : 64;
+      const j = (y * w2 + x) * 4;
+      od[j] = od[j+1] = od[j+2] = v; od[j+3] = 255;
+    }
+  }
+  og.putImageData(o, 0, 0);
+  const t = new THREE.CanvasTexture(out);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
 function groundNightFloor(m){
   if (!m || !GROUND_NIGHT_EMI) return m;
   m.emissive = new THREE.Color(GROUND_EMI_HEX);
@@ -4392,7 +4424,11 @@ matPlaceStone.userData.duskColor = 0xD3C4A6;      // precast concrete, neutral
 const matStoneRend  = stdMat({ color:0x1E1C18, roughness:0.99, metalness:0.0 });
 matStoneRend.userData.duskColor  = 0xE0C79A;      // warm limestone
 
-const matStoneClad  = stdMat({ color:0x1E1B17, roughness:0.26, metalness:0.62 });
+/* METALNESS DOWN AT NIGHT (world v269). At 0.62 metal and 0.26 roughness the clad towers mirrored
+   the night sky, and under the city's x5 night lift that mirror came out as a flat bright silver —
+   the odd pale towers on Al Maryah and Al Reem from the world camera. Cladding at night is a dark
+   body with lit windows, like everything else; the sheen belongs to the day material. */
+const matStoneClad  = stdMat({ color:0x1E1B17, roughness:0.55, metalness:0.22 });
 matStoneClad.userData.duskColor  = 0xB9BCC0;      // brushed aluminium
 
 /* PAINTED WHITE RENDER, AND THE MISSING MAJORITY FINISH.
@@ -9491,6 +9527,12 @@ function buildGroundFor(d){
   /* The painted island floor takes the same floor as the untextured platform, so an island does
      not change brightness at the moment its ground texture finishes uploading. */
   groundNightFloor(night);
+  /* The road glow rides on the same emissive: map at full value on asphalt, a quarter elsewhere,
+     intensity x4, so sand lands back on the floor above and roads sit four times over it. */
+  {
+    const glow = roadGlowMap(tex.image);
+    if (glow && night.emissive){ night.emissiveMap = glow; night.emissiveIntensity = GROUND_NIGHT_EMI * 4; }
+  }
   const day  = dayGround.clone();  day.map  = tex;
   const dusk = duskGround.clone(); dusk.map = tex;
   /* PLAN MODE MATERIALS. MeshBasic, so no light, no shadow, no material tint and no exposure —
