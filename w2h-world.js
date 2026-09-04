@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v270';
+export const BUILD = 'world v271';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -9738,6 +9738,6 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
          /* One call for the whole archipelago. The per-district ticks are closures over their own
             signal lists, so the shell does not need to know how many districts there are or which
             of them have junctions. */
-         tickSignals: t => { for (let i = 0; i < signalTicks.length; i++) signalTicks[i](t); },
-         tickTraffic: (t, dt) => { for (let i = 0; i < trafficTicks.length; i++) trafficTicks[i](t, dt); } };
+         tickSignals: (t, camDist) => { for (let i = 0; i < signalTicks.length; i++) signalTicks[i](t, camDist); },
+         tickTraffic: (t, dt, camDist) => { for (let i = 0; i < trafficTicks.length; i++) trafficTicks[i](t, dt, camDist); } };
 }

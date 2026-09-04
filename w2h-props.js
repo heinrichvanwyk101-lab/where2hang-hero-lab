@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v37';
+export const BUILD = 'props v38';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -262,7 +262,7 @@ const carPoolGeo = (() => {
 })();
 /* SIGNAL HALOS: a flat additive disc at head height in the aspect's colour, toggled with the lens
    so a junction shows its state from the city camera, where the lens itself is under a pixel. */
-const haloGeo = (() => { const g = new THREE.PlaneGeometry(1.4, 1.4); g.rotateX(-Math.PI / 2); g.translate(0, 0.9, 0); return g; })();
+const haloGeo = (() => { const g = new THREE.PlaneGeometry(1.8, 1.8); g.rotateX(-Math.PI / 2); g.translate(0, 0.9, 0); return g; })();
 
 /* ---------- shrub ----------
 
@@ -1325,9 +1325,13 @@ function addProps(d, layer, plan, budget = {}){
     lightsMesh.userData.nightOnly = true;
     lightsMesh.userData.duskMats = [matHeadlight, matTaillight];
   }
-  const TM = new THREE.Object3D();
-  function tickTraffic(t, dt){
+  const TM = new THREE.Object3D(), TP = new THREE.Object3D();
+  /* VISIBILITY SCALE (props v38): 1 at district range, up to 3.5 from the city camera, applied to
+     the light pools only — the car bodies keep their size. */
+  const visScale = camDist => Math.min(3.5, Math.max(1, (camDist || 0) / 700));
+  function tickTraffic(t, dt, camDist){
     if (!traffic.length || !trafficMesh) return;
+    const vis = visScale(camDist);
     for (let i = 0; i < traffic.length; i++){
       const v = traffic[i];
       const pts = v.rd.pts;
@@ -1364,7 +1368,11 @@ function addProps(d, layer, plan, budget = {}){
       TM.updateMatrix();
       trafficMesh.setMatrixAt(i, TM.matrix);
       if (lightsMesh) lightsMesh.setMatrixAt(i, TM.matrix);
-      if (carPoolMesh) carPoolMesh.setMatrixAt(i, TM.matrix);
+      if (carPoolMesh){
+        TP.position.copy(TM.position); TP.rotation.copy(TM.rotation); TP.scale.set(vis, 1, vis);
+        TP.updateMatrix();
+        carPoolMesh.setMatrixAt(i, TP.matrix);
+      }
     }
     trafficMesh.instanceMatrix.needsUpdate = true;
     if (lightsMesh) lightsMesh.instanceMatrix.needsUpdate = true;
@@ -1382,8 +1390,10 @@ function addProps(d, layer, plan, budget = {}){
      start would need a fourth state and reads as a flicker at this scale. */
   const prev = new Int8Array(signals.length).fill(-1);
   const SM = new THREE.Object3D();
-  function tickSignals(t){
+  const HM = new THREE.Object3D();
+  function tickSignals(t, camDist){
     if (!signals.length) return;
+    const vis = Math.min(3.5, Math.max(1, (camDist || 0) / 700));
     const dirty = [false, false, false];
     for (let i = 0; i < signals.length; i++){
       const s = signals[i];
@@ -1401,7 +1411,11 @@ function addProps(d, layer, plan, budget = {}){
         SM.scale.set(on, on, on);
         SM.updateMatrix();
         m.setMatrixAt(i, SM.matrix);
-        if (haloMeshes[k]) haloMeshes[k].setMatrixAt(i, SM.matrix);
+        if (haloMeshes[k]){
+          HM.position.copy(SM.position); HM.rotation.copy(SM.rotation); HM.scale.set(on * vis, on, on * vis);
+          HM.updateMatrix();
+          haloMeshes[k].setMatrixAt(i, HM.matrix);
+        }
         dirty[k] = true;
       }
     }
