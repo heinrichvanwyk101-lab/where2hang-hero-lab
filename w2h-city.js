@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v107';
+export const BUILD = 'city v108';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -320,14 +320,17 @@ function archDayTexture(cols, rows){
       const hw = CW * 0.26;
       // The recess: darker in the middle of the opening, a paler rim either side standing in
       // for the moulded surround real arched windows are cut with.
-      g.fillStyle = 'rgba(150,140,124,0.55)';
+      /* LIGHTER RECESSES THAN THE FIRST PASS (0.55 rim, 0.55-0.70 opening). At district range
+         the openings are a pixel wide and the texture averages to its recess colour, which
+         turned both palaces chocolate brown by day. Halved, the average stays the wall colour. */
+      g.fillStyle = 'rgba(150,140,124,0.30)';
       g.beginPath();
       g.moveTo(cx - hw - 1, bot); g.lineTo(cx - hw - 1, top + hw);
       g.quadraticCurveTo(cx - hw - 1, top - 1, cx, top - 1);
       g.quadraticCurveTo(cx + hw + 1, top - 1, cx + hw + 1, top + hw);
       g.lineTo(cx + hw + 1, bot);
       g.closePath(); g.fill();
-      g.fillStyle = 'rgba(60,58,52,' + (0.55 + rnd()*0.15).toFixed(2) + ')';
+      g.fillStyle = 'rgba(60,58,52,' + (0.28 + rnd()*0.10).toFixed(2) + ')';
       g.beginPath();
       g.moveTo(cx - hw, bot); g.lineTo(cx - hw, top + hw);
       g.quadraticCurveTo(cx - hw, top, cx, top);
@@ -794,8 +797,20 @@ function etihadTowers(x0, z0){
     /* REPEAT (1, 1). The tiling is baked into the geometry's UVs in metres now, exactly as on
        ADNOC — a repeat here would multiply a scale that is already correct. */
     const m = new THREE.Mesh(geo, cityMaterial(TEX_TOWER, 1, 1, 0.78, s.colour));
+    /* PALE SILVER-BLUE BY DAY, ITS OWN MATERIAL. cityMaterial's day swap tints the window sheet
+       with DAY_BY_NIGHT's dark glass tone, so the five most photographed towers in the city
+       rendered as brown slabs by daylight. The real curtain wall is a light grey-blue that reads
+       almost white against the sea; the arris and the swept crowns only show when the faces are
+       bright enough to shade differently. Low metalness, same lesson as Nation Towers — a
+       reflective material goes dark under this sky. */
+    const day = new THREE.MeshStandardMaterial({ color:0xCDD9E1, roughness:0.38, metalness:0.08 });
+    day.userData.glassOverride = false;
+    const em = m.clone(); em.userData = { ...m.userData, dayMats: day, duskColor: 0xB8C7D1, glassOverride:false };
+    m.material = em;
     m.position.set(x0 + s.dx, shaft/2, z0 + s.dz);
-    m.rotation.y = 0.10 + i * 0.06;
+    /* A FAN, NOT A ROW. Each lens turns a little further than the last so the five faces catch
+       the light differently and the cluster reads as five towers rather than one repeated. */
+    m.rotation.y = [0.05, 0.32, -0.18, 0.48, 0.20][i];
     m.userData.hero = true;
     g.add(m);
   });
@@ -924,6 +939,15 @@ function emiratesPalace(x0, z0){
     color:0x2A2216, roughness:0.7, emissive:0xE8B547, emissiveIntensity:0.34 });
   glow.userData.duskColor = 0xE0D6CC;
   glow.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xDCD8D6, roughness:0.7 });
+  /* THE GRAND DOME IS THE ONE PIECE ALLOWED TO BE GOLD BY DAY. The measured aerial gave it a
+     neutral grey, and that stays true of the 114 small domes; but a grey ball on a pink building
+     is not what anyone remembers, and the model has to be recognised from a phone at district
+     range. The real dome is silver, gold and glass mosaic that flashes warm in low sun, so the
+     day colour is a muted old gold — warm, not lurid. */
+  const grand = new THREE.MeshStandardMaterial({
+    color:0x2A2216, roughness:0.5, metalness:0.2, emissive:0xE8B547, emissiveIntensity:0.40 });
+  grand.userData.duskColor = 0xD9B76A;
+  grand.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD4B36C, roughness:0.45, metalness:0.25 });
 
   /* H_WING IS THE RECORD'S OWN HEIGHT. The bake gives this footprint h 25.6 m, which is 3.28
      units — so the old hand-set 3.4 was very nearly right and is simply replaced by the
@@ -973,10 +997,31 @@ function emiratesPalace(x0, z0){
 
   /* The domed centre, and the ONE piece that carries the rotation explicitly. Sized to sit
      clear inside the ring — checked, all four corners land at least 1.5 units in. */
-  const MW = 17.0, MD = 9.5;
+  /* CENTRED ON THE GRAND DOME'S OWN SEAT, NOT THE RING CENTROID — the dome sat two units off
+     the block's axis, which is why it read as a ball dropped near the middle rather than the
+     crown of a central pavilion. The block is stepped: the main mass, a set-back upper storey and
+     the drum plinth, so the centre climbs to the dome the way the real one does. Containment
+     re-checked against the ring at the new centre: all four corners inside, 0.47 units at the
+     tightest. */
+  const MW = 16.0, MD = 9.5, T2_H = 1.15, T3_H = 0.9;
+  const GX = 2.70, GZ = 7.90;          // PALACE_DOMES[4], the grand dome's seat
   const main = new THREE.Mesh(new THREE.BoxGeometry(MW, H_MAIN, MD), stone);
-  main.position.set(x0 + CX, H_MAIN/2, z0 + CZ);
+  main.position.set(x0 + GX, H_MAIN/2, z0 + GZ);
   main.rotation.y = PALACE_ROT; g.add(main);
+  const tier2 = new THREE.Mesh(new THREE.BoxGeometry(MW * 0.64, T2_H, MD * 0.82), arch);
+  tier2.position.set(x0 + GX, H_MAIN + T2_H / 2, z0 + GZ);
+  tier2.rotation.y = PALACE_ROT; g.add(tier2);
+  const tier3 = new THREE.Mesh(new THREE.CylinderGeometry(3.85, 4.1, T3_H, 24), stone);
+  tier3.position.set(x0 + GX, H_MAIN + T2_H + T3_H / 2, z0 + GZ); g.add(tier3);
+  /* Corner turrets on the main block, the four small domed pavilions that frame the grand dome. */
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([su, sv]) => {
+    const u = su * (MW / 2 - 1.3), v = sv * (MD / 2 - 1.1);
+    const px = GX + u * AX - v * AZ, pz = GZ + u * AZ + v * AX;
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.1, 12), arch);
+    t.position.set(x0 + px, H_MAIN + 0.55, z0 + pz); g.add(t);
+    const d = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 8, 0, Math.PI*2, 0, Math.PI/2), glow);
+    d.position.set(x0 + px, H_MAIN + 1.1, z0 + pz); g.add(d);
+  });
 
   /* roofAt REBUILT FOR A SHAPE THAT IS NOT A ROW OF BOXES. The x-range scan that replaced the
      hy table cannot survive a rotated plan, so the probe is now a real containment test: inside
@@ -992,8 +1037,10 @@ function emiratesPalace(x0, z0){
     return c;
   }
   function roofAt(px, pz){
-    const dx = px - CX, dz = pz - CZ;
+    const dx = px - GX, dz = pz - GZ;
     const u = dx * AX + dz * AZ, v = -dx * AZ + dz * AX;
+    if (Math.hypot(u, v) <= 3.85) return H_MAIN + T2_H + T3_H;
+    if (Math.abs(u) <= MW * 0.32 && Math.abs(v) <= MD * 0.41) return H_MAIN + T2_H;
     if (Math.abs(u) <= MW/2 && Math.abs(v) <= MD/2) return H_MAIN;
     return inRing(px, pz) ? H_WING : 0;
   }
@@ -1021,7 +1068,7 @@ function emiratesPalace(x0, z0){
     [-21.30, 16.90, 1.37],
     [-13.50, 14.50, 1.61],
     [ -4.50, 13.90, 1.90],
-    [  2.70,  7.90, 3.40],
+    [  2.70,  7.90, 4.10],
     [  9.90,  4.90, 1.90],
     [ 18.30,  0.10, 1.90],
     [ 22.50, -8.30, 1.31],
@@ -1032,12 +1079,36 @@ function emiratesPalace(x0, z0){
     const roof = roofAt(px, pz), drumH = Math.max(0.35, r * 0.22), base = roof + drumH;
     const drum = new THREE.Mesh(new THREE.CylinderGeometry(r*0.88, r*0.88, drumH, 20), stone);
     drum.position.set(x0 + px, roof + drumH/2, z0 + pz); g.add(drum);
-    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 22, 13, 0, Math.PI*2, 0, Math.PI/2), glow);
+    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 22, 13, 0, Math.PI*2, 0, Math.PI/2), r > 3 ? grand : glow);
     d.position.set(x0 + px, base, z0 + pz); d.userData.hero = true; g.add(d);
     const fin = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 8), glow);
     fin.position.set(x0 + px, base + r + 0.35, z0 + pz); g.add(fin);
   }
   PALACE_DOMES.forEach(([px, pz, r]) => dome(px, pz, r));
+
+  /* THE 114 DOMES. The wings' parapets are studded with small domes end to end — it is the
+     texture that says "palace" before the grand dome is even in view. Walked along the traced
+     ring at a steady spacing, set half a unit in from the edge so they sit on the roof rather
+     than on the cornice, skipped where the seat would fall under the centre block. */
+  { let acc = 0, n = 0;
+    for (let i = 0; i < PALACE_RING.length; i++){
+      const a = PALACE_RING[i], b = PALACE_RING[(i + 1) % PALACE_RING.length];
+      const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      for (let t = acc; t < seg; t += 3.0){
+        const f = t / seg, ex = a[0] + (b[0] - a[0]) * f, ez = a[1] + (b[1] - a[1]) * f;
+        // step inward: the point 0.7 units toward the ring centroid that is still inside
+        const dx = CX - ex, dz = CZ - ez, L = Math.hypot(dx, dz) || 1;
+        const px = ex + dx / L * 0.7, pz = ez + dz / L * 0.7;
+        if (!inRing(px, pz) || roofAt(px, pz) > H_WING) continue;
+        const d = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 6, 0, Math.PI*2, 0, Math.PI/2), glow);
+        d.position.set(x0 + px, H_WING + 0.12, z0 + pz); g.add(d);
+        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.24, 10), stone);
+        drum.position.set(x0 + px, H_WING + 0.0, z0 + pz); g.add(drum);
+        if (++n > 140) break;
+      }
+      acc = (acc - seg) % 3.0; if (acc < 0) acc += 3.0;
+    }
+  }
 
   /* PAVING AND PALMS ALONG THE TRACED ROUTES.
 
@@ -2287,8 +2358,10 @@ function yasMall(x0, z0, facing){
 
   const body = new THREE.MeshStandardMaterial({
     color:0x181C20, roughness:0.85, emissive:0xE8B547, emissiveIntensity:0.06 });
-  body.userData.duskColor = 0xB9B4A8;
-  body.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xB9B4A8, roughness:0.85 });
+  /* CREAM, NOT GREY. The grey read as a warehouse from the Yas shot; the real cladding is a
+     warm off-white precast, and the car decks below sit a step darker than it. */
+  body.userData.duskColor = 0xDCD3C2;
+  body.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE4DCCB, roughness:0.85 });
 
   const glass = new THREE.MeshStandardMaterial({
     color:0x1C2A30, roughness:0.35, metalness:0.2,
@@ -2298,8 +2371,8 @@ function yasMall(x0, z0, facing){
     color:0xD6EAF0, roughness:0.35, metalness:0.2 });
 
   const deckMat = new THREE.MeshStandardMaterial({ color:0x14181C, roughness:0.95 });
-  deckMat.userData.duskColor = 0x9A968C;
-  deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x9A968C, roughness:0.95 });
+  deckMat.userData.duskColor = 0xB5AFA2;
+  deckMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xBDB7A9, roughness:0.95 });
 
   const dark = new THREE.MeshStandardMaterial({ color:0x101317, roughness:0.9 });
   dark.userData.duskColor = 0x6E6A64;
@@ -2325,6 +2398,20 @@ function yasMall(x0, z0, facing){
   pyr.position.set(0, (28 + 8) / M, 0);
   pyr.rotation.y = Math.PI / 4;
   g.add(pyr);
+  /* THE GLAZED SPINES. The mall's two main galleries run out from the atrium under continuous
+     barrel-vaulted skylights, and they are what the aerials show first: two bright lines crossing
+     at the pyramid. Half-cylinders lying on the roof, in the same glass as the pyramid. */
+  [[0, 380], [Math.PI / 2, 400]].forEach(([ry, len]) => {
+    const v = new THREE.Mesh(new THREE.CylinderGeometry(11 / M, 11 / M, len / M, 14, 1, false, 0, Math.PI), glass);
+    v.rotation.set(0, ry, Math.PI / 2, 'YZX');
+    v.position.set(0, 28 / M, 0);
+    g.add(v);
+  });
+  /* Deck parapets: a pale kerb round each car deck so the decks read as structures with an edge
+     rather than as darker ground. */
+  const kerb = new THREE.MeshStandardMaterial({ color:0x2A2823, roughness:0.9 });
+  kerb.userData.duskColor = 0xE0DACD;
+  kerb.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEAE4D6, roughness:0.9 });
 
   /* Car decks. Low, flat, and larger than anything else on the site. */
   for (const [dx, dz, w, dp] of [
@@ -2335,6 +2422,10 @@ function yasMall(x0, z0, facing){
     m.position.set(dx / M, 13 / M / 2, dz / M);
     m.receiveShadow = true;
     g.add(m);
+    for (const [kx, kz, kw, kd] of [[0, dp / 2, w, 2.5], [0, -dp / 2, w, 2.5], [w / 2, 0, 2.5, dp], [-w / 2, 0, 2.5, dp]]){
+      const k = new THREE.Mesh(new THREE.BoxGeometry(kw / M, 1.6 / M, kd / M), kerb);
+      k.position.set((dx + kx) / M, 13.8 / M, (dz + kz) / M); g.add(k);
+    }
   }
 
   /* The big dark-roofed box on the east flank - the cinema-and-warehouse end, and the one thing
@@ -2524,6 +2615,45 @@ function qasrAlWatan(x0, z0){
   dome.position.set(x0 + SX, drumT, z0 + SZ); dome.userData.hero = true; g.add(dome);
   const fin = new THREE.Mesh(new THREE.ConeGeometry(0.20, 1.10, 8), domeMat);
   fin.position.set(x0 + SX, drumT + R_DOME + 0.45, z0 + SZ); g.add(fin);
+
+  /* THE TWO SMALLER DOMES. Each flanking pavilion carries its own dome over its centre — in the
+     photographs the three domes in a row across the front are what says "Qasr Al Watan" rather
+     than "another palace". Seated on each flank ring's own centroid so they cannot miss the
+     roof, on a drum, at a little over half the great dome's radius. */
+  [QASR_FLANK_W, QASR_FLANK_E].forEach(ring => {
+    let cx = 0, cz = 0; ring.forEach(([px, pz]) => { cx += px; cz += pz; });
+    cx /= ring.length; cz /= ring.length;
+    const rr = R_DOME * 0.58, dh = 0.9;
+    const dr = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.92, rr * 1.0, dh, 20), stone);
+    dr.position.set(x0 + cx, H_PAV + dh / 2, z0 + cz); g.add(dr);
+    const dm = new THREE.Mesh(new THREE.SphereGeometry(rr, 20, 12, 0, Math.PI*2, 0, Math.PI/2), domeMat);
+    dm.position.set(x0 + cx, H_PAV + dh, z0 + cz); g.add(dm);
+    const f2 = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.7, 8), domeMat);
+    f2.position.set(x0 + cx, H_PAV + dh + rr + 0.3, z0 + cz); g.add(f2);
+  });
+
+  /* THE ARCADE. The ground floor of every wing is a colonnade of white arches; walked along the
+     main ring and both flanks at a steady spacing, on the forecourt side only (+z), the same
+     rule the palace uses for its garden-side colonnade. Each column stands a little proud of the
+     wall so the shadow line reads. */
+  const colMat = corniceMat;
+  [[QASR_MAIN, 14], [QASR_FLANK_W, -12], [QASR_FLANK_E, -26]].forEach(([ring, minZ]) => {
+    let cx = 0, cz = 0; ring.forEach(([px, pz]) => { cx += px; cz += pz; });
+    cx /= ring.length; cz /= ring.length;
+    let acc = 0;
+    for (let i = 0; i < ring.length; i++){
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      for (let t = acc; t < seg; t += 1.6){
+        const f = t / seg, px = a[0] + (b[0] - a[0]) * f, pz = a[1] + (b[1] - a[1]) * f;
+        if (pz < minZ) continue;
+        const nx = px - cx, nz = pz - cz, L = Math.hypot(nx, nz) || 1;
+        const c = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.9, 0.42), colMat);
+        c.position.set(x0 + px + nx / L * 0.28, 0.95, z0 + pz + nz / L * 0.28); g.add(c);
+      }
+      acc = (acc - seg) % 1.6; if (acc < 0) acc += 1.6;
+    }
+  });
 
   /* THE FORECOURT — AND UNLIKE THE PALACE, THERE IS NO PALACE_PATHS TABLE HERE TO RECOVER.
      Nothing traced this estate's own drives the way geojson.io traced the palace's, so this is
@@ -3332,14 +3462,19 @@ function grandMosque(x0, z0){
      Genuinely dark, roughness high (matte tarmac, not wet-look), against a bright near-white
      marking colour so the stripes actually read as paint on asphalt rather than another shade
      of the same grey. */
+  /* PALE CONCRETE, NOT TARMAC. The near-black asphalt of the first pass was the biggest thing in
+     every frame of the mosque — two black fields either side of a white building, which is what
+     the eye went to. The real car parks and coach aprons are light paving and sand-coloured
+     concrete; by daylight they are barely darker than the marble. Markings go darker so they
+     still read as a car park rather than a plaza. */
   const asphalt = new THREE.MeshStandardMaterial({
-    color:0x121214, roughness:0.92, emissive:0x0A0A0B, emissiveIntensity:0.05 });
-  asphalt.userData.duskColor = 0x1C1C1F;
-  asphalt.userData.dayMats = new THREE.MeshStandardMaterial({ color:0x232326, roughness:0.92 });
+    color:0x1E1C19, roughness:0.9, emissive:0xCFC8B8, emissiveIntensity:0.10 });
+  asphalt.userData.duskColor = 0xCFC8B8;
+  asphalt.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xD6D0C2, roughness:0.9 });
   const lineMark = new THREE.MeshStandardMaterial({
-    color:0xE8E4D8, roughness:0.55, emissive:0xE8E4D8, emissiveIntensity:0.25 });
-  lineMark.userData.duskColor = 0xF2EFE6;
-  lineMark.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF5F2EA, roughness:0.5 });
+    color:0x8F887A, roughness:0.6, emissive:0xB8B1A2, emissiveIntensity:0.12 });
+  lineMark.userData.duskColor = 0xB0A998;
+  lineMark.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xA9A292, roughness:0.6 });
   /* GARDEN PLANTING, FOR PORTIONS OF THE HARDSCAPE LAYER — "gardens should have garden portions",
      not one uniform paved tone across the whole traced shape. Green enough to read as planting
      against the arch material's pale cream, not so saturated it looks like a lawn from a
@@ -3373,12 +3508,17 @@ function grandMosque(x0, z0){
   const WING = (PLAN - COURT) / 2;      // 9.5  — north / east / west thickness
   const HALL = AH * 8.4;                // 16.8 — prayer hall depth, nearly the courtyard's width
 
-  const MH   = AH * 7.2;                // 14.4 — taller than the first pass, needle-proportioned
-  const MW   = MH * 0.040;              // ~30:1 height to width — the real minaret's own ratio
+  /* MINARETS AT 18 UNITS (140 m against the real 107 m) AND 20:1, NOT 14 UNITS AT 30:1. The
+     30:1 needle was true to the drawings and invisible from the district shot — a 0.58-unit
+     shaft is under a pixel at that range. This is a model that must read from 3 km up on a
+     phone, so the four towers are lifted a quarter and thickened by half. Same logic as the
+     domes below: the silhouette is the identity, and the silhouette has to be visible. */
+  const MH   = AH * 9.0;                // 18.0
+  const MW   = MH * 0.052;              // ~20:1, thick enough to survive the far shot
   const INSET = AH * 0.9;
 
-  const MAIN_R  = AH * 1.9;             // main dome, larger and the visual anchor
-  const FLANK_R = MAIN_R * 0.74;        // two large flanks, close to the main in scale
+  const MAIN_R  = AH * 2.4;             // main dome, 4.8 units — the visual anchor from any range
+  const FLANK_R = MAIN_R * 0.72;        // two large flanks, close to the main in scale
   const MID_R   = MAIN_R * 0.40;        // four mid domes filling the cluster
   const TURRET_R = MAIN_R * 0.30;       // two domed corner turrets on the hall itself
   const SMALL_R = MAIN_R * 0.15;        // arcade parapet rhythm
@@ -3455,9 +3595,9 @@ function grandMosque(x0, z0){
      did not, which is why the whole main cluster rendered off in open water on the live site while
      the bench, tested only at the origin, never could have shown it. sZ is that correction. */
   const hallH = AH * 2.0, sZ = southZ - z0;
-  dome(0, sZ, MAIN_R, hallH + MAIN_R * 1.7, hallH);
-  dome(-MAIN_R * 1.55, sZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
-  dome( MAIN_R * 1.55, sZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.5, hallH);
+  dome(0, sZ, MAIN_R, hallH + MAIN_R * 1.45, hallH);   // drum top 11 units, dome top 15.8 — under the minarets, as built
+  dome(-MAIN_R * 1.5, sZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.6, hallH);
+  dome( MAIN_R * 1.5, sZ - HALL * 0.05, FLANK_R, hallH + FLANK_R * 1.6, hallH);
   [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sz]) => {
     dome(sx * MAIN_R * 2.7, sZ + sz * HALL * 0.28, MID_R, hallH + MID_R * 1.4, hallH);
   });
@@ -3522,6 +3662,39 @@ function grandMosque(x0, z0){
     p.position.set(x0 + sgn * PLAN * 0.24, BASE_Y + 0.04, z0 - (COURT + WING) / 2 - WING * 0.55);
     g.add(p);
   });
+
+  /* THE REFLECTIVE POOLS. The mosque is famous for the sheets of water that wrap the arcades
+     on the east and west, doubling the columns at dusk; they are the second thing after the
+     domes in every postcard. Two long pools hugging the east and west wings for the full depth
+     of the plan, with a white kerb, plus a third across the north front. */
+  const POOL_W = WING * 0.9, kerb = 0.35;
+  [-1, 1].forEach(sgn => {
+    const px = x0 + sgn * (PLAN / 2 + POOL_W / 2 + kerb + 0.3), len = eastZ1 - eastZ0;
+    const k = new THREE.Mesh(new THREE.BoxGeometry(POOL_W + kerb * 2, 0.16, len + kerb * 2), stone);
+    k.position.set(px, BASE_Y + 0.08, (eastZ0 + eastZ1) / 2); g.add(k);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(POOL_W, 0.08, len), pool);
+    p.position.set(px, BASE_Y + 0.14, (eastZ0 + eastZ1) / 2); g.add(p);
+  });
+  { const pz = z0 - (COURT + WING) / 2 - WING / 2 - POOL_W * 0.55 - kerb - 0.3;
+    const k = new THREE.Mesh(new THREE.BoxGeometry(PLAN * 0.86 + kerb * 2, 0.16, POOL_W * 0.55 + kerb * 2), stone);
+    k.position.set(x0, BASE_Y + 0.08, pz); g.add(k);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(PLAN * 0.86, 0.08, POOL_W * 0.55), pool);
+    p.position.set(x0, BASE_Y + 0.14, pz); g.add(p); }
+
+  /* THE COURTYARD ARCADE. The sahn is ringed by a colonnade of pointed arches on all four sides;
+     the pillars above stood alone without the roof that joins them. A shallow roof slab bridges
+     each row and an inner parapet lifts the wing wall behind it, so the wings read as an arcade
+     around a court rather than four solid blocks. */
+  [[PLAN, z0 - (COURT + WING) / 2, 'x', southZ], [PLAN, southZ, 'x', z0 - (COURT + WING) / 2],
+   [COURT, x0 + (COURT + WING) / 2, 'z', 0], [COURT, x0 - (COURT + WING) / 2, 'z', 0]]
+    .forEach(([span, edge, axis]) => {
+      const roof = new THREE.Mesh(axis === 'x'
+        ? new THREE.BoxGeometry(span, 0.25, WING * 0.34)
+        : new THREE.BoxGeometry(WING * 0.34, 0.25, span), arch);
+      if (axis === 'x') roof.position.set(x0, BASE_Y + AH * 1.6, edge - WING * 0.3);
+      else               roof.position.set(edge, BASE_Y + AH * 0.9, z0);
+      g.add(roof);
+    });
 
   /* ---------- THE PRECINCT ----------
 

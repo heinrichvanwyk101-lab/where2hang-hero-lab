@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v287';
+export const BUILD = 'world v288';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6798,6 +6798,7 @@ function buildingSpec(rnd, ctx){
      was cut off by the ceiling; feeding them a landmark skirt would report every low building
      near the palace as trimmed when it was not. */
   const h    = Math.min(capH, ctx.style === 'white' ? 36 / M_PER_UNIT : Infinity,   // a white district is mid-rise
+                        ctx.style === 'low'   ? 22 / M_PER_UNIT : Infinity,   // a low district: nothing above six storeys
                         SLENDER * Math.min(w, dp),
                         3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95),
                         softH * (0.30 + Math.pow(R.hRoll, 2.2) * 0.70));
@@ -7988,6 +7989,10 @@ const saadiyat = DISTRICTS.find(d => d.id === 'saadiyat');
 /* The fabric between the museums is white contemporary (buildingSpec reads styleZones): the
    cultural district and Saadiyat Grove, x -2500..-600 m, y 4200..5500 m, in island units. */
 saadiyat.styleZones = [{ x0:-520, x1:-275, z0:94, z1:262, style:'white' }];
+/* THE BREAKWATER IS LOW (world v288). The survey carries no heights out there — five of 162
+   records — so the fabric was inventing a tower cluster round Marina Mall where the real spit
+   is the Heritage Village, the mall, a few low hotels and open ground. Capped at six storeys. */
+corniche.styleZones = [{ x0:-1030, x1:-870, z0:-180, z1:-50, style:'low' }];
 const LM_SAADIYAT = {
   louvre:     { x:-478.8, z:172.6 },
   znm:        { x:-371.6, z:177.8 },
