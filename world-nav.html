@@ -169,6 +169,13 @@
      group leaves no way to tell which of several near-identical dots you actually opened. */
   .w2hPin.single.active{background:#E8B547;
     box-shadow:0 1px 6px rgba(0,0,0,.55),0 0 0 6px rgba(232,181,71,.35)}
+  /* A DESTINATION: a mall, a hotel, a waterfront precinct — one named pill for everything inside
+     it (nav v207). It never splits into its members; a tap lists them once the camera is close. */
+  .w2hPin.dest{height:30px;padding:0 12px 0 10px;border-radius:999px;white-space:nowrap;
+    background:rgba(16,22,28,.92);color:#F2F5F7;font:800 11px/30px Inter,sans-serif;
+    letter-spacing:.04em;text-transform:uppercase;
+    box-shadow:0 2px 8px rgba(0,0,0,.45),0 0 0 2px rgba(0,194,168,.85)}
+  .w2hPin.dest b{color:#3DE9CD;font-weight:800;margin-left:6px}
   /* THE VENUE CARD. Not a bubble pinned to the marker: a bubble anchored to a pin has to be
      repositioned every frame as the camera eases, can end up off-screen when the pin is near an
      edge, and competes for space with the pins around it. A fixed panel is stable, always fully
@@ -705,7 +712,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v205', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v207', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2017,7 +2024,8 @@ function renderPinOverlay(){
       el.onclick = () => {
         const ps = el.__pins;
         if (!ps || !ps.length) return;
-        if (ps.length > 1) zoomToPinCluster(ps); else tapResultPin(ps[0]);
+        if (ps.length === 1 && ps[0].members) tapDestinationPin(ps[0]);
+        else if (ps.length > 1) zoomToPinCluster(ps); else tapResultPin(ps[0]);
       };
       layer.appendChild(el);
       pinEls.set(key, el);
@@ -2025,9 +2033,17 @@ function renderPinOverlay(){
     el.__pins = pins;
     el.style.left = c.cx + 'px';
     el.style.top = c.cy + 'px';
-    if (pins.length > 1){
+    if (pins.length === 1 && pins[0].members){
+      const p0 = pins[0];
+      el.className = 'w2hPin dest';
+      el.textContent = p0.dest;
+      const b = document.createElement('b'); b.textContent = String(p0.members.length);
+      el.appendChild(b);
+    } else if (pins.length > 1){
       el.className = 'w2hPin cluster';
-      el.textContent = String(pins.length);
+      /* Venues, not pins: a mall in the cluster counts for everything inside it. */
+      let n = 0; for (const p of pins) n += p.members ? p.members.length : 1;
+      el.textContent = String(n);
     } else {
       const venue = pins[0];
       const isActive = !!(activeVenue && venue.venueId && activeVenue.venueId === venue.venueId);
@@ -2142,12 +2158,28 @@ function showVenueCard(v){
    name rather than by trying to hit one of several overlapping dots. activeVenue stays null
    while the list is showing, so no pin is marked active: none of them individually is what the
    card is about yet. */
-function showGroupList(pts){
+/* A DESTINATION PIN, TAPPED. Far out, the tap flies to the container the way a cluster tap
+   does; once the camera is at that shot (or closer), the tap answers with the list of what is
+   inside. The pin itself never splits: sixty restaurants in one mall cannot be told apart at
+   any distance the camera can reach, and the list is what the person wanted anyway. */
+function tapDestinationPin(p){
+  const wantDist = fitDist(CLUSTER_FLOOR_R * 2.5, goal.fov || 46);
+  const nowDist = cur.dist * (orbit.zoom || 1);
+  const sameSpot = Math.hypot(goal.target.x - p.x, goal.target.z - p.z) < CLUSTER_FLOOR_R * 2;
+  if (sameSpot && nowDist <= wantDist * 1.15){ showGroupList(p.members, p.dest); return; }
+  resetOrbit();
+  goal.target.set(p.x, GROUND + 8, p.z);
+  goal.dist = wantDist;
+  goal.elev = goal.dist * PITCH_PLACE;
+}
+function showGroupList(pts, title){
   const card = document.getElementById('venueCard');
   if (!card) return;
   activeVenue = null;
-  document.getElementById('vcName').textContent = pts.length + ' venues here';
-  document.getElementById('vcMeta').textContent = 'Too close together to separate — pick one';
+  let n = 0; for (const p of pts) n += p.members ? p.members.length : 1;
+  document.getElementById('vcName').textContent = title || (n + ' venues here');
+  document.getElementById('vcMeta').textContent = title ? (n + (n === 1 ? ' venue' : ' venues') + ' inside — pick one')
+                                                        : 'Too close together to separate — pick one';
   document.getElementById('vcOpen').style.display = 'none';
   const list = document.getElementById('vcList');
   list.innerHTML = '';
@@ -2157,8 +2189,9 @@ function showGroupList(pts){
     row.className = 'vcRow';
     const nm = document.createElement('div');
     nm.className = 'vcRowName';
-    nm.textContent = p.name || 'Venue';
+    nm.textContent = p.members ? (p.dest + ' · ' + p.members.length) : (p.name || 'Venue');
     row.appendChild(nm);
+    if (p.members){ row.addEventListener('click', () => showGroupList(p.members, p.dest)); list.appendChild(row); return; }
     const rowMetaParts = [];
     if (Number.isFinite(p.rating)) rowMetaParts.push('★ ' + Number(p.rating).toFixed(1));
     const mt = (p.category || '').trim();
@@ -2654,7 +2687,14 @@ if (/[?&]embed=1/.test(location.search)){
           const [ox, oy] = BMAP.islandOrigin(entry);
           const local = { x: (p.x - ox) / BMAP.M_PER_UNIT, z: -(p.z - oy) / BMAP.M_PER_UNIT, h: 0 };
           const w = anchorWorld(d, local);
-          converted.push({ x: w.x, z: w.z, venueId: p.venueId, name: p.name, category: p.category, heroUrl: p.heroUrl, rating: p.rating });
+          const pin = { x: w.x, z: w.z, venueId: p.venueId, name: p.name, category: p.category, heroUrl: p.heroUrl, rating: p.rating };
+          /* A CONTAINER PIN carries its venues as members, all placed at the container itself:
+             they are inside it, and the point of the pin is that they are never drawn apart. */
+          if (p.dest && Array.isArray(p.members) && p.members.length){
+            pin.dest = String(p.dest);
+            pin.members = p.members.map(m => ({ x: w.x, z: w.z, venueId: m.venueId, name: m.name, category: m.category, heroUrl: m.heroUrl, rating: m.rating }));
+          }
+          converted.push(pin);
         }
         // Diagnostic, not decoration — stored so ui() (called by setResults below, which this
         // message is about to trigger) can append it rather than have its own crumb-write
@@ -3722,6 +3762,15 @@ function applyView(next){
 
   viewSeq++;
   const vNow = performance.now();
+  /* THE STARFIELD HANGS OFF THE SCENE, NOT THE WORLD GROUP, so the traverse below never meets
+     it and the night sky showed at noon (nav v207). Points that declare nightOnly are toggled
+     here, scene-wide; nightStrict keeps the stars to night alone. */
+  scene.traverse(o => {
+    if (o.isPoints && o.userData.nightOnly){
+      o.userData.vBranch = 'nightOnly';
+      o.visible = night || (dusk && !o.userData.nightStrict);
+    }
+  });
   world.traverse(o => {
     o.userData.vSeen = next; o.userData.vSeq = viewSeq; o.userData.vAt = vNow;
     /* SPRITES ARE NOT MESHES, and the grid labels have been visible in every view since the day
@@ -3736,6 +3785,14 @@ function applyView(next){
        Handled before the mesh guard rather than by loosening it — everything after this line
        reads o.material as a surface material, which a SpriteMaterial is not. */
     if (o.userData.planOnly){ o.userData.vBranch='planOnly'; o.visible = plan; return; }
+    /* THE STARFIELD IS A POINTS OBJECT, NOT A MESH, and this guard skipped it in every view, so
+       the night sky showed at noon (nav v206). Points that declare nightOnly follow the same
+       rule as nightOnly meshes; nightStrict keeps them to night alone. */
+    if (o.isPoints && o.userData.nightOnly){
+      o.userData.vBranch = 'nightOnly';
+      o.visible = night || (dusk && !o.userData.nightStrict);
+      return;
+    }
     if (!o.isMesh) return;
     /* HELPERS ARE NOT SCENERY. The district tap targets are horizontal discs wider than the
        coastline, held off screen by material.visible = false — and this loop was overwriting that
@@ -3774,7 +3831,10 @@ function applyView(next){
        buildings. */
     if (o.userData.nightOnly){
       o.userData.vBranch='nightOnly';
-      o.visible = night || dusk;
+      /* nightStrict: the stars. Every other nightOnly thing (lamps, car lights, halos) belongs at
+         dusk too; a starfield over a dusk sky with light still in it does not, and the app's
+         opening view is dusk. */
+      o.visible = night || (dusk && !o.userData.nightStrict);
       if (o.visible) o.material = dusk && o.userData.duskMats ? o.userData.duskMats
                                                              : o.userData.origMat;
       return;

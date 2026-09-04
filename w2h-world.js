@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v278';
+export const BUILD = 'world v279';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -503,6 +503,7 @@ const stars = new THREE.Points(starGeo, starMat);
 stars.frustumCulled = false;
 stars.renderOrder = -10;
 stars.userData.nightOnly = true;
+stars.userData.nightStrict = true;   // night alone: a dusk sky still has light in it, and the app's opening view is dusk
 stars.userData.litMat = false;
 stars.userData.origMat = starMat;
 stars.userData.noShadow = true;

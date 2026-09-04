@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v96';
+export const BUILD = 'city v97';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3846,60 +3846,74 @@ function rahaMall(x0, z0){
 
 function aldarHQ(x0, z0){
   const g = new THREE.Group();
+  /* A COIN, NOT AN EGG (city v97). The lens was 140 m wide by 110 m tall — the surveyed footprint
+     width includes the podium, and the building itself is a circle, 121 m across, which is the
+     one fact everyone knows about it. Width now equals height, and the lens sinks 6 m into the
+     plinth so the circle rises from an entrance rather than balancing on a point. */
   const R_THICK = (39.0 / 2) / M_PER_U;    // the lens's own thickness — "the narrow strip"
-  const R_TALL  = (110  / 2) / M_PER_U;    // sourced height, five independent agreements
-  const R_WIDE  = (140.1 / 2) / M_PER_U;   // surveyed footprint width
+  const R_TALL  = (121  / 2) / M_PER_U;    // the circle's radius: diameter 121 m, sourced
+  const R_WIDE  = R_TALL;
+  const SINK    = 6 / M_PER_U;
   const ROT = -1.2780;                         // surveyed rotation, radians
-
-  /* THE LENS ITSELF — a unit sphere, non-uniformly scaled into an ellipsoid rather than built as
-     a flat-ended cylinder. A scaled sphere gives continuously convex faces on both sides by
-     construction, which is the one thing a flat-capped primitive cannot do without a second,
-     separate curved cap — matching "two convex circular facades" directly instead of
-     approximating it. */
-  /* THE GLASS IS BLUE-GREEN, AND IT WAS NEUTRAL GREY. Every colour here was a value of lightness
-     with almost no hue in it — 0x0A0E14 is near-black with a blue cast, 0x8BA4B8 is a grey-blue
-     that any glass tower in the scene could wear. Aldar HQ does not read as a grey disc from any
-     angle: its curtain wall is a saturated blue-green, and it is the single most recognisable
-     thing about the building after the circle itself. A correct silhouette in the wrong colour
-     still fails to be identifiable, which is the whole point of hand-building a landmark instead
-     of letting the fabric generate a box.
-
-     HUE CARRIES ACROSS ALL THREE VIEWS rather than only the lit one. The day material is the
-     saturated teal the building actually is; dusk keeps the hue and drops the value so it reads
-     as the same glass under warmer, lower light; the base stays very dark, because at night this
-     facade is mostly reflection and interior spill, but it is now a dark TEAL rather than a dark
-     grey — a night material with the hue removed makes the building change identity after sunset.
-
-     Roughness and metalness are unchanged. The facade was already reading as glass; it was only
-     ever reading as the wrong glass, so this touches colour and nothing else. */
+  /* THE GLASS IS PALE, NOT TEAL, AND THAT IS WHAT MADE IT DISAPPEAR. 0x2E8B96 is the colour of
+     the building's own reflection of the sea in a certain light; from the district shot the
+     coin sat in front of the canal in exactly that colour and read as a hole. Photographs at
+     noon show a silver-blue curtain wall with a white diagrid over it, lighter than the water
+     and the sky. So the day glass is light, strongly reflective, and carries the diagrid as a
+     texture; dusk keeps it light; night goes to dark steel with the diagrid cells lit. */
+  const tex = (() => {
+    const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const c = cv.getContext('2d');
+    /* THE BLUE LIVES IN THE TEXTURE, the mullions over it. A map multiplies the material colour,
+       so white lines over a dark blue material came out blue: the lattice was invisible. With
+       the glass blue painted here and the material colour white by day, the lines stay white. */
+    c.fillStyle = '#2F66B0'; c.fillRect(0, 0, N, N);
+    /* the diagrid: two families of diagonals at +-60 degrees, eight bays across the tile */
+    c.strokeStyle = 'rgba(242,246,247,0.96)'; c.lineWidth = 11;
+    const step = N / 8;
+    for (let k = -8; k <= 16; k++){
+      c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step + N * 0.577, N); c.stroke();
+      c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step - N * 0.577, N); c.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    /* six diamonds across each face: twelve bays round the circumference over an eight-bay tile */
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.4, 2.2);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  })();
+  const lit = (() => {
+    const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#000000'; c.fillRect(0, 0, N, N);
+    /* lit cells behind the diagrid, most of them, a few dark */
+    const step = N / 8;
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++){
+      if ((x * 7 + y * 13) % 5 === 0) continue;
+      c.fillStyle = (x + y) % 3 ? '#C9E4EE' : '#9FC6D6';
+      c.fillRect(x * step + 6, y * step + 6, step - 12, step - 12);
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.4, 2.2);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
   const glassMat = new THREE.MeshStandardMaterial({
-    color:0x08222A, roughness:0.18, metalness:0.35, envMapIntensity:1.4 });
-  glassMat.userData.duskColor = 0x2E8B96;
-  glassMat.userData.duskRough = 0.22; glassMat.userData.duskMetal = 0.30;
-  glassMat.userData.duskEnv = 1.7;
-  /* DUSK CARRIES THE FULL DAY TEAL, NOT A DARKENED ONE — 0x14454E was the first attempt and it
-     rendered as a black disc with a specular hotspot on it. The lift honours a material's own
-     duskColor over DUSK_GLASS, so the hue was reaching the render; it was simply at about 30%
-     value while keeping metalness 0.30, and a dark colour under metalness reads as black no
-     matter what its hue is. Value, not hue, was the thing that had to move.
-
-     Photographs of the building at dusk show it MORE saturated than at noon, not less: the glass
-     is lit from within and from the podium by then, so it holds its colour while the stone around
-     it goes warm and grey. Matching the day value is therefore the accurate answer as well as the
-     legible one, and duskEnv lifts the reflection a little to keep it reading as glass rather
-     than as flat paint. */
+    color:0x3C4C62, map:tex, roughness:0.22, metalness:0.45, envMapIntensity:1.2,
+    emissive:0xFFFFFF, emissiveMap:lit, emissiveIntensity:0.32 });
+  glassMat.userData.glassOverride = true;
+  glassMat.userData.duskColor = 0xCFDCEC;
+  glassMat.userData.duskRough = 0.20; glassMat.userData.duskMetal = 0.40;
+  glassMat.userData.duskEnv = 1.3;
   glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
-    color:0x2E8B96, roughness:0.15, metalness:0.25, envMapIntensity:1.6 });
-
-  const geo = new THREE.SphereGeometry(1, 40, 28);
+    color:0xFFFFFF, map:tex, roughness:0.20, metalness:0.35, envMapIntensity:1.0 });
+  const geo = new THREE.SphereGeometry(1, 48, 32);
   geo.scale(R_THICK, R_TALL, R_WIDE);
   geo.computeVertexNormals();
   const lens = new THREE.Mesh(geo, glassMat);
-  lens.position.set(x0, R_TALL, z0);
+  lens.position.set(x0, R_TALL - SINK, z0);
   lens.rotation.y = ROT;
   lens.userData.hero = true;
   g.add(lens);
-
   /* THE ZIPPER — the corrugated glass strip every source names as its own element, distinct from
      the two faces it joins. A thin torus, scaled the same non-uniform way as the lens so it
      traces the lens's own equator (its widest cross-section, at half height) rather than a
@@ -3914,23 +3928,32 @@ function aldarHQ(x0, z0){
   zipGeo.scale(R_THICK, 1, R_WIDE);
   zipGeo.rotateX(Math.PI / 2);
   const zipper = new THREE.Mesh(zipGeo, zipperMat);
-  zipper.position.set(x0, R_TALL, z0);
+  zipper.position.set(x0, R_TALL - SINK, z0);
   zipper.rotation.y = ROT;
   g.add(zipper);
-
-  /* A MODEST PLINTH, UNSOURCED AND SAID SO. An ellipsoid resting directly on the ground touches
-     it at one point, which reads as floating — every reference photo shows the lens rising from
-     a real ground-floor entrance structure, but none of the sources here give its footprint or
-     height. 0.6 units (4.7 m) is a plausible single-storey lobby allowance, not a measurement. */
+  /* THE RIM — the white steel band round the coin's edge, the thing that outlines the circle in
+     every photograph and keeps the silhouette legible when the glass happens to match the sky.
+     A fat torus in the face plane at the lens's outline; the two glass faces bulge out of it. */
+  const rimMat = new THREE.MeshStandardMaterial({ color:0x4A5258, roughness:0.45, metalness:0.35, emissive:0xDDE6EA, emissiveIntensity:0.06 });
+  rimMat.userData.glassOverride = false;
+  rimMat.userData.duskColor = 0xE4E9EC;
+  rimMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF6F8FA, roughness:0.35, metalness:0.2 });
+  const rimGeo = new THREE.TorusGeometry(R_TALL * 0.985, R_THICK * 0.28, 10, 96);   // y/z plane after rotateY
+  rimGeo.rotateY(Math.PI / 2);
+  const rim = new THREE.Mesh(rimGeo, rimMat);
+  rim.position.set(x0, R_TALL - SINK, z0);
+  rim.rotation.y = ROT;
+  g.add(rim);
+  /* THE PLINTH, sized to the real podium: the entrance block the circle rises out of, wider than
+     the lens is thick and long enough to hold it. Pale stone by day. */
   const plinthMat = new THREE.MeshStandardMaterial({ color:0x1A1A18, roughness:0.85 });
   plinthMat.userData.glassOverride = false;
   plinthMat.userData.duskColor = 0xC4BEA8;
   plinthMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xCEC8B2, roughness:0.85 });
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(R_THICK * 2.3, R_THICK * 2.6, 0.6, 24), plinthMat);
-  plinth.position.set(x0, 0.3, z0);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(R_THICK * 3.2, 0.8, R_WIDE * 1.5), plinthMat);
+  plinth.position.set(x0, 0.4, z0);
   plinth.rotation.y = ROT;
   g.add(plinth);
-
   return g;
 }
 
