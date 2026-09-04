@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v276';
+export const BUILD = 'world v277';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4913,8 +4913,14 @@ function glazed(base, tex){
    units, with Corniche to Al Maryah opened up to more than twenty-six. The total land extent
    barely moved (262 units wide before, 254 after), so the portrait framing is unaffected.
    =========================================================================== */
+/* cam — THE DISTRICT SHOT, PINNED BY HAND (world v277). Each one was set on the phone with the
+   nav's pan hand and read off the camera readout, with the zoom and tilt of the moment folded
+   into distance and elevation. angle is the azimuth in degrees (camera at target + (sin a, cos a)
+   times dist), dist and elev are display units, tx/tz the aim point as an offset from the
+   island's displayed centre. A district with a cam skips the composed framing entirely. */
 const DISTRICTS = [
   { id:'corniche', name:'Corniche',   x:-40*ISLE_SCALE, z:66*ISLE_SCALE, r:76*ISLE_SCALE, rot: 0.10, tint:C.gold,
+    cam: { angle:210, dist:4080, elev:1730, tx:-57, tz:873 },
     /* The district shot comes from the Gulf, north of the Corniche itself; the mainland is south. */
     seaAngle: Math.PI,
     built:true,
@@ -5153,6 +5159,7 @@ const DISTRICTS = [
     ] },
   // A short quay on the south face: Al Maryah is reclaimed business waterfront with a hard edge.
   { id:'maryah',   name:'Al Maryah',  x:2*ISLE_SCALE, z:-22*ISLE_SCALE, r:34*ISLE_SCALE, rot: 0.30, tint:0x8FD3E8,
+    cam: { angle:27, dist:2402, elev:839, tx:-274, tz:-299 },
     shore:[{ kind:'quay', t:0.60, t1:0.76, reps:5, off:2.0, y:2.40, len:6.2, wide:1.0 }],
     built:false, coreN:[0.0, 0.0], places:[
       /* Rosewood and Waterfront were never in the bake's landmark table, so they could not have
@@ -5171,6 +5178,7 @@ const DISTRICTS = [
      the camera heading is derived from it, and every rule on the island is relative to its own
      centre. */
   { id:'reem',     name:'Al Reem',    x:88*ISLE_SCALE, z:34*ISLE_SCALE, r:44*ISLE_SCALE, rot:-0.20, tint:0xBFD3E0,
+    cam: { angle:37, dist:2417, elev:877, tx:-23, tz:-189 },
     /* UNDER CONSTRUCTION (world v272): the east and south of Al Reem carry no surveyed roads or
        buildings because they are still being built, and desert on a reclaimed island reads as a
        hole in the data. Ground with no road within 200 m and clear of the shore is dressed as
@@ -5201,6 +5209,7 @@ const DISTRICTS = [
      to the sand, which is what actually punctuates a beach of that length. The rest stays
      painter-only, as the brief asks. */
   { id:'saadiyat', name:'Saadiyat',   x:-44*ISLE_SCALE, z:-116*ISLE_SCALE, r:56*ISLE_SCALE, rot: 0.15, tint:0xDDD3C0,
+    cam: { angle:150, dist:3778, elev:1659, tx:-213, tz:473 },
     shore:[
       /* Saadiyat's straight run is the NORTH-WEST coast, t 0.02 to 0.28 by the same measurement.
          Groynes are shorter and lower than v41's: fourteen units out was a pier, not a groyne. */
@@ -5221,6 +5230,7 @@ const DISTRICTS = [
      is already concave, so it is the only place a marina reads as a marina rather than as
      furniture parked on an open shore. */
   { id:'yas',      name:'Yas Island', x:78*ISLE_SCALE, z:-196*ISLE_SCALE, r:62*ISLE_SCALE, rot:-0.10, tint:C.gold,
+    cam: { angle:11, dist:3322, elev:921, tx:-33, tz:-813 },
     shore:[
       /* THE INLET IS AT t 0.65 TO 0.81, NOT 0.55 TO 0.62. I guessed the fractions from the shape
          array, but the outline is resampled at equal ARC LENGTH, so an index in that array is not
@@ -5260,6 +5270,7 @@ const DISTRICTS = [
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
   { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+    cam: { angle:250, dist:3488, elev:1703, tx:600, tz:337 },
     /* The district shot comes from the north: the Gulf. South of the strip is Khalifa City and
        the E10, which the model leaves as water. */
     seaAngle: Math.PI,
