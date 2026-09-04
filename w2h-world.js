@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v282';
+export const BUILD = 'world v283';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6793,7 +6793,8 @@ function buildingSpec(rnd, ctx){
      capH STAYS AT THE DISTRICT CAP. The crown rules below test h < capH to decide whether a tower
      was cut off by the ceiling; feeding them a landmark skirt would report every low building
      near the palace as trimmed when it was not. */
-  const h    = Math.min(capH, SLENDER * Math.min(w, dp),
+  const h    = Math.min(capH, ctx.style === 'white' ? 36 / M_PER_UNIT : Infinity,   // a white district is mid-rise
+                        SLENDER * Math.min(w, dp),
                         3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95),
                         softH * (0.30 + Math.pow(R.hRoll, 2.2) * 0.70));
 
@@ -6916,6 +6917,7 @@ function buildingSpec(rnd, ctx){
   /* ---- SHAFT STAGES ----
      Heights are split from the bottom up, footprint steps in at each join, and the cumulative
      width is floored so a three-stage tower does not taper away to nothing. */
+  if (ctx.style === 'white'){ podium = null; inset = 1; }   // a white district: terraces, no podium
   const podH   = podium ? podium.h : 0;
   const shaftH = h - podH;
   /* A SCULPTED TOWER GETS ONE STAGE, ALWAYS. Setbacks and a swept profile are two different
@@ -6926,6 +6928,9 @@ function buildingSpec(rnd, ctx){
   else if (tier === 2) nStage = frac > 0.62 ? (R.sb < 0.22 ? 1 : R.sb < 0.86 ? 2 : 3)
                                             : (R.sb < 0.58 ? 1 : 2);
   else if (tier === 1) nStage = R.sb < 0.82 ? 1 : 2;
+  /* A WHITE DISTRICT STEPS. Saadiyat Grove is terraces, not slabs: every mid-rise there takes
+     two or three stages, and no podium. */
+  if (ctx.style === 'white' && tier >= 1) nStage = R.sb < 0.5 ? 2 : 3;
 
   const stages = [];
   let y = podH, left = shaftH, sw = w * inset, sd = dp * inset, cum = inset;

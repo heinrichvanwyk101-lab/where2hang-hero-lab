@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v101';
+export const BUILD = 'city v102';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4132,22 +4132,37 @@ function zayedNationalMuseum(x0, z0, bearing){
 }
 function guggenheimAbuDhabi(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
-  /* A CLUSTER OF WHITE BLOCKS AND CONES on a 220 by 170 m platform at the water — the aerial of
-     the site under construction is a heap of white boxes over honeycomb cells, the renders add
-     the leaning cones. Both are here: blocks for the mass, cones for the silhouette. */
+  /* GEHRY'S HEAP: a low white mass with angled shells and cones thrown across it, on a 220 by
+     170 m platform at the water, honeycomb cells along the seaward edge. The character is in
+     the tilt — nothing stands straight — so the slabs lean, the cones lean, and half the cones
+     lie on their sides. Warm white stone, a few in pale blue-grey, as the renders read. */
   const base = new THREE.Mesh(new THREE.BoxGeometry(220 / M, 6 / M, 170 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
   base.position.set(x0, 3 / M, z0);
   g.add(base);
   const white = saadKitMat(0xE0DCD3, 0xF3F0EA, 0.85, 0.02);
   const stone = saadKitMat(0xCFC6B7, 0xE4DDD0, 0.85, 0);
+  const blue  = saadKitMat(0xB6C3CE, 0xD0DCE6, 0.55, 0.25);
+  const mats = [white, white, stone, blue];
   let seed = 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
-  for (let i = 0; i < 16; i++){
-    const w = (22 + rnd() * 40) / M, d = (22 + rnd() * 36) / M, h = (12 + rnd() * 34) / M;
-    const bx = x0 + (rnd() - 0.5) * 150 / M, bz = z0 + (rnd() - 0.5) * 110 / M;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), i % 3 ? white : stone);
-    m.position.set(bx, 6 / M + h / 2, bz);
-    m.rotation.y = rnd() * 0.9 - 0.45;
+  /* the core: a cluster of tall angled slabs, each leaning a different way */
+  for (let i = 0; i < 9; i++){
+    const w = (26 + rnd() * 30) / M, d = (14 + rnd() * 16) / M, h = (22 + rnd() * 30) / M;
+    const bx = x0 + (rnd() - 0.5) * 110 / M, bz = z0 + (rnd() - 0.5) * 80 / M;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats[i % 4]);
+    m.position.set(bx, 6 / M + h / 2 - 2 / M, bz);
+    m.rotation.set((rnd() - 0.5) * 0.35, rnd() * 3.14, (rnd() - 0.5) * 0.35);
+    if (i === 0) m.userData.hero = true;
     g.add(m);
+  }
+  /* the cones: some standing and leaning, some lying across the heap */
+  for (let i = 0; i < 11; i++){
+    const a = i / 11 * 6.2832 + rnd() * 0.5, rr = (i % 3 === 0 ? 16 : 34 + rnd() * 36) / M;
+    const H = (30 + rnd() * 34) / M, rb = (11 + rnd() * 9) / M, rt = rb * (0.15 + rnd() * 0.3);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, H, 14, 1, false), mats[(i + 1) % 4]);
+    const lying = i % 4 === 3;
+    cone.position.set(x0 + Math.cos(a) * rr, lying ? 6 / M + rb * 0.8 : 6 / M + H / 2 + 6 / M, z0 + Math.sin(a) * rr);
+    cone.rotation.set(lying ? Math.PI / 2 - 0.25 + (rnd() - 0.5) * 0.3 : (rnd() - 0.5) * 0.5, rnd() * 6.2832, lying ? 0 : (rnd() - 0.5) * 0.5);
+    g.add(cone);
   }
   /* The honeycomb: two rows of hexagonal cells along the seaward edge, as in the site aerial. */
   const cellMat = saadKitMat(0xD9D4CC, 0xEDE9E2, 0.85, 0);
@@ -4155,15 +4170,6 @@ function guggenheimAbuDhabi(x0, z0){
     const cell = new THREE.Mesh(new THREE.CylinderGeometry(8 / M, 8 / M, 7 / M, 6, 1, false), cellMat);
     cell.position.set(x0 + (-96 + i * 17.5 + (row ? 8.5 : 0)) / M, 6 / M + 3.5 / M, z0 + (-70 - row * 15) / M);
     g.add(cell);
-  }
-  for (let i = 0; i < 7; i++){
-    const a = i / 7 * 6.2832 + rnd() * 0.5, rr = (30 + rnd() * 40) / M;
-    const H = (30 + rnd() * 30) / M, rb = (11 + rnd() * 9) / M, rt = rb * (0.2 + rnd() * 0.3);
-    const cone = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, H, 12, 1, false), i % 2 ? white : stone);
-    cone.position.set(x0 + Math.cos(a) * rr, 6 / M + H / 2 + 8 / M, z0 + Math.sin(a) * rr);
-    cone.rotation.set((rnd() - 0.5) * 0.5, rnd() * 6.2832, (rnd() - 0.5) * 0.5);
-    if (i === 1) cone.userData.hero = true;
-    g.add(cone);
   }
   return g;
 }
