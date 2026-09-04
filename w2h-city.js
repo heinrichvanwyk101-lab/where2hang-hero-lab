@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v108';
+export const BUILD = 'city v109';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4705,11 +4705,277 @@ function warnerBrosWorld(x0, z0, rot){
   band.position.set(px, 34 / M, pz); band.rotation.y = rot; g.add(band);
   return g;
 }
+
+/* =========================================================================================
+   LANDMARK PASS TWO (city v109). The register's massed and missing entries, built on their
+   surveyed footprints where the survey has them. Same conventions as pass one: metres in,
+   divided by M_PER_U once; saadKitMat / kitGlass for materials; the world file measures the
+   kit zone off the object.
+   ========================================================================================= */
+function kitGlass(dusk, day, rough, metal){
+  const m = new THREE.MeshStandardMaterial({ color:dusk, map:TEX_TOWER, roughness:0.3, metalness:0.5 });
+  m.userData.glassOverride = true; m.userData.duskColor = dusk;
+  m.userData.dayMats = new THREE.MeshStandardMaterial({
+    color:day, roughness:rough == null ? 0.35 : rough, metalness:metal == null ? 0.1 : metal, envMapIntensity:0.6 });
+  return m;
+}
+/* An elliptical tower: plan w by d metres, hm metres tall, narrowing by `taper` at the top, with
+   the crown sheared by `shear` metres across the plan's x so the top slopes rather than sits
+   flat. The shear is applied only to the top ring, so the cap stays planar and tilted. */
+function ellipTower(w, d, hm, taper, shear, segs){
+  const M = M_PER_U, H = hm / M;
+  const geo = new THREE.CylinderGeometry(1, 1, H, segs || 40, 10);
+  const pos = geo.attributes.position;
+  for (let v = 0; v < pos.count; v++){
+    const t = (pos.getY(v) + H / 2) / H, x = pos.getX(v), z = pos.getZ(v);
+    const k = 1 - (taper || 0) * t;
+    pos.setX(v, x * (w / 2) * k / M); pos.setZ(v, z * (d / 2) * k / M);
+    if (shear && t > 0.999) pos.setY(v, pos.getY(v) + (shear / M) * 0.5 * x);
+  }
+  pos.needsUpdate = true; geo.computeVertexNormals();
+  return geo;
+}
+/* A rectangular tower whose top is one sloping plane, the crown most of the city's newer slabs
+   carry. */
+function shearBox(w, d, hm, shear){
+  const M = M_PER_U, H = hm / M;
+  const geo = new THREE.BoxGeometry(w / M, H, d / M);
+  const pos = geo.attributes.position;
+  for (let v = 0; v < pos.count; v++){
+    if (pos.getY(v) > H / 2 - 1e-4) pos.setY(v, H / 2 + (shear / M) * (pos.getX(v) / (w / 2 / M)) * 0.5);
+  }
+  pos.needsUpdate = true; geo.computeVertexNormals();
+  return geo;
+}
+const _placeRot = (x0, z0, rot) => { const cs = Math.cos(rot), sn = Math.sin(rot); return (ax, az) => [x0 + ax * cs + az * sn, z0 - ax * sn + az * cs]; };
+
+/* WORLD TRADE CENTER ABU DHABI — Burj Mohammed bin Rashid, 381 m, the tallest tower in the city:
+   a slender glass form that narrows and rounds off to a curved crown, with the square Trust
+   Tower (278 m) beside it and the souk podium between. On the survey's 400 m record. */
+function wtcAbuDhabi(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const glass = kitGlass(0x2A3E52, 0xA9C4D6);
+  const burj = new THREE.Mesh(ellipTower(50, 38, 381, 0.42, 22, 40), glass);
+  burj.position.set(x0, 381 / M / 2, z0); burj.rotation.y = rot;
+  burj.userData.hero = burj.userData.kitName = 'wtcAbuDhabi'; g.add(burj);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.8 / M, 1.6 / M, 26 / M, 8), saadKitMat(0xC9CED3, 0xEEF1F3, 0.4, 0.4));
+  mast.position.set(x0 + 1.2, (381 + 13) / M, z0); g.add(mast);
+  const trust = new THREE.Mesh(shearBox(42, 42, 278, 10), kitGlass(0x24343F, 0xB7C9D2));
+  trust.position.set(x0 - 3.9, 278 / M / 2, z0 + 19.4); trust.rotation.y = rot; g.add(trust);
+  const podium = new THREE.Mesh(new THREE.BoxGeometry(150 / M, 28 / M, 110 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
+  podium.position.set(x0 - 2, 14 / M, z0 + 9); podium.rotation.y = rot; g.add(podium);
+  return g;
+}
+/* THE LANDMARK — 324 m, an oval tower that leans back into a long sloping crown. On its own
+   surveyed record, 72 by 40 m. */
+function landmarkTower(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const t = new THREE.Mesh(ellipTower(72, 40, 324, 0.12, 38, 44), kitGlass(0x33424A, 0xC5CFD3, 0.3, 0.12));
+  t.position.set(x0, 324 / M / 2, z0); t.rotation.y = rot;
+  t.userData.hero = t.userData.kitName = 'landmarkTower'; g.add(t);
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(90 / M, 16 / M, 60 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
+  pod.position.set(x0, 8 / M, z0); pod.rotation.y = rot; g.add(pod);
+  return g;
+}
+/* ADNEC — the exhibition halls: a row of vaulted halls behind a long glass concourse, on the
+   survey's 461 by 410 m plot next to Capital Gate. */
+function adnecHalls(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, at = _placeRot(x0, z0, rot);
+  const white = saadKitMat(0xDCD9D2, 0xF1EFEA, 0.7, 0.05), glass = saadKitMat(0x2E4650, 0x9FC1CF, 0.35, 0.2, 0xBFE0EC, 0.1);
+  const N = 6, W = 68, DEP = 190;
+  for (let i = 0; i < N; i++){
+    const ax = (i - (N - 1) / 2) * (W + 4) / M;
+    const [hx, hz] = at(ax, 40 / M);
+    const hall = new THREE.Mesh(new THREE.BoxGeometry(W / M, 16 / M, DEP / M), white);
+    hall.position.set(hx, 8 / M, hz); hall.rotation.y = rot; g.add(hall);
+    const vault = new THREE.Mesh(new THREE.CylinderGeometry(W / 2 / M, W / 2 / M, DEP / M, 18, 1, false, 0, Math.PI), white);
+    vault.rotation.set(0, rot, Math.PI / 2, 'YZX'); vault.scale.set(0.42, 1, 1);
+    vault.position.set(hx, 16 / M, hz);
+    if (i === 2) vault.userData.hero = vault.userData.kitName = 'adnecHalls';
+    g.add(vault);
+  }
+  const [cx, cz] = at(0, -70 / M);
+  const conc = new THREE.Mesh(new THREE.BoxGeometry((N * (W + 4) + 30) / M, 14 / M, 34 / M), glass);
+  conc.position.set(cx, 7 / M, cz); conc.rotation.y = rot; g.add(conc);
+  const [ex, ez] = at(0, -80 / M);
+  const entry = new THREE.Mesh(new THREE.BoxGeometry(80 / M, 30 / M, 50 / M), white);
+  entry.position.set(ex, 15 / M, ez); entry.rotation.y = rot; g.add(entry);
+  return g;
+}
+/* THE FOUNDER'S MEMORIAL — the Constellation: a 30 m field of cables hung in an open steel
+   pavilion over a raised garden, across the road from the Corniche. On the 95 by 51 m plot. */
+function foundersMemorial(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, at = _placeRot(x0, z0, rot);
+  const lawn = saadKitMat(0x3E5A34, 0x5E7A45, 0.9, 0), stone = saadKitMat(0xD5D0C6, 0xE9E4DA, 0.8, 0);
+  const steel = saadKitMat(0x2E2A26, 0x3C3834, 0.5, 0.5);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(95 / M, 3 / M, 51 / M), stone);
+  plinth.position.set(x0, 1.5 / M, z0); plinth.rotation.y = rot; g.add(plinth);
+  const grass = new THREE.Mesh(new THREE.BoxGeometry(88 / M, 0.6 / M, 44 / M), lawn);
+  grass.position.set(x0, 3.2 / M, z0); grass.rotation.y = rot; g.add(grass);
+  const [px, pz] = at(-12 / M, 0);
+  // the open pavilion: four columns and a lid, 36 x 36 x 30 m
+  for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){
+    const [cx, cz] = at((-12 + sx * 17) / M, sz * 17 / M);
+    const col = new THREE.Mesh(new THREE.BoxGeometry(1.6 / M, 30 / M, 1.6 / M), steel);
+    col.position.set(cx, 18 / M, cz); col.rotation.y = rot; g.add(col);
+  }
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(38 / M, 2 / M, 38 / M), steel);
+  lid.position.set(px, 33 / M, pz); lid.rotation.y = rot; g.add(lid);
+  // the constellation: a cylinder of cables (an alpha-tested texture of thin verticals)
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const c = cv.getContext('2d'); c.fillStyle = '#000'; c.fillRect(0, 0, N, N);
+  c.fillStyle = '#fff';
+  for (let i = 0; i < 40; i++){ const x = Math.floor((i * 6.4 + (i % 3) * 1.7) % N); c.fillRect(x, 0, 1, N); }
+  for (let i = 0; i < 90; i++){ const x = (i * 37) % N, y = (i * 53 + 20) % N; c.fillRect(x, y, 5, 5); }
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(6, 1);
+  const cableMat = new THREE.MeshStandardMaterial({ color:0xC7B58A, alphaMap:tex, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.4, emissive:0xE8D8A8, emissiveIntensity:0.25 });
+  cableMat.userData.glassOverride = false; cableMat.userData.duskColor = 0xC7B58A;
+  cableMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xBFAF86, alphaMap:tex, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.3 });
+  const con = new THREE.Mesh(new THREE.CylinderGeometry(13 / M, 13 / M, 27 / M, 36, 1, true), cableMat);
+  con.position.set(px, 3.5 / M + 13.5 / M, pz); con.userData.hero = con.userData.kitName = 'foundersMemorial'; g.add(con);
+  const [wx, wz] = at(28 / M, 0);
+  const pool = new THREE.Mesh(new THREE.BoxGeometry(30 / M, 0.5 / M, 40 / M), saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1));
+  pool.position.set(wx, 3.6 / M, wz); pool.rotation.y = rot; g.add(pool);
+  return g;
+}
+/* SKY TOWER AND SUN TOWER, Shams Abu Dhabi — the tallest pair on Al Reem: a 292 m oval with a
+   sloping crown and, beside it, a 247 m slab with the same slant. Both on surveyed records. */
+function skyTower(x0, z0, rot, sx, sz, srot){
+  const g = new THREE.Group(), M = M_PER_U;
+  const sky = new THREE.Mesh(ellipTower(87, 39, 292, 0.06, 30, 44), kitGlass(0x2B4250, 0x9FC0D2, 0.3, 0.1));
+  sky.position.set(x0, 292 / M / 2, z0); sky.rotation.y = rot;
+  sky.userData.hero = sky.userData.kitName = 'skyTower'; g.add(sky);
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 300 / M, 44 / M), saadKitMat(0xDDE2E6, 0xF2F5F7, 0.5, 0.2));
+  fin.position.set(x0, 150 / M, z0); fin.rotation.y = rot; g.add(fin);
+  const sun = new THREE.Mesh(shearBox(66, 33, 247, 24), kitGlass(0x2B4250, 0xA8C6D5, 0.3, 0.1));
+  sun.position.set(sx, 247 / M / 2, sz); sun.rotation.y = srot; g.add(sun);
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(170 / M, 14 / M, 90 / M), saadKitMat(0xD3CEC5, 0xE6E2DA, 0.85, 0));
+  pod.position.set((x0 + sx) / 2, 7 / M, (z0 + sz) / 2); pod.rotation.y = rot; g.add(pod);
+  return g;
+}
+/* REEM MALL — a cream box with a glazed spine and the blue snow-park vault, on the survey's
+   188 by 179 m record. */
+function reemMall(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, at = _placeRot(x0, z0, rot);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(188 / M, 26 / M, 179 / M), saadKitMat(0xDCD3C2, 0xE6DECD, 0.85, 0));
+  body.position.set(x0, 13 / M, z0); body.rotation.y = rot; body.userData.hero = body.userData.kitName = 'reemMall'; g.add(body);
+  const glass = saadKitMat(0x2E4650, 0xC9E3EC, 0.3, 0.2, 0xBFE4EC, 0.2);
+  const spine = new THREE.Mesh(new THREE.CylinderGeometry(9 / M, 9 / M, 170 / M, 12, 1, false, 0, Math.PI), glass);
+  spine.rotation.set(0, rot, Math.PI / 2, 'YZX'); spine.position.set(x0, 26 / M, z0); g.add(spine);
+  const [vx, vz] = at(0, 60 / M);
+  const vault = new THREE.Mesh(new THREE.CylinderGeometry(22 / M, 22 / M, 120 / M, 16, 1, false, 0, Math.PI), saadKitMat(0x4E7FA8, 0x7FB3DA, 0.4, 0.2));
+  vault.rotation.set(0, rot, Math.PI / 2, 'YZX'); vault.scale.set(0.6, 1, 1); vault.position.set(vx, 26 / M, vz); g.add(vault);
+  return g;
+}
+/* ADGM SQUARE — the Galleria's undulating white roof between the four glass towers of the
+   financial centre, all on their surveyed records (island units, absolute). */
+function adgmSquare(){
+  const g = new THREE.Group(), M = M_PER_U;
+  /* A stone-grey podium so the white roof above it reads as a separate thing; at the first
+     render the two were the same tone and the roof vanished into the deck. */
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(296 / M, 15 / M, 219 / M), saadKitMat(0xB9B4AA, 0xC8C3B8, 0.85, 0));
+  pod.position.set(-29.2, 7.5 / M, 10.6); pod.rotation.y = 1.51; g.add(pod);
+  // the roof: a plane rippled along its length, white, floating on a glass band
+  const roofG = new THREE.PlaneGeometry(210 / M, 130 / M, 40, 8);
+  const rp = roofG.attributes.position;
+  for (let v = 0; v < rp.count; v++) rp.setZ(v, Math.sin(rp.getX(v) * M / 26) * 7 / M);
+  /* Laid flat and turned in the geometry itself — an Euler on the mesh stood it on edge. */
+  roofG.rotateX(-Math.PI / 2); roofG.rotateY(1.51 + Math.PI / 2);
+  roofG.computeVertexNormals();
+  const roofMat = saadKitMat(0xE6E4DE, 0xF7F6F2, 0.6, 0.05); roofMat.side = THREE.DoubleSide; roofMat.userData.dayMats.side = THREE.DoubleSide;
+  const roof = new THREE.Mesh(roofG, roofMat);
+  roof.position.set(-24, 30 / M, 13);
+  roof.userData.hero = roof.userData.kitName = 'adgmSquare'; g.add(roof);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(200 / M, 12 / M, 120 / M), saadKitMat(0x2E4650, 0xBFDCE8, 0.3, 0.2, 0xBFE4EC, 0.2));
+  band.position.set(-24, 21 / M, 13); band.rotation.y = 1.51 + Math.PI / 2; g.add(band);
+  const glass = kitGlass(0x223644, 0xA3BFD0, 0.3, 0.1);
+  for (const [x, z, h, w, d, rot] of [[-16.8, 6.1, 155, 63.4, 39.7, 1.487], [-19, 23.5, 155, 64.1, 40.7, 1.46],
+                                       [-27.6, 0.5, 131, 71.3, 40, -0.1], [-31.4, 26.4, 131, 70.5, 40.2, -0.088]]){
+    const t = new THREE.Mesh(shearBox(w, d, h, 6), glass);
+    t.position.set(x, h / M / 2, z); t.rotation.y = rot; g.add(t);
+  }
+  return g;
+}
+/* CLEVELAND CLINIC ABU DHABI — a white podium under a stepped 110 m tower with dark glass
+   bands, on the survey's tower and podium records. */
+function clevelandClinic(){
+  const g = new THREE.Group(), M = M_PER_U, rot = 1.457;
+  const white = saadKitMat(0xDCDAD5, 0xF0EEEA, 0.75, 0.05), dark = saadKitMat(0x1E2A32, 0x3A4F5C, 0.35, 0.3, 0xBFD8EA, 0.15);
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(210 / M, 25 / M, 118 / M), white);
+  pod.position.set(-41, 12.5 / M, 65); pod.rotation.y = rot; g.add(pod);
+  [[128, 40, 110], [110, 34, 86], [92, 28, 62]].forEach(([w, d, h], i) => {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), white);
+    t.position.set(-36.6, h / M / 2, 64.7); t.rotation.y = rot; if (i === 0) t.userData.hero = t.userData.kitName = 'clevelandClinic'; g.add(t);
+    const gl = new THREE.Mesh(new THREE.BoxGeometry((w + 1) / M, (h - 6) / M, (d + 1) / M), dark);
+    gl.scale.set(1, 1, 0.55); gl.position.set(-36.6, h / M / 2 + 1 / M, 64.7); gl.rotation.y = rot; g.add(gl);
+  });
+  return g;
+}
+/* YAS WATERWORLD — the pearl-shell canopy, three slide towers with their coloured spirals, the
+   wave pool and the lazy river, on the park's centre. */
+function yasWaterworld(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  const water = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.15);
+  const wave = new THREE.Mesh(new THREE.CircleGeometry(42 / M, 32), water); wave.rotation.x = -Math.PI / 2; wave.position.set(x0 + 60 / M, 0.06, z0 + 20 / M); g.add(wave);
+  const river = new THREE.Mesh(new THREE.RingGeometry(70 / M, 82 / M, 48), water); river.rotation.x = -Math.PI / 2; river.position.set(x0, 0.06, z0); g.add(river);
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 16, 0, Math.PI, 0, Math.PI / 2), saadKitMat(0xE8E4DA, 0xF8F5EE, 0.4, 0.15, 0xFFF0D8, 0.1));
+  shell.scale.set(62 / M, 34 / M, 50 / M); shell.position.set(x0 - 40 / M, 0, z0 - 20 / M); shell.rotation.y = 0.6;
+  shell.userData.hero = shell.userData.kitName = 'yasWaterworld'; g.add(shell);
+  const cols = [[0xF2B233, 0xFFC94A], [0xE0522D, 0xFF6A3D], [0x2F86C9, 0x4FA8E8]];
+  [[20, 40, 38], [-10, 60, 32], [45, -30, 27]].forEach(([dx, dz, h], i) => {
+    const tw = new THREE.Mesh(new THREE.CylinderGeometry(4 / M, 5 / M, h / M, 12), saadKitMat(0xD8D3C8, 0xEDE8DC, 0.8, 0));
+    tw.position.set(x0 + dx / M, h / M / 2, z0 + dz / M); g.add(tw);
+    const tube = new THREE.Mesh(new THREE.TorusGeometry(15 / M, 1.7 / M, 8, 36, Math.PI * 1.6), saadKitMat(cols[i][0], cols[i][1], 0.5, 0.1));
+    tube.rotation.set(Math.PI / 2 - 0.35, 0, i * 1.1); tube.position.set(x0 + dx / M, h / M * 0.55, z0 + dz / M); g.add(tube);
+  });
+  return g;
+}
+/* AL RAHA BEACH HOTEL — a low arcaded hotel in warm sandstone with a domed pavilion, on its
+   two surveyed footprints, which were reserved in the Raha kit zones for it. */
+function rahaBeachHotel(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const stone = saadKitMat(0xCDB19E, 0xE2C6B2, 0.9, 0), pale = saadKitMat(0xE4D6C8, 0xF0E6DA, 0.85, 0);
+  const glass = saadKitMat(0x1C3A44, 0x3E8A9A, 0.25, 0.3);
+  const block = (x, z, w, d, h, rot, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, h / M / 2, z); m.rotation.y = rot; g.add(m); return m; };
+  const A = block(-203.27, 101.76, 197.7, 95.1, 18, 0.321, stone); A.userData.hero = A.userData.kitName = 'rahaBeachHotel';
+  block(-218.53, 95.47, 120.8, 34.8, 14, -1.264, stone);
+  // arcade: pale piers along both long faces of A
+  const at = _placeRot(-203.27, 101.76, 0.321);
+  for (let i = -8; i <= 8; i++) for (const s of [-1, 1]){
+    const [px, pz] = at(i * 11 / M, s * 48 / M);
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(2.2 / M, 12 / M, 2.2 / M), pale); pier.position.set(px, 6 / M, pz); pier.rotation.y = 0.321; g.add(pier);
+    if (i < 8){ const [ax, az] = at((i + 0.5) * 11 / M, s * 47.4 / M);
+      const arch = new THREE.Mesh(new THREE.BoxGeometry(7 / M, 9 / M, 0.3 / M), glass); arch.position.set(ax, 6 / M, az); arch.rotation.y = 0.321; g.add(arch); }
+  }
+  const pav = block(-203.27, 101.76, 34, 34, 26, 0.321, pale);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(11 / M, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xC9A96A, 0xD9BC7A, 0.5, 0.3, 0xE8B547, 0.2));
+  dome.position.set(-203.27, 26 / M, 101.76); g.add(dome);
+  return g;
+}
+/* MANARAT AL SAADIYAT AND BERKLEE ABU DHABI — the low white gallery with its deep overhanging
+   roof, and the small cube with the glass drum next door, on their surveyed footprints. */
+function manaratSaadiyat(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const white = saadKitMat(0xE2E1DC, 0xF4F3EF, 0.7, 0.05), dark = saadKitMat(0x1C262C, 0x35464F, 0.35, 0.3);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(230 / M, 11 / M, 80 / M), white);
+  body.position.set(-214.4, 5.5 / M, 163.2); body.userData.hero = body.userData.kitName = 'manaratSaadiyat'; g.add(body);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(232 / M, 5 / M, 82 / M), dark);
+  band.position.set(-214.4, 3 / M, 163.2); g.add(band);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(245 / M, 2.5 / M, 92 / M), white);
+  roof.position.set(-214.4, 12.2 / M, 163.2); g.add(roof);
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(60 / M, 16 / M, 56 / M), white);
+  cube.position.set(-220.3, 8 / M, 181.2); cube.rotation.y = -1.42; g.add(cube);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(18 / M, 18 / M, 18 / M, 28), dark);
+  drum.position.set(-220.3 + 2.5, 9 / M, 181.2 - 1.5); g.add(drum);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
-         capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld };
+         capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
+         wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
+         yasWaterworld, rahaBeachHotel, manaratSaadiyat };
 }
 
 

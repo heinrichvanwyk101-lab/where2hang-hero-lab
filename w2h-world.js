@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v288';
+export const BUILD = 'world v289';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -4980,6 +4980,10 @@ const DISTRICTS = [
       { label:'Fairmont Marina Residences', osm:'Fairmont Marina Residences', x:LM.fairmont.x, z:LM.fairmont.z, h: 10, r:16 },
       { label:'Etihad Towers',   osm:'Etihad Towers',      x:LM.etihad.x, z:LM.etihad.z, h:18, r:28 },
       { label:'ADNOC HQ',        osm:'ADNOC Headquarters', x: LM.adnoc.x, z: LM.adnoc.z, h:26, r:22 },
+      { label:'World Trade Center', x:-548.1, z:-265.8, h:49, r:24 },   // Burj Mohammed bin Rashid, on the kit
+      { label:'Landmark Tower',     x:-564.0, z:-228.7, h:42, r:22 },
+      { label:'ADNEC',              x: 561.5, z: 702.8, h: 3, r:40 },
+      { label:"Founder's Memorial", x:-866.0, z:  47.6, h: 4, r:18 },
       { label:'Capital Gate', x:527.5, z:715.2, h:20, r:26 },
       { label:'Nation Towers', x:-836.1, z:28.1, h:24, r:26 },
       /* No osm match will ever come back for this one — see LM.mosque above — so it never gets
@@ -5200,7 +5204,8 @@ const DISTRICTS = [
          So this island declares what actually resolves and nothing else. One anchor is below the
          two the shot needs, so Al Reem falls back to framing its coastline, which is honest:
          better a wide island than three labels stacked on its centre pretending to be venues. */
-      { label:'Sky Tower',   osm:'Sky Tower',   x:  0, z:  0, h:16, r:36 },
+      { label:'Sky Tower',   osm:'Sky Tower',   x:-1.9, z:-135.2, h:38, r:36 },
+      { label:'Reem Mall',   x:21.3, z:12.4, h: 4, r:30 },   // on the kit; the survey has no name for it
       { label:'Gate Towers', x:-3.3, z:-98.4, h:30, r:36 },   // on the kit; the survey has no name for it
     ] },
   /* AND SAADIYAT OUT BY EIGHT, for the same reason. Widening the skirt shifts which pair is
@@ -7551,6 +7556,12 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const hosn = kit.qasrAlHosn ? kit.qasrAlHosn(-506.9, -192.1, 0.18) : new THREE.Group();
   /* Nation Towers on the published coordinates (24.4672 N, 54.3297 E), forty metres back from the Corniche shore. */
   const nation = kit.nationTowers ? kit.nationTowers(-836.1, 28.1, 0.57) : new THREE.Group();
+  /* PASS TWO (world v289): the Corniche's tallest pair on their surveyed records, the ADNEC halls
+     on their plot beside Capital Gate, and the Founder's Memorial on its 95 by 51 m ground. */
+  const wtc      = kit.wtcAbuDhabi      ? kit.wtcAbuDhabi(-548.1, -265.8, 0.61)   : new THREE.Group();
+  const landmark = kit.landmarkTower    ? kit.landmarkTower(-564.0, -228.7, -0.433) : new THREE.Group();
+  const adnec    = kit.adnecHalls       ? kit.adnecHalls(561.5, 702.8, -0.29)     : new THREE.Group();
+  const founder  = kit.foundersMemorial ? kit.foundersMemorial(-866.0, 47.6, 0.6)  : new THREE.Group();
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7573,7 +7584,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -7590,7 +7601,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
@@ -7697,6 +7708,9 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
 
   // ADNOC HQ: the tall slim anchor at the eastern end.
   massBlock(LM.adnoc.x, LM.adnoc.z, 7.6, 44, 4.8, true, false, 0.14);
+  // World Trade Center and the Landmark: the two tallest, so the far view keeps them too.
+  massBlock(-548.1, -265.8, 5.5, 381 / M_PER_UNIT, 4.5, true, false, 0.10);
+  massBlock(-564.0, -228.7, 8.5, 324 / M_PER_UNIT, 5.0, true, false, 0.10);
 
   /* THE SUPPORTING SKYLINE IS GONE, AND IT IS WHAT THE BIG BLOCKS WERE.
 
@@ -7870,6 +7884,7 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (kit.yasCircuit) built.push(kit.yasCircuit(35.0, 230.7, 0.14, 37.2, 239.5));
   /* Warner Bros. World on its surveyed footprint (713 by 694 m at bake (19122, -191) m, rot 1.25). */
   if (kit.warnerBrosWorld) built.push(kit.warnerBrosWorld(74.8, -26.3, 1.25));
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-45.0, -42.0));   // world v289, on the park's centre
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
@@ -7976,6 +7991,7 @@ if (!NO_KIT && kit.rahaMall){
   const mall = kit.rahaMall(LM_RAHA.rahaMall.x, LM_RAHA.rahaMall.z);
   mall.position.y = GROUND;
   raha.detail.add(mall);
+  if (kit.rahaBeachHotel){ const h = kit.rahaBeachHotel(); h.position.y = GROUND; raha.detail.add(h); }   // world v289
 }
 
 /* ---------- SAADIYAT CULTURAL DISTRICT (world v280) ------------------------------------------
@@ -8006,15 +8022,36 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-495, x1:-466, z0: 63, z1: 87 },   // Guggenheim, 220 x 170 m
   { x0:-360, x1:-330, z0:288, z1:314 },   // Natural History Museum, 130 x 100 m plus a margin
   { x0:-322, x1:-290, z0:283, z1:310 },   // teamLab Phenomena, 190 x 140 m plus a margin
+  { x0:-232, x1:-197, z0:156, z1:171 },   // Manarat Al Saadiyat, 245 x 92 m (world v289)
+  { x0:-227, x1:-213, z0:175, z1:188 },   // Berklee Abu Dhabi, 80 x 74 m
 ];
 /* ---------- AL REEM: GATE TOWERS (world v285) — on the survey's 256 by 50 m slab (bake
    (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
 const reem = DISTRICTS.find(d => d.id === 'reem');
-KIT_ZONES[reem.id] = [{ x0:-24, x1:18, z0:-108, z1:-88 }];
+KIT_ZONES[reem.id] = [{ x0:-24, x1:18, z0:-108, z1:-88 },
+  { x0:-16, x1:12, z0:-144, z1:-126 },   // Sky Tower, 87 x 39 m, rot 0.47 (world v289)
+  { x0:-33, x1:-15, z0:-141, z1:-126 },  // Sun Tower, 66 x 33 m
+  { x0:6, x1:36, z0:-2, z1:27 },         // Reem Mall, 188 x 179 m
+];
 if (!NO_KIT && reem && kit.gateTowers){
   const gt = kit.gateTowers(-3.3, -98.4, -0.57);
   gt.position.y = GROUND;
   reem.detail.add(gt);
+  if (kit.skyTower){ const st = kit.skyTower(-1.9, -135.2, 0.465, -24.0, -133.6, -0.564); st.position.y = GROUND; reem.detail.add(st); }
+  if (kit.reemMall){ const rm = kit.reemMall(21.3, 12.4, -0.42); rm.position.y = GROUND; reem.detail.add(rm); }
+}
+/* ---------- AL MARYAH (world v289): ADGM Square with the Galleria roof, and Cleveland Clinic,
+   on their surveyed records; the zones replace the flat survey boxes with the kit. */
+const maryah = DISTRICTS.find(d => d.id === 'maryah');
+KIT_ZONES[maryah.id] = [
+  { x0:-50, x1:-8, z0:-8, z1:30 },       // the Galleria podium and the four ADGM towers
+  { x0:-56, x1:-26, z0:52, z1:80 },      // Cleveland Clinic podium and tower
+];
+if (!NO_KIT && maryah && kit.adgmSquare){
+  for (const fn of ['adgmSquare', 'clevelandClinic']){
+    if (!kit[fn]) continue;
+    const m = kit[fn](); m.position.y = GROUND; maryah.detail.add(m);
+  }
 }
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
@@ -8025,6 +8062,7 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
     m.position.y = GROUND;
     saadiyat.detail.add(m);
   }
+  if (kit.manaratSaadiyat){ const m = kit.manaratSaadiyat(); m.position.y = GROUND; saadiyat.detail.add(m); }
 }
 
 /* ===========================================================================
