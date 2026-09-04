@@ -9217,6 +9217,12 @@ function footprintsFor(d, list){
         /* The local ceiling still binds. A low-rise zone means low rise whatever the island's
            surveyed stock says about buildings of this size elsewhere on it. */
         h = Math.max(0.4, Math.min(h, cellCap(d, nx, ny, tallest)));
+        /* A 'low' STYLE ZONE BINDS THE RESAMPLED HEIGHT TOO (world v288). The Breakwater's
+           unmeasured hotel parcels are big, and big draws from the big band, which on Corniche
+           is towers. The zone says six storeys and the survey has nothing to say against it. */
+        for (const zn of (d.styleZones || [])){
+          if (zn.style === 'low' && b.x >= zn.x0 && b.x <= zn.x1 && b.z >= zn.z0 && b.z <= zn.z1){ h = Math.min(h, 22 / M_PER_UNIT); break; }
+        }
       } else {
         /* THE OLD MODEL, KEPT FOR THE ISLAND THAT HAS NO SURVEYED STOCK TO RESAMPLE. Wrong in the
            way described above, and still better than a flat city: it is continuous, it respects the

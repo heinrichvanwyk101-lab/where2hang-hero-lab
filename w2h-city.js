@@ -3962,6 +3962,11 @@ function rahaMall(x0, z0){
   body.rotation.y = ROT;
   body.userData.hero = true;
   g.add(body);
+  /* A PLINTH THAT REACHES BELOW GRADE. The mall stands where the shore paint and the beach drop
+     meet, and from the Raha shot the box read as hovering over the sand on its seaward end. A
+     dark base course a unit deep closes any gap between the box and whatever the ground does. */
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + 0.6, 1.4, D + 0.6), paleMat);
+  plinth.position.set(x0, -0.5, z0); plinth.rotation.y = ROT; g.add(plinth);
 
   /* THE BAYS. Nine across the long frontage, which is the count the elevation photo reads at and
      gives a pier width close to the arch width — the rhythm in the photograph is near enough to
