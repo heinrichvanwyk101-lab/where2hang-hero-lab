@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v294';
+export const BUILD = 'world v295';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5246,7 +5246,8 @@ const DISTRICTS = [
       { label:'Jumeirah Saadiyat',   x: -4.9, z:11.4, h: 3, r:30 },
       { label:'St. Regis Saadiyat',  x:-112.0, z:62.0, h: 4, r:34 },   // world v291
       { label:'NYU Abu Dhabi',       x: -8.0, z:310.0, h: 4, r:34 },
-      { label:'Mamsha Al Saadiyat',  x:-227.8, z:92.1, h: 3, r:28 },
+      { label:'Mamsha Al Saadiyat',  x:-330.0, z:96.0, h: 3, r:34 },   // the row's middle (world v295)
+      { label:'Saadiyat Grove',      x:-320.0, z:205.0, h: 4, r:34 },
     ] },
   /* CONDITION TWO: THE MARINA. A quay wall down one wall of the inlet with pontoon fingers off
      it, and a mound across the mouth. The inlet is the only place on any island where the coast
@@ -5339,6 +5340,7 @@ const DISTRICTS = [
          rather than a bug, since nothing here was actually confirmed by a name match. */
       { label:'Aldar HQ', x:LM_RAHA.aldar.x, z:LM_RAHA.aldar.z, h:14, r:18 },
       { label:'Al Raha Mall', x:LM_RAHA.rahaMall.x, z:LM_RAHA.rahaMall.z, h:6, r:24 },
+      { label:'Al Seef Village', x:216.6, z:-92.3, h:4, r:26 },   // on the kit (world v295)
       { label:'Al Raha Beach Resort', x:LM_RAHA.rahaResortA.x, z:LM_RAHA.rahaResortA.z, h:5, r:26 },
     ] },
 ];
@@ -6814,6 +6816,7 @@ function buildingSpec(rnd, ctx){
      near the palace as trimmed when it was not. */
   const h    = Math.min(capH, ctx.style === 'white' ? 36 / M_PER_UNIT : Infinity,   // a white district is mid-rise
                         ctx.style === 'low'   ? 22 / M_PER_UNIT : Infinity,   // a low district: nothing above six storeys
+                        ctx.style === 'villa' ? 9 / M_PER_UNIT : Infinity,    // a villa district: two storeys (world v295)
                         SLENDER * Math.min(w, dp),
                         3 + tallest * fall * (0.25 + Math.pow(R.hRoll, 2.2) * 0.95),
                         softH * (0.30 + Math.pow(R.hRoll, 2.2) * 0.70));
@@ -7764,6 +7767,10 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
    anchors rather than beside them, so the labels and the roofs cannot disagree. */
 const yas = DISTRICTS.find(d => d.id === 'yas');
 KIT_ZONES[yas.id] = [];
+/* EAST YAS IS VILLAS (world v295). Yas Acres and Noya are two-storey villa communities, and the
+   survey carries them as ~1,000 unmeasured 17 m footprints east of x 60; the height resampler
+   was handing them tower heights. A villa zone caps both the fabric and the resampled survey. */
+yas.styleZones = [{ x0:60, x1:405, z0:-400, z1:300, style:'villa' }];
 if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   const at = nm => (yas.places || []).find(pl => pl.label === nm);
   const built = [];
@@ -7985,6 +7992,7 @@ KIT_ZONES[raha.id] = [
   { x0:-196.6, x1:-166.9, z0: 83.5, z1:104.9 },   // Al Raha Mall     — 182.7 x 86.8 m, rot  16.9°
   { x0:-219.2, x1:-187.3, z0: 90.0, z1:113.5 },   // Beach Resort, A  — 197.7 x 95.1 m, rot  18.4°
   { x0:-225.0, x1:-212.1, z0: 85.4, z1:105.5 },   // Beach Resort, B  — 120.8 x 34.8 m, rot -72.4°
+  { x0:200, x1:233, z0:-102, z1:-82 },             // Al Seef Village — 208 x 88 m, rot 0.26 (world v295)
 ];
 
 /* ALDAR HQ, BUILT AND ADDED. The first of Al Raha's four landmarks with actual geometry rather
@@ -8011,6 +8019,7 @@ if (!NO_KIT && kit.rahaMall){
   mall.position.y = GROUND;
   raha.detail.add(mall);
   if (kit.rahaBeachHotel){ const h = kit.rahaBeachHotel(); h.position.y = GROUND; raha.detail.add(h); }   // world v289
+  if (kit.alSeefVillage){ const v = kit.alSeefVillage(216.6, -92.3, 0.26); v.position.y = GROUND; raha.detail.add(v); }   // world v295, on the 208 x 88 m record
 }
 
 /* ---------- SAADIYAT CULTURAL DISTRICT (world v280) ------------------------------------------
@@ -8047,7 +8056,7 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-24, x1:14, z0:-6, z1:29 },        // Jumeirah parcel, 249 x 164 m
   { x0:-136, x1:-88, z0:48, z1:78 },      // St. Regis, grid-searched site (world v291)
   { x0:-46, x1:22, z0:286, z1:346 },      // NYU Abu Dhabi campus records
-  { x0:-244, x1:-211, z0:84, z1:101 },    // Mamsha Al Saadiyat parcel, 219 x 91 m
+  { x0:-410, x1:-262, z0:140, z1:232 },   // Saadiyat Grove: the kit lays the whole district (world v295)
 ];
 /* ---------- AL REEM: GATE TOWERS (world v285) — on the survey's 256 by 50 m slab (bake
    (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
@@ -8091,7 +8100,37 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   if (kit.manaratSaadiyat){ const m = kit.manaratSaadiyat(); m.position.y = GROUND; saadiyat.detail.add(m); }
   if (kit.saadiyatResorts){ const m = kit.saadiyatResorts(); m.position.y = GROUND; saadiyat.detail.add(m); }
   if (kit.stRegisSaadiyat){ const m = kit.stRegisSaadiyat(-112, 62, 0.43); m.position.y = GROUND; saadiyat.detail.add(m); }   // world v291
-  for (const fn of ['nyuCampus', 'mamshaSaadiyat']) if (kit[fn]){ const m = kit[fn](); m.position.y = GROUND; saadiyat.detail.add(m); }
+  if (kit.nyuCampus){ const m = kit.nyuCampus(); m.position.y = GROUND; saadiyat.detail.add(m); }
+  /* MAMSHA AL SAADIYAT (world v295): 1.4 km of beachfront walked along the surveyed shore. The
+     shore line below is sampled from the outline every 20 units; blocks sit 12 units inland of
+     it (between beach and beach road), the promenade at 5. */
+  const SAAD_BEACH = [[-420, 99], [-400, 95], [-380, 89], [-360, 87], [-340, 84], [-320, 82], [-300, 76], [-280, 68], [-260, 64], [-240, 70]];
+  const shoreZ = x => { for (let i = 0; i + 1 < SAAD_BEACH.length; i++){ const [a, za] = SAAD_BEACH[i], [b, zb] = SAAD_BEACH[i + 1]; if (x >= a && x <= b) return za + (zb - za) * (x - a) / (b - a); } return SAAD_BEACH[x < -420 ? 0 : SAAD_BEACH.length - 1][1]; };
+  const shoreRot = x => { const dz = shoreZ(x + 10) - shoreZ(x - 10); return -Math.atan2(dz, 20); };
+  const mamBlocks = [], mamProm = [];
+  for (let i = 0; i < 9; i++){ const x = -412 + i * 21, rot = shoreRot(x), a = -rot; mamBlocks.push({ x: x - Math.sin(a) * 12, z: shoreZ(x) + Math.cos(a) * 12, rot, len: 130, dep: 60, storeys: [7, 5, 6, 7, 5, 6, 7, 5, 6][i] }); KIT_ZONES[saadiyat.id].push({ x0:x - 10, x1:x + 10, z0:shoreZ(x) + 5, z1:shoreZ(x) + 19 }); }
+  for (let i = 0; i + 1 < SAAD_BEACH.length; i++){ const [a, za] = SAAD_BEACH[i], [b, zb] = SAAD_BEACH[i + 1]; const rot = -Math.atan2(zb - za, b - a), L = Math.hypot(b - a, zb - za) * M_PER_UNIT; mamProm.push({ x:(a + b) / 2 - Math.sin(-rot) * 5, z:(za + zb) / 2 + Math.cos(-rot) * 5, rot, len:L }); }
+  if (kit.mamshaSaadiyat){ const m = kit.mamshaSaadiyat(mamBlocks, mamProm); m.position.y = GROUND; saadiyat.detail.add(m); }
+  /* SAADIYAT GROVE (world v295): built as complete. A grid of white terraced blocks turned with
+     the museum, filling the zone round the Zayed National Museum, skipping the museum zones,
+     the lagoon, the roads' verges and anything off the outline. */
+  if (kit.groveBlock){
+    const GR = 0.25, cx0 = -336, cz0 = 186;
+    const zones = KIT_ZONES[saadiyat.id].filter(z => !(z.x0 === -410 && z.z0 === 140));
+    const grove = new THREE.Group(); let n = 0;
+    for (let u = -70; u <= 70; u += 14) for (let v = -42; v <= 42; v += 12){
+      const x = cx0 + u * Math.cos(GR) + v * Math.sin(GR), z = cz0 - u * Math.sin(GR) + v * Math.cos(GR);
+      if (x < -410 || x > -262 || z < 140 || z > 232) continue;
+      if (zones.some(zn => x > zn.x0 - 4 && x < zn.x1 + 4 && z > zn.z0 - 4 && z < zn.z1 + 4)) continue;
+      if (Math.hypot(x + 374, z - 169) < 17) continue;                                    // the museum's lagoon
+      /* No outline test: the zone is wholly inland (north shore at z 95, the tip at z 297), and
+         the first pass's test rejected every cell — its helpers take the bake's own frame. */
+      const hsh = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+      const gb = kit.groveBlock(x, z, 62 + hsh * 14, 42 + hsh * 10, 18 + Math.floor(hsh * 4) * 3.6, GR);
+      grove.add(gb); n++;
+    }
+    grove.position.y = GROUND; saadiyat.detail.add(grove);
+  }
 }
 
 /* ===========================================================================
@@ -9288,7 +9327,7 @@ function footprintsFor(d, list){
            unmeasured hotel parcels are big, and big draws from the big band, which on Corniche
            is towers. The zone says six storeys and the survey has nothing to say against it. */
         for (const zn of (d.styleZones || [])){
-          if (zn.style === 'low' && b.x >= zn.x0 && b.x <= zn.x1 && b.z >= zn.z0 && b.z <= zn.z1){ h = Math.min(h, 22 / M_PER_UNIT); break; }
+          if ((zn.style === 'low' || zn.style === 'villa') && b.x >= zn.x0 && b.x <= zn.x1 && b.z >= zn.z0 && b.z <= zn.z1){ h = Math.min(h, (zn.style === 'villa' ? 8 : 22) / M_PER_UNIT); break; }
         }
       } else {
         /* THE OLD MODEL, KEPT FOR THE ISLAND THAT HAS NO SURVEYED STOCK TO RESAMPLE. Wrong in the

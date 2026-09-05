@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v117';
+export const BUILD = 'city v118';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5246,46 +5246,88 @@ function nyuCampus(){
 }
 /* MAMSHA AL SAADIYAT — the beachfront row: stepped white apartment blocks with terraces facing
    the sea, on the survey's 219 by 91 m parcel. */
-function mamshaSaadiyat(){
-  const g = new THREE.Group(), M = M_PER_U, rot = 0.24, at = _placeRot(-227.8, 92.1, rot);
-  const white = saadKitMat(0xE2E0DA, 0xF4F2EC, 0.8, 0), glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3);
-  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
-  const canopy = saadKitMat(0xC9A96A, 0xD9BC7A, 0.7, 0), umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0), pool = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.15);
-  const slab = (ax, az, w, d, h, mat, y) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, (y || 0) / M + h / M / 2, pz); m.rotation.y = rot; g.add(m); return m; };
-  /* THE HARDSCAPE FIRST: the beach promenade along the sea side (local -z), a lawn strip on the
-     street side, and the paved lanes between the blocks. */
-  slab(0, -42, 232, 14, 0.5, pave);
-  slab(0, 42, 232, 8, 0.5, lawn);
-  for (let i = 0; i < 7; i++){
-    const ax = (i - 3) * 30;
-    slab(ax, 0, 30, 90, 0.3, pave);
-    // the block: five storeys at the back, three in the middle, and the restaurant terrace on the promenade
-    [[0, 22, 18, 34], [1, -6, 12, 18]].forEach(([k, az, h, dep]) => {
-      const b = slab(ax, az, 24, dep, h, white);
-      if (i === 3 && k === 0) b.userData.hero = b.userData.kitName = 'mamshaSaadiyat';
-      const [gx, gz] = at(ax / M, (az - dep / 2 - 0.3) / M);
-      const gl = new THREE.Mesh(new THREE.BoxGeometry(20 / M, (h - 2) / M, 0.4 / M), glassD);
-      gl.position.set(gx, h / M / 2, gz); gl.rotation.y = rot; g.add(gl);
-    });
-    // the restaurant: a glass pavilion under a wide canopy, tables under umbrellas on the promenade
-    slab(ax, -24, 20, 14, 5, glassD);
-    slab(ax, -25, 26, 20, 0.6, canopy, 5);
-    for (const [ux, uz] of [[-7, -38], [0, -40], [7, -38], [-4, -45], [4, -45]]){
-      const [px, pz] = at((ax + ux) / M, uz / M);
-      const u = new THREE.Mesh(new THREE.CylinderGeometry(2.2 / M, 2.2 / M, 0.3 / M, 10), umbrella); u.position.set(px, 2.6 / M, pz); g.add(u);
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15 / M, 0.15 / M, 2.6 / M, 6), canopy); pole.position.set(px, 1.3 / M, pz); g.add(pole);
-    }
-    if (i % 2 === 0){ const p = slab(ax, 4, 14, 8, 0.4, pool); p.position.y = 0.5 / M; }
-  }
-  /* SOFTSCAPE: two palm rows, promenade edge and street edge, and a few in the lanes. */
+function mamshaSaadiyat(blocks, prom){
+  /* THE FULL BEACHFRONT (city v118). Mamsha is 1.4 km of low white blocks along Saadiyat beach,
+     not one parcel: w2h-world.js walks the surveyed shore and hands in a block list (centre,
+     bearing, length, storeys) and the promenade's segments. Each block steps down toward the
+     beach in three terraces with a glass band per floor, a pool on the second terrace, the
+     restaurant terrace on the promenade in front, and palms in two rows. */
+  const g = new THREE.Group(), M = M_PER_U;
+  const white = saadKitMat(0xE2E0DA, 0xF4F2EC, 0.8, 0), cream = saadKitMat(0xD9D0BE, 0xEDE5D3, 0.85, 0);
+  const glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3, 0xBFD8EA, 0.18, 1.0), pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0);
+  const canopy = saadKitMat(0xC9A96A, 0xD9BC7A, 0.7, 0), umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0);
+  const pool = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.15), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const cafe = saadKitMat(0x3A3A2E, 0x5C7A8C, 0.3, 0.3, 0xFFC878, 0.4, 1.0);
   const palms = [];
-  for (let ax = -112; ax <= 112; ax += 9) palms.push(at(ax / M, -48.5 / M));
-  for (let ax = -108; ax <= 108; ax += 12) palms.push(at(ax / M, 46 / M));
-  for (let i = 0; i < 7; i++) for (const az of [-14, 12]) palms.push(at(((i - 3) * 30 + 14) / M, az / M));
+  const slab = (at, rot, ax, az, w, d, h, mat, y0) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, ((y0 || 0) + h / 2) / M, pz); m.rotation.y = rot; g.add(m); return m; };
+  blocks.forEach((b, i) => {
+    const at = _placeRot(b.x, b.z, b.rot), rot = b.rot, F = 3.6, L = b.len, D = b.dep || 60;
+    // three terraces stepping down to the beach (local -z is seaward)
+    const h1 = b.storeys * F, h2 = Math.max(2, b.storeys - 2) * F, h3 = Math.max(1, b.storeys - 4) * F;
+    const t1 = slab(at, rot, 0, D * 0.22, L, D * 0.5, h1, i % 2 ? white : cream);
+    if (i === Math.floor(blocks.length / 2)) t1.userData.hero = t1.userData.kitName = 'mamshaSaadiyat';
+    slab(at, rot, 0, -D * 0.08, L, D * 0.34, h2, white);
+    slab(at, rot, 0, -D * 0.32, L, D * 0.26, h3, cream);
+    for (let k = 0; k < b.storeys; k++){ const gl = slab(at, rot, 0, D * 0.22 - D * 0.25 - 0.3, L * 0.9, 0.5, F * 0.55, glassD, k * F + F * 0.25); if (k >= b.storeys - 2) gl.visible = k < b.storeys; }
+    for (let k = 0; k < Math.max(2, b.storeys - 2); k++) slab(at, rot, 0, -D * 0.08 - D * 0.17 - 0.3, L * 0.9, 0.5, F * 0.55, glassD, k * F + F * 0.25);
+    slab(at, rot, 0, -D * 0.08, L * 0.3, D * 0.14, 0.4, pool, h2 + 0.2);
+    slab(at, rot, 0, -D * 0.32, L * 0.5, D * 0.1, 0.4, lawn, h3 + 0.2);
+    // the restaurant terrace in front, under a canopy, with umbrellas on the sand side
+    slab(at, rot, 0, -D * 0.52, L * 0.6, 12, 5, cafe);
+    slab(at, rot, 0, -D * 0.53, L * 0.66, 18, 0.5, canopy, 5.2);
+    for (let ax = -L * 0.3; ax <= L * 0.3; ax += 9){ const [ux, uz] = at(ax / M, -D * 0.66 / M); const u = new THREE.Mesh(new THREE.CylinderGeometry(2 / M, 2 / M, 0.3 / M, 10), umbrella); u.position.set(ux, 2.6 / M, uz); g.add(u); }
+    for (let ax = -L / 2 + 6; ax <= L / 2 - 6; ax += 9) palms.push(at(ax / M, (D * 0.5 + 6) / M));
+  });
+  // the promenade: paved band along the shore with the palm row on its seaward edge
+  (prom || []).forEach(sg => {
+    const at = _placeRot(sg.x, sg.z, sg.rot);
+    slab(at, sg.rot, 0, 0, sg.len, 8, 0.4, pave);
+    for (let ax = -sg.len / 2 + 4; ax <= sg.len / 2 - 4; ax += 8) palms.push(at(ax / M, -6 / M));
+  });
   kitPalms(g, palms, 0.75);
   return g;
 }
-
+/* A GROVE BLOCK (city v118) — one white terraced block of the Saadiyat Grove: the body, two
+   setbacks, a glass band per floor and a planted roof. w2h-world.js lays the grid. */
+function groveBlock(x, z, w, d, hm, rot){
+  const g = new THREE.Group(), M = M_PER_U, F = 3.6;
+  const white = saadKitMat(0xE4E2DC, 0xF5F3EE, 0.8, 0), glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3, 0xBFD8EA, 0.16, 1.0), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const box = (wv, dv, hv, y0, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(wv / M, hv / M, dv / M), mat); m.position.set(x, (y0 + hv / 2) / M, z); m.rotation.y = rot; g.add(m); return m; };
+  const n = Math.max(3, Math.round(hm / F));
+  box(w, d, n * F, 0, white);
+  for (let k = 0; k < n; k++) box(w + 0.6, d + 0.6, F * 0.5, k * F + F * 0.3, glassD);
+  box(w * 0.7, d * 0.7, F, n * F, white);
+  box(w * 0.66, d * 0.66, 0.5, n * F + F, lawn);
+  box(w * 0.4, d * 0.4, F, n * F + F, white);
+  return g;
+}
+/* AL SEEF VILLAGE (city v118) — the low Arabian-style waterfront mall on Al Raha creek, on the
+   survey's 208 by 88 m record: two-storey sand blocks round a courtyard with arcades, wind-
+   tower turrets at the corners, a quay with marina fingers on the creek side, palms. */
+function alSeefVillage(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, at = _placeRot(x0, z0, rot);
+  const sand = saadKitMat(0xD2BC96, 0xE4CFA8, 0.85, 0, undefined, undefined, 0.6), pale = saadKitMat(0xE6DCC8, 0xF3EBDA, 0.85, 0), dark = saadKitMat(0x3A3128, 0x5A4C3E, 0.8, 0);
+  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), water = saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1), timber = saadKitMat(0x8C6E4A, 0xA98B64, 0.9, 0);
+  const box = (ax, az, w, d, h, mat, y0, r) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, ((y0 || 0) + h / 2) / M, pz); m.rotation.y = rot + (r || 0); g.add(m); return m; };
+  box(0, 0, 208, 88, 0.6, pave);
+  const main = box(0, 22, 200, 36, 9, sand); main.userData.hero = main.userData.kitName = 'alSeefVillage';
+  box(-80, -16, 40, 44, 9, sand); box(80, -16, 40, 44, 9, sand);
+  // arcades: pale arch panels along the courtyard faces
+  for (let ax = -90; ax <= 90; ax += 10){ box(ax, 3.7, 6, 0.4, 6.5, pale, 0.5); }
+  for (const sx of [-1, 1]) for (let az = -36; az <= 4; az += 10) box(sx * 59.7, az, 0.4, 6, 6.5, pale, 0.5);
+  // wind towers at the corners and a taller one over the entrance
+  for (const [ax, az] of [[-96, 36], [96, 36], [-96, -34], [96, -34]]){ box(ax, az, 7, 7, 16, sand); box(ax, az, 7.6, 7.6, 1.2, dark, 12); box(ax, az, 5, 5, 1, dark, 16); }
+  box(0, 36, 12, 12, 20, sand); box(0, 36, 13, 13, 1.2, dark, 15); box(0, 36, 8, 8, 1, dark, 20);
+  // the creek side: quay, marina fingers, boats' worth of pontoon
+  box(0, -50, 208, 10, 1.2, pave);
+  for (let ax = -90; ax <= 90; ax += 20) box(ax, -66, 3, 26, 0.6, timber, 0.4);
+  box(0, -64, 214, 30, 0.2, water, -0.3);
+  const palms = [];
+  for (let ax = -96; ax <= 96; ax += 12) palms.push(at(ax / M, -47 / M)), palms.push(at(ax / M, 46 / M));
+  for (let ax = -40; ax <= 40; ax += 13) palms.push(at(ax / M, -12 / M));
+  kitPalms(g, palms, 0.75);
+  return g;
+}
 /* YAS BAY WATERFRONT (city v112) — the piece of Yas people actually walk: Pier71's restaurant
    row on the promontory deck (the deck itself is kit.yasBayPier, placed alongside), the bay
    promenade running from the Hilton past the arena to the eastern parcels, and the white
@@ -5401,7 +5443,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, groveBlock, alSeefVillage };
 }
 
 
