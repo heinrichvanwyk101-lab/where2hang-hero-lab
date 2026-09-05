@@ -731,7 +731,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v209', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v211', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2822,8 +2822,13 @@ if (/[?&]embed=1/.test(location.search)){
       /* Sent by the host when an opaque route covers the world, and again when it clears. The
          camera keeps whatever goal it had, so waking resumes the same shot rather than composing
          a new one. */
-      else if (m.type === 'idle') WORLD_IDLE = true;
-      else if (m.type === 'wake') WORLD_IDLE = false;
+      /* IDLE RELEASES TOUCH (nav v211). Off the world routes the app sets pointer-events:none on
+         the iframe, but Android Chrome's compositor still consults the touch-action regions INSIDE
+         a fixed full-screen frame, and #gl declares touch-action:none — so a swipe over the Events
+         list was swallowed unless the finger started on the bottom bar. On idle the canvas gives
+         the axis back; on wake it takes it again. */
+      else if (m.type === 'idle'){ WORLD_IDLE = true; const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = 'auto'; gl.style.pointerEvents = 'none'; } document.body.style.touchAction = 'auto'; }
+      else if (m.type === 'wake'){ WORLD_IDLE = false; const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = ''; gl.style.pointerEvents = ''; } document.body.style.touchAction = ''; }
       /* SETCHROMEINSET — the allBtn/tiltBtn fix. Both sit at bottom:18px of THIS document,
          which is the real device viewport (the iframe is position:fixed, inset:0 on the host
          side). Search's own "FIND A SPOT" composer panel is in-flow host content painted at a
@@ -4196,12 +4201,16 @@ const mapGesture = () => view === 'plan' || view === 'check';
 /* THE HAND TOGGLE. Declared here, before the pointer handlers that read it, and read only from
    inside them, so there is no synchronous call site ahead of it. */
 let panMode = false;
+/* THE READOUT IS A DEBUG TOOL, NOT PART OF THE HAND (nav v210). It used to come on with the pan
+   button, which put a block of camera numbers over the model every time someone wanted to drag
+   the view. It now shows only on the ?cam=1 debug address; the hand alone just pans. */
+const CAM_DEBUG = /[?&]cam=1/.test(location.search);
 {
   const panBtn = document.getElementById('panBtn'), camout = document.getElementById('camout');
   const setPan = on => {
     panMode = on;
     if (panBtn){ panBtn.classList.toggle('on', panMode); panBtn.setAttribute('aria-pressed', panMode ? 'true' : 'false'); }
-    if (camout) camout.classList.toggle('on', panMode);
+    if (camout) camout.classList.toggle('on', panMode && CAM_DEBUG);
   };
   if (panBtn) panBtn.addEventListener('click', () => { setPan(!panMode); orbit.on = true; });
   /* ?cam=1 — the debug address: the hand and the readout on from the first frame, so the world
@@ -4215,7 +4224,7 @@ let panMode = false;
    hand is on; the string is rebuilt every frame then, which is nothing next to the scene. */
 function paintCamOut(){
   const el = document.getElementById('camout');
-  if (!el || !panMode) return;
+  if (!el || !panMode || !CAM_DEBUG) return;
   const a = cur.angle + orbit.yaw;
   const deg = ((a * 180 / Math.PI) % 360 + 360) % 360;
   const d = activeDistrict;

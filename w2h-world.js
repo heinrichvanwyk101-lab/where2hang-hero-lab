@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v293';
+export const BUILD = 'world v294';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5285,7 +5285,8 @@ const DISTRICTS = [
       { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
       { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
-      { label:'Pier71',        x:-27.3, z:412.9, h: 3, r:24 },   // on the kit (world v292)
+      { label:'Pier71',        x:-31.5, z:415.0, h: 3, r:24 },   // on the kit (world v292)
+      { label:'Café del Mar',  x: -1.0, z:416.0, h: 3, r:22 },   // on the kit (world v294)
       { label:'SeaWorld',      osm:'SeaWorld Abu Dhabi',      x: 22, z: 14, h: 8, r:38 },
     ] },
   /* AL RAHA. A mainland patch — data/isle-raha.json says so via noCoastline in the bake. Its
@@ -7900,6 +7901,9 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      on that deck, the bay promenade and the parcels behind the arena. */
   if (kit.yasBayPier) built.push(kit.yasBayPier(-31.5, 415.0, 1.45));   // world v293: down the spit's own axis
   if (kit.yasBayWaterfront) built.push(kit.yasBayWaterfront());
+  /* CAFE DEL MAR (world v294): out over the bay between the pier and the arena, on the shore's
+     own normal — the shore there runs (-14,410) to (18,397), so seaward is 0.386 rad. */
+  if (kit.cafeDelMar) built.push(kit.cafeDelMar(-1, 416, 0.386));   // six units further out, so the tip stands in the bay
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
