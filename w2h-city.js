@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v123';
+export const BUILD = 'city v124';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2586,7 +2586,7 @@ function qasrAlWatan(x0, z0){
   corniceMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF0EBE1, roughness:0.68 });
   const facadeMat = palaceFacadeMat(0xE0DAD0, 0xD9D2C6, 0.24);
 
-  function traced(ring, h){
+  function traced(ring, h, base = 0){
     const sh = new THREE.Shape();
     ring.forEach((p, i) => i ? sh.lineTo(p[0], -p[1]) : sh.moveTo(p[0], -p[1]));
     function band(bh, mat, yOff, withUV){
@@ -2594,7 +2594,7 @@ function qasrAlWatan(x0, z0){
       geo.rotateX(-Math.PI/2); geo.computeVertexNormals();
       if (withUV) writeSlabUVs(geo, sh, 12, bh);
       const m = new THREE.Mesh(geo, mat);
-      m.position.set(x0, yOff, z0); g.add(m);
+      m.position.set(x0, base + yOff, z0); g.add(m);
       return m;
     }
     band(PLINTH_H, plinthMat, 0);
@@ -2606,19 +2606,35 @@ function qasrAlWatan(x0, z0){
   traced(QASR_FLANK_W, H_PAV);
   traced(QASR_FLANK_E, H_PAV);
 
-  /* THE DOME STACK, built to reach 72 m rather than told to. hall 1.20 + drum 1.80 + radius 2.37
-     on a 3.85 roof gives an apex of 9.22 units — 71.9 m against the reference's 72.0. */
-  const SX = -0.25, SZ = 15.25;
-  const hallT = H_WING + 1.20, drumT = hallT + 1.80, R_DOME = 2.37;
-  const hall = new THREE.Mesh(new THREE.CylinderGeometry(4.20, 4.40, 1.20, 24), stone);
-  hall.position.set(x0 + SX, H_WING + 0.60, z0 + SZ); g.add(hall);
-  const drum = new THREE.Mesh(new THREE.CylinderGeometry(2.90, 3.05, 1.80, 24), stone);
-  drum.position.set(x0 + SX, hallT + 0.90, z0 + SZ); g.add(drum);
+  const QASR_ROT = -0.28713159522809534;
+  const qc = Math.cos(QASR_ROT), qs = Math.sin(QASR_ROT);
+  /* THE CENTRAL BLOCK (city v124). The photogrammetry capture shows the great dome on a square
+     block that rises well clear of the wings, with its own colonnaded storeys and a small dome
+     on each corner; the earlier stack put the dome on a low drum straight off the wing roof, so
+     the palace read as one long range with a dome dropped on it. The block is an 80 m square
+     on the wings' own axis (QASR_ROT), 19 m above the wing roof, dressed with the same
+     plinth, facade and cornice bands as the wings so it belongs to them. Apex is still 72 m:
+     wing 3.85 + block 2.40 + drum 0.80 + dome 2.20 = 9.25 units. */
+  const SX = -0.25, SZ = 15.25, H_BLOCK = 2.40, HB = 5.0;
+  const bq = (dx, dz) => [SX + dx * qc - dz * qs, SZ + dx * qs + dz * qc];
+  const BLOCK = [bq(-HB, -HB), bq(HB, -HB), bq(HB, HB), bq(-HB, HB)];
+  traced(BLOCK, H_BLOCK, H_WING);
+  const blockT = H_WING + H_BLOCK, drumT = blockT + 0.80, R_DOME = 2.20, R_FLANK = 1.37;
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(2.90, 3.05, 0.80, 24), stone);
+  drum.position.set(x0 + SX, blockT + 0.40, z0 + SZ); g.add(drum);
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(R_DOME, 26, 15, 0, Math.PI*2, 0, Math.PI/2), domeMat);
   dome.position.set(x0 + SX, drumT, z0 + SZ); dome.userData.hero = true; g.add(dome);
   const fin = new THREE.Mesh(new THREE.ConeGeometry(0.20, 1.10, 8), domeMat);
   fin.position.set(x0 + SX, drumT + R_DOME + 0.45, z0 + SZ); g.add(fin);
+  /* The four corner domes of the block, each on a short drum, inset from the corner. */
+  for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]){
+    const [px, pz] = bq(dx * (HB - 0.95), dz * (HB - 0.95)), rc = 0.46, dc = 0.55;
+    const cd = new THREE.Mesh(new THREE.CylinderGeometry(rc * 0.9, rc, dc, 16), stone);
+    cd.position.set(x0 + px, blockT + dc / 2, z0 + pz); g.add(cd);
+    const cm = new THREE.Mesh(new THREE.SphereGeometry(rc, 16, 10, 0, Math.PI*2, 0, Math.PI/2), domeMat);
+    cm.position.set(x0 + px, blockT + dc, z0 + pz); g.add(cm);
+  }
 
   /* THE TWO SMALLER DOMES. Each flanking pavilion carries its own dome over its centre — in the
      photographs the three domes in a row across the front are what says "Qasr Al Watan" rather
@@ -2627,7 +2643,7 @@ function qasrAlWatan(x0, z0){
   [QASR_FLANK_W, QASR_FLANK_E].forEach(ring => {
     let cx = 0, cz = 0; ring.forEach(([px, pz]) => { cx += px; cz += pz; });
     cx /= ring.length; cz /= ring.length;
-    const rr = R_DOME * 0.58, dh = 0.9;
+    const rr = R_FLANK, dh = 0.9;
     const dr = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.92, rr * 1.0, dh, 20), stone);
     dr.position.set(x0 + cx, H_PAV + dh / 2, z0 + cz); g.add(dr);
     const dm = new THREE.Mesh(new THREE.SphereGeometry(rr, 20, 12, 0, Math.PI*2, 0, Math.PI/2), domeMat);
@@ -2706,8 +2722,6 @@ function qasrAlWatan(x0, z0){
      measurements now agree rather than one guess standing alone. Checked as a 2D render against
      QASR_MAIN's own outline before this went into real geometry: the paved axis lands directly
      against the building's own protruding link to the dome block, not floating off at an angle. */
-  const QASR_ROT = -0.28713159522809534;
-  const qc = Math.cos(QASR_ROT), qs = Math.sin(QASR_ROT);
   function qrot(dx, dz){ return [dx * qc - dz * qs, dx * qs + dz * qc]; }
   const axisPoly = [
     [-AXIS_HW, FRONT_Z], [AXIS_HW, FRONT_Z], [AXIS_HW, plazaCz], [-AXIS_HW, plazaCz],
