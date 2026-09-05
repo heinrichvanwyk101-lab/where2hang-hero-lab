@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v300';
+export const BUILD = 'world v301';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5282,12 +5282,12 @@ const DISTRICTS = [
          where collisions start. */
       { label:'Yas Marina',    osm:'Yas Marina Circuit',      x:-10, z: 18, h: 5, r:42 },
       { label:'W Abu Dhabi',   x:7.3, z:266.4, h: 8, r:30 },
-      { label:'Warner Bros. World', x:74.8, z:-26.3, h: 6, r:40 },
+      { label:'Warner Bros. World', x:-38.3, z:-79.9, h: 6, r:40 },   // on the park's own record (world v301)
       { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
       { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
       { label:'Pier71',        x:-31.5, z:415.0, h: 3, r:24 },   // on the kit (world v292)
-      { label:'Café del Mar',  x: -1.0, z:416.0, h: 3, r:22 },   // on the kit (world v294)
+      { label:'Café del Mar',  x:-15.0, z:405.0, h: 3, r:22 },   // on the club's own record (world v301)
       { label:'SeaWorld',      osm:'SeaWorld Abu Dhabi',      x: 22, z: 14, h: 8, r:38 },
     ] },
   /* AL RAHA. A mainland patch — data/isle-raha.json says so via noCoastline in the bake. Its
@@ -7900,8 +7900,11 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (kit.seaWorldYas) built.push(kit.seaWorldYas(211.4, 11.9));
   /* The circuit's pit building and main grandstand on their surveyed footprints along the straight. */
   if (kit.yasCircuit) built.push(kit.yasCircuit(35.0, 230.7, 0.14, 37.2, 239.5));
-  /* Warner Bros. World on its surveyed footprint (713 by 694 m at bake (19122, -191) m, rot 1.25). */
-  if (kit.warnerBrosWorld) built.push(kit.warnerBrosWorld(74.8, -26.3, 1.25));
+  /* WARNER BROS. WORLD ON ITS OWN FOOTPRINT (world v301). The 713 by 694 m record it stood on is
+     Yas Mall's retail record, beside Ferrari World, which put the park where the mall is. The park
+     is the survey's 446 by 335 m record north of Yas Waterworld, west of the mall, at (-38.3, -79.9)
+     units turned -0.68, and the kit's 420 by 300 m hall fits it. */
+  if (kit.warnerBrosWorld) built.push(kit.warnerBrosWorld(-38.3, -79.9, -0.68));
   if (kit.yasWaterworld) built.push(kit.yasWaterworld(-45.0, -42.0));   // world v289, on the park's centre
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
@@ -7910,7 +7913,12 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   if (kit.yasBayWaterfront) built.push(kit.yasBayWaterfront());
   /* CAFE DEL MAR (world v294): out over the bay between the pier and the arena, on the shore's
      own normal — the shore there runs (-14,410) to (18,397), so seaward is 0.386 rad. */
-  if (kit.cafeDelMar) built.push(kit.cafeDelMar(-1, 416, 0.386));   // six units further out, so the tip stands in the bay
+  /* CAFE DEL MAR ON ITS OWN SHORE (world v301). It stood on a platform out in the bay east of the
+     pier, beside a dark survey block that was in fact the club itself: the two records at
+     (-16.8, 401.0) and (-15.1, 396.2), 46 by 20 m, on the promenade next to Pier71. The kit's
+     club now stands on that record and the lagoon deck runs seaward in front of it, on the Yas
+     Bay grid (0.217 rad), the way the renders show it: the club on land, the pool out front. */
+  if (kit.cafeDelMar) built.push(kit.cafeDelMar(-14.9, 404.1, 0.217));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

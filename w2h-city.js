@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v124';
+export const BUILD = 'city v125';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -3917,8 +3917,8 @@ function grandMosque(x0, z0){
     [21.42,71.6],[21.61,71.47],[29.85,61.23],[29.94,61.05],[35.12,43.82],
     [35.16,43.65],
   ];
-  tracedGround(SITE_POLY, asphalt, BASE_Y + 0.015);
-  parkingMarkings(SITE_POLY);
+  /* PAVING, NOT A MARKED CAR PARK (city v125): the site around the mosque is stone and garden. */
+  tracedGround(SITE_POLY, arch, BASE_Y + 0.015);
 
   /* LAYER 2 — HARDSCAPE AND GARDENS. The closer, organic boundary hugging the building on three
      sides — the ornamental paving and planting immediately around the mosque, inside the site
@@ -3953,11 +3953,29 @@ function grandMosque(x0, z0){
     box(0, nz - 22, 18, 42, 0.3, lawn, BASE_Y);
     box(0, nz - 22, 2.6, 38, 0.2, water2, BASE_Y + 0.3);
     for (const sx of [-1, 1]){ box(sx * 6, nz - 22, 1.2, 42, 0.25, pave2, BASE_Y + 0.3); for (let t = 0; t < 42; t += 3) palms.push([x0 + sx * 8, z0 + nz - 2 - t]); }
+    /* THE GARDENS EITHER SIDE, NOT CAR PARKS (city v125). The aerials show formal parterres
+       flanking the pools: hedged beds on a grid of pale paths, a round plaza with an eight-point
+       star basin in each, palm rows along the edges. The car parks were here; the visitor lot is
+       out beyond the west garden where the coaches stop. */
+    const hedge = saadKitMat(0x2F4A26, 0x3E6A34, 0.9, 0), bloom = saadKitMat(0x6E7F3A, 0x8FA64A, 0.9, 0);
     for (const sx of [-1, 1]){
       const cx = sx * (PLAN / 2 + POOL_W + 4 + 13);
-      box(cx, 4, 26, 44, 0.2, pave2, BASE_Y);
-      for (let r = -18; r <= 18; r += 6){ box(cx - 6, 4 + r, 10, 2.2, 0.12, shade, BASE_Y + 1.3); box(cx + 6, 4 + r, 10, 2.2, 0.12, shade, BASE_Y + 1.3); }
-      for (let t = -20; t <= 20; t += 4) palms.push([x0 + cx + sx * 13.5, z0 + 4 + t]);
+      box(cx, 4, 26, 44, 0.25, lawn, BASE_Y);
+      for (let gx = -10; gx <= 10; gx += 5) for (let gz = -18; gz <= 18; gz += 6){
+        if (Math.abs(gx) < 2.6 && Math.abs(gz) < 3.5) continue;
+        box(cx + gx, 4 + gz, 3.6, 4.4, 0.55, hedge, BASE_Y + 0.25);
+        box(cx + gx, 4 + gz, 2.4, 3.2, 0.2, bloom, BASE_Y + 0.8);
+      }
+      for (let gx = -12.5; gx <= 12.5; gx += 5) box(cx + gx, 4, 0.9, 44, 0.3, pave2, BASE_Y + 0.25);
+      for (let gz = -21; gz <= 21; gz += 6) box(cx, 4 + gz, 26, 0.9, 0.3, pave2, BASE_Y + 0.25);
+      const pl = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 0.3, 32), pave2); pl.position.set(x0 + cx, BASE_Y + 0.4, z0 + 4); g.add(pl);
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.35, 8), water2); st.position.set(x0 + cx, BASE_Y + 0.55, z0 + 4); st.rotation.y = Math.PI / 8; g.add(st);
+      for (let t = -20; t <= 20; t += 4){ palms.push([x0 + cx + 13.5, z0 + 4 + t]); palms.push([x0 + cx - 13.5, z0 + 4 + t]); }
+    }
+    { const cx = -(PLAN / 2 + POOL_W + 4 + 13 + 30);
+      box(cx, 4, 24, 36, 0.2, pave2, BASE_Y);
+      for (let r = -15; r <= 15; r += 5){ box(cx - 6, 4 + r, 10, 2.2, 0.12, shade, BASE_Y + 1.3); box(cx + 6, 4 + r, 10, 2.2, 0.12, shade, BASE_Y + 1.3); }
+      for (let t = -18; t <= 18; t += 4) palms.push([x0 + cx + 13, z0 + 4 + t]);
     }
     const fz = southZ + HALL / 2 + 9;
     const plaza = new THREE.Mesh(new THREE.CylinderGeometry(7.5, 7.5, 0.2, 32), pave2); plaza.position.set(x0, BASE_Y + 0.1, z0 + fz); g.add(plaza);
@@ -4153,13 +4171,18 @@ function aldarHQ(x0, z0){
   const lit = (() => {
     const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
     const c = cv.getContext('2d');
-    c.fillStyle = '#000000'; c.fillRect(0, 0, N, N);
-    /* lit cells behind the diagrid, most of them, a few dark */
-    const step = N / 8;
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++){
-      if ((x * 7 + y * 13) % 5 === 0) continue;
-      c.fillStyle = (x + y) % 3 ? '#C9E4EE' : '#9FC6D6';
-      c.fillRect(x * step + 6, y * step + 6, step - 12, step - 12);
+    /* DIAMONDS, NOT SQUARES (city v125). The lit sheet was an eight by eight grid of square
+       panes, so at night the coin wore a square window pattern under a diagrid it did not
+       match. The glow is now the cells of the same twelve-bay diagrid the day texture draws:
+       pale glass everywhere, the mullions cut out dark, a soft band of dimmer cells across the
+       middle so the face is not one flat sheet. */
+    c.fillStyle = '#C9E4EE'; c.fillRect(0, 0, N, N);
+    c.fillStyle = 'rgba(120,160,175,0.55)'; c.fillRect(0, N * 0.36, N, N * 0.28);
+    c.strokeStyle = '#000000'; c.lineWidth = 16;
+    const step = N / 12;
+    for (let k = -12; k <= 24; k++){
+      c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step + N * 0.577, N); c.stroke();
+      c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step - N * 0.577, N); c.stroke();
     }
     const t = new THREE.CanvasTexture(cv);
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.4, 2.2);
@@ -4314,20 +4337,30 @@ function louvreAbuDhabi(x0, z0){
     /* THREE LAYERS AT 10 AND 5 PX (city v122): the solid shell under two thick lattices read as a
        plain dome, which is not the building; three offset lattices at these widths cover about
        three quarters of the sky between them and still read as the mesh. */
-    for (let y = -1; y <= 6; y++) for (let x = -1; x <= 6; x++) star(x * big + big / 2 + ((y % 2) ? big / 2 : 0), y * big + big / 2, big * 0.56, 10);
-    for (let y = -1; y <= 14; y++) for (let x = -1; x <= 14; x++) star(x * small + small / 2 + ((y % 2) ? small / 2 : 0), y * small + small / 2, small * 0.55, 5);
+    for (let y = -1; y <= 6; y++) for (let x = -1; x <= 6; x++) star(x * big + big / 2 + ((y % 2) ? big / 2 : 0), y * big + big / 2, big * 0.56, 7);
+    for (let y = -1; y <= 14; y++) for (let x = -1; x <= 14; x++) star(x * small + small / 2 + ((y % 2) ? small / 2 : 0), y * small + small / 2, small * 0.55, 3);
     const t = new THREE.CanvasTexture(cv);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 3);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 1.5);   // cells twice the size (city v125): the pattern has to survive the phone
     t.anisotropy = 8;
     return t;
   };
-  const caps = [[0, Rs, 0xA9AEB3, 0xDADEE2], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xC4C9CE], [Math.PI / 16, Rs - 5 / M, 0x767B80, 0xA9AEB3]];   // three lattices, no solid shell (city v122)
+  /* TWO OPEN LATTICES OVER THE SHELL (city v125). Three layers at three-quarters cover each
+     added up to a solid disc from the phone whatever the colours were. Two layers at about
+     forty percent cover, ribs 7 and 3 px on the doubled cells, leave real gaps, and the dark
+     shell shows through them: the pattern is the read, by day and by night. */
+  const caps = [[0, Rs, 0xA9AEB3, 0xDADEE2], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xC4C9CE]];
   for (const [rot, radius, night, day] of caps){
     const t = latticeTex(rot);
+    /* DARK RIBS OVER A LIT SHELL (city v125). Three pale, warm-emissive lattices stacked read as
+       one solid cream disc from the phone at night, and as a plain grey one by day: with nothing
+       behind them, the cells showed only sky the same tone as the ribs. The ribs are now dark
+       metal with almost no glow, and the shell below carries the glow, so at night the pattern is
+       dark lines on the museum's warm light coming up through it, and by day it is silver ribs on
+       the shadowed interior. Which is what the building does. */
     const mat = new THREE.MeshStandardMaterial({ color:night, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.5,
-                                                 emissive:0xFFD9A0, emissiveIntensity:0.30 });   // lit from beneath at night (city v114)
-    mat.userData.duskColor = day; mat.userData.glassOverride = false;
-    mat.userData.nightAlbedo = 0.55;   // the lattice reads as lines only if it is not blown to white
+                                                 emissive:0xFFD9A0, emissiveIntensity:0.10 });
+    mat.userData.duskColor = night; mat.userData.glassOverride = false;
+    mat.userData.nightAlbedo = 0.55;   // pale ribs over the dim shell below: the lines are what read
     mat.userData.dayMats = new THREE.MeshStandardMaterial({ color:day, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.65, metalness:0.12 });   // matte silver, not a mirror
     const th = Math.acos((radius - (SAG - (Rs - radius))) / radius);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 24, 0, Math.PI * 2, 0, th), mat);
@@ -4335,6 +4368,13 @@ function louvreAbuDhabi(x0, z0){
     dome.userData.hero = true;
     g.add(dome);
   }
+  /* THE LIT SHELL under the three lattices (city v125): the galleries' roof, in shadow by day and
+     glowing warm at night, the surface the rib pattern is read against. */
+  { const radius = Rs - 7.5 / M, th = Math.acos((radius - (SAG - (Rs - radius))) / radius);
+    const shellMat = saadKitMat(0x24221E, 0x3E4247, 0.9, 0.0, 0xFFB966, 0.16, 0.12);   // dim: the glow is a hint, the ribs are the pattern
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 24, 0, Math.PI * 2, 0, th), shellMat);
+    shell.position.set(x0, PL_H + RIM_Y - radius * Math.cos(th), z0);
+    g.add(shell); }
   /* The rim: a pale ring where the lattice ends, the edge every photograph draws. */
   const rimGeo = new THREE.TorusGeometry(R_DOME, 1.4 / M, 8, 96);
   rimGeo.rotateX(Math.PI / 2);
@@ -4869,6 +4909,28 @@ function kitPalms(g, pts, scale){
   trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
   g.add(trunks); g.add(crowns);
 }
+/* STREET LAMPS FOR A KIT DISTRICT (city v125). The prop kit lights roads out of a per-island
+   budget that the ring and the arterials use up, so a district laid by a kit on local streets,
+   the Grove first of all, sat dark at night. A kit lays its own: a thin dark column and a warm
+   head that glows at night, instanced, one mesh each. pts are [x, z] in island units. */
+function kitLamps(g, pts){
+  if (!pts.length) return;
+  const postMat = saadKitMat(0x3A3D42, 0x6A6E74, 0.7, 0.4, undefined, undefined, 0.30);
+  const headMat = saadKitMat(0x6B5A3A, 0xE8E2D2, 0.5, 0.1, 0xFFC27A, 3.0, 0.20);
+  const H = 9 / M_PER_U;
+  const postG = new THREE.CylinderGeometry(0.022, 0.034, H, 5); postG.translate(0, H / 2, 0);
+  const headG = new THREE.SphereGeometry(0.13, 8, 6); headG.translate(0, H + 0.04, 0);
+  /* The pool on the ground is what a lamp is at hero distance; the head alone is a dot. Additive,
+     flat, night only, the prop kit's own recipe. */
+  const poolG = new THREE.CircleGeometry(1.15, 14); poolG.rotateX(-Math.PI / 2); poolG.translate(0, 0.03, 0);
+  const poolMat = new THREE.MeshBasicMaterial({ color:0xFFB870, transparent:true, opacity:0.17, blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false });
+  const posts = new THREE.InstancedMesh(postG, postMat, pts.length), heads = new THREE.InstancedMesh(headG, headMat, pts.length), pools = new THREE.InstancedMesh(poolG, poolMat, pts.length);
+  const m4 = new THREE.Matrix4();
+  pts.forEach(([px, pz], i) => { m4.makeTranslation(px, 0, pz); posts.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); pools.setMatrixAt(i, m4); });
+  posts.instanceMatrix.needsUpdate = true; heads.instanceMatrix.needsUpdate = true; pools.instanceMatrix.needsUpdate = true;
+  pools.userData.nightOnly = true; pools.renderOrder = 2;
+  g.add(posts); g.add(heads); g.add(pools);
+}
 function kitGlass(dusk, day, rough, metal){
   const m = new THREE.MeshStandardMaterial({ color:dusk, map:TEX_TOWER, roughness:0.3, metalness:0.5 });
   m.userData.glassOverride = true; m.userData.duskColor = dusk;
@@ -5153,8 +5215,13 @@ function yasWaterworld(x0, z0){
    two surveyed footprints, which were reserved in the Raha kit zones for it. */
 function rahaBeachHotel(){
   const g = new THREE.Group(), M = M_PER_U;
-  const stone = saadKitMat(0xCDB19E, 0xE2C6B2, 0.9, 0), pale = saadKitMat(0xE4D6C8, 0xF0E6DA, 0.85, 0);
-  const glass = saadKitMat(0x1C3A44, 0x3E8A9A, 0.25, 0.3);
+  /* ONE COMPLEX WITH THE MALL (city v125). The hotel wore its own sand stone and teal glass
+     arches next to the mall's pink body and cream sails, and the two read as strangers. It now
+     carries the mall's own palette: pink stone body, cream piers, cream arch panels that glow
+     warm at night, and a two-storey link block closes the gap between the two records so the
+     pair is one building along the beach, which is what it is. */
+  const stone = saadKitMat(0xC9A79C, 0xE0BDB2, 0.9, 0, undefined, undefined, 1.5), pale = saadKitMat(0xE4D3C8, 0xF0E2D6, 0.85, 0, undefined, undefined, 1.6);
+  const glass = saadKitMat(0xE4D8C4, 0xEFE6D8, 0.7, 0.05, 0xFFE8C8, 0.28, 1.0);
   const block = (x, z, w, d, h, rot, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, h / M / 2, z); m.rotation.y = rot; g.add(m); return m; };
   const A = block(-203.27, 101.76, 197.7, 95.1, 18, 0.321, stone); A.userData.hero = A.userData.kitName = 'rahaBeachHotel';
   block(-218.53, 95.47, 120.8, 34.8, 14, -1.264, stone);
@@ -5167,6 +5234,8 @@ function rahaBeachHotel(){
       const arch = new THREE.Mesh(new THREE.BoxGeometry(7 / M, 9 / M, 0.3 / M), glass); arch.position.set(ax, 6 / M, az); arch.rotation.y = 0.321; g.add(arch); }
   }
   const pav = block(-203.27, 101.76, 34, 34, 26, 0.321, pale);
+  block(-192.5, 97.98, 72, 46, 12, 0.31, stone);   // the link to the mall, on the shared axis
+  block(-192.5, 97.98, 60, 20, 4, 0.31, pale).position.y += 12 / M;   // its roof pavilion
   const dome = new THREE.Mesh(new THREE.SphereGeometry(11 / M, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xC9A96A, 0xD9BC7A, 0.5, 0.3, 0xE8B547, 0.2));
   dome.position.set(-203.27, 26 / M, 101.76); g.add(dome);
   return g;
@@ -5475,7 +5544,9 @@ function cafeDelMar(x0, z0, rot){
   const plat = box(0, 0, 72, 96, 3, pave); plat.userData.hero = plat.userData.kitName = 'cafeDelMar';
   for (let ax = -30; ax <= 30; ax += 15) for (let az = -40; az <= 40; az += 20){ const [px, pz] = at(ax / M, az / M); const pl = new THREE.Mesh(new THREE.BoxGeometry(1.2 / M, 8 / M, 1.2 / M), pile); pl.position.set(px, -3 / M, pz); g.add(pl); }
   // the club at the landward end, with its canopy
-  box(0, -40, 44, 12, 6, white, 3); box(0, -40, 50, 18, 0.5, timber, 9.5);
+  /* THE CLUB (city v125): two white storeys with a roof bar on top, sized to the survey's own
+     46 by 20 m record on the shore, which is what the seat in w2h-world.js puts it on. */
+  box(0, -40, 46, 20, 8, white, 3); box(0, -42, 30, 12, 4, white, 11); box(0, -40, 52, 26, 0.5, timber, 15.5);
   // sand either side, the lagoon in the middle
   box(-24, 0, 20, 60, 0.4, sand, 3); box(24, 0, 20, 60, 0.4, sand, 3);
   const [lx, lz] = at(0, 2 / M);
@@ -5518,7 +5589,7 @@ function saadiyatGrove(spec){
   const glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3, 0xBFD8EA, 0.16, 1.0), glassR = saadKitMat(0x4E8FA8, 0x9FD3E8, 0.25, 0.2, 0xBFE4EC, 0.25, 1.0);
   const lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0), pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0);
   const water = saadKitMat(0x4FA9BC, 0x6FC8D8, 0.15, 0.1, 0x7FE0F0, 0.15), red = saadKitMat(0xB4382A, 0xD24A38, 0.6, 0.1, 0xFF6A50, 0.15, 1.0);
-  const palms = [];
+  const palms = [], lamps = [];
   const hash = (x, z) => Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
   const at = (cx, cz, rot) => (ax, az) => [cx + ax * Math.cos(rot) + az * Math.sin(rot), cz - ax * Math.sin(rot) + az * Math.cos(rot)];
   const slab = (x, z, w, d, h, mat, rot, y0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, ((y0 || 0) + h / 2) / M, z); m.rotation.y = rot; g.add(m); return m; };
@@ -5589,8 +5660,10 @@ function saadiyatGrove(spec){
     }
     else bar(x, z, rot, 0, 0, w - 6, d - 6, st, h > 0.2 ? cream : white);
     for (let k = -4; k <= 4; k++){ const ax = k * 13; if (Math.abs(ax) > w / 2 - 4) continue; palms.push(cat(ax / M, (d / 2 - 1.2) / M)); palms.push(cat(ax / M, -(d / 2 - 1.2) / M)); }
+    for (let k = -3; k <= 3; k++){ const ax = k * 26 + 13; if (Math.abs(ax) > w / 2 - 6) continue; lamps.push(cat(ax / M, (d / 2 - 2.6) / M)); lamps.push(cat(-ax / M, -(d / 2 - 2.6) / M)); }
   }
   kitPalms(g, palms, 0.7);
+  kitLamps(g, lamps);   // the lanes lit (city v125)
   return g;
 }
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
