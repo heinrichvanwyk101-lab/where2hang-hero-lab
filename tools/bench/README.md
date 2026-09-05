@@ -62,6 +62,10 @@ against the island top).
 - `styleZones` on a district (`{x0,x1,z0,z1,style}`) change the fabric: `'white'` for the
   cultural district, `'low'` caps everything at six storeys.
 - Any new top-level `let`/`const` must be declared before its first synchronous use.
+- `sw.js` (nav v212) caches every data file, module script and texture sheet on the phone under a
+  cache named by the four build stamps. A change to anything under `data/` or to a script that has
+  no stamp of its own (basemap, props, textures) must bump one of the stamps, or the phone keeps
+  serving the old file. The embed registers the worker; the development shell never does.
 
 ## Finding a site
 

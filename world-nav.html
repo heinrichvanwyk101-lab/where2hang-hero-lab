@@ -731,7 +731,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v211', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v212', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -6130,9 +6130,19 @@ let _frame0 = true, _tick0Done = false;
    world and `wake` when it uncovers it, and if the host never sends either, nothing changes.
    WORLD_IDLE itself is declared earlier now — see the hoist comment above the message
    listener; this was the exact binding the TDZ bug hit. */
+/* SETTLED FRAMES AT 30 (nav v212). With no finger on the canvas and the camera where it was for
+   the last two frames, every other animation frame is skipped: the flight, a drag, a pinch and
+   the first frame all still run at the display rate, and a new shot moves the camera on its next
+   frame, which drops the cap at once. Read off the camera itself, not the goal, so it is true
+   for whatever is steering — the attract flight, a tap, the host's setPlace. Halves the GPU
+   work on the Home stage whenever the city is simply being looked at. */
+let _lastDrawT = 0, _camStill = 0;
+const _camPrev = new THREE.Vector3(), _camPrevQ = new THREE.Quaternion(); let _camPrevFov = 0;
 function frame(){
   requestAnimationFrame(frame);
   if (WORLD_IDLE) return;
+  if (!_frame0 && pointers.size === 0 && _camStill >= 2 && performance.now() - _lastDrawT < 31) return;
+  _lastDrawT = performance.now();
   const _t0tick = _frame0 ? performance.now() : 0;
   /* THE WAIT FOR THE FIRST ANIMATION FRAME TO RUN AT ALL, separated from what happens inside it.
      Everything before this point is module top-level work; if this number is large the main thread
@@ -6766,6 +6776,8 @@ function frame(){
     _warmLast = null;
   }
   if (FRAME_MS.length < 12) FRAME_MS.push(Math.round(_fms));
+  if (camera.position.distanceToSquared(_camPrev) < 1e-6 && Math.abs(camera.quaternion.dot(_camPrevQ)) > 0.9999995 && camera.fov === _camPrevFov) _camStill++; else _camStill = 0;
+  _camPrev.copy(camera.position); _camPrevQ.copy(camera.quaternion); _camPrevFov = camera.fov;
   frameStats(performance.now() - t0);
 
   if (DEBUG){
@@ -7037,6 +7049,14 @@ function frame(){
 }
 frame();
 
+/* THE WORLD CACHE (nav v212). Registered with the build stamps in the query, so sw.js names its
+   cache after this exact build and throws away the last one; see the note at the top of sw.js.
+   Registered from the embed only: the development shell is opened between edits, where a cache
+   would hide them. Never fatal — a browser without service workers just loads as before. */
+if (/[?&]embed=1/.test(location.search) && 'serviceWorker' in navigator){
+  const stamp = encodeURIComponent([B_NAV, B_CITY, B_WORLD, B_PROPS].join('_').replace(/\s+/g, ''));
+  navigator.serviceWorker.register('sw.js?v=' + stamp).catch(() => {});
+}
 window.W2H = {
   world: setWorld,
   view: applyView,
@@ -7046,6 +7066,8 @@ window.W2H = {
   DISTRICTS, goal, cur,
   /* The scene and camera, for a bench to ray-cast into: what is that thing at that pixel. */
   scene, camera,
+  /* Frames actually drawn, for a bench to read the settled-frame cap (nav v212). */
+  frames: () => renderer.info.render.frame,
 };
 
 } catch(e){ fail('module top level', e); }
