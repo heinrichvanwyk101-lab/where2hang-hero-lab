@@ -8,7 +8,13 @@
    carries the stamps), with the cache as the offline fallback. */
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = 'w2h-world-' + VERSION;
-const CACHEABLE = /\.(json|ndjson|js|webp|png|jpg)$/i;
+/* DATA AND TEXTURES ONLY, NEVER THE SCRIPTS (nav v213). With the module scripts in the cache the
+   worker that was already controlling the page served the previous build's w2h-city.js and
+   w2h-world.js under a freshly fetched world-nav.html on the first load after every deploy:
+   the new worker installs and claims during that load, too late for the imports. The scripts are
+   half a megabyte compressed and change with every push; the data is three megabytes and changes
+   with a bake. So the cache keeps the data and the sheets, and the scripts come from the network. */
+const CACHEABLE = /\.(json|ndjson|webp|png|jpg)$/i;
 
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
