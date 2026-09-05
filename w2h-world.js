@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v296';
+export const BUILD = 'world v298';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8108,7 +8108,7 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   const shoreZ = x => { for (let i = 0; i + 1 < SAAD_BEACH.length; i++){ const [a, za] = SAAD_BEACH[i], [b, zb] = SAAD_BEACH[i + 1]; if (x >= a && x <= b) return za + (zb - za) * (x - a) / (b - a); } return SAAD_BEACH[x < -420 ? 0 : SAAD_BEACH.length - 1][1]; };
   const shoreRot = x => { const dz = shoreZ(x + 10) - shoreZ(x - 10); return -Math.atan2(dz, 20); };
   const mamBlocks = [], mamProm = [];
-  for (let i = 0; i < 9; i++){ const x = -412 + i * 21, rot = shoreRot(x), a = -rot; mamBlocks.push({ x: x - Math.sin(a) * 12, z: shoreZ(x) + Math.cos(a) * 12, rot, len: 130, dep: 60, storeys: [7, 5, 6, 7, 5, 6, 7, 5, 6][i] }); KIT_ZONES[saadiyat.id].push({ x0:x - 10, x1:x + 10, z0:shoreZ(x) + 5, z1:shoreZ(x) + 19 }); }
+  for (let i = 0; i < 8; i++){ const x = -412 + i * 21, rot = shoreRot(x), a = -rot; mamBlocks.push({ x: x - Math.sin(a) * 12, z: shoreZ(x) + Math.cos(a) * 12, rot, len: 130, dep: 60, storeys: [7, 5, 6, 7, 5, 6, 7, 5, 6][i] }); KIT_ZONES[saadiyat.id].push({ x0:x - 10, x1:x + 10, z0:shoreZ(x) + 5, z1:shoreZ(x) + 19 }); }   // eight blocks: the ninth seat is on the beach road (world v298)
   for (let i = 0; i + 1 < SAAD_BEACH.length; i++){ const [a, za] = SAAD_BEACH[i], [b, zb] = SAAD_BEACH[i + 1]; const rot = -Math.atan2(zb - za, b - a), L = Math.hypot(b - a, zb - za) * M_PER_UNIT; mamProm.push({ x:(a + b) / 2 - Math.sin(-rot) * 5, z:(za + zb) / 2 + Math.cos(-rot) * 5, rot, len:L }); }
   if (kit.mamshaSaadiyat){ const m = kit.mamshaSaadiyat(mamBlocks, mamProm); m.position.y = GROUND; saadiyat.detail.add(m); }
   /* SAADIYAT GROVE (world v296): to the masterplan. Not in the survey, so the composition comes
@@ -8116,14 +8116,17 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
      curved blocks wraps the museum's lake, and the galleria with its great roof runs through the
      middle. The zone below clears the survey and fabric; every museum zone is skipped. */
   if (kit.saadiyatGrove){
-    const GR = 0.25, znm = { x:-372, z:178 };
+    /* The grid is turned with the beach (-0.19 rad along this stretch), not with the museum;
+       the stone cluster is the columns nearest the Louvre; the park is the museum's south. */
+    const GR = -0.19, znm = { x:-372, z:178 };
     const zones = KIT_ZONES[saadiyat.id].filter(z => !z.grove);
     const skip = (x, z) => zones.some(zn => x > zn.x0 - 3 && x < zn.x1 + 3 && z > zn.z0 - 3 && z < zn.z1 + 3) || x < -462 || x > -262 || z < 100 || z > 232;
-    const cells = [];
-    for (let u = -98; u <= 98; u += 14) for (let v = -56; v <= 56; v += 12){
-      cells.push({ x:-400 + u * Math.cos(GR) + v * Math.sin(GR), z:166 - u * Math.sin(GR) + v * Math.cos(GR) });
-    }
-    const grove = kit.saadiyatGrove({ znm, rot:GR, galleria:{ x:-428, z:150 }, cells, skip });
+    /* CELLS TESTED AGAINST THE ROAD NETWORK OFFLINE (world v298): the grid's 124 seats, keeping
+       the 80 that stand 6.5 units or more from every non-service road in data/roads-saadiyat.json.
+       Kind 1 is the stone cluster nearest the Louvre. Regenerate with the same grid if the grid moves. */
+    const GROVE_CELLS = [[-485.7,92.5,1],[-487.9,104.3,1],[-490.2,116.1,1],[-492.5,127.9,1],[-494.7,139.6,1],[-497,151.4,1],[-499.3,163.2,1],[-501.5,175,1],[-503.8,186.8,1],[-506.1,198.6,1],[-471.9,95.1,1],[-474.2,106.9,1],[-476.4,118.7,1],[-478.7,130.5,1],[-481,142.3,1],[-483.2,154.1,1],[-485.5,165.8,1],[-487.8,177.6,1],[-490,189.4,1],[-492.3,201.2,1],[-458.2,97.8,1],[-460.4,109.6,1],[-467.2,144.9,1],[-469.5,156.7,1],[-471.8,168.5,1],[-474,180.3,1],[-476.3,192.1,1],[-478.6,203.8,1],[-444.4,100.4,1],[-458,171.1,1],[-460.3,182.9,1],[-462.5,194.7,1],[-464.8,206.5,1],[-430.7,103.1,0],[-437.5,138.4,0],[-444.3,173.8,1],[-446.5,185.6,1],[-448.8,197.3,1],[-451.1,209.1,1],[-416.9,105.7,0],[-421.5,129.3,0],[-435.1,200,0],[-437.3,211.8,0],[-403.2,108.4,0],[-407.7,131.9,0],[-410,143.7,0],[-414.5,167.3,0],[-416.8,179.1,0],[-423.6,214.4,0],[-394,134.6,0],[-396.2,146.4,0],[-398.5,158.1,0],[-400.8,169.9,0],[-403,181.7,0],[-405.3,193.5,0],[-380.2,137.2,0],[-382.5,149,0],[-384.7,160.8,0],[-387,172.6,0],[-389.3,184.4,0],[-366.5,139.9,0],[-368.7,151.6,0],[-371,163.4,0],[-373.3,175.2,0],[-375.5,187,0],[-350.4,130.7,0],[-352.7,142.5,0],[-355,154.3,0],[-357.2,166.1,0],[-359.5,177.9,0],[-361.8,189.6,0],[-336.7,133.4,0],[-339,145.2,0],[-341.2,156.9,0],[-343.5,168.7,0],[-322.9,136,0],[-325.2,147.8,0],[-327.5,159.6,0],[-313.7,162.2,0],[-295.5,141.3,0]];
+    const cells = GROVE_CELLS.map(([x, z, k]) => ({ x, z, kind: k ? 'stone' : 'block' }));
+    const grove = kit.saadiyatGrove({ znm, rot:GR, galleria:{ x:-428, z:150 }, park:{ x:-348, z:214, w:520, d:200 }, cells, skip });
     grove.position.y = GROUND; saadiyat.detail.add(grove);
   }
 }
