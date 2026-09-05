@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v121';
+export const BUILD = 'city v122';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4122,9 +4122,11 @@ function aldarHQ(x0, z0){
        the glass blue painted here and the material colour white by day, the lines stay white. */
     c.fillStyle = '#1B3D70'; c.fillRect(0, 0, N, N);   // navy, per the photographs (city v116); it was a mid blue
     /* the diagrid: two families of diagonals at +-60 degrees, eight bays across the tile */
-    c.strokeStyle = 'rgba(242,246,247,0.98)'; c.lineWidth = 14;
-    const step = N / 8;
-    for (let k = -8; k <= 16; k++){
+    /* TWELVE BAYS, THINNER LINES (city v122): the eight-bay grid read as coarse and heavy against
+       the photographs, where the diamonds are small and the mullions crisp. */
+    c.strokeStyle = 'rgba(242,246,247,0.98)'; c.lineWidth = 8;
+    const step = N / 12;
+    for (let k = -12; k <= 24; k++){
       c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step + N * 0.577, N); c.stroke();
       c.beginPath(); c.moveTo(k * step, 0); c.lineTo(k * step - N * 0.577, N); c.stroke();
     }
@@ -4191,7 +4193,7 @@ function aldarHQ(x0, z0){
   rimMat.userData.glassOverride = false;
   rimMat.userData.duskColor = 0xE4E9EC;
   rimMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF6F8FA, roughness:0.35, metalness:0.2 });
-  const rimGeo = new THREE.TorusGeometry(R_TALL * 0.985, R_THICK * 0.28, 10, 96);   // y/z plane after rotateY
+  const rimGeo = new THREE.TorusGeometry(R_TALL * 0.985, R_THICK * 0.24, 16, 160);   // y/z plane after rotateY; smoother (city v122)
   rimGeo.rotateY(Math.PI / 2);
   const rim = new THREE.Mesh(rimGeo, rimMat);
   rim.position.set(x0, R_TALL - SINK, z0);
@@ -4295,19 +4297,17 @@ function louvreAbuDhabi(x0, z0){
        the real dome is eight dense layers that read as a solid silver shell with a pattern in
        it. Ribs at 13 and 6 px give roughly two-thirds cover, and a solid inner shell below the
        two lattices closes the rest. */
-    for (let y = -1; y <= 6; y++) for (let x = -1; x <= 6; x++) star(x * big + big / 2 + ((y % 2) ? big / 2 : 0), y * big + big / 2, big * 0.56, 13);
-    for (let y = -1; y <= 14; y++) for (let x = -1; x <= 14; x++) star(x * small + small / 2 + ((y % 2) ? small / 2 : 0), y * small + small / 2, small * 0.55, 6);
+    /* THREE LAYERS AT 10 AND 5 PX (city v122): the solid shell under two thick lattices read as a
+       plain dome, which is not the building; three offset lattices at these widths cover about
+       three quarters of the sky between them and still read as the mesh. */
+    for (let y = -1; y <= 6; y++) for (let x = -1; x <= 6; x++) star(x * big + big / 2 + ((y % 2) ? big / 2 : 0), y * big + big / 2, big * 0.56, 10);
+    for (let y = -1; y <= 14; y++) for (let x = -1; x <= 14; x++) star(x * small + small / 2 + ((y % 2) ? small / 2 : 0), y * small + small / 2, small * 0.55, 5);
     const t = new THREE.CanvasTexture(cv);
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 3);
     t.anisotropy = 8;
     return t;
   };
-  const caps = [[0, Rs, 0xA9AEB3, 0xDADEE2], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xC4C9CE]];
-  /* The solid inner shell: a shade darker than the lattices so the pattern reads on it. */
-  { const radius = Rs - 5 / M, th = Math.acos((radius - (SAG - (Rs - radius))) / radius);
-    const inner = new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 20, 0, Math.PI * 2, 0, th),
-      saadKitMat(0x9A9FA5, 0xB4B9BE, 0.7, 0.08, 0xFFD9A0, 0.12, 0.6));
-    inner.position.set(x0, PL_H + RIM_Y - radius * Math.cos(th), z0); g.add(inner); }
+  const caps = [[0, Rs, 0xA9AEB3, 0xDADEE2], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xC4C9CE], [Math.PI / 16, Rs - 5 / M, 0x767B80, 0xA9AEB3]];   // three lattices, no solid shell (city v122)
   for (const [rot, radius, night, day] of caps){
     const t = latticeTex(rot);
     const mat = new THREE.MeshStandardMaterial({ color:night, alphaMap:t, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.5, metalness:0.5,
@@ -5050,47 +5050,48 @@ function diagridTex(base, line){
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
 }
 function clevelandClinic(){
-  /* TO THE PHOTOGRAPHS (city v116): green diagrid-glass volumes stacked and cantilevered over a
-     long white perforated podium with a roof garden, an orange perforated box hung off the west
-     end on columns, a dark glass tower at the east end, and lawn parterres running south to the
-     water. The survey's 110 m tower record sets the height and the rotation. */
+  /* MASSING TO THE PHOTOGRAPHS (city v122). One long white podium with rounded corners the
+     length of the site; over it, from east to west: the main diagrid tower, then a long lower
+     diagrid bar along the front with a second volume set back behind it, then the orange
+     perforated box hung off the west end on columns. The dark tower of the earlier pass was
+     the neighbouring hotel, not the clinic, and is gone. Roof garden on the podium, helipad
+     on the tower, lawn parterres south to the water. */
   const g = new THREE.Group(), M = M_PER_U, rot = 1.457, at = _placeRot(-38, 68, rot);
   const dg = diagridTex('#ffffff', 'rgba(30,70,60,0.55)');
   const glassN = new THREE.MeshStandardMaterial({ color:0x1E3A34, map:dg, roughness:0.3, metalness:0.2, emissive:0x9FD8C8, emissiveIntensity:0.22 });
   glassN.userData.glassOverride = false; glassN.userData.duskColor = 0x8FC9BC; glassN.userData.nightAlbedo = 1.4;
   glassN.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xA9DCCF, map:dg, roughness:0.3, metalness:0.25 });
-  const glassT = glassN.clone(); glassT.map = dg; glassT.userData = { ...glassN.userData };
   const white = saadKitMat(0xE4E2DD, 0xF3F1EC, 0.8, 0.05, undefined, undefined, 0.5);
   const dark = saadKitMat(0x1C242C, 0x2E3A46, 0.35, 0.3, 0xBFD8EA, 0.25, 1.0);
   const orange = saadKitMat(0xD08A2A, 0xE8A33A, 0.7, 0.1, 0xFFB050, 0.25, 1.0);
   const lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0), pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0);
-  const box = (ax, az, w, d, h, y0, mat, extraRot) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, (y0 + h / 2) / M, pz); m.rotation.y = rot + (extraRot || 0); g.add(m); return m; };
-  // the podium: 230 x 120 m, 24 m, white, with a dark glass ground band and a roof garden
-  box(0, 0, 230, 120, 24, 0, white);
-  box(0, 0, 232, 122, 5, 0, dark);
-  box(20, 10, 150, 70, 0.8, 24, lawn);
-  for (const az of [-20, 0, 20, 40]) box(20, az, 140, 3, 0.9, 24.4, pave);
-  // the glass: a long bar along the front over the podium, the big block on top, the stack behind
-  box(-20, -45, 200, 30, 32, 26, glassN);
-  const main = box(-30, 0, 128, 40, 70, 40, glassT); main.userData.hero = main.userData.kitName = 'clevelandClinic';
-  box(-70, 30, 60, 50, 46, 40, glassN);
-  box(20, 30, 70, 44, 52, 40, glassN);
-  // the orange box hung off the west end, on two columns
-  box(-125, -40, 34, 26, 30, 30, orange);
-  for (const az of [-52, -28]) box(-125, az, 4, 4, 30, 0, white);
-  // the dark tower at the east end
-  box(105, 5, 40, 34, 92, 0, dark);
-  box(105, 5, 42, 36, 2, 92, white);
-  // the roof: plant room and helipad
-  const pad = new THREE.Mesh(new THREE.CylinderGeometry(11 / M, 11 / M, 1 / M, 24), saadKitMat(0x8A8F94, 0xB8BDC2, 0.8, 0));
-  const [hx, hz] = at(-30 / M, 0); pad.position.set(hx, 111 / M, hz); g.add(pad);
-  // the grounds: lawn parterres to the south with paths, palms along the edges
-  box(0, 110, 230, 90, 0.6, 0, lawn);
-  for (const ax of [-80, -40, 0, 40, 80]) box(ax, 110, 3, 80, 0.7, 0, pave);
-  for (const az of [80, 110, 140]) box(0, az, 220, 3, 0.7, 0, pave);
+  const box = (ax, az, w, d, h, y0, mat) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, (y0 + h / 2) / M, pz); m.rotation.y = rot; g.add(m); return m; };
+  const round = (ax, az, r, h, y0, mat) => { const [px, pz] = at(ax / M, az / M); const m = new THREE.Mesh(new THREE.CylinderGeometry(r / M, r / M, h / M, 20), mat); m.position.set(px, (y0 + h / 2) / M, pz); g.add(m); return m; };
+  // the podium: 330 x 120 m, 22 m, rounded corners, a dark glass ground band, roof garden
+  box(0, 0, 330, 120, 22, 0, white);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) round(sx * 165, sz * 60, 14, 22, 0, white);
+  box(0, 0, 332, 122, 5, 0, dark);
+  box(40, 8, 200, 80, 0.8, 22, lawn);
+  for (const az of [-24, 0, 24]) box(40, az, 190, 3, 0.9, 22.4, pave);
+  // the main tower at the east end: 110 x 60 m, 76 m over the podium
+  const main = box(95, 0, 110, 60, 76, 24, glassN); main.userData.hero = main.userData.kitName = 'clevelandClinic';
+  box(95, 0, 112, 62, 2, 100, white);
+  const pad = round(80, 0, 11, 1, 102, saadKitMat(0x8A8F94, 0xB8BDC2, 0.8, 0));
+  // the long bar along the front, west of the tower, and the set-back volume behind it
+  box(-40, -34, 180, 34, 30, 26, glassN);
+  box(-40, -34, 182, 36, 1.5, 56, white);
+  box(-50, 22, 120, 44, 22, 26, glassN);
+  box(-50, 22, 122, 46, 1.5, 48, white);
+  // the orange box hung off the west end on two columns
+  box(-178, -30, 34, 26, 30, 30, orange);
+  for (const az of [-42, -18]) box(-178, az, 4, 4, 30, 0, white);
+  // the grounds: lawn parterres to the south with paths and palms on the edges
+  box(0, 115, 330, 90, 0.6, 0, lawn);
+  for (const ax of [-120, -60, 0, 60, 120]) box(ax, 115, 3, 80, 0.7, 0, pave);
+  for (const az of [85, 115, 145]) box(0, az, 320, 3, 0.7, 0, pave);
   const palms = [];
-  for (let ax = -110; ax <= 110; ax += 11) palms.push(at(ax / M, 158 / M)), palms.push(at(ax / M, -66 / M));
-  for (let az = -60; az <= 150; az += 12) palms.push(at(-120 / M, az / M)), palms.push(at(120 / M, az / M));
+  for (let ax = -160; ax <= 160; ax += 11) palms.push(at(ax / M, 163 / M)), palms.push(at(ax / M, -66 / M));
+  for (let az = -60; az <= 155; az += 12) palms.push(at(-172 / M, az / M)), palms.push(at(172 / M, az / M));
   kitPalms(g, palms, 0.8);
   return g;
 }
