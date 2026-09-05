@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v118';
+export const BUILD = 'city v119';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5436,6 +5436,86 @@ function cafeDelMar(x0, z0, rot){
   g.traverse(o => { if (o.isInstancedMesh) o.position.y = 3 / M; });
   return g;
 }
+
+/* SAADIYAT GROVE, TO THE MASTERPLAN (city v119). Not in OSM or Overture, so it is laid from the
+   published renders: the museum's lake wrapped by a promenade and a crescent of curved terraced
+   blocks on its west side; a long galleria with a great flat roof and a glass ridge through the
+   middle of the district; rounded-ended terraced blocks with planted roofs on a grid turned with
+   the museum; a linear park with fountain pools down the boulevard; a red accent pavilion; palm
+   rows along every street. `skip(x, z)` is the world's zone test so nothing lands on a museum. */
+function saadiyatGrove(spec){
+  const g = new THREE.Group(), M = M_PER_U, F = 3.6, GR = spec.rot, ZX = spec.znm.x, ZZ = spec.znm.z;
+  const white = saadKitMat(0xE4E2DC, 0xF5F3EE, 0.8, 0), cream = saadKitMat(0xDDD6C8, 0xEFE9DC, 0.85, 0);
+  const glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3, 0xBFD8EA, 0.16, 1.0), glassR = saadKitMat(0x2E4650, 0xC9E3EC, 0.3, 0.2, 0xBFE4EC, 0.2);
+  const lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0), pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0);
+  const water = saadKitMat(0x4FA9BC, 0x6FC8D8, 0.15, 0.1, 0x7FE0F0, 0.15), red = saadKitMat(0xB4382A, 0xD24A38, 0.6, 0.1, 0xFF6A50, 0.15, 1.0);
+  const palms = [];
+  const hash = (x, z) => Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+  /* A terraced block with rounded ends: each tier is a box with a cylinder at either end, a
+     glass band per floor, a planted roof on the top tier. */
+  const block = (x, z, w, d, storeys, rot, mat) => {
+    const grp = new THREE.Group();
+    const tiers = [[w, d, storeys], [w * 0.72, d * 0.8, Math.max(1, storeys - 2)], [w * 0.45, d * 0.6, 1]];
+    let y0 = 0;
+    tiers.forEach(([tw, td, n], k) => {
+      const h = n * F;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(tw / M, h / M, td / M), mat); body.position.y = (y0 + h / 2) / M; grp.add(body);
+      for (const sx of [-1, 1]){ const c = new THREE.Mesh(new THREE.CylinderGeometry(td / 2 / M, td / 2 / M, h / M, 14), mat); c.position.set(sx * tw / 2 / M, (y0 + h / 2) / M, 0); grp.add(c); }
+      for (let f = 0; f < n; f++){
+        const band = new THREE.Mesh(new THREE.BoxGeometry((tw + 0.4) / M, F * 0.5 / M, (td + 0.4) / M), glassD); band.position.y = (y0 + f * F + F * 0.3 + F * 0.25) / M; grp.add(band);
+      }
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(tw * 0.9 / M, 0.5 / M, td * 0.9 / M), lawn); roof.position.y = (y0 + h + 0.25) / M; grp.add(roof);
+      y0 += h;
+    });
+    grp.position.set(x, 0, z); grp.rotation.y = rot; g.add(grp); return grp;
+  };
+  const slab = (x, z, w, d, h, mat, rot, y0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, ((y0 || 0) + h / 2) / M, z); m.rotation.y = rot; g.add(m); return m; };
+  const at = (cx, cz, rot) => (ax, az) => [cx + ax * Math.cos(rot) + az * Math.sin(rot), cz - ax * Math.sin(rot) + az * Math.cos(rot)];
+  // THE LAKE: a crescent of water round the museum's west side, with the promenade on its rim
+  const lake = new THREE.Mesh(new THREE.RingGeometry(8, 22, 48, 1, Math.PI * 0.45, Math.PI * 1.1), water);
+  lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.15, 1); lake.position.set(ZX, 0.05, ZZ); g.add(lake);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(22, 24.5, 48, 1, Math.PI * 0.4, Math.PI * 1.2), pave);
+  rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.15, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
+  // THE CRESCENT: seven curved terraced blocks on the promenade's outer edge, tangential
+  for (let i = 0; i < 7; i++){
+    const a = Math.PI * (0.55 + i * 0.15) + GR, r = 30;
+    const x = ZX + Math.cos(a) * r, z = ZZ - Math.sin(a) * r * 1.15;
+    if (spec.skip(x, z)) continue;
+    const b = block(x, z, 66, 26, 5 + (i % 3), a + Math.PI / 2, i % 2 ? white : cream);
+    if (i === 3) b.userData.hero = b.userData.kitName = 'saadiyatGrove';
+    for (let k = -3; k <= 3; k++){ const aa = a + k * 0.03; palms.push([ZX + Math.cos(aa) * 23.5, ZZ - Math.sin(aa) * 23.5 * 1.15]); }
+  }
+  // THE GALLERIA: a long white hall under a great flat roof on columns, a glass ridge along it
+  { const GX = spec.galleria.x, GZ = spec.galleria.z, gat = at(GX, GZ, GR);
+    slab(GX, GZ, 250, 56, 12, white, GR);
+    slab(GX, GZ, 300, 96, 1.4, cream, GR, 16);
+    for (let ax = -140; ax <= 140; ax += 28) for (const az of [-44, 44]){ const [px, pz] = gat(ax / M, az / M); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.9 / M, 0.9 / M, 16 / M, 10), white); c.position.set(px, 8 / M, pz); g.add(c); }
+    const ridge = new THREE.Mesh(new THREE.CylinderGeometry(7 / M, 7 / M, 240 / M, 12, 1, false, 0, Math.PI), glassR); ridge.rotation.set(0, GR, Math.PI / 2, 'YZX'); ridge.position.set(GX, 12 / M, GZ); g.add(ridge);
+    slab(GX, GZ, 250, 4, 0.6, lawn, GR, 17.4);
+    // the red accent pavilion at one end, the fountain court at the other
+    const [rx, rz] = gat(-160 / M, 0); block(rx, rz, 30, 22, 3, GR, red);
+    const [fx, fz] = gat(165 / M, 0); const f = new THREE.Mesh(new THREE.CylinderGeometry(18 / M, 18 / M, 0.4 / M, 32), water); f.position.set(fx, 0.25 / M, fz); g.add(f);
+  }
+  // THE BOULEVARD PARK: lawn with fountain pools and palm rows on both sides of the galleria
+  { const GX = spec.galleria.x, GZ = spec.galleria.z, gat = at(GX, GZ, GR);
+    for (const az of [-80, 80]){ const [px, pz] = gat(0, az / M); slab(px, pz, 330, 26, 0.5, lawn, GR); for (let ax = -140; ax <= 140; ax += 70){ const [qx, qz] = gat(ax / M, az / M); const pool = new THREE.Mesh(new THREE.BoxGeometry(24 / M, 0.5 / M, 10 / M), water); pool.position.set(qx, 0.5 / M, qz); pool.rotation.y = GR; g.add(pool); } for (let ax = -160; ax <= 160; ax += 11) palms.push(gat(ax / M, (az - 15) / M)), palms.push(gat(ax / M, (az + 15) / M)); }
+  }
+  // THE GRID: rounded terraced blocks on the district's grid, avoiding the lake, the galleria
+  // strip, the park and every museum zone
+  for (const cell of spec.cells){
+    const { x, z } = cell;
+    if (spec.skip(x, z)) continue;
+    const dl = Math.hypot((x - ZX), (z - ZZ) / 1.15); if (dl < 40) continue;                  // lake, promenade, crescent
+    const [gx, gz] = [spec.galleria.x, spec.galleria.z]; const dx = x - gx, dz = z - gz;
+    const u = dx * Math.cos(GR) - dz * Math.sin(GR), v = dx * Math.sin(GR) + dz * Math.cos(GR);
+    if (Math.abs(u) < 24 && Math.abs(v) < 14) continue;                                    // galleria and park
+    const h = hash(x, z);
+    block(x, z, 58 + h * 22, 26 + h * 8, 5 + Math.floor(h * 4), GR + (h > 0.7 ? Math.PI / 2 : 0), h > 0.5 ? white : cream);
+    for (let k = -2; k <= 2; k++) palms.push(at(x, z, GR)(k * 5 / M, 3.4)), palms.push(at(x, z, GR)(k * 5 / M, -3.4));
+  }
+  kitPalms(g, palms, 0.7);
+  return g;
+}
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -5443,7 +5523,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, groveBlock, alSeefVillage };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, groveBlock, alSeefVillage, saadiyatGrove };
 }
 
 

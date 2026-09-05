@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v295';
+export const BUILD = 'world v296';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5247,7 +5247,7 @@ const DISTRICTS = [
       { label:'St. Regis Saadiyat',  x:-112.0, z:62.0, h: 4, r:34 },   // world v291
       { label:'NYU Abu Dhabi',       x: -8.0, z:310.0, h: 4, r:34 },
       { label:'Mamsha Al Saadiyat',  x:-330.0, z:96.0, h: 3, r:34 },   // the row's middle (world v295)
-      { label:'Saadiyat Grove',      x:-320.0, z:205.0, h: 4, r:34 },
+      { label:'Saadiyat Grove',      x:-420.0, z:155.0, h: 4, r:34 },
     ] },
   /* CONDITION TWO: THE MARINA. A quay wall down one wall of the inlet with pontoon fingers off
      it, and a mound across the mouth. The inlet is the only place on any island where the coast
@@ -8056,7 +8056,7 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-24, x1:14, z0:-6, z1:29 },        // Jumeirah parcel, 249 x 164 m
   { x0:-136, x1:-88, z0:48, z1:78 },      // St. Regis, grid-searched site (world v291)
   { x0:-46, x1:22, z0:286, z1:346 },      // NYU Abu Dhabi campus records
-  { x0:-410, x1:-262, z0:140, z1:232 },   // Saadiyat Grove: the kit lays the whole district (world v295)
+  { x0:-462, x1:-262, z0:100, z1:232, grove:true },   // Saadiyat Grove: the kit lays the whole district (world v296)
 ];
 /* ---------- AL REEM: GATE TOWERS (world v285) — on the survey's 256 by 50 m slab (bake
    (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
@@ -8111,24 +8111,19 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (let i = 0; i < 9; i++){ const x = -412 + i * 21, rot = shoreRot(x), a = -rot; mamBlocks.push({ x: x - Math.sin(a) * 12, z: shoreZ(x) + Math.cos(a) * 12, rot, len: 130, dep: 60, storeys: [7, 5, 6, 7, 5, 6, 7, 5, 6][i] }); KIT_ZONES[saadiyat.id].push({ x0:x - 10, x1:x + 10, z0:shoreZ(x) + 5, z1:shoreZ(x) + 19 }); }
   for (let i = 0; i + 1 < SAAD_BEACH.length; i++){ const [a, za] = SAAD_BEACH[i], [b, zb] = SAAD_BEACH[i + 1]; const rot = -Math.atan2(zb - za, b - a), L = Math.hypot(b - a, zb - za) * M_PER_UNIT; mamProm.push({ x:(a + b) / 2 - Math.sin(-rot) * 5, z:(za + zb) / 2 + Math.cos(-rot) * 5, rot, len:L }); }
   if (kit.mamshaSaadiyat){ const m = kit.mamshaSaadiyat(mamBlocks, mamProm); m.position.y = GROUND; saadiyat.detail.add(m); }
-  /* SAADIYAT GROVE (world v295): built as complete. A grid of white terraced blocks turned with
-     the museum, filling the zone round the Zayed National Museum, skipping the museum zones,
-     the lagoon, the roads' verges and anything off the outline. */
-  if (kit.groveBlock){
-    const GR = 0.25, cx0 = -336, cz0 = 186;
-    const zones = KIT_ZONES[saadiyat.id].filter(z => !(z.x0 === -410 && z.z0 === 140));
-    const grove = new THREE.Group(); let n = 0;
-    for (let u = -70; u <= 70; u += 14) for (let v = -42; v <= 42; v += 12){
-      const x = cx0 + u * Math.cos(GR) + v * Math.sin(GR), z = cz0 - u * Math.sin(GR) + v * Math.cos(GR);
-      if (x < -410 || x > -262 || z < 140 || z > 232) continue;
-      if (zones.some(zn => x > zn.x0 - 4 && x < zn.x1 + 4 && z > zn.z0 - 4 && z < zn.z1 + 4)) continue;
-      if (Math.hypot(x + 374, z - 169) < 17) continue;                                    // the museum's lagoon
-      /* No outline test: the zone is wholly inland (north shore at z 95, the tip at z 297), and
-         the first pass's test rejected every cell — its helpers take the bake's own frame. */
-      const hsh = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
-      const gb = kit.groveBlock(x, z, 62 + hsh * 14, 42 + hsh * 10, 18 + Math.floor(hsh * 4) * 3.6, GR);
-      grove.add(gb); n++;
+  /* SAADIYAT GROVE (world v296): to the masterplan. Not in the survey, so the composition comes
+     from the published renders: it lies between the Louvre and the Zayed museum, its crescent of
+     curved blocks wraps the museum's lake, and the galleria with its great roof runs through the
+     middle. The zone below clears the survey and fabric; every museum zone is skipped. */
+  if (kit.saadiyatGrove){
+    const GR = 0.25, znm = { x:-372, z:178 };
+    const zones = KIT_ZONES[saadiyat.id].filter(z => !z.grove);
+    const skip = (x, z) => zones.some(zn => x > zn.x0 - 3 && x < zn.x1 + 3 && z > zn.z0 - 3 && z < zn.z1 + 3) || x < -462 || x > -262 || z < 100 || z > 232;
+    const cells = [];
+    for (let u = -98; u <= 98; u += 14) for (let v = -56; v <= 56; v += 12){
+      cells.push({ x:-400 + u * Math.cos(GR) + v * Math.sin(GR), z:166 - u * Math.sin(GR) + v * Math.cos(GR) });
     }
+    const grove = kit.saadiyatGrove({ znm, rot:GR, galleria:{ x:-428, z:150 }, cells, skip });
     grove.position.y = GROUND; saadiyat.detail.add(grove);
   }
 }
