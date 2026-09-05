@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v122';
+export const BUILD = 'city v123';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5531,37 +5531,50 @@ function saadiyatGrove(spec){
   rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.15, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
   for (let i = 0; i < 4; i++){   // the fifth seat is on the boulevard (city v121)
     const a = Math.PI * (0.62 + i * 0.19) + GR, r = 28;
+    if (spec.crescent && !spec.crescent.includes(i)) continue;   // seats checked against the road network offline (city v123)
     const x = ZX + Math.cos(a) * r, z = ZZ - Math.sin(a) * r * 1.15;
     if (spec.skip(x, z)) continue;
     const b = bar(x, z, a + Math.PI / 2, 0, 0, 70, 24, 6 + (i % 2), i % 2 ? white : cream);
     if (i === 2) b.userData.hero = b.userData.kitName = 'saadiyatGrove';
     for (let k = -3; k <= 3; k++){ const aa = a + k * 0.03; palms.push([ZX + Math.cos(aa) * 21.5, ZZ - Math.sin(aa) * 21.5 * 1.15]); }
   }
-  { const GX = spec.galleria.x, GZ = spec.galleria.z, gat = at(GX, GZ, GR);
-    slab(GX, GZ, 190, 80, 10, white, GR);
-    slab(GX, GZ, 170, 64, 12, glassR, GR, 10);
-    slab(GX, GZ, 200, 90, 2, white, GR, 22);
+  { const GX = spec.galleria.x, GZ = spec.galleria.z, GA = spec.galleria.rot ?? GR, gat = at(GX, GZ, GA);
+    slab(GX, GZ, 190, 80, 10, white, GA);
+    slab(GX, GZ, 170, 64, 12, glassR, GA, 10);
+    slab(GX, GZ, 200, 90, 2, white, GA, 22);
     for (let ax = -95; ax <= 95; ax += 19) for (const az of [-46, 46]){ const [px, pz] = gat(ax / M, az / M); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.9 / M, 0.9 / M, 22 / M, 10), white); c.position.set(px, 11 / M, pz); g.add(c); }
-    const [rx, rz] = gat(0, 72 / M); bar(rx, rz, GR, 0, 0, 90, 26, 5, red);
+    const [rx, rz] = gat(0, 72 / M); bar(rx, rz, GA, 0, 0, 90, 26, 5, red);
   }
-  { const [px, pz] = [spec.park.x, spec.park.z];
+  if (spec.park){ const [px, pz] = [spec.park.x, spec.park.z];
     slab(px, pz, spec.park.w, spec.park.d, 0.5, lawn, GR);
     const pat = at(px, pz, GR);
     for (let ax = -spec.park.w / 2 + 30; ax < spec.park.w / 2; ax += 60){ const [qx, qz] = pat(ax / M, 0); slab(qx, qz, 3, spec.park.d - 8, 0.6, pave, GR); }
     for (let az = -spec.park.d / 2 + 30; az < spec.park.d / 2; az += 60){ const [qx, qz] = pat(0, az / M); slab(qx, qz, spec.park.w - 8, 3, 0.6, pave, GR); }
     for (let ax = -spec.park.w / 2 + 15; ax < spec.park.w / 2; ax += 22) for (let az = -spec.park.d / 2 + 15; az < spec.park.d / 2; az += 22) if (hash(ax, az) > 0.35) palms.push(pat(ax / M, az / M));
   }
+  /* CELLS ARE PARCELS (city v123): each carries its own seat, turn, footprint in metres, kind and
+     storeys, laid offline from the road network so nothing stands on a street. A cell is a whole
+     block between lanes: the building keeps 3 m off every side, palms line the lanes. */
   for (const cell of spec.cells){
-    const { x, z, kind } = cell;
+    const { x, z, kind } = cell, rot = cell.rot ?? GR, w = cell.w || 78, d = cell.d || 24;
     if (spec.skip(x, z)) continue;
-    const dl = Math.hypot((x - ZX), (z - ZZ) / 1.15); if (dl < 36) continue;
-    const h = hash(x, z);
-    if (kind === 'stone'){ court(x, z, GR, 62, 50, 2 + Math.floor(h * 2), stone); }
-    else if (h > 0.55) court(x, z, GR, 76, 60, 5 + Math.floor(h * 3), h > 0.8 ? white : cream);
-    else bar(x, z, GR, 0, 0, 78, 24, 6 + Math.floor(h * 3), h > 0.3 ? cream : white);
-    const cat = at(x, z, GR);
-    for (let k = -3; k <= 3; k++) palms.push(cat(k * 13 / M, 38 / M)), palms.push(cat(k * 13 / M, -38 / M));
-    const [mx, mz] = cat(0, 38 / M); slab(mx, mz, 84, 3, 0.5, lawn, GR);
+    const h = hash(x, z), st = cell.storeys || 6, cat = at(x, z, rot);
+    if (kind === 'park'){
+      slab(x, z, w - 6, d - 6, 0.5, lawn, rot);
+      slab(x, z, 2.5, d - 10, 0.6, pave, rot); slab(x, z, w - 10, 2.5, 0.6, pave, rot);
+      for (let ax = -w / 2 + 12; ax < w / 2 - 8; ax += 15) for (let az = -d / 2 + 12; az < d / 2 - 8; az += 15) if (hash(x + ax, z + az) > 0.45) palms.push(cat(ax / M, az / M));
+      continue;
+    }
+    if (kind === 'stone'){ if (Math.min(w, d) >= 44) court(x, z, rot, w - 6, d - 6, st, stone); else bar(x, z, rot, 0, 0, w - 6, d - 6, st, stone); }
+    else if (Math.min(w, d) >= 54 && h > 0.4) court(x, z, rot, w - 6, d - 6, st, h > 0.72 ? white : cream);
+    else if (Math.min(w, d) >= 54){   // two bars either side of a garden
+      const off = d / 2 - 3 - 13;
+      bar(x, z, rot, 0, -off, w - 6, 26, st, h > 0.2 ? cream : white);
+      bar(x, z, rot, 0, off, w - 6, 26, Math.max(3, st - 1), h > 0.2 ? white : cream);
+      slab(x, z, w - 10, d - 6 - 56, 0.6, lawn, rot, 0.4);
+    }
+    else bar(x, z, rot, 0, 0, w - 6, d - 6, st, h > 0.2 ? cream : white);
+    for (let k = -4; k <= 4; k++){ const ax = k * 13; if (Math.abs(ax) > w / 2 - 4) continue; palms.push(cat(ax / M, (d / 2 - 1.2) / M)); palms.push(cat(ax / M, -(d / 2 - 1.2) / M)); }
   }
   kitPalms(g, palms, 0.7);
   return g;

@@ -71,6 +71,14 @@ points for the named places. For a building the survey does not have, grid-searc
 inside the outline with clearance from the shore and from `data/roads-<id>.json`, the way
 St. Regis Saadiyat was placed.
 
+## Saadiyat Grove parcels
+
+`python3 tools/bench/grove-parcels.py` (needs numpy) rasterises the Grove zone with every road,
+museum zone, the beach and the museum lake, seats the galleria, checks the four crescent bars,
+then fills the free ground with 86 m blocks on the beach-parallel grid and smaller infill. It
+writes `out/grove_cells.json` and `out/grove_debug.ppm`; paste the cells into `GROVE_CELLS` in
+`w2h-world.js` after any road or zone change there.
+
 ## Where the register lives
 
 `docs/landmark-register.html` is the landmark register: every named place, marked built,
