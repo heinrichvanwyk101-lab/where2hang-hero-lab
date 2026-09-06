@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v128';
+export const BUILD = 'city v129';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4152,7 +4152,7 @@ function aldarHQ(x0, z0){
     /* THE BLUE LIVES IN THE TEXTURE, the mullions over it. A map multiplies the material colour,
        so white lines over a dark blue material came out blue: the lattice was invisible. With
        the glass blue painted here and the material colour white by day, the lines stay white. */
-    c.fillStyle = '#1B3D70'; c.fillRect(0, 0, N, N);   // navy, per the photographs (city v116); it was a mid blue
+    c.fillStyle = '#1A7F92'; c.fillRect(0, 0, N, N);   // emerald blue (city v129): the glass is a blue-green, not navy
     /* the diagrid: two families of diagonals at +-60 degrees, eight bays across the tile */
     /* TWELVE BAYS, THINNER LINES (city v122): the eight-bay grid read as coarse and heavy against
        the photographs, where the diamonds are small and the mullions crisp. */
@@ -4193,7 +4193,7 @@ function aldarHQ(x0, z0){
     color:0x3C4C62, map:tex, roughness:0.22, metalness:0.45, envMapIntensity:1.2,
     emissive:0xFFFFFF, emissiveMap:lit, emissiveIntensity:0.32 });
   glassMat.userData.glassOverride = true;
-  glassMat.userData.duskColor = 0xCFDCEC;
+  glassMat.userData.duskColor = 0xBFDEE4;
   glassMat.userData.duskRough = 0.20; glassMat.userData.duskMetal = 0.40;
   glassMat.userData.duskEnv = 1.3;
   glassMat.userData.dayMats = new THREE.MeshStandardMaterial({
@@ -4348,7 +4348,7 @@ function louvreAbuDhabi(x0, z0){
      added up to a solid disc from the phone whatever the colours were. Two layers at about
      forty percent cover, ribs 7 and 3 px on the doubled cells, leave real gaps, and the dark
      shell shows through them: the pattern is the read, by day and by night. */
-  const caps = [[0, Rs, 0xA9AEB3, 0xDADEE2], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xC4C9CE]];
+  const caps = [[0, Rs, 0xA9AEB3, 0xF0F2F4], [Math.PI / 8, Rs - 2.5 / M, 0x8E9398, 0xDCE0E3]];   // silver ribs (city v129)
   for (const [rot, radius, night, day] of caps){
     const t = latticeTex(rot);
     /* DARK RIBS OVER A LIT SHELL (city v125). Three pale, warm-emissive lattices stacked read as
@@ -4371,7 +4371,7 @@ function louvreAbuDhabi(x0, z0){
   /* THE LIT SHELL under the three lattices (city v125): the galleries' roof, in shadow by day and
      glowing warm at night, the surface the rib pattern is read against. */
   { const radius = Rs - 7.5 / M, th = Math.acos((radius - (SAG - (Rs - radius))) / radius);
-    const shellMat = saadKitMat(0x24221E, 0x3E4247, 0.9, 0.0, 0xFFB966, 0.16, 0.12);   // dim: the glow is a hint, the ribs are the pattern
+    const shellMat = saadKitMat(0x24221E, 0x9DA3A8, 0.8, 0.1, 0xFFB966, 0.16, 0.12);   // silver-grey by day so the dome reads silver, the ribs paler over it; dim and warm at night
     const shell = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 24, 0, Math.PI * 2, 0, th), shellMat);
     shell.position.set(x0, PL_H + RIM_Y - radius * Math.cos(th), z0);
     g.add(shell); }
@@ -4397,68 +4397,58 @@ function louvreAbuDhabi(x0, z0){
 function zayedNationalMuseum(x0, z0, bearing){
   const g = new THREE.Group(), M = M_PER_U;
   const rot = bearing || 0;
-  /* THE PODIUM — a white faceted mound the sails rise out of, 150 by 110 m and 26 m high, low-poly
-     on purpose so its facets catch the light the way the render's do. The lagoon lies against
-     its north side: a shallow pool 240 by 150 m the museum is reflected in. */
-  const podium = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xDCD8D0, 0xEFEDE7, 0.8, 0.05));
-  podium.scale.set(75 / M, 26 / M, 55 / M);
+  /* TO THE RENDERS (city v129). Five FEATHERS, not spindles: each is a slender curved blade,
+     wide low down and drawn out to a fine tip, bowing toward the lagoon, the tallest 123 m, all
+     of them a steel lattice that is silver by day and glows warm through its cells at night.
+     They rise from a low faceted white mound, flat-shaded so its facets catch the light, at the
+     edge of the lagoon. */
+  const podium = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xE6E3DC, 0xF6F4EF, 0.8, 0.05));
+  podium.material.flatShading = true; podium.material.userData.dayMats.flatShading = true;
+  podium.scale.set(80 / M, 22 / M, 60 / M);
   podium.position.set(x0, 0, z0);
   podium.rotation.y = rot;
   g.add(podium);
-  const lagoon = new THREE.Mesh(new THREE.CircleGeometry(1, 40), saadKitMat(0x6FB8CC, 0x86CCE0, 0.15, 0.1));
-  lagoon.scale.set(120 / M, 75 / M, 1);
-  lagoon.rotation.x = -Math.PI / 2;
-  lagoon.position.set(x0 - Math.sin(rot) * 70 / M, 0.06, z0 - Math.cos(rot) * 70 / M);
-  g.add(lagoon);
-  /* THE FIVE SAILS. Curved wings, the tallest 123 m in the middle, each a lathe whose swell sits
-     two-fifths of the way up at a fifth of its height, pressed to a third of that in thickness
-     and leaning toward the lagoon. Silver lattice by day, dark with a warm interior glow at night. */
-  /* THE LATTICE on the sails: a diagonal grid drawn once, carried as the colour map by day and
-     as the emissive map at night, so the glow comes through the cells and not the ribs. */
   const lat = (() => {
     const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
     const c = cv.getContext('2d');
-    c.fillStyle = '#E2E6E9'; c.fillRect(0, 0, N, N);   // near-white steel (city v117); the grey base read as pewter
+    c.fillStyle = '#E2E6E9'; c.fillRect(0, 0, N, N);
     c.strokeStyle = '#FFFFFF'; c.lineWidth = 6;
     for (let k = -8; k <= 16; k++){
       c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 + N * 0.5, N); c.stroke();
       c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 - N * 0.5, N); c.stroke();
     }
     const t = new THREE.CanvasTexture(cv);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 6);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.7, 0.7);   // extrude UVs are in units; a cell is about 11 m
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     return t;
   })();
-  const wingMat = new THREE.MeshStandardMaterial({ color:0x5C6268, map:lat, roughness:0.4, metalness:0.5, emissive:0xFFA860, emissiveIntensity:0.40, emissiveMap:lat });
+  const wingMat = new THREE.MeshStandardMaterial({ color:0xB8BEC4, map:lat, roughness:0.4, metalness:0.45, emissive:0xFFA860, emissiveIntensity:0.40, emissiveMap:lat, side:THREE.DoubleSide });   // silver steel, not pewter
   wingMat.userData.duskColor = 0xC9CED3; wingMat.userData.glassOverride = false;
-  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2F4F6, map:lat, roughness:0.38, metalness:0.4 });
+  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2F4F6, map:lat, roughness:0.38, metalness:0.4, side:THREE.DoubleSide });
+  /* THE FEATHER: a side elevation drawn in units, +x toward the lagoon. Wide at the root,
+     widest a third of the way up, then a long taper to a tip that has drifted a third of the
+     height toward the lagoon, so the blade bows over the water. Extruded thin, then pinched so
+     the root is 16 m thick and the tip a sliver. */
   const heights = [76, 110, 123, 98, 88];
   const spacing = 36 / M;
   heights.forEach((hm, i) => {
-    const H = hm / M;
-    const prof = [];
-    for (let k = 0; k <= 14; k++){
-      const t = k / 14;
-      const swell = 0.145 * hm, base = 0.075 * hm;   // slimmer feathers (city v117)
-      const half = (t < 0.4 ? base + (swell - base) * (t / 0.4) : swell * (1 - (t - 0.4) / 0.6) + 0.4) / M;
-      prof.push(new THREE.Vector2(Math.max(0.25 / M, half), t * H));
-    }
-    const wingGeo = new THREE.LatheGeometry(prof, 20);
-    /* THE CURVE. A lathe is straight; a falcon's wing is not. Each vertex is pushed sideways by
-       the square of its height, so the sail bows toward the lagoon and its tip hooks over, the
-       way the render's do. */
-    {
-      const pos = wingGeo.attributes.position;
-      for (let v = 0; v < pos.count; v++){ const y = pos.getY(v); pos.setZ(v, pos.getZ(v) - 0.7 * y * y / H); }   // z is pressed to a third afterwards
-      pos.needsUpdate = true; wingGeo.computeVertexNormals();
-    }
-    const wing = new THREE.Mesh(wingGeo, wingMat);
-    wing.scale.set(1, 1, 0.34);
+    const H = hm / M, wr = 0.11 * H, ww = 0.19 * H, tip = 0.34 * H;
+    const sh = new THREE.Shape();
+    sh.moveTo(-wr, 0);
+    sh.quadraticCurveTo(-ww * 1.15, H * 0.36, tip - 0.4 / M, H);
+    sh.quadraticCurveTo(ww * 0.9, H * 0.42, wr, 0);
+    sh.closePath();
+    const T = 16 / M;
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false, curveSegments: 24 });
+    geo.translate(0, 0, -T / 2);
+    const pos = geo.attributes.position;
+    for (let v = 0; v < pos.count; v++){ const y = pos.getY(v); pos.setZ(v, pos.getZ(v) * (1 - 0.85 * y / H)); }
+    pos.needsUpdate = true; geo.computeVertexNormals();
+    const wing = new THREE.Mesh(geo, wingMat);
     const off = (i - 2) * spacing;
-    wing.position.set(x0 + Math.cos(rot) * off, 16 / M, z0 + Math.sin(rot) * off);
-    /* SPLAYED (city v117): the outer feathers lean away from the centre one and turn a little on
-       the row, so the five fan out the way the renders show rather than standing in a rank. */
-    wing.rotation.set(0, rot + (i - 2) * 0.10, -(i - 2) * 0.075);
+    wing.position.set(x0 + Math.cos(rot) * off, 14 / M, z0 + Math.sin(rot) * off);
+    /* +x of the blade faces the lagoon (rot + pi/2); the outer feathers fan along the row. */
+    wing.rotation.set((i - 2) * 0.08, rot + Math.PI / 2 + (i - 2) * 0.10, 0);
     if (i === 2) wing.userData.hero = true;
     g.add(wing);
   });
@@ -4509,33 +4499,29 @@ function guggenheimAbuDhabi(x0, z0){
 }
 function naturalHistoryMuseum(x0, z0){
   const g = new THREE.Group(), M = M_PER_U;
-  /* WHITE CUBES, STEPPED — the render is a heap of pale blocks with planted terraces on the
-     channel by the bridge landing, not a rock. Fourteen boxes over a 160 by 120 m footprint,
-     taller toward the middle, green on the ledges. */
-  const white = saadKitMat(0xE3E0D8, 0xF4F2EC, 0.85, 0.02);
-  const green = saadKitMat(0x5E7D45, 0x6F9452, 0.95, 0);
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(130 / M, 4 / M, 100 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
-  plinth.position.set(x0, 2 / M, z0);
-  g.add(plinth);
+  /* A HEAP OF ROCK-LIKE BLOCKS (city v129). Fourteen tightly packed cubes read as one beige lump
+     from the phone. Nine bigger blocks on a three-by-three seat with 12 m gaps between them,
+     each tilted a little off plumb, dark glass slots between the stone, planted ledges on top:
+     the heap and its shadows are the read. */
+  const stone = saadKitMat(0xD9D3C8, 0xEDE8DF, 0.9, 0.02), green = saadKitMat(0x5E7D45, 0x6F9452, 0.95, 0);
+  const dark = saadKitMat(0x1E2A34, 0x2C3A46, 0.3, 0.4);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(150 / M, 4 / M, 120 / M), saadKitMat(0xCFC7B8, 0xE2DCD0, 0.9, 0));
+  plinth.position.set(x0, 2 / M, z0); g.add(plinth);
   let seed = 23; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
-  for (let i = 0; i < 14; i++){
-    const w = (18 + rnd() * 26) / M, d = (18 + rnd() * 24) / M;
-    const dx = (rnd() - 0.5) * 96, dz = (rnd() - 0.5) * 70;
-    const cen = 1 - Math.min(1, Math.hypot(dx / 48, dz / 35));
-    const h = (10 + cen * 34 + rnd() * 6) / M;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), white);
-    m.position.set(x0 + dx / M, 4 / M + h / 2, z0 + dz / M);
-    m.rotation.y = rnd() * 0.5 - 0.25;
-    if (i === 0) m.userData.hero = true;
+  let i = 0;
+  for (const gx of [-46, 0, 46]) for (const gz of [-36, 0, 36]){
+    const w = (28 + rnd() * 14) / M, d = (26 + rnd() * 12) / M;
+    const cen = 1 - Math.min(1, Math.hypot(gx / 50, gz / 40));
+    const h = (14 + cen * 34 + rnd() * 6) / M;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone);
+    m.position.set(x0 + (gx + (rnd() - 0.5) * 8) / M, 4 / M + h / 2, z0 + (gz + (rnd() - 0.5) * 8) / M);
+    m.rotation.set((rnd() - 0.5) * 0.10, rnd() * 0.6 - 0.3, (rnd() - 0.5) * 0.10);
+    if (i++ === 4) m.userData.hero = true;
     g.add(m);
-    const band = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 2.4 / M, d * 1.02), saadKitMat(0x2E3A44, 0x3C4A56, 0.3, 0.4));
-    band.position.set(m.position.x, 4 / M + h * 0.55, m.position.z);
-    band.rotation.y = m.rotation.y;
-    g.add(band);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(w * 1.03, 3 / M, d * 1.03), dark);
+    band.position.copy(m.position); band.position.y = 4 / M + h * 0.5; band.rotation.copy(m.rotation); g.add(band);
     const t = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 1.2 / M, d * 0.7), green);
-    t.position.set(m.position.x, 4 / M + h + 0.6 / M, m.position.z);
-    t.rotation.y = m.rotation.y;
-    g.add(t);
+    t.position.copy(m.position); t.position.y = 4 / M + h + 0.6 / M; t.rotation.copy(m.rotation); g.add(t);
   }
   return g;
 }
@@ -4559,6 +4545,16 @@ function teamLabPhenomena(x0, z0){
     m.position.set(x0 + dx / M, 0, z0 + dz / M);
     if (i === 0) m.userData.hero = true;
     g.add(m);
+    /* THE SKIN LIFTS OFF THE GROUND (city v129): a dark recess under each shell at the base and a
+       ring of white ribs over the crown, so the shells read as sculpted skins and not as one
+       smooth beige mound. */
+    const rec = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.44 / M, w * 0.47 / M, 5 / M, 40), dark);
+    rec.scale.set(1, 1, d / w); rec.position.set(x0 + dx / M, 2.5 / M, z0 + dz / M); g.add(rec);
+    for (let k = 0; k < 5; k++){
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(w * 0.30 / M, 0.9 / M, 6, 40), mat);
+      rib.scale.set(1, 1, d / w); rib.rotation.x = Math.PI / 2; rib.rotation.z = k * 0.3;
+      rib.position.set(x0 + dx / M, (h * 0.72 + k * 1.6) / M, z0 + dz / M); rib.scale.multiplyScalar(1 - k * 0.12); g.add(rib);
+    }
   });
   return g;
 }
@@ -4875,18 +4871,20 @@ function warnerBrosWorld(x0, z0, rot){
   const [ux, uz] = at(60 / M, 40 / M);
   const upper = new THREE.Mesh(new THREE.BoxGeometry(200 / M, 10 / M, 160 / M), gold);
   upper.position.set(ux, 31 / M, uz); upper.rotation.y = rot; g.add(upper);
-  // the entrance face is the -x end: the blue arch, a half disc of glass standing in a gold frame
-  const [ex, ez] = at(-211 / M, 0);
+  /* THE ENTRANCE IS ON THE LONG SOUTH SIDE (city v129), not the west end: the satellite shows
+     the rotunda at the middle of the hall's +z face with the courtyard opening off it, the
+     pylon at its corner, and the hotel across the courtyard. Local +z is that face. */
+  const [ex, ez] = at(0, 151 / M);
   const arch = new THREE.Mesh(new THREE.CylinderGeometry(34 / M, 34 / M, 6 / M, 40, 1, false, 0, Math.PI), blue);
-  arch.rotation.set(0, rot, Math.PI / 2, 'YZX'); arch.position.set(ex, 4 / M, ez); g.add(arch);
+  arch.rotation.set(0, rot + Math.PI / 2, Math.PI / 2, 'YZX'); arch.position.set(ex, 4 / M, ez); g.add(arch);
   const frame = new THREE.Mesh(new THREE.TorusGeometry(35 / M, 3 / M, 8, 40, Math.PI), goldL);
-  frame.rotation.set(0, rot + Math.PI / 2, 0); frame.position.set(ex - 0.2 * cs, 4 / M, ez + 0.2 * sn); g.add(frame);
-  const entryBox = new THREE.Mesh(new THREE.BoxGeometry(12 / M, 44 / M, 100 / M), gold);
-  const [bx, bz] = at(-206 / M, 0); entryBox.position.set(bx, 22 / M, bz); entryBox.rotation.y = rot; g.add(entryBox);
+  frame.rotation.set(0, rot, 0); frame.position.set(ex + 0.2 * sn, 4 / M, ez + 0.2 * cs); g.add(frame);
+  const entryBox = new THREE.Mesh(new THREE.BoxGeometry(100 / M, 44 / M, 12 / M), gold);
+  const [bx, bz] = at(0, 146 / M); entryBox.position.set(bx, 22 / M, bz); entryBox.rotation.y = rot; g.add(entryBox);
   const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), goldL);
   dome.scale.set(30 / M, 12 / M, 30 / M); dome.position.set(bx, 44 / M, bz); dome.userData.hero = dome.userData.kitName = 'warnerBrosWorld'; g.add(dome);
-  // the pylon with the shield on top
-  const [px, pz] = at(-240 / M, 70 / M);
+  // the pylon with the shield on top, at the corner of the courtyard
+  const [px, pz] = at(90 / M, 175 / M);
   const pylon = new THREE.Mesh(new THREE.BoxGeometry(9 / M, 62 / M, 9 / M), goldL);
   pylon.position.set(px, 31 / M, pz); pylon.rotation.y = rot; g.add(pylon);
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
@@ -4900,13 +4898,13 @@ function warnerBrosWorld(x0, z0, rot){
   shMat.userData.glassOverride = false; shMat.userData.duskColor = 0xFFFFFF; shMat.userData.nightAlbedo = 1.0;
   shMat.userData.dayMats = new THREE.MeshStandardMaterial({ map:tex, transparent:true, roughness:0.5, side:THREE.DoubleSide });
   const sh = new THREE.Mesh(new THREE.PlaneGeometry(24 / M, 24 / M), shMat);
-  sh.position.set(px, 72 / M, pz); sh.rotation.y = rot - Math.PI / 2; g.add(sh);
-  // the plaza and its palm grid
-  const [qx, qz] = at(-270 / M, 0);
-  const plaza = new THREE.Mesh(new THREE.BoxGeometry(90 / M, 0.5 / M, 200 / M), saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0));
-  plaza.position.set(qx, 0.25 / M, qz); plaza.rotation.y = rot; g.add(plaza);
+  sh.position.set(px, 72 / M, pz); sh.rotation.y = rot; g.add(sh);
+  // the courtyard: a paved apron off the entrance face; the hotel's own drop-off circle sits on it
+  const [qx, qz] = at(0, 195 / M);
+  const plaza = new THREE.Mesh(new THREE.BoxGeometry(220 / M, 0.3 / M, 100 / M), saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0));
+  plaza.position.set(qx, 0.15 / M, qz); plaza.rotation.y = rot; g.add(plaza);
   const palms = [];
-  for (let ax = -300; ax <= -240; ax += 15) for (let az = -90; az <= 90; az += 15) palms.push(at(ax / M, az / M));
+  for (let ax = -105; ax <= 105; ax += 15) palms.push(at(ax / M, 163 / M));
   kitPalms(g, palms, 0.75);
   return g;
 }
@@ -5636,10 +5634,12 @@ function saadiyatGrove(spec){
     bar(cx, cz, rot, (w / 2 - t / 2), 0, t, d - 2 * t, base, mat);
     slab(cx, cz, w - 2 * t - 4, d - 2 * t - 4, 0.6, lawn, rot, 0.4);
   };
-  const lake = new THREE.Mesh(new THREE.RingGeometry(8, 20, 48, 1, Math.PI * 0.5, Math.PI * 1.0), water);
-  lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.15, 1); lake.position.set(ZX, 0.05, ZZ); g.add(lake);
-  const rim = new THREE.Mesh(new THREE.RingGeometry(20, 22.5, 48, 1, Math.PI * 0.45, Math.PI * 1.1), pave);
-  rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.15, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
+  /* THE LAGOON (city v129): a pool the museum stands at the edge of, not a lake it floats in.
+     Inner edge at the mound's foot, outer edge 15 units out, wrapping the west and south. */
+  const lake = new THREE.Mesh(new THREE.RingGeometry(7, 15, 48, 1, Math.PI * 0.45, Math.PI * 1.1), water);
+  lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.1, 1); lake.position.set(ZX, 0.05, ZZ); g.add(lake);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(15, 17, 48, 1, Math.PI * 0.4, Math.PI * 1.2), pave);
+  rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.1, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
   for (let i = 0; i < 4; i++){   // the fifth seat is on the boulevard (city v121)
     const a = Math.PI * (0.62 + i * 0.19) + GR, r = 28;
     if (spec.crescent && !spec.crescent.includes(i)) continue;   // seats checked against the road network offline (city v123)
