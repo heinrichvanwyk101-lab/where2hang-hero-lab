@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v131';
+export const BUILD = 'city v132';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5764,6 +5764,47 @@ function wbHotel(x0, z0, rot){
   return g;
 }
 
+/* THE WATERFRONT PARK (city v132) — the rocky hardscape peninsula beside teamLab at the south of
+   the cultural district: pale stone paving in hexagonal tiles, tiles laid only where the world's
+   land test finds ground so the park stops at the water's edge, rock mounds, shrubs, a path grid
+   with a bridge walk to the museum, and lamps. */
+function saadiyatPark(x0, z0, land, R){
+  const g = new THREE.Group(), M = M_PER_U, rad = R || 22;
+  const pave = saadKitMat(0xD9D3C6, 0xEDE8DD, 0.9, 0), pave2 = saadKitMat(0xC9C2B4, 0xDDD6C8, 0.9, 0);
+  const rock = saadKitMat(0x8E8880, 0xA8A196, 0.95, 0), shrub = saadKitMat(0x4E6A32, 0x627F3E, 0.9, 0);
+  const onLand = (x, z) => !land || land(x, z);
+  const hex = new THREE.CylinderGeometry(1.65, 1.65, 0.25, 6);
+  const tiles = [], palms = [], lamps = [];
+  for (let i = -12; i <= 12; i++) for (let j = -12; j <= 12; j++){
+    const x = x0 + i * 3.0 + (j % 2 ? 1.5 : 0), z = z0 + j * 2.6;
+    if (Math.hypot(x - x0, z - z0) > rad || !onLand(x, z)) continue;
+    tiles.push([x, z, ((i * 7 + j * 13) % 4) === 0]);
+  }
+  const m4 = new THREE.Matrix4();
+  for (const mat of [pave, pave2]){
+    const list = tiles.filter(t => t[2] === (mat === pave2));
+    if (!list.length) continue;
+    const im = new THREE.InstancedMesh(hex, mat, list.length);
+    list.forEach(([x, z], k) => { m4.makeTranslation(x, 0.12, z); im.setMatrixAt(k, m4); });
+    im.instanceMatrix.needsUpdate = true; if (mat === pave) im.userData.hero = im.userData.kitName = 'saadiyatPark';
+    g.add(im);
+  }
+  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  for (let k = 0; k < 26; k++){
+    const a = rnd() * Math.PI * 2, r = rnd() * rad * 0.85, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r;
+    if (!onLand(x, z)) continue;
+    const s = 0.8 + rnd() * 1.6;
+    const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rock); rk.scale.set(1, 0.45, 1); rk.position.set(x, 0.3, z); rk.rotation.y = rnd() * 3; g.add(rk);
+    for (let q = 0; q < 3; q++){ const b = new THREE.Mesh(new THREE.SphereGeometry(0.35 + rnd() * 0.3, 7, 5), shrub); b.position.set(x + (rnd() - 0.5) * 4, 0.45, z + (rnd() - 0.5) * 4); g.add(b); }
+    if (rnd() > 0.5) palms.push([x + 2, z + 1]);
+  }
+  for (let t = -rad; t <= rad; t += 3.5){ if (onLand(x0 + t, z0)) lamps.push([x0 + t, z0 + 0.4]); if (onLand(x0, z0 + t)) lamps.push([x0 + 0.4, z0 + t]); }
+  const walk = new THREE.Mesh(new THREE.BoxGeometry(rad * 2, 0.35, 1.2), pave2); walk.position.set(x0, 0.28, z0); g.add(walk);
+  const walk2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, rad * 2), pave2); walk2.position.set(x0, 0.28, z0); g.add(walk2);
+  kitPalms(g, palms, 0.7); kitLamps(g, lamps);
+  return g;
+}
+
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -5771,7 +5812,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark };
 }
 
 

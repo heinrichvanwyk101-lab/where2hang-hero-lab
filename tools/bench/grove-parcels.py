@@ -27,7 +27,7 @@ for rd in roads['roads']:
     pts=[iu(p) for p in rd['pts']]
     for a,b in zip(pts,pts[1:]): stamp_seg(a,b,CLR[rd['cls']])
 # kit zones (non grove) + margin 3, mamsha seats, lake+crescent ellipse
-zones=[(-497,-460,158,187),(-388,-355,160,189),(-495,-466,63,87),(-232,-197,156,171),(-227,-213,175,188)]
+zones=[(-497,-460,158,187),(-388,-355,160,189),(-437,-407,82,106),(-232,-197,156,171),(-227,-213,175,188),(-352,-322,225,251)]   # Guggenheim on its real site, the Natural History Museum (world v306)
 SB=[[-420,99],[-400,95],[-380,89],[-360,87],[-340,84],[-320,82],[-300,76],[-280,68],[-260,64],[-240,70]]
 def shoreZ(x):
     for (a,za),(b,zb) in zip(SB,SB[1:]):
@@ -65,6 +65,23 @@ def stamp_rect(mask,cx,cz,rot,w,d,val=False):
             gi,gj=int(gz(z)),int(gx(x))
             if 0<=gi<H and 0<=gj<W: mask[gi,gj]=val
 def hashf(x,z): return abs(math.sin(x*12.9898+z*78.233)*43758.5453)%1
+# THE OUTER BLOCKS TURN WITH THE BOW ROAD (world v306): a block within 12 units of a road takes
+# that road's own angle instead of the district grid, so the west edge follows Jacques Chirac St.
+ROADSEGS=[]
+for rd in roads['roads']:
+    pts=[iu(p) for p in rd['pts']]
+    for a,b in zip(pts,pts[1:]): ROADSEGS.append((a,b))
+def nearest_road(x,z):
+    best=(99,0.0)
+    for a,b in ROADSEGS:
+        if abs(a[0]-x)>30 or abs(a[1]-z)>30: continue
+        ax,az=a;bx,bz=b;dx,dz=bx-ax,bz-az;L2=dx*dx+dz*dz
+        if L2<1e-6: continue
+        t=max(0,min(1,((x-ax)*dx+(z-az)*dz)/L2)); d=math.hypot(x-(ax+t*dx),z-(az+t*dz))
+        if d<best[0]: best=(d,-math.atan2(dz,dx))
+    return best
+def turn_of(x,z):
+    d,a=nearest_road(x,z); return a if d<12 else GR
 occ=free.copy()
 out=[]
 # 1. galleria: 190 x 80 m (24.4 x 10.3 u) plus the red bar 90 x 26 m at az=+72 m; margin 1.5 u
@@ -110,20 +127,22 @@ for ox in (0,4.5,9):
         if bestfill is None or len(placed)>len(bestfill[1]): bestfill=((ox,oz),placed)
 print('grid offset',bestfill[0],'primary',len(bestfill[1]))
 for x,z in bestfill[1]:
-    if not rect_ok(occ,x,z,GR,B,B): continue
+    rb=turn_of(x,z)
+    if not rect_ok(occ,x,z,rb,B,B): continue
     k=kind_of(x,z); h=hashf(x,z)
     st=0 if k=='park' else (2+int(h*2) if k=='stone' else 5+int(h*4))
-    out.append([round(x,1),round(z,1),GR,round(B*7.8),round(B*7.8),k,st]); stamp_rect(occ,x,z,GR,B+LN,B+LN)
+    out.append([round(x,1),round(z,1),round(rb,3),round(B*7.8),round(B*7.8),k,st]); stamp_rect(occ,x,z,rb,B+LN,B+LN)
 # 4. infill: smaller blocks in the leftovers, scanning the GR frame at 1 u steps, sizes 8, 6.5, 5
 for Bs in (8.0,6.5,5.0):
     for u in np.arange(-130,130,1.0):
         for v in np.arange(-90,90,1.0):
             x=-362+u*c+v*s; z=166-u*s+v*c
             if not (X0<x<X1 and Z0<z<Z1): continue
-            if rect_ok(occ,x,z,GR,Bs,Bs,0.99):
+            rb=turn_of(x,z)
+            if rect_ok(occ,x,z,rb,Bs,Bs,0.99):
                 k=kind_of(x,z); h=hashf(x,z)
                 st=0 if k=='park' else (2+int(h*2) if k=='stone' else 4+int(h*4))
-                out.append([round(x,1),round(z,1),GR,round(Bs*7.8),round(Bs*7.8),k,st]); stamp_rect(occ,x,z,GR,Bs+LN,Bs+LN)
+                out.append([round(x,1),round(z,1),round(rb,3),round(Bs*7.8),round(Bs*7.8),k,st]); stamp_rect(occ,x,z,rb,Bs+LN,Bs+LN)
 print('cells',len(out),{k:sum(1 for o in out if o[5]==k) for k in ('block','stone','park')})
 json.dump({'gal':gal,'cres':cres,'cells':out},open(S+'grove_cells.json','w'))
 img=np.zeros((H,W,3),np.uint8); img[roadfree]=(200,190,160); img[~roadfree]=(60,60,60); img[roadfree&~free]=(120,170,190)
