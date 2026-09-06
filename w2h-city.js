@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v127';
+export const BUILD = 'city v128';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4672,10 +4672,14 @@ function wAbuDhabi(x0, z0, bearing){
 function gateTowers(x0, z0, rot){
   const g = new THREE.Group(), M = M_PER_U;
   const H = 240 / M, W = 60 / M, D = 46 / M;
-  const mat = new THREE.MeshStandardMaterial({ color:0x6B7278, map:TEX_TOWER, roughness:0.5, metalness:0.3 });
-  mat.userData.duskColor = 0xD9D2C6; mat.userData.glassOverride = false;
-  /* TEX_TOWER is the night window sheet — dark with lit cells — so the day material goes without it. */
-  mat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xE9E3D8, roughness:0.5, metalness:0.25 });
+  /* GLAZED BY DAY (city v128). The day material was bare pale stone, so from the phone the three
+     towers were one flat beige monolith beside fabric towers that all carry the day window sheet.
+     cityMaterial gives the same night sheet and day sheet the fabric uses, at the fabric's own
+     tiling for a 60 m wide, 240 m tall tower, tinted the towers' blue-grey glass. */
+  const mat = cityMaterial(TEX_TOWER, 3, 1, 0.25, 0x5C6670);
+  mat.userData.duskColor = 0xB8C2CB; mat.userData.glassOverride = false;
+  mat.userData.dayMats = mat.userData.dayMats.clone();
+  mat.userData.dayMats.color.set(0xB4C0CA); mat.userData.dayMats.roughness = 0.5; mat.userData.dayMats.metalness = 0.2;
   const cs = Math.cos(rot), sn = Math.sin(rot);
   [-1, 0, 1].forEach((k, i) => {
     const off = k * 96 / M;
