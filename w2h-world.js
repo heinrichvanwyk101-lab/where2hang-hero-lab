@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v314';
+export const BUILD = 'world v315';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8126,7 +8126,7 @@ if (!NO_KIT && maryah && kit.adgmSquare){
 }
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
-                                ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim, 0.832], ['naturalHistoryMuseum', LM_SAADIYAT.nhm],
+                                ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim, 0.832], ['naturalHistoryMuseum', LM_SAADIYAT.nhm, -0.6],
                                 ['teamLabPhenomena', LM_SAADIYAT.teamlab, 0.72]]){
     if (!kit[fn]) continue;
     const m = kit[fn](at.x, at.z, bear);

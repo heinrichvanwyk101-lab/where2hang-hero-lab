@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v139';
+export const BUILD = 'city v140';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4528,32 +4528,38 @@ function guggenheimAbuDhabi(x0, z0, rot){
   sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
   return g;
 }
-function naturalHistoryMuseum(x0, z0){
-  const g = new THREE.Group(), M = M_PER_U;
-  /* A HEAP OF ROCK-LIKE BLOCKS (city v129). Fourteen tightly packed cubes read as one beige lump
-     from the phone. Nine bigger blocks on a three-by-three seat with 12 m gaps between them,
-     each tilted a little off plumb, dark glass slots between the stone, planted ledges on top:
-     the heap and its shadows are the read. */
-  const stone = saadKitMat(0xD9D3C8, 0xEDE8DF, 0.9, 0.02), green = saadKitMat(0x5E7D45, 0x6F9452, 0.95, 0);
-  const dark = saadKitMat(0x1E2A34, 0x2C3A46, 0.3, 0.4);
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(150 / M, 4 / M, 120 / M), saadKitMat(0xCFC7B8, 0xE2DCD0, 0.9, 0));
-  plinth.position.set(x0, 2 / M, z0); g.add(plinth);
-  let seed = 23; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
-  let i = 0;
-  for (const gx of [-46, 0, 46]) for (const gz of [-36, 0, 36]){
-    const w = (28 + rnd() * 14) / M, d = (26 + rnd() * 12) / M;
-    const cen = 1 - Math.min(1, Math.hypot(gx / 50, gz / 40));
-    const h = (14 + cen * 34 + rnd() * 6) / M;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone);
-    m.position.set(x0 + (gx + (rnd() - 0.5) * 8) / M, 4 / M + h / 2, z0 + (gz + (rnd() - 0.5) * 8) / M);
-    m.rotation.set((rnd() - 0.5) * 0.10, rnd() * 0.6 - 0.3, (rnd() - 0.5) * 0.10);
-    if (i++ === 4) m.userData.hero = true;
-    g.add(m);
-    const band = new THREE.Mesh(new THREE.BoxGeometry(w * 1.03, 3 / M, d * 1.03), dark);
-    band.position.copy(m.position); band.position.y = 4 / M + h * 0.5; band.rotation.copy(m.rotation); g.add(band);
-    const t = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 1.2 / M, d * 0.7), green);
-    t.position.copy(m.position); t.position.y = 4 / M + h + 0.6 / M; t.rotation.copy(m.rotation); g.add(t);
-  }
+function naturalHistoryMuseum(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  /* MECANOO'S ROCK FORMATION, AT THE SIZE OF THE SITE (city v140). The heap was nine 30 m cubes
+     on a 150 by 120 m plinth; the survey record is 203 by 151 m and the design is a stack of
+     huge sandstone blocks, the upper ones bridging the gaps below and cantilevering out, each
+     face striated like bedded rock, dark glass in the slots between them and planted terraces
+     on top. Built in the record's own frame: a forecourt, six ground blocks, four bridging
+     blocks, a summit block, strata bands on every one. */
+  const stone = saadKitMat(0xD6C9AE, 0xEBE0C8, 0.9, 0.02), stone2 = saadKitMat(0xC9BA9C, 0xE0D3B8, 0.9, 0.02);
+  const strata = saadKitMat(0xB8A688, 0xCDBB9C, 0.9, 0), dark = saadKitMat(0x1E2A34, 0x2C3A46, 0.3, 0.2, 0xFFD9A0, 0.15, 1.0);
+  const green = saadKitMat(0x5E7D45, 0x6F9452, 0.95, 0), pave = saadKitMat(0xD3CCBE, 0xEAE4D6, 0.9, 0);
+  const box = (ax, az, w, d, h, mat, y0, ry, rx, rz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); m.rotation.set(rx || 0, ry || 0, rz || 0); m.castShadow = m.receiveShadow = true; sub.add(m); return m; };
+  const rock = (ax, az, w, d, h, y0, ry, k) => {
+    const m = box(ax, az, w, d, h, k % 2 ? stone2 : stone, y0, ry, (k % 3 - 1) * 0.02, (k % 2 ? -1 : 1) * 0.015);
+    for (let y = 4; y < h - 2; y += 5.5) box(ax, az, w + 0.5, d + 0.5, 0.9, strata, y0 + y, ry, (k % 3 - 1) * 0.02, (k % 2 ? -1 : 1) * 0.015);   // the bedding
+    if (k % 2 === 0) box(ax, az, w * 0.7, d * 0.7, 1.2, green, y0 + h + 0.2, ry);   // planted terraces on the level tops
+    return m;
+  };
+  box(0, 0, 196, 146, 3, pave, 0);   // the forecourt platform over the record
+  // the ground tier: six blocks with slots between them
+  const ground = [[-62, -30, 64, 58, 24, 0.12], [2, -34, 58, 52, 20, -0.08], [66, -26, 60, 56, 26, 0.05], [-52, 34, 56, 60, 22, -0.14], [12, 40, 66, 54, 18, 0.10], [68, 36, 50, 50, 24, -0.06]];
+  ground.forEach(([ax, az, w, d, h, ry], k) => { const m = rock(ax, az, w, d, h, 3, ry, k); if (k === 1) m.userData.hero = m.userData.kitName = 'naturalHistoryMuseum'; });
+  // dark glass in the slots
+  for (const [ax, az, w, d] of [[-30, -32, 12, 60], [34, -30, 12, 60], [-20, 38, 14, 62], [40, 40, 12, 58], [0, 2, 190, 10]]) box(ax, az, w, d, 15, dark, 3);
+  // the bridging tier: four blocks laid across the slots, cantilevering out
+  const upper = [[-32, -28, 74, 50, 20, -0.10], [38, -30, 70, 48, 18, 0.12], [-18, 36, 72, 52, 20, 0.08], [44, 36, 62, 46, 16, -0.12]];
+  upper.forEach(([ax, az, w, d, h, ry], k) => rock(ax, az, w, d, h, 26, ry, k + 1));
+  box(-32, -28, 74, 50, 2.5, dark, 24, -0.10); box(38, -30, 70, 48, 2.5, dark, 24, 0.12); box(-18, 36, 72, 52, 2.5, dark, 24, 0.08); box(44, 36, 62, 46, 2.5, dark, 24, -0.12);
+  // the summit block over the middle
+  rock(6, 4, 66, 54, 18, 46, 0.04, 2);
+  box(6, 4, 66, 54, 2.5, dark, 44, 0.04);
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
   return g;
 }
 function teamLabPhenomena(x0, z0, scale){
