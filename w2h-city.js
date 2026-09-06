@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v135';
+export const BUILD = 'city v136';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5601,6 +5601,100 @@ function yasBayCarPark(x0, z0, rot){
   return g;
 }
 
+/* YAS BAY SOUTH BEACH (city v136) — the reclaimed sand south-west of Pier71 that the baked
+   coastline predates: the beach itself as a sand platform down to the water, the eight-point
+   star shade lattice on it, the round beach club with its pool and cabanas, the promenade
+   from the Hilton, palms and lamps. Traced from the satellite through the arena, Hilton and
+   pier root as control points, so the polygon is in island units directly. */
+function yasBaySouthBeach(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const sand = saadKitMat(0xC9B58F, 0xE8D9B4, 0.95, 0), wet = saadKitMat(0x9A8A6C, 0xB8A98A, 0.9, 0);
+  const pave = saadKitMat(0xD3CCBE, 0xEAE4D6, 0.9, 0), white = saadKitMat(0xE6E2DA, 0xF7F4EE, 0.6, 0, 0xFFE4B8, 0.08, 0.9);
+  const water = saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1, 0x7FE0F0, 0.3, 1.0), timber = saadKitMat(0x7A6448, 0xB89A72, 0.9, 0);
+  const dark = saadKitMat(0x2A2C30, 0x3A3D42, 0.8, 0);
+  const box = (x, z, w, d, h, mat, y0, r) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, ((y0 || 0) + h / 2) / M, z); m.rotation.y = r || 0; g.add(m); return m; };
+  /* the platform: a shape in island units, extruded 2.3 units down so its sides reach below the sea */
+  /* The north edge runs back to z 404, inside the coast, so the platform meets the island under
+     its bevel rather than floating a channel's width off it; the top sits 0.06 below the island's
+     face so the island's own ground wins in the overlap. */
+  const PTS = [[-46, 404], [-48, 418], [-50, 424], [-52, 436], [-58, 449], [-66, 457], [-76, 458], [-85, 452], [-88, 440], [-86, 428], [-90, 418], [-92, 404]];
+  { const sh = new THREE.Shape(); PTS.forEach(([x, z], i) => i ? sh.lineTo(x, -z) : sh.moveTo(x, -z)); sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: 2.3, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, -2.3, 0);   // shape +y (= -z) into world -z; depth stands up, then dropped so the top is the ground
+    const m = new THREE.Mesh(geo, [sand, wet]); m.position.y = -0.06; m.receiveShadow = true; m.userData.hero = m.userData.kitName = 'yasBaySouthBeach'; g.add(m); }
+  /* the promenade south from the Hilton down the landward edge, and its lamps */
+  const prom = [[-57, 414], [-54, 426], [-56, 438], [-62, 452]];
+  for (let i = 0; i < prom.length - 1; i++){ const [x0, z0] = prom[i], [x1, z1] = prom[i + 1]; const L = Math.hypot(x1 - x0, z1 - z0); box((x0 + x1) / 2, (z0 + z1) / 2, L * M, 9, 0.35, pave, 0.1, Math.atan2(-(z1 - z0), x1 - x0)); }
+  /* THE STAR: two squares turned 45 degrees to each other, white beams on posts 6 m up, spokes
+     to the centre — 55 m across, which is what makes it read from the air. */
+  { const cx = -66.8, cz = 447.9, R = 27 / M, H = 6;
+    for (let k = 0; k < 8; k++){ const a0 = k * Math.PI / 4, a1 = a0 + Math.PI / 2;
+      const x0 = cx + Math.cos(a0) * R, z0 = cz + Math.sin(a0) * R, x1 = cx + Math.cos(a1) * R, z1 = cz + Math.sin(a1) * R;
+      const L = Math.hypot(x1 - x0, z1 - z0); box((x0 + x1) / 2, (z0 + z1) / 2, L * M, 0.8, 0.5, white, H, Math.atan2(-(z1 - z0), x1 - x0));
+      box((cx + x0) / 2, (cz + z0) / 2, R * M, 0.5, 0.4, white, H, Math.atan2(-(z0 - cz), x0 - cx));
+      box(x0, z0, 0.5, 0.5, H, dark, 0); }
+    box(cx, cz, 0.6, 0.6, H, dark, 0);
+    for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4 + Math.PI / 8; box(cx + Math.cos(a) * R * 0.5, cz + Math.sin(a) * R * 0.5, 0.4, 0.4, H, dark, 0); }
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.05, R * 1.05, 0.25 / M, 32), timber); disc.position.set(cx, 0.2 / M, cz); g.add(disc); }
+  /* THE ROUND BEACH CLUB: a 42 m deck with the pool in the middle and a ring of cabanas */
+  { const cx = -80.9, cz = 443, R = 21 / M;
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.5 / M, 40), pave); deck.position.set(cx, 0.35 / M, cz); g.add(deck);
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.42, R * 0.42, 0.5 / M, 32), water); pool.position.set(cx, 0.6 / M, cz); g.add(pool);
+    for (let k = 0; k < 10; k++){ const a = k * Math.PI / 5; const r = box(cx + Math.cos(a) * R * 0.8, cz + Math.sin(a) * R * 0.8, 5, 4, 3.2, white, 0.5, -a); r.castShadow = true; }
+    box(cx + R * 1.1, cz, 16, 12, 5, white, 0.5); }
+  const palms = [];
+  for (const [x, z] of [[-60, 418], [-57, 430], [-59, 442], [-64, 452], [-72, 456], [-80, 454], [-86, 446], [-85, 434], [-79, 422], [-71, 416]]) palms.push([x, z]);
+  kitPalms(g, palms, 0.85);
+  if (typeof kitLamps === 'function') kitLamps(g, prom);
+  return g;
+}
+
+/* YAS MARINA (city v136) — the yacht basin east of the W, which the bake carries as a hole in the
+   outline with a quay round it and nothing on the water. Pontoon walkways down the basin's two
+   long edges and along the north and south arms, and the yachts on them: two instanced meshes,
+   hulls and cabins, sized 14 to 32 m at random, bows to the water, sitting at sea level (the
+   sea is 2.05 units below the island top). Berth lines are in island units, read off the
+   outline's water grid. */
+function yasMarina(){
+  const g = new THREE.Group(), M = M_PER_U, SEA = -2.05;
+  const pont = saadKitMat(0xD8D4CA, 0xEFECE4, 0.8, 0), hullM = saadKitMat(0xE4E6E8, 0xF6F7F8, 0.35, 0.2), cabM = saadKitMat(0x9AA3AC, 0xC4CCD3, 0.3, 0.3, 0xFFE0B0, 0.05, 0.9);
+  const dark = saadKitMat(0x2A2C30, 0x3A3D42, 0.8, 0);
+  const walk = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0); const m = new THREE.Mesh(new THREE.BoxGeometry(L, 0.6 / M, 3 / M), pont); m.position.set((x0 + x1) / 2, (SEA + 0.9 / M), (z0 + z1) / 2); m.rotation.y = Math.atan2(-(z1 - z0), x1 - x0); g.add(m);
+    for (let t = 0; t <= L; t += 3){ const k = t / L; const p = new THREE.Mesh(new THREE.CylinderGeometry(0.25 / M, 0.25 / M, 3.4 / M, 6), dark); p.position.set(x0 + (x1 - x0) * k, SEA + 1.2 / M, z0 + (z1 - z0) * k); g.add(p); } };
+  /* berth lines: [x0, z0, x1, z1, bow angle (island, from +x toward -z), spacing] — boats sit
+     just off the walkway on its water side */
+  const lines = [
+    [54, 251, 54, 305,  0,      2.1],   // the basin's west edge, bows east
+    [72, 258, 72, 296,  Math.PI, 2.1],   // east edge, bows west (x 75 put the sterns on the quay)
+    [30, 255, 48, 255,  Math.PI / 2, 2.4],   // north arm, north side
+    [30, 261, 48, 261, -Math.PI / 2, 2.4],   // north arm, south side
+    [38, 291, 50, 291,  Math.PI / 2, 2.4],   // south arm
+    [38, 303, 52, 303, -Math.PI / 2, 2.4],
+  ];
+  const hull = new THREE.BoxGeometry(1, 1, 1), cab = new THREE.BoxGeometry(1, 1, 1);
+  let n = 0; for (const l of lines) n += Math.floor(Math.hypot(l[2] - l[0], l[3] - l[1]) / l[5]);
+  const hulls = new THREE.InstancedMesh(hull, hullM, n), cabs = new THREE.InstancedMesh(cab, cabM, n);
+  const o = new THREE.Object3D(); let i = 0, seed = 7;
+  const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  for (const [x0, z0, x1, z1, bow, sp] of lines){
+    walk(x0, z0, x1, z1);
+    const L = Math.hypot(x1 - x0, z1 - z0), ux = (x1 - x0) / L, uz = (z1 - z0) / L;
+    for (let t = sp / 2; t < L; t += sp){
+      if (i >= n) break;
+      const len = (14 + rnd() * 18) / M, wid = len * 0.28;
+      const bx = Math.cos(bow), bz = -Math.sin(bow);   // bow direction in island units
+      const cx = x0 + ux * t + bx * (len / 2 + 2 / M), cz = z0 + uz * t + bz * (len / 2 + 2 / M);
+      o.position.set(cx, SEA + 0.9 / M, cz); o.rotation.set(0, bow, 0); o.scale.set(len, 1.8 / M, wid); o.updateMatrix(); hulls.setMatrixAt(i, o.matrix);
+      o.position.set(cx - bx * len * 0.1, SEA + 2.6 / M, cz - bz * len * 0.1); o.scale.set(len * 0.45, 1.6 / M, wid * 0.7); o.updateMatrix(); cabs.setMatrixAt(i, o.matrix);
+      i++;
+    }
+  }
+  hulls.count = cabs.count = i; hulls.castShadow = true;
+  hulls.userData.hero = hulls.userData.kitName = 'yasMarina';
+  g.add(hulls); g.add(cabs);
+  return g;
+}
+
 /* CAFE DEL MAR, YAS BAY (city v117) — the beach club on its own piled platform out in the bay
    between Pier71 and the arena: the lagoon pool in the middle, sand and sunbed rows either
    side, the round sunset deck with its bar at the seaward tip, the club building at the
@@ -5878,7 +5972,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina };
 }
 
 

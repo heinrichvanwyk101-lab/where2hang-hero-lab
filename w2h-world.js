@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v310';
+export const BUILD = 'world v311';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7936,6 +7936,12 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* THE YAS BAY CAR PARK (world v310): the deck structure on the survey's own lot behind the
      Hilton, (-58.5, 401.1), long axis at -0.228 in island units. */
   if (kit.yasBayCarPark) built.push(kit.yasBayCarPark(-58.5, 401.1, 0.228));
+  /* YAS BAY SOUTH BEACH (world v311): reclaimed sand the OSM coastline predates, so the kit
+     carries its own platform; the star lattice and the round beach club stand on it. */
+  if (kit.yasBaySouthBeach) built.push(kit.yasBaySouthBeach());
+  /* YAS MARINA (world v311): pontoons and yachts in the basin east of the W, which the outline
+     already carries as water. */
+  if (kit.yasMarina){ const mr = kit.yasMarina(); mr.userData.noZone = true; built.push(mr); }
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);
@@ -7950,7 +7956,9 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
        not yet shown the same symptom because its real footprint payload was already flowing
        before this was diagnosed, but the two-unit margin was never the right number here either;
        it was copied from the same reasoning, not derived separately, so it carries the same fix. */
-    if (isFinite(b.min.x)){
+    /* noZone (world v311): the marina's yachts sit on water the survey has no buildings on, and
+       its box would otherwise blank the quay buildings between the basin's arms. */
+    if (isFinite(b.min.x) && !o.userData.noZone){
       KIT_ZONES[yas.id].push({ x0:b.min.x - 6, x1:b.max.x + 6, z0:b.min.z - 6, z1:b.max.z + 6 });
     }
   }
