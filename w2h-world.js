@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v317';
+export const BUILD = 'world v318';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2765,7 +2765,12 @@ function paintGround(d, plan){
      would put Corniche at about 1850 pixels and a third of the texture. */
   const TARGET_M_PER_PX = (() => {
     const m = typeof location !== 'undefined' && location.search.match(/[?&]gpx=(\d+(?:\.\d+)?)/);
-    const v = m ? parseFloat(m[1]) : 6;
+    /* NINE ON A PHONE (world v318). The note above measured 3072 doubling firstFrame against
+       6 m/px; a viewport under 700 css px never resolves the difference, and the cartographic
+       floors keep every road visible. Corniche's canvas drops from 3072 to about 2050 wide, a
+       2.2x smaller paint and upload. Desktop keeps six. */
+    const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches;
+    const v = m ? parseFloat(m[1]) : (phone ? 9 : 6);
     return isFinite(v) && v >= 2 && v <= 40 ? v : 6;
   })();
   const spanM = 2 * d.r * M_PER_UNIT * h.x * GROUND_PAD;
@@ -5692,6 +5697,7 @@ const pickTargets = [];
      level that took the whole page down. Hotfixed within the hour; the boot check in the bench
      now runs before any push. */
   let buildBeachFor = null;
+  const beachPending = [];   // islands whose first beach pass waits for the first paint (world v318)
 DISTRICTS.forEach(d => {
   const g = new THREE.Group();
   g.name = d.id;
@@ -5843,6 +5849,7 @@ DISTRICTS.forEach(d => {
      the payload is in, which removes the first beach and builds it again with the real shore
      data. Deferred islands build after their payload and get it right first time. */
   buildBeachFor = function(d){
+    d.beachBuilt = true;
     const g = d.group;
     for (const old of g.children.filter(c => c.userData && (c.userData.beachField || c.userData.quayField))){
       g.remove(old); old.geometry.dispose();
@@ -6279,7 +6286,14 @@ DISTRICTS.forEach(d => {
       emit(idxQ, quayGrey,  'quayField');
     }
   };
-  buildBeachFor(d);
+  /* THE FIRST PASS IS DEFERRED FOR THE ISLANDS THAT ARE (world v318). Five beach lattices ran
+     here at module load, before a single frame, against payloads that had not arrived — every
+     one of them with zero shore polygons, and every one rebuilt by refreshBeach later once the
+     data was in. Three seconds of the opening blank screen. Corniche, the opening shot, still
+     builds its band here; the others are listed in beachPending and world-nav runs them one per
+     frame right after the first paint, so they are on screen within a second of it. */
+  if (d.built || opts.deferBeach === false) buildBeachFor(d);
+  else beachPending.push(d);
 
   /* ---- shoreline modules -------------------------------------------------------------------
      One InstancedMesh per module TYPE this district asks for, so the mesh count tracks the number
@@ -6430,7 +6444,12 @@ DISTRICTS.forEach(d => {
   pickTargets.push(pick);
 
   // Before any fabric exists, so the generator can be told where the roads are.
-  d.roads = roadSkeleton(d);
+  /* ONLY FOR THE ISLAND THAT BUILDS NOW (world v318). The five deferred islands got their
+     generated skeleton here too, 380 ms of the opening blank screen for networks the real
+     centrelines replace on arrival. They start with an empty roads object — the payload attach
+     writes its drawArterials and crossings into it — and ensureSkeleton fills in the generated
+     skeleton at build time, keeping whatever the payload wrote. */
+  d.roads = d.built ? roadSkeleton(d) : {};
 
   /* REAL CENTRELINES, FOR DRAWING ONLY, and the "only" is the whole design.
 
@@ -9652,7 +9671,14 @@ function footprintsFor(d, list){
 }
 
 
+function ensureSkeleton(d){
+  if (d.roads && d.roads.ring) return;
+  const sk = roadSkeleton(d);
+  d.roads = d.roads || {};
+  for (const k of Object.keys(sk)) if (d.roads[k] === undefined) d.roads[k] = sk[k];
+}
 function buildFabricFor(d){
+  ensureSkeleton(d);
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   // Per-district character: where downtown sits, and how tall it gets there.
   /* THE CEILING FOR GENERATED STOCK. Saadiyat asked for 109 m on an island whose real tallest is
@@ -9988,6 +10014,7 @@ function bridgesFor(d){
 function buildGroundFor(d){
   const f = d.fabric;
   if (!f) return;
+  ensureSkeleton(d);
   /* THE LAST MOMENT THE ANSWER CAN CHANGE. The ground canvas is painted below and there is no
      repainting it afterwards, so the real network is claimed here rather than at declaration —
      by now the deferred islands have had a leg of the attract loop to finish their fetch.
@@ -10155,8 +10182,10 @@ try {
               pct:Math.round((total - named) / total * 100) });
   PERF['#total'] = total;      // so the on-screen overlay can name the remainder honestly
   console.info('buildWorld ' + Math.round(total) + ' ms');
-  console.table ? console.table(rows) : rows.forEach(r =>
-    console.info('  ' + r.stage.padEnd(14) + String(r.ms).padStart(6) + ' ms  ' +
+  /* One line per stage (world v318): console.table prints as "[Object, Object]" in a headless
+     log, so the rows are written out where a probe can read them. */
+  rows.forEach(r =>
+    console.info('  stage ' + r.stage.padEnd(14) + String(r.ms).padStart(6) + ' ms  ' +
                  String(r.pct).padStart(3) + '%  x' + r.calls));
 } catch (e){ /* timing must never break the build */ }
 
@@ -10235,6 +10264,7 @@ function buildIsland(id){
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
          refreshBeach: buildBeachFor,
+         beachPending,
          buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,
          corniche, GROUND, propCount, KIT_ZONES, refreshIslandWater,
          /* EXPORTED FOR addParkProps, which groundFeaturesFor's own ring-acceptance loop does

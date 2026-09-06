@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v141';
+export const BUILD = 'city v142';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2435,16 +2435,18 @@ function yasMall(x0, z0, facing){
   shade.userData.duskColor = 0xEAE5D8; shade.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF6F2E8, roughness:0.7 });
   const carMats = [0xDADADA, 0x2E3238, 0x8A8E93, 0x7A2A2A].map(c => { const m = new THREE.MeshStandardMaterial({ color:0x1A1A1A, roughness:0.5, metalness:0.2 }); m.userData.duskColor = c; m.userData.dayMats = new THREE.MeshStandardMaterial({ color:c, roughness:0.5, metalness:0.2 }); return m; });
   let carK = 0;
+  const shades = [], posts = [], cars = [[], [], [], []];
   for (const [dx, dz, w, dp] of [[ 255,  245, 210, 190], [-255,  245, 210, 190], [ 255, -245, 210, 190], [-255, -245, 210, 190]]){
     const lot = new THREE.Mesh(new THREE.BoxGeometry(w / M, 0.5 / M, dp / M), deckMat); lot.position.set(dx / M, 0.25 / M, dz / M); lot.receiveShadow = true; g.add(lot);
     for (let rz = -dp / 2 + 18; rz < dp / 2 - 10; rz += 30){
       for (let rx = -w / 2 + 12; rx < w / 2 - 8; rx += 18){
-        const c = new THREE.Mesh(new THREE.BoxGeometry(16 / M, 0.3 / M, 11 / M), shade); c.position.set((dx + rx) / M, 3.4 / M, (dz + rz) / M); g.add(c);
-        for (const px of [-6, 6]){ const p = new THREE.Mesh(new THREE.BoxGeometry(0.3 / M, 3.2 / M, 0.3 / M), dark); p.position.set((dx + rx + px) / M, 1.6 / M, (dz + rz) / M); g.add(p); }
-        for (const cx of [-5.5, -1.8, 1.8, 5.5]) for (const sgn of [-1, 1]){ if (((carK++) % 5) === 0) continue; const car = new THREE.Mesh(new THREE.BoxGeometry(2 / M, 1.5 / M, 4.4 / M), carMats[carK % 4]); car.position.set((dx + rx + cx) / M, 1.25 / M, (dz + rz + sgn * 3.2) / M); g.add(car); }
+        shades.push([(dx + rx) / M, 3.4 / M, (dz + rz) / M, 16 / M, 0.3 / M, 11 / M]);
+        for (const px of [-6, 6]) posts.push([(dx + rx + px) / M, 1.6 / M, (dz + rz) / M, 0.3 / M, 3.2 / M, 0.3 / M]);
+        for (const cx of [-5.5, -1.8, 1.8, 5.5]) for (const sgn of [-1, 1]){ if (((carK++) % 5) === 0) continue; cars[carK % 4].push([(dx + rx + cx) / M, 1.25 / M, (dz + rz + sgn * 3.2) / M, 2 / M, 1.5 / M, 4.4 / M]); }
       }
     }
   }
+  kitBoxes(g, shade, shades); kitBoxes(g, dark, posts); cars.forEach((list, i) => kitBoxes(g, carMats[i], list));   // instanced (city v142)
   for (const [dx, dz, w, dp] of [
       [   0,  300, 180, 140], [   0, -300, 180, 140]]){
     const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, 13 / M, dp / M), deckMat);
@@ -4976,6 +4978,17 @@ function kitPalms(g, pts, scale){
    budget that the ring and the arterials use up, so a district laid by a kit on local streets,
    the Grove first of all, sat dark at night. A kit lays its own: a thin dark column and a warm
    head that glows at night, instanced, one mesh each. pts are [x, z] in island units. */
+/* ONE DRAW CALL FOR A CROWD OF BOXES (city v142). items are [x, yCentre, z, w, h, d] in kit units,
+   already in the parent's frame; one InstancedMesh of a unit box per material instead of a Mesh
+   per box. The Yas Mall's canopy lots alone were two and a half thousand meshes. */
+function kitBoxes(parent, mat, items){
+  if (!items.length) return null;
+  const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, items.length);
+  const o = new THREE.Object3D();
+  items.forEach(([x, y, z, w, h, d], i) => { o.position.set(x, y, z); o.scale.set(w, h, d); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+  im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.userData.prop = true;
+  parent.add(im); return im;
+}
 function kitLamps(g, pts){
   if (!pts.length) return;
   const postMat = saadKitMat(0x3A3D42, 0x6A6E74, 0.7, 0.4, undefined, undefined, 0.30);
@@ -5624,19 +5637,24 @@ function yasBayCarPark(x0, z0, rot){
   const box = (ax, az, w, d, h, mat, y0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); sub.add(m); return m; };
   for (let i = 0; i <= N; i++){ const m = box(0, 0, W, D, 0.5, slab, i * LEVEL); if (i === 0) m.userData.hero = m.userData.kitName = 'yasBayCarPark'; }
   // columns on a 8 m grid, and the fin screen round the decks
-  for (let ax = -W / 2 + 4; ax < W / 2; ax += 8) for (let az = -D / 2 + 4; az < D / 2; az += 16) box(ax, az, 0.6, 0.6, N * LEVEL, dark);
-  for (let ax = -W / 2 + 1; ax < W / 2; ax += 2.4){ box(ax, -D / 2 - 0.4, 0.4, 0.15, N * LEVEL, fin); box(ax, D / 2 + 0.4, 0.4, 0.15, N * LEVEL, fin); }
-  for (let az = -D / 2 + 1; az < D / 2; az += 2.4){ box(-W / 2 - 0.4, az, 0.15, 0.4, N * LEVEL, fin); box(W / 2 + 0.4, az, 0.15, 0.4, N * LEVEL, fin); }
+  /* Instanced (city v142): one mesh each for the columns, the fins, the canopies, the posts and
+     each car colour, in place of some six hundred meshes. Entries are [x, yCentre, z, w, h, d]. */
+  const it = (ax, az, w, d, h, y0) => [ax / M, ((y0 || 0) + h / 2) / M, az / M, w / M, h / M, d / M];
+  const cols = [], fins = [], canopies = [], posts = [], cars = [[], [], [], []];
+  for (let ax = -W / 2 + 4; ax < W / 2; ax += 8) for (let az = -D / 2 + 4; az < D / 2; az += 16) cols.push(it(ax, az, 0.6, 0.6, N * LEVEL));
+  for (let ax = -W / 2 + 1; ax < W / 2; ax += 2.4){ fins.push(it(ax, -D / 2 - 0.4, 0.4, 0.15, N * LEVEL)); fins.push(it(ax, D / 2 + 0.4, 0.4, 0.15, N * LEVEL)); }
+  for (let az = -D / 2 + 1; az < D / 2; az += 2.4){ fins.push(it(-W / 2 - 0.4, az, 0.15, 0.4, N * LEVEL)); fins.push(it(W / 2 + 0.4, az, 0.15, 0.4, N * LEVEL)); }
   // the roof deck: two rows of shade canopies down the long axis, cars under them
   const TOP = N * LEVEL + 0.5;
   let k = 0;
   for (const row of [-D / 4, D / 4]){
     for (let ax = -W / 2 + 10; ax < W / 2 - 8; ax += 16){
-      box(ax, row, 15, 11, 0.3, canopy, TOP + 2.8);
-      for (const dx of [-5.5, -1.8, 1.8, 5.5]) for (const s of [-1, 1]){ const c = box(ax + dx, row + s * 3.2, 2, 4.4, 1.5, car[(k++) % 4], TOP + 0.05); c.position.y += 0.1 / M; }
-      for (const dx of [-6, 6]) for (const s of [-1, 1]) box(ax + dx, row + s * 5, 0.25, 0.25, 2.8, dark, TOP);
+      canopies.push(it(ax, row, 15, 11, 0.3, TOP + 2.8));
+      for (const dx of [-5.5, -1.8, 1.8, 5.5]) for (const s of [-1, 1]) cars[(k++) % 4].push(it(ax + dx, row + s * 3.2, 2, 4.4, 1.5, TOP + 0.15));
+      for (const dx of [-6, 6]) for (const s of [-1, 1]) posts.push(it(ax + dx, row + s * 5, 0.25, 0.25, 2.8, TOP));
     }
   }
+  kitBoxes(sub, dark, cols); kitBoxes(sub, fin, fins); kitBoxes(sub, canopy, canopies); kitBoxes(sub, dark, posts); cars.forEach((list, i) => kitBoxes(sub, car[i], list));
   // the ramps at each end, as sloped slabs
   for (const sgn of [-1, 1]){ const r = box(sgn * (W / 2 - 14), 0, 24, 8, 0.4, slab, N * LEVEL / 2); r.rotation.z = -sgn * Math.atan2(N * LEVEL, 24); }
   sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);

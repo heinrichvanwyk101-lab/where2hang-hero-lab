@@ -742,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v216', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v217', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1318,7 +1318,7 @@ phase('propKit');
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, insideIsle, distToOutline } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline } =
   buildWorld(scene, kit, {
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -1400,6 +1400,18 @@ await flushPaint('world');
 if (PROG && buildCornicheMass){
   buildCornicheMass();
   await flushPaint('mass');
+}
+/* THE DEFERRED BEACH BANDS (nav v217): one island per frame, after the first paint, and not
+   awaited — the boot below and the `ready` post do not wait on them. refreshBeach rebuilds each
+   again when its payload lands, exactly as before; this only moves the blank-payload first pass
+   off the critical path. */
+if (beachPending && beachPending.length){
+  (async () => {
+    for (const d of beachPending){
+      await nextPaint();
+      if (!d.beachBuilt) try { refreshBeach(d); } catch (e) { console.warn('beach', d.id, e && e.message); }
+    }
+  })();
 }
 
 /* ===========================================================================

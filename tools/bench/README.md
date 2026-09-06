@@ -33,7 +33,15 @@ node tools/bench/placeview.mjs <island> "<place label>" [dist] [elev] [angle]
 node tools/bench/coordview.mjs <island> "" [dist] [elev] [angle] <x> <z>
 ZOOM=1.6 node tools/bench/worldview.mjs        # the whole archipelago from the world shot; ZOOM backs the camera off
 node tools/bench/lampcount.mjs <island>        # counts the instanced props and dumps lamp-pool positions to out/lamps-<island>.json
+GPX=9 ZOOM=1.6 node tools/bench/worldview.mjs  # GPX sets the ground resolution target the phone branch uses (9 m/px under 700 css px)
 ```
+
+## Measuring the boot
+
+`buildWorld` prints one `stage` line per timed stage to the console, and the prop placer
+prints its budget and rejections per island. The scratch probe used for the load audit opens
+`world-nav.html?embed=1&rail=0&fp&view=day` in a Pixel 7 context, logs every console line with
+a timestamp, and reads per-island mesh, instance and triangle counts once all six are built.
 
 `kitview` finds the mesh whose `userData.kitName` matches (every kit piece tags its hero mesh
 with one). `placeview` targets a place anchor from the district's `places` list. `coordview`
