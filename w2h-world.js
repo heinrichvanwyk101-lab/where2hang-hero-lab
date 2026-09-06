@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v316';
+export const BUILD = 'world v317';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5246,7 +5246,7 @@ const DISTRICTS = [
       { label:'Guggenheim Abu Dhabi',    x:-466.5, z: 86.6, h: 8, r:30 },   // on the survey's own 308 x 233 m footprint on the west promontory (world v308)
       { label:'Natural History Museum',  x:-412.6, z:248.2, h: 5, r:26 },   // on its baked footprint on the south peninsula (world v312)
       { label:'teamLab Phenomena',       x:-393.1, z:264.1, h: 4, r:22 },   // on its baked footprint beside the NHM (world v312)
-      { label:'Cultural District Park',  x:-352.0, z:308.0, h: 2, r:26 },   // the hardscape peninsula (world v306)
+      { label:'Cultural District Park',  x:-426.0, z:266.0, h: 2, r:26 },   // the museum's hex-paved grounds on its own peninsula (world v317)
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
@@ -8091,7 +8091,7 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-388, x1:-355, z0:160, z1:189 },   // Zayed National Museum podium and lagoon
   { x0:-492, x1:-441, z0: 64, z1:110 },   // Guggenheim at the size of its baked footprint (world v314)
   { x0:-428, x1:-397, z0:234, z1:262 },   // Natural History Museum on its baked footprint (world v312)
-  { x0:-376, x1:-328, z0:284, z1:332 },   // the waterfront park on the peninsula (world v306)
+  { x0:-452, x1:-386, z0:230, z1:296 },   // the museum's hex-paved grounds (world v317)
   { x0:-406, x1:-380, z0:252, z1:276 },   // teamLab Phenomena on its baked footprint beside the NHM (world v312)
   { x0:-232, x1:-197, z0:156, z1:171 },   // Manarat Al Saadiyat, 245 x 92 m (world v289)
   { x0:-227, x1:-213, z0:175, z1:188 },   // Berklee Abu Dhabi, 80 x 74 m
@@ -8143,7 +8143,11 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
      stops at the water through the island test, rocks, shrubs, a walk to teamLab. */
   if (kit.saadiyatPark){
     const parkLand = (x, z) => insideIsle(saadiyat.id, x / saadiyat.r, -z / saadiyat.r);   // outline space: units over d.r, north up
-    const pk = kit.saadiyatPark(-352, 308, parkLand, 24); pk.position.y = GROUND; saadiyat.detail.add(pk);
+    /* ON THE MUSEUM'S PENINSULA (world v317). The satellite's hexagonal paving with its trees and
+       rocks is the Natural History Museum's own grounds, west of teamLab, not the peninsula by
+       the bridge where it stood; the tiles and walks clip to the island so nothing runs out over
+       the water. */
+    const pk = kit.saadiyatPark(-418, 262, parkLand, 30); pk.position.y = GROUND; saadiyat.detail.add(pk);
   }
 
   if (kit.manaratSaadiyat){ const m = kit.manaratSaadiyat(); m.position.y = GROUND; saadiyat.detail.add(m); }

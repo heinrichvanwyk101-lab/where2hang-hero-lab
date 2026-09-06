@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v140';
+export const BUILD = 'city v141';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6033,8 +6033,12 @@ function saadiyatPark(x0, z0, land, R){
     if (rnd() > 0.5) palms.push([x + 2, z + 1]);
   }
   for (let t = -rad; t <= rad; t += 3.5){ if (onLand(x0 + t, z0)) lamps.push([x0 + t, z0 + 0.4]); if (onLand(x0, z0 + t)) lamps.push([x0 + 0.4, z0 + t]); }
-  const walk = new THREE.Mesh(new THREE.BoxGeometry(rad * 2, 0.35, 1.2), pave2); walk.position.set(x0, 0.28, z0); g.add(walk);
-  const walk2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, rad * 2), pave2); walk2.position.set(x0, 0.28, z0); g.add(walk2);
+  /* THE WALKS STOP AT THE WATER (city v141): laid in 3-unit lengths, each only where the land
+     test finds ground, instead of one bar the full diameter that ran out over the sea. */
+  for (let t = -rad; t < rad; t += 3){
+    if (onLand(x0 + t + 1.5, z0)){ const w = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.35, 1.2), pave2); w.position.set(x0 + t + 1.5, 0.28, z0); g.add(w); }
+    if (onLand(x0, z0 + t + 1.5)){ const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 3.05), pave2); w.position.set(x0, 0.28, z0 + t + 1.5); g.add(w); }
+  }
   kitPalms(g, palms, 0.7); kitLamps(g, lamps);
   return g;
 }
