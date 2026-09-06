@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v304';
+export const BUILD = 'world v305';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7561,7 +7561,10 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const palace = kit.emiratesPalace(LM.palace.x, LM.palace.z);
   const etihad = kit.etihadTowers(LM.etihad.x, LM.etihad.z);
   const adnoc  = kit.adnocHQ(LM.adnoc.x, LM.adnoc.z);
-  const qasr   = kit.qasrAlWatan(LM.qasr.x, LM.qasr.z);
+  /* The palace wall is clipped to the peninsula (world v305): the kit asks this test before it
+     lays each piece. Units to bake metres through the Corniche extent centre in data/index.json. */
+  const qasrLand = (x, z) => insideIsle(corniche.id, x * M_PER_UNIT + (-2626.7), (-2358.8) - z * M_PER_UNIT);
+  const qasr   = kit.qasrAlWatan(LM.qasr.x, LM.qasr.z, qasrLand);
   const marina = kit.marinaMall(LM.marina.x, LM.marina.z);
   const fairmont = kit.fairmontMarina(LM.fairmont.x, LM.fairmont.z);
   /* Capital Gate on its surveyed footprint (72 x 49 m, 160 m; bake (1488, -7937) m). */

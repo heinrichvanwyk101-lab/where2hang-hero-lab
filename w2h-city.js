@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v130';
+export const BUILD = 'city v131';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2545,7 +2545,7 @@ const QASR_FLANK_E = [
     [ 28.79,-32.90], [ 29.45,-33.11], [ 28.66,-35.59],
 ];
 
-function qasrAlWatan(x0, z0){
+function qasrAlWatan(x0, z0, land){
   const g = new THREE.Group();
 
   /* Pale, and deliberately paler than Emirates Palace. city-reference gives body #E0DAD0 and
@@ -2794,17 +2794,29 @@ function qasrAlWatan(x0, z0){
      building's own rotated frame through qrot. */
   { const W2 = 66, DN = -54, DS = 84, GATE = 15;
     const lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0), water2 = saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1, 0x7FE0F0, 0.12);
-    const wall = (dx, dz, len, along) => { const [px, pz] = qrot(dx, dz); const m = new THREE.Mesh(new THREE.BoxGeometry(along ? len : 0.9, 1.3, along ? 0.9 : len), stone); m.position.set(x0 + px, 0.65, z0 + pz); m.rotation.y = -QASR_ROT; g.add(m); };
+    /* ON LAND ONLY (city v131). The wall used to run straight across the water on the west and
+       south of the peninsula. It is laid in 3-unit pieces now, and a piece is built only where
+       `land` (the world's own island test) says the ground is there; the pavilions and pools
+       take the same test. Without a land test the whole rectangle is built, as before. */
+    const onLand = (px, pz) => !land || land(x0 + px, z0 + pz);
+    const wall = (dx, dz, len, along) => {
+      const n = Math.max(1, Math.round(len / 3)), step = len / n;
+      for (let k = 0; k < n; k++){
+        const t = -len / 2 + step * (k + 0.5), ax = along ? dx + t : dx, az = along ? dz : dz + t;
+        const [px, pz] = qrot(ax, az); if (!onLand(px, pz)) continue;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(along ? step + 0.1 : 0.9, 1.3, along ? 0.9 : step + 0.1), stone); m.position.set(x0 + px, 0.65, z0 + pz); m.rotation.y = -QASR_ROT; g.add(m);
+      }
+    };
     wall(0, DN, 2 * W2, true);
     wall(-(GATE + (W2 - GATE) / 2), DS, W2 - GATE, true); wall((GATE + (W2 - GATE) / 2), DS, W2 - GATE, true);
     wall(-W2, (DN + DS) / 2, DS - DN, false); wall(W2, (DN + DS) / 2, DS - DN, false);
     for (const [dx, dz] of [[-W2, DN], [W2, DN], [-W2, DS], [W2, DS], [-GATE, DS], [GATE, DS]]){
-      const [px, pz] = qrot(dx, dz);
+      const [px, pz] = qrot(dx, dz); if (!onLand(px, pz)) continue;
       const pav = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.6, 4.6), stone); pav.position.set(x0 + px, 1.8, z0 + pz); pav.rotation.y = -QASR_ROT; g.add(pav);
       const dm = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), domeMat); dm.position.set(x0 + px, 3.6, z0 + pz); g.add(dm);
     }
     for (const [dx, dz, w, d] of [[-36, 62, 26, 7], [36, 62, 26, 7]]){
-      const [px, pz] = qrot(dx, dz);
+      const [px, pz] = qrot(dx, dz); if (!onLand(px, pz)) continue;
       const lw = new THREE.Mesh(new THREE.BoxGeometry(w + 14, 0.3, d + 14), lawn); lw.position.set(x0 + px, 0.15, z0 + pz); lw.rotation.y = -QASR_ROT; g.add(lw);
       const pl = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, d), water2); pl.position.set(x0 + px, 0.35, z0 + pz); pl.rotation.y = -QASR_ROT; g.add(pl);
     }
