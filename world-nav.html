@@ -742,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v215', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v216', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -5556,7 +5556,7 @@ function cullGreens(d){
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
-      if (!o.isInstancedMesh || o.name === 'footprints' || o.name === 'bridges') return;
+      if (!o.isInstancedMesh || o.name === 'footprints' || o.name === 'bridges' || o.userData.prop) return;   // props are not fabric (nav v216)
       let dirty = false;
       for (let i = 0; i < o.count; i++){
         o.getMatrixAt(i, m);
@@ -5681,7 +5681,12 @@ function cullFabric(d, list){
   [d.mass, d.detail].forEach(layer => {
     if (!layer) return;
     layer.children.forEach(o => {
-      if (!o.isInstancedMesh || o.name === 'footprints' || o.name === 'bridges') return;
+      /* PROPS ARE NOT FABRIC (nav v216). The prop kit's lamps, pools, palms, cars and boats are
+         instanced meshes on the same layer, and this loop was zeroing every one of them that
+         stood in a kit zone, in a surveyed footprint or on ground with no surveyed building
+         near it — which on Saadiyat's cultural district was all of them. They carry
+         userData.prop and are left alone. */
+      if (!o.isInstancedMesh || o.name === 'footprints' || o.name === 'bridges' || o.userData.prop) return;
       for (let i = 0; i < o.count; i++){
         o.getMatrixAt(i, m);
         /* Elements 12 and 14 are the translation's x and z. Cheaper than decompose, and this runs

@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const BUILD = 'props v40';
+export const BUILD = 'props v41';
 
 /* Shortest distance from a point to a closed polyline. The prop kit needs one now because the
    beach gave the coastline a width, and "outside the island" stopped meaning "in the sea". */
@@ -444,6 +444,13 @@ function makeBuilder(layer){
     const im = new THREE.InstancedMesh(geo, mat, list.length);
     im.castShadow = true; im.receiveShadow = true;
     im.userData.litMat = true;
+    /* A PROP, NOT FABRIC (props v41). world-nav's cullFabric and cullGreens walk every instanced
+       mesh on the island layers and zero the instances that fall in a kit zone, in a surveyed
+       footprint, in a park or too far from a surveyed building. That is the right test for a
+       generated building and the wrong one for a lamp column: it blanked every column inside
+       Saadiyat's Grove zone and on the unbuilt plots of the district, so the grid was dark
+       however the budget was sized. The flag lets both passes step over these. */
+    im.userData.prop = true;
     list.forEach((it, i) => {
       place(it, i);
       M.updateMatrix();
@@ -697,7 +704,10 @@ function addProps(d, layer, plan, budget = {}){
      ?lamps=N overrides it, in the same spirit as ?cycw and ?cycol: the honest way to settle how
      much lighting is too much is to look at it. */
   if (XS_ && plan.mainRoadLen){
-    const need = Math.ceil(plan.mainRoadLen / XS_.stepLamp);
+    /* ALL THREE CLASSES (props v38): majors and minors at the lamp step, locals at one and a half times it —
+       a local street is lit, but more thinly. Before this the count covered majors alone and the
+       minor and local walk below ran into an exhausted budget every time. */
+    const need = Math.ceil(plan.mainRoadLen / XS_.stepLamp + (plan.minorRoadLen || 0) / XS_.stepLamp + (plan.localRoadLen || 0) / (XS_.stepLamp * 1.5));
     const m = typeof location !== 'undefined' && location.search.match(/[?&]lamps=(\d+)/);
     const ceil = m ? Math.min(40000, parseInt(m[1], 10)) : 12000;
     B.lamps = Math.max(B.lamps, Math.min(need, ceil));
@@ -851,6 +861,7 @@ function addProps(d, layer, plan, budget = {}){
 
   const RANK = { major: 0, minor: 1, local: 2 };
   roads.sort((a, b) => (RANK[a.cls] ?? 1) - (RANK[b.cls] ?? 1));
+  const rej = { budget: 0, inside: 0, crossing: 0, path: 0 };
 
   roads.forEach(rd => {
     /* ONE SIDE PER ROAD, FIXED FOR ITS WHOLE LENGTH.
@@ -884,8 +895,16 @@ function addProps(d, layer, plan, budget = {}){
        older world file. */
     const half = (XS_ && XS_.halfBy && XS_.halfBy[rd.cls] !== undefined) ? XS_.halfBy[rd.cls]
                : XS_ ? XS_.halfRoad : null;
-    const stepL = XS_ ? XS_.stepLamp : 0.052;
-    walk(rd.pts, stepL, (x, y, tx, ty, i) => {
+    const stepL = (XS_ ? XS_.stepLamp : 0.052) * (rd.cls === 'local' ? 1.5 : 1);   // locals at one and a half steps, as the budget assumes (props v41)
+    /* A SHORT RUN GETS ITS COLUMN AT THE MIDDLE (props v41). walk() puts the first step a full
+       step in, and a surveyed street grid is one polyline per block edge, most of them shorter
+       than two steps: the first candidate fell inside the junction keep and there was no second.
+       Saadiyat's cultural district had columns on its long roads and none on the grid between
+       them. Under two steps the run is lit once, at its midpoint, which clears both junctions
+       on any block edge longer than twice the keep; longer runs walk as before. */
+    const runLen = rd.pts.reduce((L, p, i) => i ? L + Math.hypot(p[0] - rd.pts[i-1][0], p[1] - rd.pts[i-1][1]) : 0, 0);
+    const walkFn = runLen < stepL * 2 ? (pts, st, fn) => walk(pts, runLen / 2, (x, y, tx, ty, i) => { if (i === 0) fn(x, y, tx, ty, i); }) : walk;
+    walkFn(rd.pts, stepL, (x, y, tx, ty, i) => {
       const nx = -ty, ny = tx;
       /* Kerb face plus the verge offset, which is the table's own definition. The old o1/o2 were
          multiples of a made-up corridor width and meant nothing in metres. */
@@ -899,6 +918,10 @@ function addProps(d, layer, plan, budget = {}){
       if (lamps.length < B.lamps && inside(lx * 1.02, ly * 1.02) && !nearCrossing(lx, ly, JUNCTION_KEEP)
           && !nearPathLamp(lx, ly))
         lamps.push({ x:lx, y:ly, rot: Math.atan2(tx, ty) });
+      else if (lamps.length >= B.lamps) rej.budget++;
+      else if (!inside(lx * 1.02, ly * 1.02)) rej.inside++;
+      else if (nearCrossing(lx, ly, JUNCTION_KEEP)) rej.crossing++;
+      else rej.path++;
       /* THE AVENUE WAS A PAIR AT EVERY STEP, both sides, at exactly the same offset — which is
          the single most visible repetition in the scene, because a road is a straight line and a
          perfectly periodic thing on a straight line is a comb.
@@ -1212,6 +1235,8 @@ function addProps(d, layer, plan, budget = {}){
      painted road without floating, and far below anything the eye resolves at district range.
      The size jitter matters more than it sounds — 628 identical discs along a kerb line read as
      a dotted rule rather than as lighting. */
+  console.info('lamps: ' + d.id + ' budget=' + B.lamps + ' placed=' + lamps.length + ' roads=' + roads.length + ' chains=' + (plan.cycleChains || []).length +
+    ' rejected budget=' + rej.budget + ' inside=' + rej.inside + ' crossing=' + rej.crossing + ' path=' + rej.path);
   const pools = build(poolGeo, matPoolNight, lamps, (p) => {
     const s = 3.4 + R() * 1.5;
     M.position.set(p.x * r, Y + 0.06, -p.y * r);

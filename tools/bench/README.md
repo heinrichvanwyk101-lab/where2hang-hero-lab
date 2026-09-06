@@ -32,6 +32,7 @@ node tools/bench/kitview.mjs <island> <kitName> [dist] [elev] [angle]
 node tools/bench/placeview.mjs <island> "<place label>" [dist] [elev] [angle]
 node tools/bench/coordview.mjs <island> "" [dist] [elev] [angle] <x> <z>
 ZOOM=1.6 node tools/bench/worldview.mjs        # the whole archipelago from the world shot; ZOOM backs the camera off
+node tools/bench/lampcount.mjs <island>        # counts the instanced props and dumps lamp-pool positions to out/lamps-<island>.json
 ```
 
 `kitview` finds the mesh whose `userData.kitName` matches (every kit piece tags its hero mesh

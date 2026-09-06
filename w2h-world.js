@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v315';
+export const BUILD = 'world v316';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3713,13 +3713,20 @@ function paintGround(d, plan){
        lamp budget from it instead of carrying a constant. Normalised units, matching the step it
        will divide into. Majors only: minors and locals are lit from whatever is left over, and
        including them here would have Corniche asking for twenty-five thousand columns. */
-    plan.mainRoadLen = (plan.arterials || []).reduce((sum, a) => {
-      const cls = a.cls || (a.major ? 'major' : 'minor');
-      if (cls !== 'major' || a.length < 2) return sum;
+    /* MINORS AND LOCALS ARE MEASURED TOO (world v316). "Lit from whatever is left over" meant
+       never: on Saadiyat the majors and the ring alone consumed the budget, so the cultural
+       district's grid — every street of it minor or local — had no columns at all. The placer
+       now sizes for all three classes and the ceiling is what protects the frame. */
+    const lenOf = cls => (plan.arterials || []).reduce((sum, a) => {
+      const c = a.cls || (a.major ? 'major' : 'minor');
+      if (c !== cls || a.length < 2) return sum;
       let L = 0;
       for (let i = 1; i < a.length; i++) L += Math.hypot(a[i][0] - a[i-1][0], a[i][1] - a[i-1][1]);
       return sum + L;
-    }, 0) + (plan.ring || []).reduce((sum, seg) => {
+    }, 0);
+    plan.minorRoadLen = lenOf('minor');
+    plan.localRoadLen = lenOf('local');
+    plan.mainRoadLen = lenOf('major') + (plan.ring || []).reduce((sum, seg) => {
       let L = 0;
       for (let i = 1; i < seg.length; i++) L += Math.hypot(seg[i][0] - seg[i-1][0], seg[i][1] - seg[i-1][1]);
       return sum + L;
@@ -10027,6 +10034,10 @@ function buildGroundFor(d){
        cull sees the fill like any other generated stock. */
     fillRoadless(d);
     bridgesFor(d);
+    console.info('props: ' + d.id + ' realRoads=' + ((d.roads && d.roads.drawArterials) || []).length +
+      ' arterials=' + (plan.arterials || []).length + ' mainLen=' + (plan.mainRoadLen || 0).toFixed(3) +
+      ' minorLen=' + (plan.minorRoadLen || 0).toFixed(3) + ' localLen=' + (plan.localRoadLen || 0).toFixed(3) +
+      ' crossings=' + (plan.crossings || []).length);
     const n = props.addProps(d, d.detail, plan);
     /* tickSignals is a FUNCTION, not a count, so the blind key sum would turn propCount.signals
        into NaN the moment it tried to add it. Collected separately and called from the frame
