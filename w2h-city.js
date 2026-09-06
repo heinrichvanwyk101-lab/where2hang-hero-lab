@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v129';
+export const BUILD = 'city v130';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4402,10 +4402,12 @@ function zayedNationalMuseum(x0, z0, bearing){
      of them a steel lattice that is silver by day and glows warm through its cells at night.
      They rise from a low faceted white mound, flat-shaded so its facets catch the light, at the
      edge of the lagoon. */
-  const podium = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xE6E3DC, 0xF6F4EF, 0.8, 0.05));
+  /* THE MOUND (city v130): a crystalline hill of triangular facets, long enough that every
+     feather roots inside it, flat-shaded; the render's white folded roof. */
+  const podium = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), saadKitMat(0xE6E3DC, 0xF6F4EF, 0.8, 0.02));
   podium.material.flatShading = true; podium.material.userData.dayMats.flatShading = true;
-  podium.scale.set(80 / M, 22 / M, 60 / M);
-  podium.position.set(x0, 0, z0);
+  podium.scale.set(98 / M, 24 / M, 64 / M);
+  podium.position.set(x0, 2 / M, z0);
   podium.rotation.y = rot;
   g.add(podium);
   const lat = (() => {
@@ -4424,7 +4426,7 @@ function zayedNationalMuseum(x0, z0, bearing){
   })();
   const wingMat = new THREE.MeshStandardMaterial({ color:0xB8BEC4, map:lat, roughness:0.4, metalness:0.45, emissive:0xFFA860, emissiveIntensity:0.40, emissiveMap:lat, side:THREE.DoubleSide });   // silver steel, not pewter
   wingMat.userData.duskColor = 0xC9CED3; wingMat.userData.glassOverride = false;
-  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2F4F6, map:lat, roughness:0.38, metalness:0.4, side:THREE.DoubleSide });
+  wingMat.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF2F4F6, map:lat, roughness:0.5, metalness:0.05, side:THREE.DoubleSide });   // no metalness: with nothing to reflect it only darkens
   /* THE FEATHER: a side elevation drawn in units, +x toward the lagoon. Wide at the root,
      widest a third of the way up, then a long taper to a tip that has drifted a third of the
      height toward the lagoon, so the blade bows over the water. Extruded thin, then pinched so
@@ -4446,7 +4448,7 @@ function zayedNationalMuseum(x0, z0, bearing){
     pos.needsUpdate = true; geo.computeVertexNormals();
     const wing = new THREE.Mesh(geo, wingMat);
     const off = (i - 2) * spacing;
-    wing.position.set(x0 + Math.cos(rot) * off, 14 / M, z0 + Math.sin(rot) * off);
+    wing.position.set(x0 + Math.cos(rot) * off, 8 / M, z0 + Math.sin(rot) * off);   // rooted inside the mound
     /* +x of the blade faces the lagoon (rot + pi/2); the outer feathers fan along the row. */
     wing.rotation.set((i - 2) * 0.08, rot + Math.PI / 2 + (i - 2) * 0.10, 0);
     if (i === 2) wing.userData.hero = true;
@@ -5636,10 +5638,18 @@ function saadiyatGrove(spec){
   };
   /* THE LAGOON (city v129): a pool the museum stands at the edge of, not a lake it floats in.
      Inner edge at the mound's foot, outer edge 15 units out, wrapping the west and south. */
-  const lake = new THREE.Mesh(new THREE.RingGeometry(7, 15, 48, 1, Math.PI * 0.45, Math.PI * 1.1), water);
-  lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.1, 1); lake.position.set(ZX, 0.05, ZZ); g.add(lake);
-  const rim = new THREE.Mesh(new THREE.RingGeometry(15, 17, 48, 1, Math.PI * 0.4, Math.PI * 1.2), pave);
-  rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.1, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
+  /* THE FOUNTAIN (city v130): a curved water channel that runs round the mound, with a line of
+     jets down its middle, and a paved walk outside it. Not a lake. */
+  const lake = new THREE.Mesh(new THREE.RingGeometry(11, 14.5, 64, 1, Math.PI * 0.35, Math.PI * 1.3), water);
+  lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.08, 1); lake.position.set(ZX, 0.05, ZZ); g.add(lake);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(14.5, 16.5, 64, 1, Math.PI * 0.3, Math.PI * 1.4), pave);
+  rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.08, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
+  { const jet = saadKitMat(0xE8F4F8, 0xFFFFFF, 0.3, 0, 0xCFEFFF, 0.6, 1.0);
+    for (let a = Math.PI * 0.4; a <= Math.PI * 1.6; a += Math.PI / 22){
+      const j = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.06, 1.1, 6), jet);
+      const ax = Math.cos(a) * 12.75, az = Math.sin(a) * 12.75 * 1.08;
+      j.position.set(ZX + ax * Math.cos(GR) + az * Math.sin(GR), 0.6, ZZ - ax * Math.sin(GR) + az * Math.cos(GR)); g.add(j);
+    } }
   for (let i = 0; i < 4; i++){   // the fifth seat is on the boulevard (city v121)
     const a = Math.PI * (0.62 + i * 0.19) + GR, r = 28;
     if (spec.crescent && !spec.crescent.includes(i)) continue;   // seats checked against the road network offline (city v123)
