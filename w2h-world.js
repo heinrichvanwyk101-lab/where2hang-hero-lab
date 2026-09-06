@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v307';
+export const BUILD = 'world v309';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5236,9 +5236,9 @@ const DISTRICTS = [
          three newer museums, so these are placed, not resolved. Island units from the extent
          centre; see LM_SAADIYAT. */
       { label:'Louvre Abu Dhabi',        x:-478.8, z:172.6, h: 5, r:34 },
-      { label:'Guggenheim Abu Dhabi',    x:-430.0, z:128.0, h: 8, r:30 },   // the site inside the bow, 250 m in from the beach (world v307)
-      { label:'Natural History Museum',  x:-337.0, z:238.0, h: 5, r:26 },   // off the roads, north-west of teamLab (world v306)
-      { label:'teamLab Phenomena',       x:-308.0, z:288.0, h: 4, r:26 },
+      { label:'Guggenheim Abu Dhabi',    x:-466.5, z: 86.6, h: 8, r:30 },   // on the survey's own 308 x 233 m footprint on the west promontory (world v308)
+      { label:'Natural History Museum',  x:-405.0, z:255.0, h: 5, r:26 },   // on its two baked footprints south-west of the lagoon (world v308)
+      { label:'teamLab Phenomena',       x:-276.0, z:216.0, h: 4, r:22 },   // on the district side of the bridge approach, by the interchange (world v309)
       { label:'Cultural District Park',  x:-352.0, z:308.0, h: 2, r:26 },   // the hardscape peninsula (world v306)
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
@@ -8062,17 +8062,17 @@ corniche.styleZones = [{ x0:-1030, x1:-870, z0:-180, z1:-50, style:'low' }];
 const LM_SAADIYAT = {
   louvre:     { x:-478.8, z:172.6 },
   znm:        { x:-371.6, z:177.8 },
-  guggenheim: { x:-430.0, z:128.0 },   // the satellite's site inside the bow, 250 m in from the beach (world v307); the published point sat on the beach
-  nhm:        { x:-337.0, z:238.0 },   // north-west of teamLab, 21 units clear of every road (world v306); the bridge-landing seat sat on the interchange
-  teamlab:    { x:-308.0, z:288.0 },   // on the shore by the bridge, 19 units clear of the roads (world v306)
+  guggenheim: { x:-466.5, z: 86.6 },   // THE BAKED FOOTPRINT (world v308): the survey's 308 x 233 m record on the west promontory, where the map pin is
+  nhm:        { x:-408.0, z:253.0 },   // the two baked footprints south-west of the lagoon, 203 x 151 and 149 x 115 m (world v308)
+  teamlab:    { x:-276.0, z:216.0 },   // the district side of the bridge approach, by the interchange (world v309); it stood across the bridge
 };
 KIT_ZONES[saadiyat.id] = [
   { x0:-497, x1:-460, z0:158, z1:187 },   // Louvre platform, 260 x 210 m
   { x0:-388, x1:-355, z0:160, z1:189 },   // Zayed National Museum podium and lagoon
-  { x0:-445, x1:-415, z0:116, z1:140 },   // Guggenheim, 220 x 170 m, on the satellite's site (world v307)
-  { x0:-352, x1:-322, z0:225, z1:251 },   // Natural History Museum, 130 x 100 m plus a margin (world v306)
+  { x0:-488, x1:-445, z0: 70, z1:103 },   // Guggenheim on its baked footprint (world v308)
+  { x0:-428, x1:-382, z0:236, z1:274 },   // Natural History Museum on its two baked footprints (world v308)
   { x0:-376, x1:-328, z0:284, z1:332 },   // the waterfront park on the peninsula (world v306)
-  { x0:-324, x1:-292, z0:275, z1:301 },   // teamLab Phenomena, 190 x 140 m plus a margin (world v306)
+  { x0:-292, x1:-260, z0:204, z1:228 },   // teamLab Phenomena on the district side of the approach (world v309)
   { x0:-232, x1:-197, z0:156, z1:171 },   // Manarat Al Saadiyat, 245 x 92 m (world v289)
   { x0:-227, x1:-213, z0:175, z1:188 },   // Berklee Abu Dhabi, 80 x 74 m
   { x0:-57, x1:-14, z0:13, z1:55 },       // Park Hyatt parcel, 240 x 225 m (world v290)
@@ -8114,7 +8114,7 @@ if (!NO_KIT && maryah && kit.adgmSquare){
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
                                 ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim], ['naturalHistoryMuseum', LM_SAADIYAT.nhm],
-                                ['teamLabPhenomena', LM_SAADIYAT.teamlab]]){
+                                ['teamLabPhenomena', LM_SAADIYAT.teamlab, 0.72]]){
     if (!kit[fn]) continue;
     const m = kit[fn](at.x, at.z, bear);
     m.position.y = GROUND;
@@ -8159,7 +8159,7 @@ if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
        (the courtyard houses at the Louvre end), p park lawn (south of the museum). The galleria
        seat and the four crescent bars were checked the same way. Regenerate with
        tools/bench/grove-parcels.py after any road or zone change. */
-    const GROVE_CELLS = [[-376.1,131.5,-0.082,86,86,"b",8],[-362.7,134.1,-0.19,86,86,"b",8],[-349.4,136.7,-0.19,86,86,"b",6],[-336.0,139.2,-0.19,86,86,"b",8],[-338.6,152.6,-0.19,86,86,"b",6],[-322.7,141.8,-0.19,86,86,"b",6],[-322.2,211.2,-0.19,86,86,"b",7],[-290.8,120.2,0.019,86,86,"b",5],[-308.8,213.7,-0.951,86,86,"b",5],[-285.2,162.9,-0.003,86,86,"b",5],[-290.3,189.6,-0.02,86,86,"b",6],[-399.5,128.2,0.018,62,62,"b",5],[-394.0,104.9,3.122,62,62,"b",5],[-399.5,138.4,-0.19,62,62,"b",7],[-399.4,148.6,-0.19,62,62,"b",5],[-389.3,128.2,-0.026,62,62,"b",4],[-383.8,104.8,-3.077,62,62,"b",4],[-389.3,138.4,-0.19,62,62,"b",4],[-399.4,206.7,-2.514,62,62,"b",4],[-370.5,104.3,-3.077,62,62,"b",6],[-390.4,218.6,-2.514,62,62,"b",5],[-335.5,166.0,-2.513,62,62,"b",4],[-339.9,215.1,-0.975,62,62,"b",6],[-327.4,155.3,-0.19,62,62,"b",5],[-333.5,203.1,2.189,62,62,"b",4],[-321.0,164.7,2.182,62,62,"b",4],[-315.5,172.9,2.182,62,62,"b",5],[-319.4,193.5,0.582,62,62,"b",5],[-313.7,227.2,-0.19,62,62,"b",7],[-296.1,141.0,-0.165,62,62,"b",4],[-296.9,161.2,-0.003,62,62,"b",7],[-286.1,141.9,-0.165,62,62,"b",7],[-279.8,119.7,-0.046,62,62,"b",7],[-294.7,202.4,2.216,62,62,"b",7],[-276.8,146.7,-1.582,62,62,"b",5],[-278.3,186.2,-0.02,62,62,"b",6],[-346.0,103.9,-1.561,51,51,"b",6],[-365.1,224.5,0.619,51,51,"p",0],[-355.5,217.1,-0.94,51,51,"b",5],[-332.7,103.4,-1.561,51,51,"b",7],[-316.6,104.5,1.707,51,51,"b",5],[-328.3,181.6,0.789,51,51,"b",6],[-298.1,103.9,-3.115,51,51,"b",4],[-313.7,200.7,-0.98,51,51,"b",4],[-304.1,225.0,-0.19,51,51,"b",6],[-384.5,224.8,0.619,39,39,"p",0],[-381.0,217.3,0.619,39,39,"p",0],[-348.2,147.3,-0.19,39,39,"b",7],[-338.3,190.9,0.629,39,39,"b",6],[-317.1,117.6,-0.049,39,39,"b",6],[-312.2,139.9,-1.564,39,39,"b",4],[-313.5,146.8,3.134,39,39,"b",6],[-313.0,160.1,-0.061,39,39,"b",7],[-298.4,169.1,1.565,39,39,"b",7],[-280.7,103.2,1.612,39,39,"b",6],[-275.2,159.3,-1.582,39,39,"b",5],[-274.7,167.5,-1.387,39,39,"b",5],[-280.0,195.0,-2.531,39,39,"b",4],[-264.7,147.0,-1.582,39,39,"b",4],[-264.6,157.2,-1.582,39,39,"b",7],[-265.3,197.8,1.01,39,39,"b",5]];
+    const GROVE_CELLS = [[-376.1,131.5,-0.082,86,86,"b",8],[-362.7,134.1,-0.19,86,86,"b",8],[-349.4,136.7,-0.19,86,86,"b",6],[-336.0,139.2,-0.19,86,86,"b",8],[-338.6,152.6,-0.19,86,86,"b",6],[-322.7,141.8,-0.19,86,86,"b",6],[-338.1,221.9,-0.94,86,86,"b",7],[-322.2,211.2,-0.19,86,86,"b",7],[-290.8,120.2,0.019,86,86,"b",5],[-308.8,213.7,-0.951,86,86,"b",5],[-285.2,162.9,-0.003,86,86,"b",5],[-290.3,189.6,-0.02,86,86,"b",6],[-399.5,128.2,0.018,62,62,"b",5],[-394.0,104.9,3.122,62,62,"b",5],[-399.5,138.4,-0.19,62,62,"b",7],[-399.4,148.6,-0.19,62,62,"b",5],[-389.3,128.2,-0.026,62,62,"b",4],[-383.8,104.8,-3.077,62,62,"b",4],[-389.3,138.4,-0.19,62,62,"b",4],[-399.4,206.7,-2.514,62,62,"b",4],[-370.5,104.3,-3.077,62,62,"b",6],[-390.4,218.6,-2.514,62,62,"b",5],[-358.8,223.6,2.201,62,62,"p",0],[-335.5,166.0,-2.513,62,62,"b",4],[-327.4,155.3,-0.19,62,62,"b",5],[-333.5,203.1,2.189,62,62,"b",4],[-321.0,164.7,2.182,62,62,"b",4],[-315.5,172.9,2.182,62,62,"b",5],[-319.4,193.5,0.582,62,62,"b",5],[-323.9,222.2,-0.19,62,62,"b",4],[-314.7,227.0,-0.19,62,62,"b",6],[-296.1,141.0,-0.165,62,62,"b",4],[-296.9,161.2,-0.003,62,62,"b",7],[-304.3,226.0,-0.19,62,62,"b",5],[-286.1,141.9,-0.165,62,62,"b",7],[-279.8,119.7,-0.046,62,62,"b",7],[-276.8,146.7,-1.582,62,62,"b",5],[-278.3,186.2,-0.02,62,62,"b",6],[-346.0,103.9,-1.561,51,51,"b",6],[-332.7,103.4,-1.561,51,51,"b",7],[-348.4,227.7,-0.94,51,51,"b",6],[-316.6,104.5,1.707,51,51,"b",5],[-328.3,181.6,0.789,51,51,"b",6],[-298.1,103.9,-3.115,51,51,"b",4],[-313.7,200.7,-0.98,51,51,"b",4],[-384.5,224.8,0.619,39,39,"p",0],[-381.0,217.3,0.619,39,39,"p",0],[-348.2,147.3,-0.19,39,39,"b",7],[-346.0,209.8,0.65,39,39,"b",4],[-338.3,190.9,0.629,39,39,"b",6],[-317.1,117.6,-0.049,39,39,"b",6],[-312.2,139.9,-1.564,39,39,"b",4],[-313.5,146.8,3.134,39,39,"b",6],[-313.0,160.1,-0.061,39,39,"b",7],[-298.4,169.1,1.565,39,39,"b",7],[-299.8,197.3,2.216,39,39,"b",5],[-280.7,103.2,1.612,39,39,"b",6],[-275.2,159.3,-1.582,39,39,"b",5],[-274.7,167.5,-1.387,39,39,"b",5],[-280.0,195.0,-2.531,39,39,"b",4],[-264.7,147.0,-1.582,39,39,"b",4],[-264.6,157.2,-1.582,39,39,"b",7]];
     const cells = GROVE_CELLS.map(([x, z, r, w, d, k, st]) => ({ x, z, w, d, rot: r, storeys: st, kind: k === 's' ? 'stone' : k === 'p' ? 'park' : 'block' }));   // each cell carries its own turn (world v306)
     const grove = kit.saadiyatGrove({ znm, rot:GR, galleria:null, cells, skip, crescent:[] });
     grove.position.y = GROUND; saadiyat.detail.add(grove);

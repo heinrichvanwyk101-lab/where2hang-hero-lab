@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v133';
+export const BUILD = 'city v134';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4539,8 +4539,9 @@ function naturalHistoryMuseum(x0, z0){
   }
   return g;
 }
-function teamLabPhenomena(x0, z0){
+function teamLabPhenomena(x0, z0, scale){
   const g = new THREE.Group(), M = M_PER_U;
+  /* scale (city v134): the shells are drawn 230 m across; the built museum is nearer 160 m. */
   /* TWO WHITE SHELLS merged, 150 m across and 30 m high, smooth — the render is a single
      continuous white skin with openings cut into it; two rounded domes read as that at this
      scale. Glows softly at night. */
@@ -4570,6 +4571,7 @@ function teamLabPhenomena(x0, z0){
       rib.position.set(x0 + dx / M, (h * 0.72 + k * 1.6) / M, z0 + dz / M); rib.scale.multiplyScalar(1 - k * 0.12); g.add(rib);
     }
   });
+  if (scale && scale !== 1){ const sub = new THREE.Group(); [...g.children].forEach(c => sub.add(c)); sub.scale.set(scale, 1, scale); sub.position.set(x0 * (1 - scale), 0, z0 * (1 - scale)); g.add(sub); }
   return g;
 }
 

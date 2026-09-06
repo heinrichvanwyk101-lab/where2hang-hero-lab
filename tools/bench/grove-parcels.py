@@ -27,7 +27,7 @@ for rd in roads['roads']:
     pts=[iu(p) for p in rd['pts']]
     for a,b in zip(pts,pts[1:]): stamp_seg(a,b,CLR[rd['cls']])
 # kit zones (non grove) + margin 3, mamsha seats, lake+crescent ellipse
-zones=[(-497,-460,158,187),(-388,-355,160,189),(-437,-407,82,106),(-232,-197,156,171),(-227,-213,175,188),(-352,-322,225,251)]   # Guggenheim on its real site, the Natural History Museum (world v306)
+zones=[(-497,-460,158,187),(-388,-355,160,189),(-437,-407,82,106),(-232,-197,156,171),(-227,-213,175,188),(-292,-260,204,228)]   # teamLab by the interchange (world v309)   # Guggenheim on its real site, the Natural History Museum (world v306)
 SB=[[-420,99],[-400,95],[-380,89],[-360,87],[-340,84],[-320,82],[-300,76],[-280,68],[-260,64],[-240,70]]
 def shoreZ(x):
     for (a,za),(b,zb) in zip(SB,SB[1:]):
