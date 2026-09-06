@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v125';
+export const BUILD = 'city v126';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4695,29 +4695,51 @@ function gateTowers(x0, z0, rot){
   g.add(arch);
   return g;
 }
-/* SEAWORLD YAS ISLAND — a round building 320 m across under five stacked shell tiers, each
-   stepping in, dark glass between them: from the air it is a pale layered disc, and that is the
-   whole identification. */
-function seaWorldYas(x0, z0){
-  const g = new THREE.Group(), M = M_PER_U;
-  const tierMat = saadKitMat(0xD8D3C9, 0xF0ECE4, 0.8, 0.05);
-  const glassMat = saadKitMat(0x1F2A33, 0x2F3E4C, 0.25, 0.5, 0xBFD8EA, 0.22, 1.0);   // the glass bands glow at night
-  const radii = [160, 135, 108, 80, 52], step = 9 / M;
-  let y = 0;
-  radii.forEach((r, i) => {
-    const gl = new THREE.Mesh(new THREE.CylinderGeometry((r - 4) / M, (r - 4) / M, step * 0.55, 48), glassMat);
-    gl.position.set(x0 + (i * 6) / M, y + step * 0.275, z0 - (i * 4) / M);
-    g.add(gl);
-    const tier = new THREE.Mesh(new THREE.CylinderGeometry(r / M, (r + 6) / M, step * 0.55, 48), tierMat);
-    tier.position.set(x0 + (i * 6) / M, y + step * 0.55 + step * 0.275, z0 - (i * 4) / M);
-    if (i === 0) tier.userData.hero = tier.userData.kitName = 'seaWorldYas';
-    g.add(tier);
-    y += step;
-  });
-  const crown = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), tierMat);
-  crown.scale.set(40 / M, 14 / M, 40 / M);
-  crown.position.set(x0 + 30 / M, y, z0 - 20 / M);
-  g.add(crown);
+/* SEAWORLD YAS ISLAND (city v126) — to the photographs, not the first guess: a great rectangular
+   hall on the survey's 327 by 320 m record, flat stepped roofs, the whole facade banded in blues
+   from navy at the ground to sky at the parapet, a tall glass entrance block at the front corner
+   under the sign, the blue coaster twisting across the forecourt, and a shaded plaza of wave
+   stripes and palms in front. At night the bands glow blue, which is what the building does. */
+function seaWorldYas(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, R = rot == null ? -1.569 : rot, at = _placeRot(x0, z0, R);
+  /* THE BANDS: one canvas, navy to sky in fourteen steps, wrapped up every face. */
+  const bandTex = (() => {
+    const cv = document.createElement('canvas'); cv.width = 16; cv.height = 256; const c = cv.getContext('2d');
+    const stops = ['#0A2350', '#0D2C62', '#103A7C', '#14489A', '#1A5AB4', '#1F6DC6', '#2A83D2', '#3E98DC', '#57ACE3', '#72BFEA', '#8CCDEE', '#A4D9F2', '#B8E3F5', '#C8EAF7'];
+    stops.forEach((col, i) => { c.fillStyle = col; c.fillRect(0, 256 - (i + 1) * 256 / stops.length, 16, 256 / stops.length + 1); });
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
+  })();
+  const bands = new THREE.MeshStandardMaterial({ color:0xFFFFFF, map:bandTex, roughness:0.6, metalness:0.05, emissive:0xFFFFFF, emissiveMap:bandTex, emissiveIntensity:0.45 });
+  bands.userData.glassOverride = false; bands.userData.duskColor = 0xFFFFFF; bands.userData.nightAlbedo = 0.2;   // the map is the colour; the lift must not push it
+  bands.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xFFFFFF, map:bandTex, roughness:0.6, metalness:0.05 });
+  const roof = saadKitMat(0xC2C6CB, 0xD9DCE0, 0.9, 0), plant = saadKitMat(0x8A8E93, 0xA8ACB1, 0.9, 0);
+  const glass = saadKitMat(0x14202C, 0x2A4A62, 0.25, 0.5, 0x9CC8E8, 0.5, 1.0), sign = saadKitMat(0xF2F4F6, 0xFFFFFF, 0.6, 0, 0xFFFFFF, 0.5, 0.9);
+  const coaster = saadKitMat(0x2E5BB8, 0x3A6FD0, 0.5, 0.3, 0x6FA0FF, 0.35, 1.0), pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0);
+  const wave1 = saadKitMat(0xB7663F, 0xC97A50, 0.9, 0), wave2 = saadKitMat(0xE6D9C0, 0xF3EADA, 0.9, 0), canopy = saadKitMat(0xE0DDD4, 0xF4F2EC, 0.7, 0);
+  const hall = (ax, az, w, d, h) => {
+    const geo = new THREE.BoxGeometry(w / M, h / M, d / M);
+    const m = new THREE.Mesh(geo, [bands, bands, roof, roof, bands, bands]);
+    const [px, pz] = at(ax / M, az / M); m.position.set(px, h / 2 / M, pz); m.rotation.y = R; g.add(m); return m;
+  };
+  const box = (ax, az, w, d, h, mat, y0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); const [px, pz] = at(ax / M, az / M); m.position.set(px, ((y0 || 0) + h / 2) / M, pz); m.rotation.y = R; g.add(m); return m; };
+  /* THE HALL, two roof levels: the taller back block and the lower front block, 300 m across. */
+  const back = hall(0, -55, 300, 180, 44); back.userData.hero = back.userData.kitName = 'seaWorldYas';
+  hall(0, 75, 300, 80, 32);
+  for (const [ax, az, w, d] of [[-60, -90, 90, 60], [70, -30, 110, 70], [-90, 10, 70, 50]]) box(ax, az, w, d, 3, plant, 44);   // roof plant
+  /* THE ENTRANCE: the glass block at the front corner with the sign panel over it. */
+  box(-105, 118, 70, 30, 50, glass); box(-105, 134, 40, 3, 9, sign, 38);
+  /* THE COASTER, a blue tube snaking across the forecourt with one vertical loop. */
+  const pts = [[-150, 150, 2], [-110, 165, 10], [-70, 150, 4], [-30, 172, 14], [10, 158, 6], [50, 175, 12], [90, 160, 3], [130, 150, 8]].map(([x, z, y]) => { const [px, pz] = at(x / M, z / M); return new THREE.Vector3(px, y / M, pz); });
+  const curve = new THREE.CatmullRomCurve3(pts);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 1.3 / M, 6, false), coaster));
+  { const loop = new THREE.Mesh(new THREE.TorusGeometry(13 / M, 1.3 / M, 6, 32), coaster); const [px, pz] = at(-30 / M, 172 / M); loop.position.set(px, 14 / M, pz); loop.rotation.y = R + Math.PI / 2; g.add(loop); }
+  /* THE FORECOURT: the wave plaza in terracotta and cream, shade canopies on their poles, palms. */
+  box(0, 220, 340, 130, 0.4, pave);
+  for (let i = 0; i < 9; i++) box(0, 175 + i * 11, 320, 5, 0.15, i % 2 ? wave1 : wave2, 0.4);
+  const palms = [];
+  for (let ax = -150; ax <= 150; ax += 25){ box(ax, 240, 18, 12, 0.5, canopy, 5); for (const dz of [-5, 5]) for (const dx of [-7, 7]) box(ax + dx, 240 + dz, 0.6, 0.6, 5, roof); }
+  for (let ax = -160; ax <= 160; ax += 16){ palms.push(at(ax / M, 205 / M)); palms.push(at(ax / M, 270 / M)); }
+  kitPalms(g, palms, 0.8);
   return g;
 }
 

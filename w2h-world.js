@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v301';
+export const BUILD = 'world v302';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7897,7 +7897,7 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      (bake (18596, -2475) m, bearing 166 degrees). */
   if (kit.wAbuDhabi) built.push(kit.wAbuDhabi(7.3, 266.4, 2.897));
   /* SeaWorld on its surveyed landmark (the 327 by 320 m footprint at bake (20188, -489) m). */
-  if (kit.seaWorldYas) built.push(kit.seaWorldYas(211.4, 11.9));
+  if (kit.seaWorldYas) built.push(kit.seaWorldYas(211.4, 11.9, -1.569));   // the record's own turn (world v302)
   /* The circuit's pit building and main grandstand on their surveyed footprints along the straight. */
   if (kit.yasCircuit) built.push(kit.yasCircuit(35.0, 230.7, 0.14, 37.2, 239.5));
   /* WARNER BROS. WORLD ON ITS OWN FOOTPRINT (world v301). The 713 by 694 m record it stood on is
