@@ -31,6 +31,7 @@ software renderer; run it in the background and wait on its output file.
 node tools/bench/kitview.mjs <island> <kitName> [dist] [elev] [angle]
 node tools/bench/placeview.mjs <island> "<place label>" [dist] [elev] [angle]
 node tools/bench/coordview.mjs <island> "" [dist] [elev] [angle] <x> <z>
+ZOOM=1.6 node tools/bench/worldview.mjs        # the whole archipelago from the world shot; ZOOM backs the camera off
 ```
 
 `kitview` finds the mesh whose `userData.kitName` matches (every kit piece tags its hero mesh

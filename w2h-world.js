@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v309';
+export const BUILD = 'world v310';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5299,7 +5299,7 @@ const DISTRICTS = [
      BASE[d.id] the same way every baked island's do, once the basemap transform runs.
 
      built:false — loads on demand like Yas and Saadiyat, not eagerly like Corniche. */
-  { id:'raha', name:'Al Raha', x:2408, z:86, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
+  { id:'raha', name:'Al Raha', x:2818, z:-170, r:24*ISLE_SCALE, rot:0, tint:0xC9A542,
     cam: { angle:250, dist:3488, elev:1703, tx:600, tz:337 },
     /* The district shot comes from the north: the Gulf. South of the strip is Khalifa City and
        the E10, which the model leaves as water. */
@@ -7933,6 +7933,9 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      club now stands on that record and the lagoon deck runs seaward in front of it, on the Yas
      Bay grid (0.217 rad), the way the renders show it: the club on land, the pool out front. */
   if (kit.cafeDelMar) built.push(kit.cafeDelMar(-14.9, 404.1, 0.217));
+  /* THE YAS BAY CAR PARK (world v310): the deck structure on the survey's own lot behind the
+     Hilton, (-58.5, 401.1), long axis at -0.228 in island units. */
+  if (kit.yasBayCarPark) built.push(kit.yasBayCarPark(-58.5, 401.1, 0.228));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

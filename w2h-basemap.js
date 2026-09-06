@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v20';
+export const BUILD = 'basemap v21';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -52,6 +52,14 @@ export const M_PER_UNIT = 7.8;
 /* p = 1/3. See the note above; this is the only number in the file with an aesthetic argument
    behind it rather than an arithmetic one. */
 export const DAMP_P = 1 / 3;
+
+/* THE CAP (basemap v21). p = 1/3 alone gave Al Maryah 3.94 and Al Reem 3.04: a 2.4 km island
+   drawn 1,230 units long, longer than half of Abu Dhabi Island, which is the only island the
+   channel between Corniche and Reem could never hold. It sat over Corniche's east tip, under
+   Reem's west lobe and into Saadiyat, and read as "smashed". Above 2.6 the exponent is no longer
+   bringing a small island up to legibility; it is making it a big one. 2.6 leaves Al Raha (2.54)
+   untouched and only Maryah and Reem come down. */
+export const SCALE_CAP = 2.6;
 
 const m2u = m => m / M_PER_UNIT;
 
@@ -100,7 +108,7 @@ export function damping(idx, p = DAMP_P){
   for (const i of idx.islands || []){
     /* s = (R / E)^(1-p). At p = 1 every s is 1 and nothing is damped; at p = 0 every island is
        scaled to the reference's size, which is the old diorama exactly. */
-    out[i.id] = i.extent ? Math.pow(R / span(i), 1 - p) : 1;
+    out[i.id] = i.extent ? Math.min(SCALE_CAP, Math.pow(R / span(i), 1 - p)) : 1;
   }
   return out;
 }
@@ -116,12 +124,17 @@ export function islandOrigin(entry){
 /* The diorama layout: where the islands sit when t = 0. Kept as a table rather than derived,
    because this is a composition — the archipelago is arranged to read well in the opening shot,
    and no formula produces that. Units, +x east, +z south. */
+/* RE-SPACED (basemap v21) against the real coastline polygons under SCALE_CAP, by search: every
+   pair now clears by at least 65 units of water (Corniche to Saadiyat, bridged in reality, is
+   the tightest), Maryah sits in the channel east of Corniche's tip and west of Reem, and Yas and
+   Al Raha moved east together so Reem's east lobe no longer lies under Yas Marina. Corniche and
+   Saadiyat are unchanged. */
 export const DIORAMA = {
   corniche: [   0,    0 ],
-  maryah:   [ 940, -150 ],
-  reem:     [1560, -640 ],
+  maryah:   [1080, -120 ],
+  reem:     [1750, -690 ],
   saadiyat: [ 520, -1560],
-  yas:      [2300, -1180],
+  yas:      [2710, -1450],
   /* AL RAHA. Real bearing from Yas is ~1,517 m west and ~4,537 m south — genuinely Yas's nearest
      neighbour of the six, closer to it than Saadiyat or Reem are to anything else in this table.
      Composed close to Yas for exactly that reason: this is the one pair where "near" is honest
@@ -175,7 +188,7 @@ export const DIORAMA = {
      on the picked pair's midpoint (1809.5,129), a delta of [+448.5,-201.5]. Reverified against
      every real coastline polygon at the new position — clear of all five, Reem included at 136
      units, not a circle-model number this time. */
-  raha:     [2408, 86 ],
+  raha:     [2818, -170 ],
 };
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.

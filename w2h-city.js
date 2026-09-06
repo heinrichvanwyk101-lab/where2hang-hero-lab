@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v134';
+export const BUILD = 'city v135';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5569,6 +5569,38 @@ function yasBayWaterfront(){
   return g;
 }
 
+/* THE YAS BAY CAR PARK (city v135) — the three-deck structure behind the Hilton on the survey's
+   own 228 by 102 m lot: open decks behind a fin screen, ramps at the ends, the roof deck with
+   its two rows of shade canopies and the cars under them, the way the satellite shows it. Local
+   +x runs the long way. */
+function yasBayCarPark(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  const slab = saadKitMat(0xC9C4B8, 0xE4E0D6, 0.9, 0), fin = saadKitMat(0xB8B4AC, 0xD6D2C8, 0.7, 0.1);
+  const canopy = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0, 0xFFE4B8, 0.06, 0.9), dark = saadKitMat(0x2A2C30, 0x3A3D42, 0.8, 0);
+  const car = [saadKitMat(0xD8D8D8, 0xEDEDED, 0.5, 0.3), saadKitMat(0x2E3238, 0x3E434A, 0.5, 0.3), saadKitMat(0x8A8E93, 0xA8ACB1, 0.5, 0.3), saadKitMat(0x7A2A2A, 0xA03A3A, 0.5, 0.3)];
+  const W = 228, D = 102, LEVEL = 3.2, N = 3;
+  const box = (ax, az, w, d, h, mat, y0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); sub.add(m); return m; };
+  for (let i = 0; i <= N; i++){ const m = box(0, 0, W, D, 0.5, slab, i * LEVEL); if (i === 0) m.userData.hero = m.userData.kitName = 'yasBayCarPark'; }
+  // columns on a 8 m grid, and the fin screen round the decks
+  for (let ax = -W / 2 + 4; ax < W / 2; ax += 8) for (let az = -D / 2 + 4; az < D / 2; az += 16) box(ax, az, 0.6, 0.6, N * LEVEL, dark);
+  for (let ax = -W / 2 + 1; ax < W / 2; ax += 2.4){ box(ax, -D / 2 - 0.4, 0.4, 0.15, N * LEVEL, fin); box(ax, D / 2 + 0.4, 0.4, 0.15, N * LEVEL, fin); }
+  for (let az = -D / 2 + 1; az < D / 2; az += 2.4){ box(-W / 2 - 0.4, az, 0.15, 0.4, N * LEVEL, fin); box(W / 2 + 0.4, az, 0.15, 0.4, N * LEVEL, fin); }
+  // the roof deck: two rows of shade canopies down the long axis, cars under them
+  const TOP = N * LEVEL + 0.5;
+  let k = 0;
+  for (const row of [-D / 4, D / 4]){
+    for (let ax = -W / 2 + 10; ax < W / 2 - 8; ax += 16){
+      box(ax, row, 15, 11, 0.3, canopy, TOP + 2.8);
+      for (const dx of [-5.5, -1.8, 1.8, 5.5]) for (const s of [-1, 1]){ const c = box(ax + dx, row + s * 3.2, 2, 4.4, 1.5, car[(k++) % 4], TOP + 0.05); c.position.y += 0.1 / M; }
+      for (const dx of [-6, 6]) for (const s of [-1, 1]) box(ax + dx, row + s * 5, 0.25, 0.25, 2.8, dark, TOP);
+    }
+  }
+  // the ramps at each end, as sloped slabs
+  for (const sgn of [-1, 1]){ const r = box(sgn * (W / 2 - 14), 0, 24, 8, 0.4, slab, N * LEVEL / 2); r.rotation.z = -sgn * Math.atan2(N * LEVEL, 24); }
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
+  return g;
+}
+
 /* CAFE DEL MAR, YAS BAY (city v117) — the beach club on its own piled platform out in the bay
    between Pier71 and the arena: the lagoon pool in the middle, sand and sunbed rows either
    side, the round sunset deck with its bar at the seaward tip, the club building at the
@@ -5736,7 +5768,7 @@ function wbHotel(x0, z0, rot){
     geo.rotateX(-Math.PI / 2); geo.translate(0, y / M, 0);   // shape +y is now -z; depth stands up
     const m = new THREE.Mesh(geo, mat); sub.add(m); return m;
   };
-  const R_OUT = 92, R_IN = 62, FLOOR = 4.2;
+  const R_OUT = 92, R_IN = 62, FLOOR = 4.2, CX = 70, CZ = 3;   // CX/CZ: the drop-off oval, east of the arc centre
   let y = 0;
   for (let i = 0; i < 8; i++){
     const gl = sector(R_OUT, R_IN, FLOOR - 0.7, y, glass); if (i === 0) gl.userData.hero = gl.userData.kitName = 'wbHotel';
@@ -5751,16 +5783,48 @@ function wbHotel(x0, z0, rot){
   /* the porte-cochere and the drop-off circle */
   { const can = new THREE.Mesh(new THREE.BoxGeometry(70 / M, 1.2 / M, 26 / M), white); can.position.set(0, 7 / M, -(R_OUT + 12) / M); sub.add(can);
     for (const dx of [-28, -10, 10, 28]) for (const dz of [-8, 8]){ const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5 / M, 0.5 / M, 7 / M, 8), band); c.position.set(dx / M, 3.5 / M, -(R_OUT + 12 + dz) / M); sub.add(c); }
-    const CZ = -(R_OUT + 62);
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(48 / M, 48 / M, 0.4 / M, 40), pave); disc.position.set(0, 0.2 / M, CZ / M); sub.add(disc);
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(26 / M, 26 / M, 0.5 / M, 40), lawn); ring.position.set(0, 0.45 / M, CZ / M); sub.add(ring);
-    const basin = new THREE.Mesh(new THREE.CylinderGeometry(14 / M, 14 / M, 0.6 / M, 32), water); basin.position.set(0, 0.7 / M, CZ / M); sub.add(basin);
-    const shield = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 7 / M, 0.8 / M), gold); shield.position.set(0, 4.5 / M, CZ / M); sub.add(shield);
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.4 / M, 0.4 / M, 3 / M, 8), dark); post.position.set(0, 1.5 / M, CZ / M); sub.add(post);
+    /* THE DROP-OFF IS AT THE EAST END, NOT ON THE PARK SIDE (city v135). The satellite puts the
+       oval forecourt and its fountain 70 m east of the arc's centre, level with it, off the
+       crescent's east tip where the hotel's own entrance canopy is; the first seat put it 154 m
+       north, in the middle of the park's courtyard. */
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(36 / M, 36 / M, 0.4 / M, 40), pave); disc.scale.set(1.25, 1, 1); disc.position.set(CX / M, 0.2 / M, CZ / M); sub.add(disc);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(22 / M, 22 / M, 0.5 / M, 40), lawn); ring.scale.set(1.25, 1, 1); ring.position.set(CX / M, 0.45 / M, CZ / M); sub.add(ring);
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(9 / M, 9 / M, 0.6 / M, 32), water); basin.position.set(CX / M, 0.7 / M, CZ / M); sub.add(basin);
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 7 / M, 0.8 / M), gold); shield.position.set(CX / M, 4.5 / M, CZ / M); sub.add(shield);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.4 / M, 0.4 / M, 3 / M, 8), dark); post.position.set(CX / M, 1.5 / M, CZ / M); sub.add(post);
+    const ent = new THREE.Mesh(new THREE.BoxGeometry(22 / M, 1 / M, 30 / M), white); ent.position.set(84 / M, 6.5 / M, -22 / M); sub.add(ent);
+    for (const dz of [-12, 0, 12]) for (const dx of [-8, 8]){ const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5 / M, 0.5 / M, 6.5 / M, 8), band); c.position.set((84 + dx) / M, 3.25 / M, (-22 + dz) / M); sub.add(c); }
+  }
+  /* THE COURTYARD POOL inside the crescent, and the resort cluster the satellite shows around it
+     (city v135): the DoubleTree tower south of the arc's centre, the long low Miral HQ slab
+     running south-west to north-east on the west side with the Yas Arcade block at its south
+     end, and the lap pool between them. All in the hotel's own frame, measured off the image
+     with the crescent's 149 m chord as the scale. */
+  { const box = (ax, az, w, d, h, mat, y0, r) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); m.rotation.y = r || 0; sub.add(m); return m; };
+    // the lagoon pool and its deck, at the arc centre
+    box(-18, -12, 78, 52, 0.4, pave);
+    const lag = new THREE.Mesh(new THREE.CylinderGeometry(20 / M, 20 / M, 0.6 / M, 28), water); lag.scale.set(1.5, 1, 1); lag.position.set(-20 / M, 0.6 / M, -12 / M); sub.add(lag);
+    const lag2 = new THREE.Mesh(new THREE.CylinderGeometry(12 / M, 12 / M, 0.6 / M, 24), water); lag2.position.set(4 / M, 0.6 / M, -22 / M); sub.add(lag2);
+    // DoubleTree by Hilton: an L of two ten-storey bars, white bands over glass, south of the centre
+    const DT = 3.4;
+    for (const [ax, az, w, d] of [[0, 58, 64, 32], [22, 84, 22, 52]]){
+      for (let i = 0; i < 10; i++){ box(ax, az, w, d, DT - 0.9, glass, i * DT); box(ax, az, w + 1.2, d + 1.2, 0.9, band, i * DT + DT - 0.9); }
+      box(ax, az, w * 0.7, d * 0.7, 2.4, white, 10 * DT);
+    }
+    box(0, 32, 40, 14, 5, white, 0, 0);   // the tower's entrance lobby toward the pool
+    // Miral HQ: a five-storey slab, 155 by 45 m, on a north-east / south-west axis, with a
+    // deep white frame and a roof terrace; Yas Arcade at its south-west end, a dark glass box
+    const MH = -0.85;
+    for (let i = 0; i < 5; i++){ box(-107, 29, 155, 45, 3.3, glass, i * 4.2, MH); box(-107, 29, 158, 48, 0.9, white, i * 4.2 + 3.3, MH); }
+    box(-107, 29, 120, 30, 2.2, band, 21, MH);
+    for (let i = 0; i < 3; i++){ box(-116, 78, 60, 48, 3.6, dark, i * 4.2, MH); box(-116, 78, 62, 50, 0.6, band, i * 4.2 + 3.6, MH); }
+    // the lap pool between the slab and the tower, on the slab's axis
+    box(-62, 30, 44, 18, 0.5, pave, 0, MH); box(-62, 30, 36, 11, 0.7, water, 0.1, MH);
   }
   sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
-  const cs = Math.cos(rot || 0), sn = Math.sin(rot || 0), CZ = -(R_OUT + 62), palms = [];
-  for (let a = 0; a < Math.PI * 2; a += Math.PI / 9){ const lx = Math.cos(a) * 36 / M, lz = CZ / M + Math.sin(a) * 36 / M; palms.push([x0 + lx * cs + lz * sn, z0 - lx * sn + lz * cs]); }
+  const cs = Math.cos(rot || 0), sn = Math.sin(rot || 0), palms = [];
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 9){ const lx = (CX + Math.cos(a) * 36) / M, lz = (CZ + Math.sin(a) * 28) / M; palms.push([x0 + lx * cs + lz * sn, z0 - lx * sn + lz * cs]); }
+  for (let t = -60; t <= 60; t += 15){ const lx = (-107 + t * Math.cos(-0.85) - 30 * Math.sin(-0.85)) / M, lz = (29 - t * Math.sin(-0.85) - 30 * Math.cos(-0.85)) / M; palms.push([x0 + lx * cs + lz * sn, z0 - lx * sn + lz * cs]); }
   for (let dx = -60; dx <= 60; dx += 15){ const lx = dx / M, lz = -(R_OUT + 30) / M; palms.push([x0 + lx * cs + lz * sn, z0 - lx * sn + lz * cs]); }
   kitPalms(g, palms, 0.8);
   return g;
@@ -5814,7 +5878,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark };
 }
 
 

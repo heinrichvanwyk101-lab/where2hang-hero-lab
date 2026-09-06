@@ -299,7 +299,18 @@
      the kind of thing that drifts, so: if Search's peek-band height ever changes, this needs the
      same change or the buttons end up either buried again or floating with a gap above the
      composer. */
-  body.hasChromeInset .allBtn, body.hasChromeInset .tiltBtn{bottom:calc(42vh + 18px)}
+  /* EMBED: OUT FROM UNDER THE APP'S TAB BAR (nav v215). The app's BottomNav is fixed over the
+     iframe's bottom ~96 px plus the safe-area inset, and Home's SCROLL cue and view pill sit
+     just above it — so a control at bottom:18px is invisible on Home and one lifted to clear
+     the bar lands on the pill. Reported as "the back button is hidden behind the bottom tab
+     bar". Stacked instead in the mid-right column under the pan button, which is already
+     there for the same reason: pan at 50vh, tilt 48px below it, Back 48px below that. Search
+     (hasChromeInset) keeps its own placement above the peek band, declared after this so it
+     still wins. */
+  body.embed .tiltBtn{bottom:auto;top:calc(50vh + 48px)}
+  body.embed .allBtn{bottom:auto;top:calc(50vh + 96px);right:12px}
+  body.hasChromeInset .allBtn, body.hasChromeInset .tiltBtn{top:auto;bottom:calc(42vh + 18px)}
+  body.hasChromeInset .allBtn{right:60px}
   body.hasChromeInset .panBtn{top:28vh}
   body.hasChromeInset .camout{bottom:calc(72vh + 8px)}
   .isle{position:fixed;z-index:4;transform:translate(-50%,-50%);pointer-events:none;
@@ -731,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v214', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v215', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
