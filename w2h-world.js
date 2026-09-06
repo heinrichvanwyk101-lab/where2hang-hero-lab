@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v312';
+export const BUILD = 'world v313';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7942,6 +7942,8 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* YAS MARINA (world v311): pontoons and yachts in the basin east of the W, which the outline
      already carries as water. */
   if (kit.yasMarina){ const mr = kit.yasMarina(); mr.userData.noZone = true; built.push(mr); }
+  /* CLYMB (world v313): on its own 72 by 49 m survey record between the mall and the roof. */
+  if (kit.clymb) built.push(kit.clymb(48.5, 4.4, 0.726));
   for (const o of built){
     o.position.y = GROUND;
     yas.detail.add(o);

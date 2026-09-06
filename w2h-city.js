@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v137';
+export const BUILD = 'city v138';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -2386,11 +2386,20 @@ function yasMall(x0, z0, facing){
     const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, dp / M), mat);
     m.position.set(dx / M, h / M / 2, dz / M);
     m.castShadow = true; m.receiveShadow = true;
-    g.add(m); return m;
+    g.add(m);
+    /* a dark glazed band at the upper level and a pale cornice, so the cladding reads as a mall
+       and not a warehouse (city v138) */
+    if (mat === body && h >= 20){
+      const band = new THREE.Mesh(new THREE.BoxGeometry((w + 0.6) / M, 3.2 / M, (dp + 0.6) / M), glass); band.position.set(dx / M, (h - 7) / M, dz / M); g.add(band);
+      const cor = new THREE.Mesh(new THREE.BoxGeometry((w + 1.6) / M, 1.2 / M, (dp + 1.6) / M), kerbLike); cor.position.set(dx / M, (h - 0.6) / M, dz / M); g.add(cor);
+    }
+    return m;
   };
+  const kerbLike = new THREE.MeshStandardMaterial({ color:0x2A2823, roughness:0.9 });
+  kerbLike.userData.duskColor = 0xE0DACD; kerbLike.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF0EBDF, roughness:0.9 });
 
   /* Retail core: the atrium, four wings on the axes, four blocks on the diagonals. */
-  box(body,    0,    0, 150, 28, 150);
+  { const atrium = box(body,    0,    0, 150, 28, 150); atrium.userData.hero = atrium.userData.kitName = 'yasMall'; }
   box(body,  135,    0, 120, 24, 120);   box(body, -135,   0, 120, 24, 120);
   box(body,    0,  140, 115, 24, 125);   box(body,    0,-140, 115, 24, 125);
   box(body,  115,  120, 110, 20, 110);   box(body, -115, 120, 110, 20, 110);
@@ -2398,10 +2407,11 @@ function yasMall(x0, z0, facing){
 
   /* The pyramid over the atrium. Four radial segments IS a pyramid, and turning it 45 degrees
      squares it to the block beneath. */
-  const pyr = new THREE.Mesh(new THREE.ConeGeometry(72 / M, 16 / M, 4), glass);
-  pyr.position.set(0, (28 + 8) / M, 0);
-  pyr.rotation.y = Math.PI / 4;
-  g.add(pyr);
+  /* THE DOME (city v138). The satellite shows the mall's centre as a big round skylight over the
+     central plaza, not a pyramid: a glass cap 110 m across on a low drum, with a ring of fins. */
+  { const drum = new THREE.Mesh(new THREE.CylinderGeometry(58 / M, 58 / M, 6 / M, 40), body); drum.position.set(0, 31 / M, 0); g.add(drum);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(56 / M, 40, 16, 0, Math.PI * 2, 0, Math.PI * 0.42), glass); dome.position.set(0, 34 / M - 56 / M * Math.cos(Math.PI * 0.42), 0); g.add(dome);
+    for (let k = 0; k < 24; k++){ const a = k / 24 * Math.PI * 2; const fin = new THREE.Mesh(new THREE.BoxGeometry(1.2 / M, 8 / M, 14 / M), body); fin.position.set(Math.cos(a) * 58 / M, 36 / M, Math.sin(a) * 58 / M); fin.rotation.y = -a; g.add(fin); } }
   /* THE GLAZED SPINES. The mall's two main galleries run out from the atrium under continuous
      barrel-vaulted skylights, and they are what the aerials show first: two bright lines crossing
      at the pyramid. Half-cylinders lying on the roof, in the same glass as the pyramid. */
@@ -2418,9 +2428,24 @@ function yasMall(x0, z0, facing){
   kerb.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xEAE4D6, roughness:0.9 });
 
   /* Car decks. Low, flat, and larger than anything else on the site. */
+  /* SURFACE LOTS UNDER SHADE CANOPIES (city v138). The satellite shows the ground round the mall
+     as long rows of white canopies with cars under them, not stacked decks: the four corner
+     lots are drawn that way now, and only the two axial ones stay as multi-storey decks. */
+  const shade = new THREE.MeshStandardMaterial({ color:0x2A2A28, roughness:0.7, emissive:0xFFE4B8, emissiveIntensity:0.05 });
+  shade.userData.duskColor = 0xEAE5D8; shade.userData.dayMats = new THREE.MeshStandardMaterial({ color:0xF6F2E8, roughness:0.7 });
+  const carMats = [0xDADADA, 0x2E3238, 0x8A8E93, 0x7A2A2A].map(c => { const m = new THREE.MeshStandardMaterial({ color:0x1A1A1A, roughness:0.5, metalness:0.2 }); m.userData.duskColor = c; m.userData.dayMats = new THREE.MeshStandardMaterial({ color:c, roughness:0.5, metalness:0.2 }); return m; });
+  let carK = 0;
+  for (const [dx, dz, w, dp] of [[ 255,  245, 210, 190], [-255,  245, 210, 190], [ 255, -245, 210, 190], [-255, -245, 210, 190]]){
+    const lot = new THREE.Mesh(new THREE.BoxGeometry(w / M, 0.5 / M, dp / M), deckMat); lot.position.set(dx / M, 0.25 / M, dz / M); lot.receiveShadow = true; g.add(lot);
+    for (let rz = -dp / 2 + 18; rz < dp / 2 - 10; rz += 30){
+      for (let rx = -w / 2 + 12; rx < w / 2 - 8; rx += 18){
+        const c = new THREE.Mesh(new THREE.BoxGeometry(16 / M, 0.3 / M, 11 / M), shade); c.position.set((dx + rx) / M, 3.4 / M, (dz + rz) / M); g.add(c);
+        for (const px of [-6, 6]){ const p = new THREE.Mesh(new THREE.BoxGeometry(0.3 / M, 3.2 / M, 0.3 / M), dark); p.position.set((dx + rx + px) / M, 1.6 / M, (dz + rz) / M); g.add(p); }
+        for (const cx of [-5.5, -1.8, 1.8, 5.5]) for (const sgn of [-1, 1]){ if (((carK++) % 5) === 0) continue; const car = new THREE.Mesh(new THREE.BoxGeometry(2 / M, 1.5 / M, 4.4 / M), carMats[carK % 4]); car.position.set((dx + rx + cx) / M, 1.25 / M, (dz + rz + sgn * 3.2) / M); g.add(car); }
+      }
+    }
+  }
   for (const [dx, dz, w, dp] of [
-      [ 255,  245, 210, 190], [-255,  245, 210, 190],
-      [ 255, -245, 210, 190], [-255, -245, 210, 190],
       [   0,  300, 180, 140], [   0, -300, 180, 140]]){
     const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, 13 / M, dp / M), deckMat);
     m.position.set(dx / M, 13 / M / 2, dz / M);
@@ -5714,6 +5739,35 @@ function yasMarina(){
   return g;
 }
 
+/* CLYMB ABU DHABI (city v138) — the dark crystalline block between Yas Mall and Ferrari World
+   on its own 72 by 49 m survey record: a faceted charcoal boulder about 28 m high, the 43 m
+   climbing tower leaning out of one end as a taller angular prism, and the round flight chamber
+   of the indoor skydive at the other, in pale glass. Flat-shaded so the facets catch the light;
+   a thin blue-glass seam round the base. */
+function clymb(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  const dark = saadKitMat(0x24272B, 0x3A3E45, 0.85, 0.05); dark.flatShading = true; if (dark.userData.dayMats) dark.userData.dayMats.flatShading = true;
+  const seam = saadKitMat(0x1B3A5C, 0x2F6FA8, 0.3, 0.3, 0x4FA0FF, 0.35, 1.0);
+  const chamber = saadKitMat(0xC9D6DE, 0xE6EEF3, 0.3, 0.2, 0xBFE4FF, 0.12, 1.0);
+  const facet = (ax, az, r, h, sides, y0, sx, sz, tilt, turn) => {
+    const geo = new THREE.CylinderGeometry(r * 0.72 / M, r / M, h / M, sides, 1);
+    const m = new THREE.Mesh(geo, dark); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); m.scale.set(sx || 1, 1, sz || 1); m.rotation.set(tilt || 0, turn || 0, 0); m.castShadow = true; sub.add(m); return m;
+  };
+  // the body: two overlapping faceted prisms
+  const body = facet(-4, 0, 26, 27, 7, 0, 1.35, 0.95, 0, 0.3); body.userData.hero = body.userData.kitName = 'clymb';
+  facet(14, 6, 20, 22, 6, 0, 1.2, 1.0, 0, 1.1);
+  // the climbing tower, leaning out of the north-east end
+  facet(-24, -4, 11, 43, 5, 0, 1.1, 0.9, -0.08, 0.6);
+  // the flight chamber
+  { const c = new THREE.Mesh(new THREE.CylinderGeometry(7 / M, 7 / M, 32 / M, 24), chamber); c.position.set(30 / M, 16 / M, -10 / M); sub.add(c);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(8.5 / M, 8.5 / M, 1.5 / M, 24), dark); cap.position.set(30 / M, 32.5 / M, -10 / M); sub.add(cap); }
+  // the seam at the base and the apron
+  { const sm = new THREE.Mesh(new THREE.BoxGeometry(78 / M, 2.2 / M, 54 / M), seam); sm.position.set(0, 1.1 / M, 0); sub.add(sm);
+    const ap = new THREE.Mesh(new THREE.BoxGeometry(96 / M, 0.3 / M, 70 / M), saadKitMat(0xD3CCBE, 0xEAE4D6, 0.9, 0)); ap.position.set(0, 0.15 / M, 0); sub.add(ap); }
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
+  return g;
+}
+
 /* CAFE DEL MAR, YAS BAY (city v117) — the beach club on its own piled platform out in the bay
    between Pier71 and the arena: the lagoon pool in the middle, sand and sunbed rows either
    side, the round sunset deck with its bar at the seaward tip, the club building at the
@@ -5994,7 +6048,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb };
 }
 
 
