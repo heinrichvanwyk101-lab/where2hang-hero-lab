@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v126';
+export const BUILD = 'city v127';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5688,6 +5688,56 @@ function saadiyatGrove(spec){
   kitLamps(g, lamps);   // the lanes lit (city v125)
   return g;
 }
+/* THE WB ABU DHABI (city v127) — the hotel beside Warner Bros. World: an eight-storey crescent of
+   blue glass under white floor bands, a deep white roof canopy over the sky deck, the WB shield on
+   the convex face, the porte-cochere below it, and the drop-off circle with its fountain and
+   palm ring in front. On the survey's 148 by 106 m record at the park's west end, on the park's
+   own axis. The convex front faces local -z. */
+function wbHotel(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  const glass = saadKitMat(0x1B2E44, 0x3D6A90, 0.25, 0.4, 0xFFD9A0, 0.35, 1.0);
+  const band = saadKitMat(0xE8E6E0, 0xF6F4EE, 0.7, 0), white = saadKitMat(0xE2E0DA, 0xF4F2EC, 0.8, 0, 0xFFE0B8, 0.1, 0.8);
+  const gold = saadKitMat(0xC9A227, 0xE0B62E, 0.4, 0.5, 0xFFD24A, 0.4, 1.0), dark = saadKitMat(0x14181E, 0x22262C, 0.6, 0.2);
+  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const water = saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1, 0x7FE0F0, 0.3, 1.0);
+  const A0 = Math.PI * 0.20, A1 = Math.PI * 0.80;   // the arc, centred on +y of the shape = -z of the world
+  const sector = (rOut, rIn, h, y, mat) => {
+    const sh = new THREE.Shape();
+    sh.absarc(0, 0, rOut / M, A0, A1, false); sh.absarc(0, 0, rIn / M, A1, A0, true); sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: h / M, bevelEnabled: false, curveSegments: 40 });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, y / M, 0);   // shape +y is now -z; depth stands up
+    const m = new THREE.Mesh(geo, mat); sub.add(m); return m;
+  };
+  const R_OUT = 92, R_IN = 62, FLOOR = 4.2;
+  let y = 0;
+  for (let i = 0; i < 8; i++){
+    const gl = sector(R_OUT, R_IN, FLOOR - 0.7, y, glass); if (i === 0) gl.userData.hero = gl.userData.kitName = 'wbHotel';
+    sector(R_OUT + 1.2, R_IN - 1.2, 0.7, y + FLOOR - 0.7, band);
+    y += FLOOR;
+  }
+  sector(R_OUT + 4, R_IN - 4, 1.2, y + 2.4, white);          // the roof canopy, floating over the sky deck
+  for (let a = A0 + 0.08; a < A1; a += 0.16){ const c = new THREE.Mesh(new THREE.BoxGeometry(0.6 / M, 2.4 / M, 0.6 / M), band); c.position.set(Math.cos(a) * (R_OUT + 2) / M, (y + 1.2) / M, -Math.sin(a) * (R_OUT + 2) / M); sub.add(c); }
+  /* the shield on the convex face, a dark panel with a gold rim, at mid height on the axis */
+  { const sh = new THREE.Mesh(new THREE.BoxGeometry(14 / M, 16 / M, 1.2 / M), dark); sh.position.set(0, 20 / M, -(R_OUT + 0.9) / M); sub.add(sh);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(16 / M, 18 / M, 0.6 / M), gold); rim.position.set(0, 20 / M, -(R_OUT + 0.6) / M); sub.add(rim); }
+  /* the porte-cochere and the drop-off circle */
+  { const can = new THREE.Mesh(new THREE.BoxGeometry(70 / M, 1.2 / M, 26 / M), white); can.position.set(0, 7 / M, -(R_OUT + 12) / M); sub.add(can);
+    for (const dx of [-28, -10, 10, 28]) for (const dz of [-8, 8]){ const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5 / M, 0.5 / M, 7 / M, 8), band); c.position.set(dx / M, 3.5 / M, -(R_OUT + 12 + dz) / M); sub.add(c); }
+    const CZ = -(R_OUT + 62);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(48 / M, 48 / M, 0.4 / M, 40), pave); disc.position.set(0, 0.2 / M, CZ / M); sub.add(disc);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(26 / M, 26 / M, 0.5 / M, 40), lawn); ring.position.set(0, 0.45 / M, CZ / M); sub.add(ring);
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(14 / M, 14 / M, 0.6 / M, 32), water); basin.position.set(0, 0.7 / M, CZ / M); sub.add(basin);
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 7 / M, 0.8 / M), gold); shield.position.set(0, 4.5 / M, CZ / M); sub.add(shield);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.4 / M, 0.4 / M, 3 / M, 8), dark); post.position.set(0, 1.5 / M, CZ / M); sub.add(post);
+  }
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
+  const cs = Math.cos(rot || 0), sn = Math.sin(rot || 0), CZ = -(R_OUT + 62), palms = [];
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 9){ const lx = Math.cos(a) * 36 / M, lz = CZ / M + Math.sin(a) * 36 / M; palms.push([x0 + lx * cs + lz * sn, z0 - lx * sn + lz * cs]); }
+  for (let dx = -60; dx <= 60; dx += 15){ const lx = dx / M, lz = -(R_OUT + 30) / M; palms.push([x0 + lx * cs + lz * sn, z0 - lx * sn + lz * cs]); }
+  kitPalms(g, palms, 0.8);
+  return g;
+}
+
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -5695,7 +5745,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel };
 }
 
 

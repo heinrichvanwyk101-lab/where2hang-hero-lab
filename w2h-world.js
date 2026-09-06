@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v302';
+export const BUILD = 'world v303';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5283,6 +5283,7 @@ const DISTRICTS = [
       { label:'Yas Marina',    osm:'Yas Marina Circuit',      x:-10, z: 18, h: 5, r:42 },
       { label:'W Abu Dhabi',   x:7.3, z:266.4, h: 8, r:30 },
       { label:'Warner Bros. World', x:-38.3, z:-79.9, h: 6, r:40 },   // on the park's own record (world v301)
+      { label:'The WB Abu Dhabi', x:-85.6, z:-75.8, h: 6, r:28 },   // the hotel beside the park (world v303)
       { label:'Yas Mall',      osm:'Yas Mall',                x: 10, z: -6, h: 8, r:40 },
       { label:'Ferrari World', osm:'Ferrari World Abu Dhabi', x: 30, z:-12, h: 9, r:40 },
       { label:'Yas Waterworld', osm:'Yas Waterworld',         x: -4, z:-24, h: 6, r:38 },
@@ -7905,6 +7906,8 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      is the survey's 446 by 335 m record north of Yas Waterworld, west of the mall, at (-38.3, -79.9)
      units turned -0.68, and the kit's 420 by 300 m hall fits it. */
   if (kit.warnerBrosWorld) built.push(kit.warnerBrosWorld(-38.3, -79.9, -0.68));
+  /* The WB Abu Dhabi, the hotel at the park's west end, on the survey's 148 by 106 m record (world v303). */
+  if (kit.wbHotel) built.push(kit.wbHotel(-85.6, -75.8, -0.69));
   if (kit.yasWaterworld) built.push(kit.yasWaterworld(-45.0, -42.0));   // world v289, on the park's centre
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
