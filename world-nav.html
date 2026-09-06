@@ -731,7 +731,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v213', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v214', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1526,6 +1526,8 @@ function _visibleChain(o){
   return true;
 }
 const ZOOM_MIN = 0.08;
+/* ZOOM OUT TO THE WHOLE DISTRICT (nav v214): 2.6 could not show a district's full layout on a phone. */
+const ZOOM_MAX = 5.0;
 const orbit = { yaw:0, lift:0, zoom:1, panX:0, panZ:0, on:false };
 /* SEPARATE FROM ORBIT.LIFT ITSELF, WHICH THE GESTURE HANDLER SETS DIRECTLY AND INSTANTLY —
    this is only for the tilt BUTTON, which needs to ease toward a target over time rather than
@@ -4255,7 +4257,7 @@ canvas.addEventListener('pointermove', e => {
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     if (pinch0 > 8){
       // Pinching APART should move the camera closer, so the ratio is inverted.
-      orbit.zoom = Math.max(ZOOM_MIN, Math.min(2.6, zoom0 * (pinch0 / d)));
+      orbit.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom0 * (pinch0 / d)));
       orbit.on = true;
       /* Twist to rotate, in the map modes only. Two fingers on a turntable already mean zoom and
          adding rotation to them there would make every pinch drift the heading. */
@@ -4331,7 +4333,7 @@ canvas.addEventListener('pointercancel', endPointer);
 // Desktop convenience while working on the thing; harmless on a phone.
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  orbit.zoom = Math.max(ZOOM_MIN, Math.min(2.6, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.10)));
+  orbit.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, orbit.zoom * (1 + Math.sign(e.deltaY) * 0.10)));
   orbit.on = true;
 }, { passive:false });
 canvas.addEventListener('pointerup', e => {

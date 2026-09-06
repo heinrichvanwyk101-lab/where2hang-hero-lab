@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v132';
+export const BUILD = 'city v133';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5671,7 +5671,7 @@ function saadiyatGrove(spec){
     if (i === 2) b.userData.hero = b.userData.kitName = 'saadiyatGrove';
     for (let k = -3; k <= 3; k++){ const aa = a + k * 0.03; palms.push([ZX + Math.cos(aa) * 21.5, ZZ - Math.sin(aa) * 21.5 * 1.15]); }
   }
-  { const GX = spec.galleria.x, GZ = spec.galleria.z, GA = spec.galleria.rot ?? GR, gat = at(GX, GZ, GA);
+  if (spec.galleria){ const GX = spec.galleria.x, GZ = spec.galleria.z, GA = spec.galleria.rot ?? GR, gat = at(GX, GZ, GA);
     slab(GX, GZ, 190, 80, 10, white, GA);
     slab(GX, GZ, 170, 64, 12, glassR, GA, 10);
     slab(GX, GZ, 200, 90, 2, white, GA, 22);

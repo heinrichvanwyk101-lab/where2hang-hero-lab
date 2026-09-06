@@ -90,20 +90,23 @@ def gal_ok(x,z):
     c,s=math.cos(GR),math.sin(GR); rx=x+ (72/7.8)*s; rz=z+(72/7.8)*c
     return rect_ok(occ,x,z,GR,GW,GD) and rect_ok(occ,rx,rz,GR,90/7.8+3,RB)
 gal=None; best=1e9
+SAT_ONLY=True   # world v307: lay what the satellite shows, not the masterplan render
 for dx in range(-16,17,2):
     for dz in range(-16,17,2):
         x,z=-428+dx,150+dz
         if gal_ok(x,z) and dx*dx+dz*dz<best: best=dx*dx+dz*dz; gal=(x,z)
+if SAT_ONLY: gal=None
 print('galleria seat',gal)
 if gal:
     x,z=gal; c,s=math.cos(GR),math.sin(GR)
     stamp_rect(occ,x,z,GR,GW+1,GD+1); stamp_rect(occ,x+(72/7.8)*s,z+(72/7.8)*c,GR,90/7.8+4,RB+1)
 # 2. crescent seats against roads only
 cres=[]
+CRES_OFF=True
 for i in range(4):
     a=math.pi*(0.62+i*0.19)+GR; r=28
     x=ZX+math.cos(a)*r; z=ZZn-math.sin(a)*r*1.15
-    if rect_ok(roadfree,x,z,a+math.pi/2,70/7.8+1.5,24/7.8+1.5,0.95): cres.append(i); stamp_rect(occ,x,z,a+math.pi/2,70/7.8+3,24/7.8+3)
+    if not CRES_OFF and rect_ok(roadfree,x,z,a+math.pi/2,70/7.8+1.5,24/7.8+1.5,0.95): cres.append(i); stamp_rect(occ,x,z,a+math.pi/2,70/7.8+3,24/7.8+3)
 print('crescent ok',cres)
 # 3. primary grid: 11 x 11 u blocks, 2.6 u lanes, GR frame, best of 9 offsets
 B,LN=11.0,2.6
@@ -113,11 +116,16 @@ def grid_seats(ox,oz,B):
     for u in np.arange(-130,130,B+LN):
         for v in np.arange(-90,90,B+LN):
             x=-362+ox+u*c+v*s; z=166+oz-u*s+v*c
-            if X0<x<X1 and Z0<z<Z1: seats.append((x,z))
+            if X0<x<X1 and Z0<z<Z1 and x>EAST_ONLY_X: seats.append((x,z))
     return seats
 def kind_of(x,z):
-    if z>197 and -392<x<-306: return 'park'
-    return 'stone' if x<-447 else 'block'
+    # the palm boulevard runs south from the lagoon to the south leg of Jacques Chirac St
+    if z>197 and -386<x<-358: return 'park'
+    return 'block'
+# WEST OF THE LAGOON IS NOT BUILT (world v307): the satellite shows the Guggenheim site and open
+# construction ground between it and the bow road, with one long strip of parcels between the
+# site and the lagoon. The grid fill stops at x = -400; the strip is laid by hand below.
+EAST_ONLY_X=-400
 bestfill=None
 for ox in (0,4.5,9):
     for oz in (0,4.5,9):
@@ -137,12 +145,16 @@ for Bs in (8.0,6.5,5.0):
     for u in np.arange(-130,130,1.0):
         for v in np.arange(-90,90,1.0):
             x=-362+u*c+v*s; z=166-u*s+v*c
-            if not (X0<x<X1 and Z0<z<Z1): continue
+            if not (X0<x<X1 and Z0<z<Z1) or x<=EAST_ONLY_X: continue
             rb=turn_of(x,z)
             if rect_ok(occ,x,z,rb,Bs,Bs,0.99):
                 k=kind_of(x,z); h=hashf(x,z)
                 st=0 if k=='park' else (2+int(h*2) if k=='stone' else 4+int(h*4))
                 out.append([round(x,1),round(z,1),round(rb,3),round(Bs*7.8),round(Bs*7.8),k,st]); stamp_rect(occ,x,z,rb,Bs+LN,Bs+LN)
+# the strip between the Guggenheim site and the lagoon: three long bars, north-south, six storeys
+for zc in (118,150,182):
+    x=-398; z=zc
+    if rect_ok(free,x,z,GR+math.pi/2,150/7.8,40/7.8,0.9): out.append([x,z,round(GR+math.pi/2,3),150,40,'block',6]); stamp_rect(occ,x,z,GR+math.pi/2,150/7.8+2,40/7.8+2)
 print('cells',len(out),{k:sum(1 for o in out if o[5]==k) for k in ('block','stone','park')})
 json.dump({'gal':gal,'cres':cres,'cells':out},open(S+'grove_cells.json','w'))
 img=np.zeros((H,W,3),np.uint8); img[roadfree]=(200,190,160); img[~roadfree]=(60,60,60); img[roadfree&~free]=(120,170,190)
