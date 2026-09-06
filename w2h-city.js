@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v136';
+export const BUILD = 'city v137';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5453,8 +5453,17 @@ function mamshaSaadiyat(blocks, prom){
     slab(x, z, w * 0.9, d * 0.9, 0.5, lawn, rot, h + 0.25);
     return b;
   };
+  /* SURVEY SLABS (city v137): a block flagged slab is one of the built Mamsha's angled bars or
+     podiums on its own surveyed footprint — the bar at full size, glass bands, planted roof,
+     nothing invented round it; the promenade comes from `prom` below. */
   blocks.forEach((b, i) => {
     const { x, z, rot, len, dep, storeys } = b, mat = i % 2 ? white : cream, cat = at(x, z, rot);
+    if (b.slab){
+      const m = bar(x, z, rot, 0, 0, len, dep, storeys, b.podium ? cream : mat);
+      if (i === 4) m.userData.hero = m.userData.kitName = 'mamshaSaadiyat';
+      if (!b.podium) for (const sgn of [-1, 1]){ const [tx, tz] = cat(sgn * (len / 2 - 6) / M, 0); slab(tx, tz, 8, dep * 0.7, 1.2, white, rot, storeys * F + 0.6); }
+      return;
+    }
     const main = bar(x, z, rot, 0, dep * 0.32, len, dep * 0.36, storeys, mat);
     if (i === 4) main.userData.hero = main.userData.kitName = 'mamshaSaadiyat';
     bar(x, z, rot, -(len / 2 - 11), -dep * 0.1, 22, dep * 0.5, storeys - 2, mat);
@@ -5466,8 +5475,18 @@ function mamshaSaadiyat(blocks, prom){
     for (let ax = -len / 2; ax <= len / 2; ax += 9) palms.push(cat(ax / M, -(dep / 2 + 4) / M));
     for (let k = -1; k <= 1; k++) for (const uz of [-(dep / 2 + 18), -(dep / 2 + 24)]){ const [ux, uz2] = cat((k * 12) / M, uz / M); const u = new THREE.Mesh(new THREE.CylinderGeometry(1.8 / M, 1.8 / M, 0.3 / M, 10), umbrella); u.position.set(ux, 2.4 / M, uz2); g.add(u); }
   });
+  for (const pr of (prom || [])){
+    if (pr.x0 === undefined) continue;
+    const L = Math.hypot(pr.x1 - pr.x0, pr.z1 - pr.z0), ang = Math.atan2(pr.z1 - pr.z0, pr.x1 - pr.x0), rot = -ang;
+    const cat = at((pr.x0 + pr.x1) / 2, (pr.z0 + pr.z1) / 2, rot);
+    slab((pr.x0 + pr.x1) / 2, (pr.z0 + pr.z1) / 2, L * M, 10, 0.4, pave, rot);
+    for (let t = -L / 2; t <= L / 2; t += 1.2) palms.push(cat(t, -1.0));
+    for (let t = -L / 2 + 1; t < L / 2; t += 1.6) for (const uz of [-3.2, -4.4]){ const [ux, uz2] = cat(t, uz); const u = new THREE.Mesh(new THREE.CylinderGeometry(1.8 / M, 1.8 / M, 0.3 / M, 10), umbrella); u.position.set(ux, 2.2 / M, uz2); g.add(u); const p = new THREE.Mesh(new THREE.CylinderGeometry(0.08 / M, 0.08 / M, 2.2 / M, 6), white); p.position.set(ux, 1.1 / M, uz2); g.add(p); }
+    for (let t = -L / 2 + 2; t < L / 2; t += 9){ const [kx, kz] = cat(t, -2.0); slab(kx, kz, 10, 6, 3.6, glassD, rot); slab(kx, kz, 13, 8, 0.4, canopy, rot, 3.7); }
+  }
   for (let i = 0; i + 1 < blocks.length; i++){
     const a = blocks[i], b = blocks[i + 1], L = Math.hypot(b.x - a.x, b.z - a.z), ang = Math.atan2(b.z - a.z, b.x - a.x);
+    if (a.slab || b.slab) continue;
     const cat = at((a.x + b.x) / 2, (a.z + b.z) / 2, -ang), rot = -ang;
     const [px, pz] = cat(0, -(a.dep / 2 + 6) / M); slab(px, pz, L * M + 2, 10, 0.4, pave, rot);
     const [rx, rz] = cat(0, (a.dep / 2 + 16) / M); slab(rx, rz, L * M + 2, 22, 0.3, road, rot);
@@ -5780,16 +5799,19 @@ function saadiyatGrove(spec){
      Inner edge at the mound's foot, outer edge 15 units out, wrapping the west and south. */
   /* THE FOUNTAIN (city v130): a curved water channel that runs round the mound, with a line of
      jets down its middle, and a paved walk outside it. Not a lake. */
-  const lake = new THREE.Mesh(new THREE.RingGeometry(11, 14.5, 64, 1, Math.PI * 0.35, Math.PI * 1.3), water);
-  lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.08, 1); lake.position.set(ZX, 0.05, ZZ); g.add(lake);
-  const rim = new THREE.Mesh(new THREE.RingGeometry(14.5, 16.5, 64, 1, Math.PI * 0.3, Math.PI * 1.4), pave);
-  rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.08, 1); rim.position.set(ZX, 0.06, ZZ); g.add(rim);
-  { const jet = saadKitMat(0xE8F4F8, 0xFFFFFF, 0.3, 0, 0xCFEFFF, 0.6, 1.0);
-    for (let a = Math.PI * 0.4; a <= Math.PI * 1.6; a += Math.PI / 22){
-      const j = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.06, 1.1, 6), jet);
-      const ax = Math.cos(a) * 12.75, az = Math.sin(a) * 12.75 * 1.08;
-      j.position.set(ZX + ax * Math.cos(GR) + az * Math.sin(GR), 0.6, ZZ - ax * Math.sin(GR) + az * Math.cos(GR)); g.add(j);
-    } }
+  /* THE LAGOON (city v137): the satellite shows the museum standing in a teardrop of water some
+     280 by 320 m, the mound on its east side and joined to the south shore by a causeway, the
+     Grove's blocks coming up to its west rim. A basin, not a channel: an ellipse centred five
+     units west of the mound, a paved rim walk, the causeway, and the fountain jets gone. */
+  { const LX = spec.lagoon ? spec.lagoon.x : ZX, LZ = spec.lagoon ? spec.lagoon.z : ZZ;
+    const deep = saadKitMat(0x1E4E5C, 0x2F7E8E, 0.15, 0.1, 0x5FC0D0, 0.12, 1.0);
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(18, 64), deep);
+    lake.rotation.x = -Math.PI / 2; lake.rotation.z = -GR; lake.scale.set(1, 1.15, 1); lake.position.set(LX, 0.05, LZ); g.add(lake);
+    const rim = new THREE.Mesh(new THREE.RingGeometry(18, 19.6, 64), pave);
+    rim.rotation.x = -Math.PI / 2; rim.rotation.z = -GR; rim.scale.set(1, 1.15, 1); rim.position.set(LX, 0.06, LZ); g.add(rim);
+    const way = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.25, 22), pave);   // from the mound to the south rim
+    way.position.set(ZX + 2, 0.12, ZZ + 9); way.rotation.y = -GR; g.add(way);
+    for (let k = 0; k < 24; k++){ const a = k / 24 * Math.PI * 2; palms.push([LX + Math.cos(a) * 20.6, LZ + Math.sin(a) * 20.6 * 1.15]); } }
   for (let i = 0; i < 4; i++){   // the fifth seat is on the boulevard (city v121)
     const a = Math.PI * (0.62 + i * 0.19) + GR, r = 28;
     if (spec.crescent && !spec.crescent.includes(i)) continue;   // seats checked against the road network offline (city v123)

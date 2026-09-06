@@ -27,7 +27,13 @@ for rd in roads['roads']:
     pts=[iu(p) for p in rd['pts']]
     for a,b in zip(pts,pts[1:]): stamp_seg(a,b,CLR[rd['cls']])
 # kit zones (non grove) + margin 3, mamsha seats, lake+crescent ellipse
-zones=[(-497,-460,158,187),(-388,-355,160,189),(-437,-407,82,106),(-232,-197,156,171),(-227,-213,175,188),(-292,-260,204,228)]   # teamLab by the interchange (world v309)   # Guggenheim on its real site, the Natural History Museum (world v306)
+zones=[(-497,-460,158,187),(-437,-407,82,106),(-232,-197,156,171),(-227,-213,175,188),(-428,-397,234,262),(-406,-380,252,276)]   # the lagoon (world v312), NHM and teamLab on the south peninsula footprints (world v312)
+# THE GROVE AREA (world v312): the satellite's dense cluster lies between Jacques Chirac St and
+# the lagoon, west and north-west of the museum; east of the lagoon the district grid is empty
+# plots. Polygon in island units, fitted through the Louvre and the museum.
+from matplotlib.path import Path as _Path
+GROVE_AREA=_Path([(-403.9,139.4),(-344.8,142.5),(-353.8,161.4),(-382.5,165.6),(-399.7,184.0),(-424.0,178.7),(-430.3,151.5)])
+def in_area(x,z): return GROVE_AREA.contains_point((x,z))
 SB=[[-420,99],[-400,95],[-380,89],[-360,87],[-340,84],[-320,82],[-300,76],[-280,68],[-260,64],[-240,70]]
 def shoreZ(x):
     for (a,za),(b,zb) in zip(SB,SB[1:]):
@@ -42,9 +48,9 @@ xs=np.arange(W)*RES+X0+RES/2; zs=np.arange(H)*RES+Z0+RES/2
 XX,ZZ=np.meshgrid(xs,zs)
 shore=np.array([shoreZ(x) for x in xs])[None,:]
 free &= ZZ>shore+3
-ZX,ZZn=-372,178
+ZX,ZZn=-378,178.5   # the lagoon's centre (world v312): five units west of the museum, the mound on its east side
 roadfree=free.copy()
-free &= np.hypot(XX-ZX,(ZZ-ZZn)/1.15)>32.5
+free &= np.hypot(XX-ZX,(ZZ-ZZn)/1.15)>21.5   # the lagoon itself plus its rim walk (world v312); the blocks come up to it
 free &= (XX>-462)&(XX<-262)&(ZZ>100)&(ZZ<232)
 import os; S=os.path.join(os.path.dirname(os.path.abspath(__file__)),'out')+'/'; os.makedirs(S,exist_ok=True)
 
@@ -116,7 +122,7 @@ def grid_seats(ox,oz,B):
     for u in np.arange(-130,130,B+LN):
         for v in np.arange(-90,90,B+LN):
             x=-362+ox+u*c+v*s; z=166+oz-u*s+v*c
-            if X0<x<X1 and Z0<z<Z1 and x>EAST_ONLY_X: seats.append((x,z))
+            if X0<x<X1 and Z0<z<Z1 and in_area(x,z): seats.append((x,z))
     return seats
 def kind_of(x,z):
     # the palm boulevard runs south from the lagoon to the south leg of Jacques Chirac St
@@ -145,16 +151,14 @@ for Bs in (8.0,6.5,5.0):
     for u in np.arange(-130,130,1.0):
         for v in np.arange(-90,90,1.0):
             x=-362+u*c+v*s; z=166-u*s+v*c
-            if not (X0<x<X1 and Z0<z<Z1) or x<=EAST_ONLY_X: continue
+            if not (X0<x<X1 and Z0<z<Z1) or not in_area(x,z): continue
             rb=turn_of(x,z)
             if rect_ok(occ,x,z,rb,Bs,Bs,0.99):
                 k=kind_of(x,z); h=hashf(x,z)
                 st=0 if k=='park' else (2+int(h*2) if k=='stone' else 4+int(h*4))
                 out.append([round(x,1),round(z,1),round(rb,3),round(Bs*7.8),round(Bs*7.8),k,st]); stamp_rect(occ,x,z,rb,Bs+LN,Bs+LN)
 # the strip between the Guggenheim site and the lagoon: three long bars, north-south, six storeys
-for zc in (118,150,182):
-    x=-398; z=zc
-    if rect_ok(free,x,z,GR+math.pi/2,150/7.8,40/7.8,0.9): out.append([x,z,round(GR+math.pi/2,3),150,40,'block',6]); stamp_rect(occ,x,z,GR+math.pi/2,150/7.8+2,40/7.8+2)
+# (the hand strip at x = -398 is gone in world v312: the polygon fill covers it)
 print('cells',len(out),{k:sum(1 for o in out if o[5]==k) for k in ('block','stone','park')})
 json.dump({'gal':gal,'cres':cres,'cells':out},open(S+'grove_cells.json','w'))
 img=np.zeros((H,W,3),np.uint8); img[roadfree]=(200,190,160); img[~roadfree]=(60,60,60); img[roadfree&~free]=(120,170,190)
