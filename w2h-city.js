@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v138';
+export const BUILD = 'city v139';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4493,47 +4493,39 @@ function zayedNationalMuseum(x0, z0, bearing){
   });
   return g;
 }
-function guggenheimAbuDhabi(x0, z0){
-  const g = new THREE.Group(), M = M_PER_U;
-  /* GEHRY'S HEAP: a low white mass with angled shells and cones thrown across it, on a 220 by
-     170 m platform at the water, honeycomb cells along the seaward edge. The character is in
-     the tilt — nothing stands straight — so the slabs lean, the cones lean, and half the cones
-     lie on their sides. Warm white stone, a few in pale blue-grey, as the renders read. */
-  const base = new THREE.Mesh(new THREE.BoxGeometry(220 / M, 6 / M, 170 / M), saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0));
-  base.position.set(x0, 3 / M, z0);
-  g.add(base);
-  const white = saadKitMat(0xE0DCD3, 0xF3F0EA, 0.85, 0.02);
-  const stone = saadKitMat(0xCFC6B7, 0xE4DDD0, 0.85, 0);
-  const blue  = saadKitMat(0xB6C3CE, 0xD0DCE6, 0.55, 0.25);
-  const mats = [white, white, stone, blue];
-  let seed = 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
-  /* the core: a cluster of tall angled slabs, each leaning a different way */
-  for (let i = 0; i < 9; i++){
-    const w = (26 + rnd() * 30) / M, d = (14 + rnd() * 16) / M, h = (22 + rnd() * 30) / M;
-    const bx = x0 + (rnd() - 0.5) * 110 / M, bz = z0 + (rnd() - 0.5) * 80 / M;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats[i % 4]);
-    m.position.set(bx, 6 / M + h / 2 - 2 / M, bz);
-    m.rotation.set((rnd() - 0.5) * 0.35, rnd() * 3.14, (rnd() - 0.5) * 0.35);
-    if (i === 0) m.userData.hero = true;
-    g.add(m);
+function guggenheimAbuDhabi(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  /* GEHRY'S CONES, AT THE SIZE OF THE SITE (city v139). The first heap was 220 by 170 m of
+     30 m cones on a bare promontory and read as a sandcastle; the survey record is 308 by
+     233 m and the design's cones are the tallest things on the island after the towers. So: a
+     stepped platform filling the record, in its frame; a core of six big angled white gallery
+     boxes stacked to 45 m, each turned a different way; eleven cones 35 to 70 m tall in pale
+     blue glass and warm white, most standing with a lean, three lying across the heap; a
+     water channel cut through the platform on the seaward side. */
+  const plat = saadKitMat(0xD9D2C6, 0xEAE5DC, 0.9, 0), plat2 = saadKitMat(0xCFC7B8, 0xE2DCD0, 0.9, 0);
+  const white = saadKitMat(0xE0DCD3, 0xF3F0EA, 0.85, 0.02), stone = saadKitMat(0xCFC6B7, 0xE4DDD0, 0.85, 0);
+  const blue  = saadKitMat(0xA9C4D8, 0xD6E8F4, 0.4, 0, 0xBFE4FF, 0.10, 1.0), blue2 = saadKitMat(0xBFD0DC, 0xE4EEF5, 0.4, 0, 0xBFE4FF, 0.08, 1.0);   // no metalness: without an envMap it only darkens (city v139)
+  const water = saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1, 0x7FE0F0, 0.2, 1.0);
+  const box = (ax, az, w, d, h, mat, y0, ry, rx, rz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); m.rotation.set(rx || 0, ry || 0, rz || 0); m.castShadow = true; sub.add(m); return m; };
+  box(0, 0, 300, 226, 5, plat, 0); box(20, -10, 220, 160, 4, plat2, 5);
+  box(-40, 60, 180, 14, -1, water, 3);   // the channel: a shallow dark slot in the platform
+  { const ch = new THREE.Mesh(new THREE.BoxGeometry(200 / M, 1.2 / M, 16 / M), water); ch.position.set(-30 / M, 4.6 / M, 62 / M); ch.rotation.y = 0.18; sub.add(ch); }
+  /* the core: six angled galleries */
+  const core = [[0, 0, 90, 60, 20, 9, 0.2], [18, -12, 70, 50, 16, 27, -0.5], [-22, 10, 60, 40, 14, 40, 0.9], [40, 24, 56, 44, 18, 9, 1.3], [-46, -20, 62, 36, 18, 9, -0.9], [8, 8, 40, 30, 12, 52, 0.4]];
+  core.forEach(([ax, az, w, d, h, y0, ry], k) => { const m = box(ax, az, w, d, h, k % 3 === 2 ? stone : white, y0, ry, (k % 2 ? 0.05 : -0.04), (k % 3 ? 0.03 : -0.05)); if (k === 0) m.userData.hero = m.userData.kitName = 'guggenheimAbuDhabi'; });
+  /* the cones: [ax, az, base r, top r, height, lean x, lean z, lying, mat] */
+  const cones = [
+    [-70, -50, 24, 8, 66, 0.10, -0.06, 0, blue], [62, -46, 22, 7, 58, -0.08, 0.10, 0, blue2], [-96, 20, 20, 6, 52, 0.12, 0.04, 0, white],
+    [96, 18, 26, 9, 70, -0.10, -0.05, 0, blue], [-30, -70, 18, 6, 44, 0.05, 0.14, 0, blue2], [36, 60, 21, 7, 50, -0.06, -0.12, 0, white],
+    [-64, 62, 19, 6, 46, 0.14, 0.02, 0, blue], [4, -40, 16, 5, 38, 0.08, 0.08, 0, blue2], [120, -30, 18, 6, 42, -0.12, 0.06, 0, white],
+    [-120, -20, 22, 7, 60, 0.06, -0.10, 1, blue], [70, 84, 20, 6, 52, -0.10, 0.05, 1, blue2], [-10, 96, 17, 5, 44, 0.04, 0.12, 1, white]];
+  for (const [ax, az, rb, rt, h, lx, lz, lying, mat] of cones){
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(rt / M, rb / M, h / M, 20, 1, false), mat);
+    if (lying){ c.position.set(ax / M, (9 + rb * 0.75) / M, az / M); c.rotation.set(Math.PI / 2 - 0.22, Math.atan2(az, ax) + 0.4, 0); }
+    else { c.position.set(ax / M, (9 + h / 2) / M, az / M); c.rotation.set(lx, 0, lz); }
+    c.castShadow = true; sub.add(c);
   }
-  /* the cones: some standing and leaning, some lying across the heap */
-  for (let i = 0; i < 11; i++){
-    const a = i / 11 * 6.2832 + rnd() * 0.5, rr = (i % 3 === 0 ? 16 : 34 + rnd() * 36) / M;
-    const H = (30 + rnd() * 34) / M, rb = (11 + rnd() * 9) / M, rt = rb * (0.15 + rnd() * 0.3);
-    const cone = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, H, 14, 1, false), mats[(i + 1) % 4]);
-    const lying = i % 4 === 3;
-    cone.position.set(x0 + Math.cos(a) * rr, lying ? 6 / M + rb * 0.8 : 6 / M + H / 2 + 6 / M, z0 + Math.sin(a) * rr);
-    cone.rotation.set(lying ? Math.PI / 2 - 0.25 + (rnd() - 0.5) * 0.3 : (rnd() - 0.5) * 0.5, rnd() * 6.2832, lying ? 0 : (rnd() - 0.5) * 0.5);
-    g.add(cone);
-  }
-  /* The honeycomb: two rows of hexagonal cells along the seaward edge, as in the site aerial. */
-  const cellMat = saadKitMat(0xD9D4CC, 0xEDE9E2, 0.85, 0);
-  for (let row = 0; row < 2; row++) for (let i = 0; i < 12; i++){
-    const cell = new THREE.Mesh(new THREE.CylinderGeometry(8 / M, 8 / M, 7 / M, 6, 1, false), cellMat);
-    cell.position.set(x0 + (-96 + i * 17.5 + (row ? 8.5 : 0)) / M, 6 / M + 3.5 / M, z0 + (-70 - row * 15) / M);
-    g.add(cell);
-  }
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
   return g;
 }
 function naturalHistoryMuseum(x0, z0){

@@ -27,7 +27,7 @@ for rd in roads['roads']:
     pts=[iu(p) for p in rd['pts']]
     for a,b in zip(pts,pts[1:]): stamp_seg(a,b,CLR[rd['cls']])
 # kit zones (non grove) + margin 3, mamsha seats, lake+crescent ellipse
-zones=[(-497,-460,158,187),(-437,-407,82,106),(-232,-197,156,171),(-227,-213,175,188),(-428,-397,234,262),(-406,-380,252,276)]   # the lagoon (world v312), NHM and teamLab on the south peninsula footprints (world v312)
+zones=[(-497,-460,158,187),(-492,-441,64,110),(-232,-197,156,171),(-227,-213,175,188),(-428,-397,234,262),(-406,-380,252,276)]   # the lagoon (world v312), NHM and teamLab on the south peninsula footprints (world v312)
 # THE GROVE AREA (world v312): the satellite's dense cluster lies between Jacques Chirac St and
 # the lagoon, west and north-west of the museum; east of the lagoon the district grid is empty
 # plots. Polygon in island units, fitted through the Louvre and the museum.

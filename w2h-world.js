@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v313';
+export const BUILD = 'world v314';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8082,7 +8082,7 @@ const LM_SAADIYAT = {
 KIT_ZONES[saadiyat.id] = [
   { x0:-497, x1:-460, z0:158, z1:187 },   // Louvre platform, 260 x 210 m
   { x0:-388, x1:-355, z0:160, z1:189 },   // Zayed National Museum podium and lagoon
-  { x0:-488, x1:-445, z0: 70, z1:103 },   // Guggenheim on its baked footprint (world v308)
+  { x0:-492, x1:-441, z0: 64, z1:110 },   // Guggenheim at the size of its baked footprint (world v314)
   { x0:-428, x1:-397, z0:234, z1:262 },   // Natural History Museum on its baked footprint (world v312)
   { x0:-376, x1:-328, z0:284, z1:332 },   // the waterfront park on the peninsula (world v306)
   { x0:-406, x1:-380, z0:252, z1:276 },   // teamLab Phenomena on its baked footprint beside the NHM (world v312)
@@ -8126,7 +8126,7 @@ if (!NO_KIT && maryah && kit.adgmSquare){
 }
 if (!NO_KIT && saadiyat && kit.louvreAbuDhabi){
   for (const [fn, at, bear] of [['louvreAbuDhabi', LM_SAADIYAT.louvre], ['zayedNationalMuseum', LM_SAADIYAT.znm, 0.25],
-                                ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim], ['naturalHistoryMuseum', LM_SAADIYAT.nhm],
+                                ['guggenheimAbuDhabi', LM_SAADIYAT.guggenheim, 0.832], ['naturalHistoryMuseum', LM_SAADIYAT.nhm],
                                 ['teamLabPhenomena', LM_SAADIYAT.teamlab, 0.72]]){
     if (!kit[fn]) continue;
     const m = kit[fn](at.x, at.z, bear);
