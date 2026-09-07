@@ -742,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v219', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v220', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2316,47 +2316,66 @@ window.__w2hClearResultMarkers = clearResultMarkers;
    wide shot. Everything needed to rebuild it lives in resultPins, which persists for the whole
    result set, so this is a re-run of the same math rather than a remembered snapshot that could
    drift out of step with it. */
-function frameAllResults(label){
-  const pts = resultPins;
-  if (!pts || !pts.length) return false;
-
+/* The one island every pin sits on, or null when the set spans several. Generous — 1.15 —
+   because a waterfront venue can sit just outside the radius the island is framed on without
+   belonging anywhere else. */
+function resultsHost(pts){
+  for (const d of DISTRICTS){
+    const rr = (d.r * (d.dispScale || 1)) * 1.15;
+    if (pts.every(p => Math.hypot(p.x - d.x, p.z - d.z) <= rr)) return d;
+  }
+  return null;
+}
+function resultsBox(pts){
   let x0 =  Infinity, z0 =  Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const p of pts){
     if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
     if (p.z < z0) z0 = p.z; if (p.z > z1) z1 = p.z;
   }
-  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-  const halfDiag = Math.hypot(x1 - x0, z1 - z0) / 2;
-
-  /* A single result has no extent at all, and framing a zero radius puts the camera in the
-     building. SHOT_MIN_DISP is the same floor setDistrict uses for a small island, and it means
-     the same thing here: the closest the camera is ever allowed to stand. */
-  const r = Math.max(SHOT_MIN_DISP * 0.55, halfDiag * 1.25);
-
-  /* One island or several, decided by whether every point falls inside the same district's
-     displayed radius. Generous — 1.15 — because a waterfront venue can sit just outside the
-     radius the island is framed on without belonging anywhere else. */
-  let host = null;
-  for (const d of DISTRICTS){
-    const rr = (d.r * (d.dispScale || 1)) * 1.15;
-    if (pts.every(p => Math.hypot(p.x - d.x, p.z - d.z) <= rr)){ host = d; break; }
-  }
+  return { x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, halfDiag: Math.hypot(x1 - x0, z1 - z0) / 2 };
+}
+/* THE PLACE-SCALE FLOOR (nav v220). A single result, or a handful inside one mall, used to be
+   framed on SHOT_MIN_DISP * 0.55 — 176 units, about 1.4 km, the floor an ISLAND is framed on —
+   at the flattest pitch, which put the camera on the horizon 3 km away with the place a speck
+   under its pin. Thirty-four units is a block, and the district pitch keeps the pin above the
+   roofs. */
+const RESULTS_MIN_R = 34;
+let lastResultsBox = null;
+function frameAllResults(label){
+  const pts = resultPins;
+  if (!pts || !pts.length) return false;
+  const box = resultsBox(pts), { cx, cz, halfDiag } = box;
+  const host = resultsHost(pts);
 
   resetOrbit();
   state = host ? STATE.DISTRICT : STATE.WORLD;
   activeDistrict = host; activePlace = null;
 
-  /* Spread as a fraction of the whole archipelago, clamped, driving the pitch between the place
-     angle and the world angle. */
-  const W = worldExtent();
-  const spread = Math.min(1, Math.max(0, halfDiag / Math.max(1, W.r)));
-  const pitch = PITCH_PLACE + (PITCH_WORLD - PITCH_PLACE) * spread;
-
-  goal.fov = 46;
-  goal.target.set(cx, GROUND + 8, cz);
-  goal.dist = fitDist(r, goal.fov);
-  goal.elev = goal.dist * pitch;
-  goal.angle = sunSafe(goal.angle || 0);
+  if (!host){
+    /* SPANS ISLANDS: THE WORLD SHOT, NOT A FIT OF THE SPREAD (nav v220). Fitting the pins' box at
+       46 degrees stood the camera 10,000 units back, beyond the 11,800-unit far plane, so every
+       island clipped and the frame was empty sky — the blank that appeared on Search the moment a
+       set spanned Corniche and Yas. The world shot already frames the whole archipelago at 5,700
+       and is known to render; the pins sit inside it. */
+    const W = worldExtent();
+    goal.fov = 52;
+    goal.target.set(W.cx, 0, W.cz);
+    goal.dist = fitDist(W.r * 0.52, 52); goal.elev = goal.dist * PITCH_WORLD;
+    goal.angle = sunSafe(goal.angle || 0);
+  } else {
+    const r = Math.max(RESULTS_MIN_R, halfDiag * 1.25);
+    const islandR = host.r * (host.dispScale || 1);
+    /* Pitch from the district's three-quarter view for a tight set up to the world angle when
+       the set fills the island. */
+    const spread = Math.min(1, Math.max(0, halfDiag / Math.max(1, islandR)));
+    const pitch = PITCH_DISTRICT + (PITCH_WORLD - PITCH_DISTRICT) * spread;
+    goal.fov = 46;
+    goal.target.set(cx, GROUND + 8, cz);
+    goal.dist = Math.min(fitDist(r, goal.fov), fitDist(islandR * 1.1, goal.fov));
+    goal.elev = goal.dist * pitch;
+    goal.angle = sunSafe(goal.angle || 0);
+  }
+  lastResultsBox = box;
   applyLOD();
   ui(label || 'Results', pts.length + (pts.length === 1 ? ' result' : ' results'));
   return true;
@@ -2838,7 +2857,18 @@ if (/[?&]embed=1/.test(location.search)){
              it here too costs nothing if it's already set. */
           const glc = document.getElementById('gl');
           if (glc) glc.classList.add('ready');
-          descend([() => setWorld(), () => setResults(converted, m.label)]);
+          /* NO FLY-OUT FOR A REFINEMENT (nav v220). Every set used to descend through the world
+             view and dive back in — three seconds of flight per filter tap, even when the new set
+             sat on the island the camera was already on. A set on the current island frames
+             directly; one whose box has barely moved keeps the camera and only swaps the pins;
+             only a set on another island, or spanning several, goes out through the world. */
+          const host = resultsHost(converted);
+          const box = resultsBox(converted);
+          const same = host && host === activeDistrict && state === STATE.DISTRICT;
+          const still = same && lastResultsBox && Math.hypot(box.cx - lastResultsBox.cx, box.cz - lastResultsBox.cz) < 12 && Math.abs(box.halfDiag - lastResultsBox.halfDiag) < Math.max(8, lastResultsBox.halfDiag * 0.15);
+          if (still){ resultPins = converted; resultsLabel = m.label || 'Results'; lastResultsBox = box; ui(resultsLabel, converted.length + (converted.length === 1 ? ' result' : ' results')); }
+          else if (same) setResults(converted, m.label);
+          else descend([() => setWorld(), () => setResults(converted, m.label)]);
         } else { console.warn('setResultsReal: no points classified to a modelled island'); paintDiag(); }
       }
       /* applyView, not a guessed setViewMode. A bare identifier that does not exist is a
@@ -3302,11 +3332,22 @@ document.getElementById('back').addEventListener('click', () => {
      rail. Reported plainly as "no back button". Same button, because two buttons doing
      near-identical things in the same corner is worse than one that reads the state. */
   const allBtn = document.getElementById('allBtn');
+  /* ALWAYS DOES SOMETHING VISIBLE (nav v220). With a result set up it re-framed the set — and if
+     the camera was already on that shot, which after a search it always is, the tap did nothing
+     at all. Now: not on the all-results shot → frame it; already on it → step out a level, so
+     the second tap shows the island, the third the archipelago, with the pins kept. */
+  let allShot = null;
+  const onAllShot = () => allShot && Math.abs(goal.dist - allShot.dist) < 1 && goal.target.distanceTo(allShot.target) < 1;
   if (allBtn) allBtn.addEventListener('click', () => {
     hideVenueCard();
-    if (resultPins && resultPins.length){ frameAllResults(resultsLabel); return; }
+    if (resultPins && resultPins.length && !onAllShot()){
+      frameAllResults(resultsLabel);
+      allShot = { dist: goal.dist, target: goal.target.clone() };
+      return;
+    }
     if (state === STATE.PLACE && activeDistrict) setDistrict(activeDistrict);
     else if (state === STATE.DISTRICT) setWorld();
+    else if (resultPins && resultPins.length){ frameAllResults(resultsLabel); allShot = { dist: goal.dist, target: goal.target.clone() }; }
   });
   /* Visible whenever there is anywhere to go back TO — a result set, or a navigation state
      deeper than the world view. Re-evaluated on a light interval rather than wired into every
