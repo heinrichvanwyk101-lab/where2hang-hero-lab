@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v169';
+export const BUILD = 'city v170';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5467,12 +5467,40 @@ function yasWaterworld(x0, z0, scale, rot){
     geo.rotateX(-Math.PI / 2); geo.rotateY(ROT); geo.translate(x0, y / M, z0);
     const m = new THREE.Mesh(geo, mat); g.add(m); return m;
   };
-  /* NO WALL ROUND THE PARK. The ground was a 1.1 m slab with vertical sides and a green band
-     outside it, and from the ground that is a kerb you could sit on — reported as "the park
-     technically has a wall around it". It is a surface now, not a plinth: 0.3 m of apron, a
-     narrow verge rather than a skirt, and every wet surface re-levelled onto it. */
+  /* THE WALL IS RIGHT, THE PLINTH WAS NOT, AND I HAD THOSE THE WRONG WAY ROUND. The owner's note
+     that "the park technically has a wall around it" was a statement of fact — a water park is an
+     enclosed, ticketed site and reads as one from the air — not the complaint I took it for. The
+     complaint was only that the northern corner clipped the road.
+
+     So the ground stays a SURFACE (0.3 m of apron on a narrow verge, no vertical slab edge to
+     stand on), and the enclosure is a built wall along the traced boundary: a proper 3.6 m
+     perimeter with a darker coping, set a little inside the line so it cannot overhang the
+     carriageway the corner was pulled off. A wall you can see is the point; a kerb you cannot
+     explain is not. */
   mkPad(9, 0.22, 0.02, lawn);                     // a verge, not a kerb
   const pad = mkPad(0, 0.30, 0.03, apron);        // the park's own ground, a surface
+  { const render = saadKitMat(0xB9A27E, 0xD8C39A, 0.9, 0, 0xFFE0B0, 0.05, 0.8);
+    const capM   = saadKitMat(0x8E7A5C, 0xAD9670, 0.85, 0);
+    const IN = 0.965;                              // a touch inside the traced line
+    for (let i = 0; i < PLOT.length; i++){
+      const a = PLOT[i].map((v) => v * IN), b = PLOT[(i + 1) % PLOT.length].map((v) => v * IN);
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const ang = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      const put = (h, y, w, mat) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w * S / M, h * S / M, (len + 3) * S / M), mat);
+        const [px, pz] = at(mid[0], mid[1]);
+        m.position.set(px, (y + h / 2) * S / M, pz); m.rotation.y = ROT + ang; g.add(m);
+      };
+      put(3.4, 0, 1.1, render);                    // the wall
+      put(0.5, 3.4, 1.6, capM);                    // and its coping
+    }
+    /* Piers at the corners, which is what stops a long run of boxes reading as a fence. */
+    PLOT.forEach(([ax, az]) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(2.6 * S / M, 4.6 * S / M, 2.6 * S / M), capM);
+      const [px, pz] = at(ax * IN, az * IN);
+      m.position.set(px, 2.3 * S / M, pz); m.rotation.y = ROT; g.add(m);
+    }); }
   pad.userData.hero = pad.userData.kitName = 'yasWaterworld';
   /* ---- TWO WAYS TO GET LOCAL METRES INTO THE WORLD, AND THEY DIFFER BY A SIGN ----------------
      A THREE.Shape is built in XY and laid flat with rotateX(-PI/2), which sends (u, v, 0) to
