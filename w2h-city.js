@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v162';
+export const BUILD = 'city v167';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5425,7 +5425,7 @@ function yasWaterworld(x0, z0, scale, rot){
   /* The traced boundary, kit-local metres, north-end first. Change this and the park changes. */
   const PLOT = [[103,-128],[214,9],[253,84],[224,136],[149,104],[65,88],[-36,77],[-131,83],
                 [-253,125],[-199,60],[-145,-5],[-102,-47],[-50,-89],[3,-146],[46,-189],[95,-129]];
-  const water = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.2, 1.0);
+  const water = saadKitMat(0x1B6E88, 0x27A6C8, 0.55, 0, 0x7FE0F0, 0.20, 1.0);
   const rock  = saadKitMat(0x6E5A48, 0x8C7458, 0.95, 0);
   const tan   = saadKitMat(0xC9B48E, 0xDCC7A0, 0.85, 0, undefined, undefined, 0.6);
   const pearl = saadKitMat(0xE8E6E0, 0xF8F6F0, 0.3, 0.1, 0xFFF0D8, 0.35, 0.9);
@@ -5465,42 +5465,161 @@ function yasWaterworld(x0, z0, scale, rot){
   mkPad(16, 0.6, 0.02, lawn);                     // the planted edge, a little proud of the plot
   const pad = mkPad(0, 1.1, 0.06, apron);         // the park's own ground
   pad.userData.hero = pad.userData.kitName = 'yasWaterworld';
-  /* POOLS. Every centre and radius here cleared the ring by at least its own radius. */
-  const disc = (ax, az, r, mat) => {
-    const m = new THREE.Mesh(new THREE.CircleGeometry(r * S / M, 32), mat);
-    m.rotation.x = -Math.PI / 2; const [px, pz] = at(ax, az); m.position.set(px, 0.16, pz); g.add(m); return m;
+  /* ---- TWO WAYS TO GET LOCAL METRES INTO THE WORLD, AND THEY DIFFER BY A SIGN ----------------
+     A THREE.Shape is built in XY and laid flat with rotateX(-PI/2), which sends (u, v, 0) to
+     (u, 0, -v) — so a Shape must be fed -az. Geometry built directly in 3D skips that step and
+     takes az as it is. Both then take rotateY(ROT) and the translate, which together reproduce
+     at() exactly. Mixing them up mirrors the piece about the park's long axis; that cost a whole
+     round when the ground plate did it, so both are named here rather than left to be rederived. */
+  const shapeAt = (pts) => {
+    const sh = new THREE.Shape();
+    pts.forEach(([ax, az], i) => (i ? sh.lineTo(ax * S / M, -az * S / M) : sh.moveTo(ax * S / M, -az * S / M)));
+    sh.closePath(); return sh;
   };
-  disc(170, 35, 48, water);                       // the wave pool, north end by the car park
-  disc(-120, 25, 30, water);                      // the south pool
-  { const m = new THREE.Mesh(new THREE.RingGeometry(45 * S / M, 55 * S / M, 48), water);
-    m.rotation.x = -Math.PI / 2; const [px, pz] = at(35, -25); m.position.set(px, 0.16, pz); g.add(m); }
-  /* The pearl on its rock tower, over the wide middle rather than over an end. */
-  { const [tx, tz] = at(105, 10);
-    const tower = new THREE.Mesh(new THREE.CylinderGeometry(5 * S / M, 9 * S / M, 46 * S / M, 10), rock);
-    tower.position.set(tx, 23 * S / M, tz); g.add(tower);
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(11 * S / M, 24, 16), pearl);
-    ball.position.set(tx, 56 * S / M, tz); g.add(ball); }
-  /* The village: tan blocks under canopies, thinning as the plot narrows southward. */
-  [[215, 72, 34, 24, 12], [150, 55, 32, 22, 11], [95, 25, 32, 22, 10], [20, 25, 32, 22, 11],
-   [-45, 10, 32, 22, 10], [-105, 25, 28, 20, 9], [-160, 48, 24, 18, 9]].forEach(([ax, az, w, d, h]) => {
-    box(ax, az, w, d, h, tan); box(ax, az, w + 6, d + 6, 0.8, shade, h + 1);
-  });
-  // slide towers with coloured tubes: each with two spirals and a straight run
-  const cols = [[0xF2B233, 0xFFC94A], [0xE0522D, 0xFF6A3D], [0x2F86C9, 0x4FA8E8], [0x3FA36B, 0x5CC48A], [0xB04FC2, 0xCC6FE0]];
-  [[205, 62, 32], [120, -45, 34], [55, -70, 30], [-10, -40, 28], [-70, -8, 26], [-140, 22, 22], [-190, 68, 18]]
-    .forEach(([dx, dz, h], i) => {
-      box(dx, dz, 8, 8, h, rock);
-      for (let k = 0; k < 2; k++){
-        const mat = saadKitMat(cols[(i + k) % 5][0], cols[(i + k) % 5][1], 0.5, 0.1, undefined, undefined, 1.2);
-        const tube = new THREE.Mesh(new THREE.TorusGeometry((13 + k * 5) * S / M, 1.5 * S / M, 8, 36, Math.PI * 1.7), mat);
-        tube.rotation.set(Math.PI / 2 - 0.4, ROT, i * 1.1 + k * 2.1);
-        const [px, pz] = at(dx, dz); tube.position.set(px, h * S / M * (0.6 - k * 0.2), pz); g.add(tube);
+  const pathAt = (pts) => {
+    const ph = new THREE.Path();
+    pts.forEach(([ax, az], i) => (i ? ph.lineTo(ax * S / M, -az * S / M) : ph.moveTo(ax * S / M, -az * S / M)));
+    ph.closePath(); return ph;
+  };
+  const layFlat = (geo, y) => { geo.rotateX(-Math.PI / 2); geo.rotateY(ROT); geo.translate(x0, y * S / M, z0); return geo; };
+  const stand   = (geo, y) => { geo.rotateY(ROT); geo.translate(x0, y * S / M, z0); return geo; };
+  const flat = (pts, y, mat, holes) => {
+    const sh = shapeAt(pts); if (holes) holes.forEach(h => sh.holes.push(pathAt(h)));
+    const m = new THREE.Mesh(layFlat(new THREE.ShapeGeometry(sh), y), mat); g.add(m); return m;
+  };
+  /* An organic outline instead of a perfect circle: a water park has no circular pools, and a
+     disc at this camera height reads as a painted dot rather than as water. */
+  const blob = (cx, cz, rx, rz, seed, n) => {
+    const pts = [];
+    for (let i = 0; i < (n || 28); i++){
+      const a = (i / (n || 28)) * Math.PI * 2;
+      const k = 1 + 0.15 * Math.sin(a * 3 + seed) + 0.08 * Math.sin(a * 5 + seed * 2.3);
+      pts.push([cx + Math.cos(a) * rx * k, cz + Math.sin(a) * rz * k]);
+    }
+    return pts;
+  };
+  const scaleAbout = (pts, cx, cz, k) => pts.map(([ax, az]) => [cx + (ax - cx) * k, cz + (az - cz) * k]);
+  /* A POOL IS A HOLE IN THE GROUND, not a sheet laid on it: a coping course round the rim, a pale
+     shallow shelf inside that, then the deep water. Three tones is what makes it read as water. */
+  const shallow = saadKitMat(0x3F94AC, 0x5FC8DC, 0.5, 0, 0x9FF0FF, 0.16, 1.0);
+  const coping  = saadKitMat(0xD5CCB6, 0xEFE8D8, 0.85, 0);
+  const pool = (cx, cz, rx, rz, seed) => {
+    const rim = blob(cx, cz, rx, rz, seed);
+    /* EVERY LAYER ABOVE THE WATER IS A RING, NOT A DISC. Filled, the coping simply covered the
+       pool it was meant to edge and the whole thing rendered as a pale blot — which is what a
+       water park with no visible water looks like from the air. Each band gets the next one down
+       as a hole, so the deep water is the top surface in the middle and nothing overdraws it. */
+    /* HEIGHTS ARE ABOVE THE APRON, WHICH IS THE WHOLE REASON THE POOLS WERE INVISIBLE. The park's
+       ground is a 1.1 m slab starting at 0.06, so its top surface is at 1.16 m — and the water was
+       being laid at 1.00, underneath it. Only the coping at 1.30 cleared, which is exactly what
+       rendered: pale rings round sand. Everything wet now sits above 1.16. */
+    flat(scaleAbout(rim, cx, cz, 1.07), 1.44, coping, [rim]);       // a thin coping course, no more
+    flat(rim, 1.34, shallow, [scaleAbout(rim, cx, cz, 0.93)]);      // a hint of shallow at the edge
+    flat(scaleAbout(rim, cx, cz, 0.93), 1.30, water);               // and the rest of it is water
+    return rim;
+  };
+  /* THE POOLS, on the centres that cleared the traced ring by at least their own radius. */
+  const wave = pool(170, 35, 37, 29, 1.2);                 // the wave pool, north end by the car park
+  flat(blob(146, 62, 28, 12, 2.1), 1.32, shade);           // its beach, the shallow end's sand crescent
+  pool(-120, 25, 28, 21, 3.4);                             // the south pool
+  pool(-52, 4, 36, 26, 5.1);                               // the children's lagoon
+  /* THE LAZY RIVER, a channel with banks rather than a flat annulus: the water is the gap between
+     two blobs, and a low bank rings both edges. */
+  { const outer = blob(35, -25, 62, 50, 0.7), inner = scaleAbout(outer, 35, -25, 0.58);
+    flat(scaleAbout(outer, 35, -25, 1.07), 1.44, coping, [outer]);          // the outer bank, a ring
+    flat(inner, 1.44, coping, [scaleAbout(inner, 35, -25, 0.93)]);          // the inner bank, a ring
+    flat(scaleAbout(inner, 35, -25, 0.93), 1.40, lawn);                     // the island it circles
+    flat(outer, 1.30, water, [inner]); }                                    // the channel itself
+  /* THE MOUNTAIN. One hero instead of seven identical sticks: a rock massif over the wide middle
+     with the pearl on its summit and five flumes spiralling off it into a splash pool. The flumes
+     are tubes on real helices, thick enough to read as rides from the air, which the flat torus
+     rings they replace never did. */
+  { const MX = 105, MZ = 10, TOP = 40;
+    /* The massif, four stacked drums. Each is translated in LOCAL metres before stand() turns and
+       seats the whole thing, because stand() only ever adds the park's own origin. */
+    for (const [r, h] of [[34, 12], [26, 22], [17, 31], [9, TOP]]){
+      const geo = new THREE.CylinderGeometry(r * 0.7 * S / M, r * S / M, h * S / M, 9);
+      geo.translate(MX * S / M, (h / 2) * S / M, MZ * S / M);
+      g.add(new THREE.Mesh(stand(geo, 0), rock));
+    }
+    const splash = pool(105, -48, 33, 23, 2.7);
+    const cols = [[0xF2B233, 0xFFC94A], [0xE0522D, 0xFF6A3D], [0x2F86C9, 0x4FA8E8], [0x3FA36B, 0x5CC48A], [0xB04FC2, 0xCC6FE0]];
+    for (let i = 0; i < 5; i++){
+      const mat = saadKitMat(cols[i][0], cols[i][1], 0.45, 0.1, undefined, undefined, 1.25);
+      const a0 = i * 1.24, turns = 1.15 + (i % 2) * 0.35;
+      const pts = [];
+      for (let s = 0; s <= 44; s++){
+        const t = s / 44, a = a0 + turns * Math.PI * 2 * t, r = 11 + 30 * t;
+        const y = TOP - (TOP - 2) * Math.pow(t, 0.85);
+        pts.push(new THREE.Vector3((MX + Math.cos(a) * r) * S / M, y * S / M, (MZ + Math.sin(a) * r) * S / M));
       }
-      const run = new THREE.Mesh(new THREE.BoxGeometry(2.2 * S / M, 1.2 * S / M, (h * 1.6 * S) / M),
-        saadKitMat(cols[(i + 2) % 5][0], cols[(i + 2) % 5][1], 0.5, 0.1, undefined, undefined, 1.2));
-      const [px, pz] = at(dx, dz + h * 0.8);
-      run.position.set(px, h * S / M * 0.5, pz); run.rotation.set(-Math.atan2(h, h * 1.6), ROT, 0, 'YXZ'); g.add(run);
+      const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 56, 2.1 * S / M, 7, false);
+      g.add(new THREE.Mesh(stand(geo, 0), mat));
+    }
+    const [tx, tz] = at(MX, MZ);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(12 * S / M, 24, 16), pearl);
+    ball.position.set(tx, (TOP + 11) * S / M, tz);
+    ball.userData.kitName = 'yasWaterworldPearl'; g.add(ball); }
+  /* TWO SMALLER SLIDE STACKS down the tail, so the park thins rather than stopping. */
+  for (const [sx, sz, h, i] of [[-155, 40, 24, 1], [-185, 75, 17, 3]]){
+    box(sx, sz, 8, 8, h, rock);
+    const cols = [[0xF2B233, 0xFFC94A], [0xE0522D, 0xFF6A3D], [0x2F86C9, 0x4FA8E8], [0x3FA36B, 0x5CC48A], [0xB04FC2, 0xCC6FE0]];
+    for (let k = 0; k < 2; k++){
+      const mat = saadKitMat(cols[(i + k) % 5][0], cols[(i + k) % 5][1], 0.45, 0.1, undefined, undefined, 1.25);
+      const pts = [];
+      for (let s = 0; s <= 30; s++){
+        const t = s / 30, a = k * 2.4 + 1.5 * Math.PI * 2 * t, r = 3.5 + 11 * t;
+        pts.push(new THREE.Vector3((sx + Math.cos(a) * r) * S / M, (h - (h - 2) * Math.pow(t, 0.9)) * S / M, (sz + Math.sin(a) * r) * S / M));
+      }
+      g.add(new THREE.Mesh(stand(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 1.6 * S / M, 6, false), 0), mat));
+    }
+  }
+  /* THE VILLAGE, as clusters of small cabanas under pitched canopies rather than one slab each:
+     at this camera height a cluster reads as a place and a slab reads as a warehouse. */
+  const cabana = (ax, az, n, spread, seed) => {
+    for (let i = 0; i < n; i++){
+      const a = seed + i * 2.399, r = spread * Math.sqrt((i + 0.6) / n);
+      const cx = ax + Math.cos(a) * r, cz = az + Math.sin(a) * r;
+      const w = 15 + (i % 3) * 5, d = 12 + (i % 2) * 5, h = 8 + (i % 3) * 2;
+      box(cx, cz, w, d, h, tan);
+      box(cx, cz, w + 6, d + 6, 0.9, shade, h + 0.8);
+    }
+  };
+  /* THE ENTRANCE, at the +ax end where the park meets the survey's car park: one building big
+     enough to read as a gate rather than another cabana. */
+  box(215, 72, 40, 20, 13, tan); box(215, 72, 48, 28, 1.2, shade, 14);
+  cabana(178, 78, 5, 14, 0.4);       // the village behind it
+  cabana(150, 55, 5, 15, 1.7);
+  cabana(20, 25, 5, 16, 3.1);
+  cabana(-105, 25, 4, 13, 4.5);
+  cabana(-160, 48, 3, 10, 5.8);
+  /* LOUNGER DECKS beside the water, instanced: eighty small pale bars is the finest texture that
+     still reads from the district camera, and it is what tells the eye these are pools. */
+  { const rows = [];
+    const edge = (cx, cz, rx, rz, a0, a1, k) => {
+      for (let i = 0; i <= 14; i++){
+        const a = a0 + (a1 - a0) * (i / 14);
+        rows.push([cx + Math.cos(a) * rx * k, cz + Math.sin(a) * rz * k, a]);
+      }
+    };
+    edge(170, 35, 46, 36, -2.2, 0.5, 1.30);
+    edge(-120, 25, 28, 21, 0.4, 3.2, 1.35);
+    edge(105, -48, 26, 18, 2.6, 5.4, 1.40);
+    edge(35, -25, 62, 50, 1.4, 3.4, 1.22);
+    const geo = new THREE.BoxGeometry(3.4 * S / M, 0.6 * S / M, 1.5 * S / M);
+    const im = new THREE.InstancedMesh(geo, shade, rows.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+    rows.forEach(([ax, az, a], i) => {
+      const [px, pz] = at(ax, az);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ROT - a);
+      v.set(px, 1.52 * S / M, pz);
+      im.setMatrixAt(i, m4.compose(v, q, sc));
     });
+    im.instanceMatrix.needsUpdate = true; g.add(im); }
+  /* PLANTING in the gaps the rides leave, so the ground is not one unbroken apron. */
+  [[90, 70, 18, 10, 1.1], [-60, 50, 22, 12, 2.4], [-80, -30, 21, 11, 3.7],
+   [70, -120, 20, 11, 0.6], [10, -120, 17, 9, 4.9]]
+    .forEach(([cx, cz, rx, rz, sd]) => flat(blob(cx, cz, rx, rz, sd, 18), 1.30, lawn));
   /* No shade rows of its own (city v143): the covered car park is the survey's lot, with its own
      baked structures and cars, and rows drawn here landed on the entrance road.
      PALMS FOLLOW THE TRACED EDGE, a few metres inside it, so the tree line is the park's own
