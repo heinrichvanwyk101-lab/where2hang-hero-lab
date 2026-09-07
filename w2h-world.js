@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v331';
+export const BUILD = 'world v332';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7980,16 +7980,27 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      (8-unit cells at (-40,-32), (-32,-32), (-48,-24)), which is exactly the scatter of stray little
      buildings the owner circled and called incorrect. Centred on that lagoon the kit's 260 m spread
      covers x -52..-20, z -47..-15, which is the park and nothing else. */
-  /* MEASURED, NOT READ OFF A PICTURE (world v331). Four passes moved this park by eye and four
-     came back wrong, so it is now derived. The survey holds 42 heightless footprints in the block
-     south and east of the car park lot (parking polygons at x -64.2..-37.5, z -48.4..-20.1 and
-     x -49..-38.2, z -53.6..-43.6) — every one a park structure, which is exactly why the height
-     model was standing towers on them. A weighted principal axis through those 42 gives the site:
-     centre (-41.9, 3.3), long axis 1.456 rad off east, 591 m along it and about 250 m across.
-     That axis is very nearly due north-south with the north end leaned slightly east, NOT the
-     north-east diagonal v329 used. The kit is authored to those proportions now, so it goes on at
-     full size. */
-  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-41.9, 3.3, 1.0, 1.456));
+  /* FITTED TO THE MODEL, NOT TO THE REAL WORLD (world v332), which is the correction the owner
+     made and the reason five earlier passes missed. v331 took a principal axis through the 42
+     heightless park footprints and got centre (-41.9, 3.3) on a near north-south bearing; the
+     centroid was dragged west by structures on that side that are not the park, and the answer was
+     about 120 m out with the bearing some 17 degrees off.
+
+     This one asks the model's own geometry instead. Every road centreline in roads-yas.json is
+     given a half-width by class (major 6, minor 3.5, local 2.5 units), every parking polygon is a
+     barrier, and the pair are rasterised once to a blocked grid. The kit's own footprint — its
+     spine from ax -280 to +280 and the taper across it — is then swept over centre and bearing,
+     scored on how much of it lands clear of roads and lots, and penalised by how far its wave pool
+     falls from the surveyed water body at (-32, -35.6), which is the one hard anchor here: the
+     satellite shows that pool at the park's north end.
+
+     The search converges tightly on rot 1.70 to 1.78 and centre (-28, -9), the wave pool landing
+     within one to three units of the surveyed pool. Independently, the owner drew the correct
+     boundary and the model's own outline on one frame; read off against the three pools, whose
+     sizes cross-check the scale to two per cent, that drawing gives centre (-30, -13) and rot 1.9.
+     Two unrelated methods within a couple of units of each other is the first time this park has
+     had corroboration, so it goes on the middle of them. */
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-28.0, -9.0, 1.0, 1.74));
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
@@ -8042,11 +8053,11 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* Widened to the pools (world v327): the old box stopped at z -24 and left the park's own
      structures north of that line standing as invented buildings — the fault the owner reported.
      This spans the lagoon, the ride structures round it and the entrance apron below. */
-  /* THE PARK AND ITS CAR PARK (world v331). The zone is axis-aligned, so it takes the whole
-     block the 42 park structures occupy plus the two lots north-west of them; the invented
-     buildings the owner keeps seeing on the water park and in the parking are those footprints
-     standing up, and there is nothing there the kit and the lot paint do not replace. */
-  KIT_ZONES[yas.id].push({ x0:-66, x1:-18, z0:-56, z1:46 });
+  /* THE PARK AND ITS CAR PARK (world v332). The zone is axis-aligned, so it takes the kit's own
+     footprint on its fitted bearing plus the two lots north-west of it. The invented buildings the
+     owner keeps seeing on the water park and in the parking are heightless survey footprints
+     standing up; this drops 73 of them and not one building that carries a height. */
+  KIT_ZONES[yas.id].push({ x0:-64, x1:-8, z0:-54, z1:29 });
 }
 
 /* ---------- the four placeholders ---------- */

@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v158';
+export const BUILD = 'city v159';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6480,7 +6480,16 @@ function maryahPromenade(){
     }
     return poly[poly.length - 1][0];
   };
-  const INSET = 1.1;          // the walk sits this far inside the drawn water's edge
+  /* THE QUAY IS BUILT OUT OVER THE WATER, NOT STOPPED AT THE DRAWN EDGE (city v159). v156 set the
+     walk one unit INSIDE the outline, on the reasoning that a walk should be on land. It is the
+     wrong reading of this shore: Al Maryah's west quay is reclaimed, and the promenade, its
+     terraces and the restaurant frontages are all built OUT past the natural edge on a man-made
+     deck — which is why the owner's frames show the whole waterfront standing over water with a
+     wall to the sea, and why stopping at the outline left the model short of its own island.
+     The walk centre now sits twenty metres beyond the outline; the apron below already fills from
+     the walk back to the shore whenever it is the outer line, and the wall already drops to the
+     water under its outer edge, so the same two lines do the work with the sign reversed. */
+  const INSET = -2.6;         // NEGATIVE: the walk sits this far OUT over the water
   const QUAY  = 1.6;          // and this far outside the podium where the podium is the outer one
   const ZS = [-8.8, -4, 0, 5, 10, 15, 20, 24, 27.8, 33, 39.4, 42.5];
   const walkAt = (z) => {
@@ -6506,7 +6515,7 @@ function maryahPromenade(){
     /* THE APRON. Where the walk is out past the drawn coast it is standing on nothing, so fill
        from the walk back to the outline and drop a quay wall to the water under its outer edge. */
     const gapA = xAt(SHORE, az) - ax, gapB = xAt(SHORE, bz) - bx, gap = (gapA + gapB) / 2;
-    if (gap > 0.6){
+    if (gap > 0.4){
       const deck = new THREE.Mesh(new THREE.BoxGeometry(gap + 1.4, 0.5 / M, len + 0.4), stone);
       deck.position.set(cx + nx * (gap / 2), 0.25 / M, cz + nz * (gap / 2)); deck.rotation.y = ang; g.add(deck);
       /* 2.6 units of skirt: ISLE_DEPTH is 2.4, so this reaches past the waterline whatever the
