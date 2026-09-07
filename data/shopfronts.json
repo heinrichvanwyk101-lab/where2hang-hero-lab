@@ -1,0 +1,254 @@
+{
+ "generated": "2026-09-07",
+ "note": "Venues with a street-level shopfront the world dresses (sign in the brand colour, awning, glow). From venues.frontage = 'shopfront'; colours are a placeholder palette until the photo-derived brand colour lands.",
+ "venues": [
+  {
+   "id": 5493,
+   "name": "Flavors Grill",
+   "category": "Restaurant",
+   "lat": 24.52779769897461,
+   "lng": 54.3639030456543,
+   "color": "#1B998B"
+  },
+  {
+   "id": 4025,
+   "name": "Gandofly Seafood",
+   "category": "Restaurant",
+   "lat": 24.477479934692383,
+   "lng": 54.380252838134766,
+   "color": "#F2A541"
+  },
+  {
+   "id": 4247,
+   "name": "Class Food",
+   "category": "Restaurant",
+   "lat": 24.483989715576172,
+   "lng": 54.365394592285156,
+   "color": "#8E44AD"
+  },
+  {
+   "id": 2839,
+   "name": "Mosaic",
+   "category": "Restaurant",
+   "lat": 24.43156623840332,
+   "lng": 54.435977935791016,
+   "color": "#2A9D8F"
+  },
+  {
+   "id": 4817,
+   "name": "Bosporus",
+   "category": "Restaurant",
+   "lat": 24.495649337768555,
+   "lng": 54.38393783569336,
+   "color": "#1B998B"
+  },
+  {
+   "id": 5494,
+   "name": "Asyak Grill",
+   "category": "Restaurant",
+   "lat": 24.52783966064453,
+   "lng": 54.36421585083008,
+   "color": "#E9C46A"
+  },
+  {
+   "id": 1642,
+   "name": "SADDLE",
+   "category": "Cafe",
+   "lat": 24.45353889465332,
+   "lng": 54.34009552001953,
+   "color": "#2A9D8F"
+  },
+  {
+   "id": 4932,
+   "name": "Dampa Seafood Grill",
+   "category": "Restaurant",
+   "lat": 24.494441986083984,
+   "lng": 54.36610794067383,
+   "color": "#D62828"
+  },
+  {
+   "id": 13530,
+   "name": "Mukbang Shows",
+   "category": "Restaurant",
+   "lat": 24.47458581,
+   "lng": 54.37518366,
+   "color": "#F2A541"
+  },
+  {
+   "id": 13532,
+   "name": "Kadoura Seafood",
+   "category": "Restaurant",
+   "lat": 24.51419172,
+   "lng": 54.37530741,
+   "color": "#2A9D8F"
+  },
+  {
+   "id": 4915,
+   "name": "Cerutti",
+   "category": "Cafe",
+   "lat": 24.493860244750977,
+   "lng": 54.36125564575195,
+   "color": "#3D5A80"
+  },
+  {
+   "id": 13534,
+   "name": "Shurfa Bay",
+   "category": "Restaurant",
+   "lat": 24.46536141,
+   "lng": 54.32722472,
+   "color": "#8E44AD"
+  },
+  {
+   "id": 13536,
+   "name": "Steak Chef",
+   "category": "Restaurant",
+   "lat": 24.46577127,
+   "lng": 54.33138695,
+   "color": "#E4572E"
+  },
+  {
+   "id": 13538,
+   "name": "Caffeino",
+   "category": "Restaurant",
+   "lat": 24.45191166,
+   "lng": 54.33614566,
+   "color": "#EF476F"
+  },
+  {
+   "id": 13541,
+   "name": "The Butcher Shop & Grill",
+   "category": "Restaurant",
+   "lat": 24.48897023,
+   "lng": 54.40004322,
+   "color": "#F4A261"
+  },
+  {
+   "id": 13551,
+   "name": "New Shanghai",
+   "category": "Restaurant",
+   "lat": 24.48836832,
+   "lng": 54.40038542,
+   "color": "#1B998B"
+  },
+  {
+   "id": 13539,
+   "name": "Marsa Gandofly",
+   "category": "Restaurant",
+   "lat": 24.5140354,
+   "lng": 54.37545262,
+   "color": "#F2A541"
+  },
+  {
+   "id": 1891,
+   "name": "Derwandi",
+   "category": "Restaurant",
+   "lat": 24.463747024536133,
+   "lng": 54.32642364501953,
+   "color": "#D62828"
+  },
+  {
+   "id": 4901,
+   "name": "The Skewers",
+   "category": "Restaurant",
+   "lat": 24.49343490600586,
+   "lng": 54.3698844909668,
+   "color": "#8E44AD"
+  },
+  {
+   "id": 5115,
+   "name": "Bovini",
+   "category": "Restaurant",
+   "lat": 24.49118995666504,
+   "lng": 54.355525970458984,
+   "color": "#2A9D8F"
+  },
+  {
+   "id": 1916,
+   "name": "Jones the Grocer",
+   "category": "Restaurant",
+   "lat": 24.463991165161133,
+   "lng": 54.387020111083984,
+   "color": "#F2A541"
+  },
+  {
+   "id": 2075,
+   "name": "3B Burger",
+   "category": "Restaurant",
+   "lat": 24.466060638427734,
+   "lng": 54.33107376098633,
+   "color": "#8E44AD"
+  },
+  {
+   "id": 19,
+   "name": "COYA",
+   "category": "Restaurant",
+   "lat": 24.5032,
+   "lng": 54.3878,
+   "color": "#E4572E"
+  },
+  {
+   "id": 13567,
+   "name": "Al Farah",
+   "category": "Restaurant",
+   "lat": 24.47076236,
+   "lng": 54.34395333,
+   "color": "#2A9D8F"
+  },
+  {
+   "id": 13573,
+   "name": "Swiss Butter",
+   "category": "Restaurant",
+   "lat": 24.42940992,
+   "lng": 54.42912653,
+   "color": "#E9C46A"
+  },
+  {
+   "id": 1634,
+   "name": "tashas",
+   "category": "Cafe",
+   "lat": 24.452796936035156,
+   "lng": 54.33967208862305,
+   "color": "#F4A261"
+  },
+  {
+   "id": 2020,
+   "name": "Seafood Express",
+   "category": "Restaurant",
+   "lat": 24.465408325195312,
+   "lng": 54.38711166381836,
+   "color": "#2A9D8F"
+  },
+  {
+   "id": 1963,
+   "name": "Stars N Bars",
+   "category": "Restaurant",
+   "lat": 24.465951919555664,
+   "lng": 54.60966110229492,
+   "color": "#B5179E"
+  },
+  {
+   "id": 2535,
+   "name": "Marine Mirage",
+   "category": "Shisha Lounge",
+   "lat": 24.473703384399414,
+   "lng": 54.31621170043945,
+   "color": "#D62828"
+  },
+  {
+   "id": 1534,
+   "name": "Café del Mar",
+   "category": "Beach Club",
+   "lat": 24.457870483398438,
+   "lng": 54.60157012939453,
+   "color": "#1B998B"
+  },
+  {
+   "id": 2248,
+   "name": "Famous Dave's",
+   "category": "Restaurant",
+   "lat": 24.470170974731445,
+   "lng": 54.37297058105469,
+   "color": "#B5179E"
+  }
+ ]
+}

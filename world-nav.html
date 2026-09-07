@@ -742,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v223', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v225', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -1799,6 +1799,18 @@ function fitDist(r, fovDeg){
    constant when the distance moves with the aspect. The three ratios are the ones the old pairs
    implied: 1.55/2.32, 1.5/5.7, and 0.62 x 0.159. */
 const PITCH_WORLD = 0.668, PITCH_DISTRICT = 0.263, PITCH_PLACE = 0.0986;
+/* PITCH FOR A SET OF PINS (nav v225). PITCH_PLACE is the landmark's portrait, 5.6 degrees, the
+   camera almost on the horizon: right for one tall building, wrong for venues, where the point
+   is the street around them. A tight cluster or one tapped venue is now looked at from about
+   30 degrees, high enough that the block, the roads and the neighbours all show. */
+const PITCH_CLUSTER = 0.58, PITCH_VENUE = 0.45;
+/* SETTLED: the camera has ARRIVED, not merely been told where to go. The second-tap lists
+   compared goal against goal, which is true the instant the first tap sets it, so a second tap
+   during the flight listed before anything was in view. cur is where the camera actually is. */
+function camSettled(){
+  return Math.hypot(cur.target.x - goal.target.x, cur.target.z - goal.target.z) < 3 &&
+         Math.abs(cur.dist - goal.dist) < Math.max(4, goal.dist * 0.06);
+}
 
 function setWorld(){
   state = STATE.WORLD; activeDistrict = null; activePlace = null;
@@ -2166,7 +2178,7 @@ function zoomToPinCluster(pts){
   const wantDist = fitDist(Math.max(CLUSTER_FLOOR_R, Math.max(6, halfDiagRaw) * 1.6), goal.fov || 46);
   const nowDist = cur.dist * (orbit.zoom || 1);
   const sameSpot = Math.hypot(goal.target.x - cx, goal.target.z - cz) < Math.max(6, halfDiagRaw) * 2;
-  if (sameSpot && nowDist <= wantDist * 1.15){ showGroupList(pts); return; }
+  if (sameSpot && nowDist <= wantDist * 1.15 && camSettled()){ showGroupList(pts); return; }
   /* FLOORS REDUCED SUBSTANTIALLY FROM THE FIRST VERSION — 30 world units minimum spread, then
      a further floor of SHOT_MIN_DISP*0.4 on top of that. Both exist for good reason elsewhere
      in this file (a district or place shot genuinely shouldn't crowd the camera into geometry)
@@ -2179,7 +2191,7 @@ function zoomToPinCluster(pts){
   resetOrbit();
   goal.target.set(cx, GROUND + 8, cz);
   goal.dist = fitDist(Math.max(CLUSTER_FLOOR_R, halfDiag * 1.6), goal.fov || 46);
-  goal.elev = goal.dist * PITCH_PLACE;
+  goal.elev = goal.dist * PITCH_CLUSTER;
 }
 
 /* SINGLE-PIN TAP, TEXTUAL FEEDBACK ONLY FOR NOW — DELIBERATELY NOT A FULL DETAIL POPUP YET.
@@ -2233,11 +2245,11 @@ function tapDestinationPin(p){
   const wantDist = fitDist(CLUSTER_FLOOR_R * 2.5, goal.fov || 46);
   const nowDist = cur.dist * (orbit.zoom || 1);
   const sameSpot = Math.hypot(goal.target.x - p.x, goal.target.z - p.z) < CLUSTER_FLOOR_R * 2;
-  if (sameSpot && nowDist <= wantDist * 1.15){ showGroupList(p.members, p.dest); return; }
+  if (sameSpot && nowDist <= wantDist * 1.15 && camSettled()){ showGroupList(p.members, p.dest); return; }
   resetOrbit();
   goal.target.set(p.x, GROUND + 8, p.z);
   goal.dist = wantDist;
-  goal.elev = goal.dist * PITCH_PLACE;
+  goal.elev = goal.dist * PITCH_CLUSTER;
 }
 function showGroupList(pts, title){
   const card = document.getElementById('venueCard');
@@ -2291,7 +2303,7 @@ function tapResultPin(v){
      yaw, lift and zoom stay where the person put them. */
   goal.target.set(v.x, GROUND + 6, v.z);
   goal.dist = fitDist(SHOT_MIN_DISP * 0.5, goal.fov || 46);
-  goal.elev = goal.dist * PITCH_PLACE;
+  goal.elev = goal.dist * PITCH_VENUE;
   showVenueCard(v);
   postToHost('venueTapped', { venueId: v.venueId || null, name: v.name || null, category: v.category || null });
 }
@@ -2368,7 +2380,11 @@ function frameAllResults(label){
     /* Pitch from the district's three-quarter view for a tight set up to the world angle when
        the set fills the island. */
     const spread = Math.min(1, Math.max(0, halfDiag / Math.max(1, islandR)));
-    const pitch = PITCH_DISTRICT + (PITCH_WORLD - PITCH_DISTRICT) * spread;
+    /* STEEP WHEN TIGHT (nav v225). This ran the other way: a set inside one block took the
+       district's 15 degrees and the venues sat under their pins with nothing readable round
+       them; a set filling the island took the world pitch. A tight set is now the steepest
+       shot, easing to the world pitch as the set spreads. */
+    const pitch = PITCH_CLUSTER + (PITCH_WORLD - PITCH_CLUSTER) * spread;
     goal.fov = 46;
     goal.target.set(cx, GROUND + 8, cz);
     goal.dist = Math.min(fitDist(r, goal.fov), fitDist(islandR * 1.1, goal.fov));
@@ -2845,8 +2861,11 @@ if (/[?&]embed=1/.test(location.search)){
           const glc = document.getElementById('gl');
           if (glc) glc.classList.add('ready');
           if (activeDistrict !== railIsle || state !== STATE.DISTRICT) setDistrict(railIsle);
-          resultPins = converted;
-          resultsLabel = m.label || railIsle.name;
+          /* THE PINS ARE THE SUBJECT (nav v225). v203 kept the rail's district shot and only raised
+             the pins, which left a set inside one block as five badges floating over an island seen
+             from 15 degrees and a kilometre off. The set is framed now: close and steep when it is
+             tight, the island's own shot when it fills the island. */
+          setResults(converted, m.label || railIsle.name);
         }
         else if (converted.length){
           attractStop();
@@ -5881,6 +5900,9 @@ async function addFootprints(d){
        projectObject naming neither the mesh nor the island. */
     snapshotMats(g); registerLift(g); applyView(view);
     fpState.set(d.id, 'on');
+    /* THE SHOPFRONTS RIDE ON THE FOOTPRINTS (nav v224): they need the same list, in the same units,
+       to find the building face they hang on, so they are placed here and nowhere else. */
+    addShopfronts(d, list).catch(e => noteError('shopfronts ' + d.id, e));
     /* AFTER the state, never before. applyLOD now asks whether this island swapped in order to
        decide whether its detail layer stays up when the camera leaves, and it reads that from
        fpState — so calling it a line earlier would settle the question with the old answer and
@@ -5891,6 +5913,82 @@ async function addFootprints(d){
   } catch (e){ noteError('footprints ' + d.id, e); fpState.set(d.id, 'none'); }
 }
 
+/* ---------- SHOPFRONTS (nav v224) ------------------------------------------------------------
+
+   A venue that is a tenant is dressed through its shopfront: kit.shopfront builds the sign, awning
+   and pavement glow in the brand colour; this places one per venue in data/shopfronts.json (the
+   app's venues with frontage = 'shopfront'). The venue's own coordinate goes through the same
+   projection every pin uses, into the island's units; the nearest surveyed footprint within five
+   units (39 m) gives the face: the sign hangs on whichever side of that box the venue point is off,
+   its +z pointing away from the wall. Under a hand-built kit the footprint is still in the raw list
+   (zoning happens later, inside footprintsFor), so Coya finds the Four Seasons' own outline. With
+   no footprint near, the sign stands at the point and faces the nearest road. */
+let shopfrontData = null;
+function shopfrontList(){
+  if (!shopfrontData) shopfrontData = fetch('data/shopfronts.json').then(r => r.ok ? r.json() : { venues: [] }).catch(() => ({ venues: [] }));
+  return shopfrontData;
+}
+async function addShopfronts(d, list){
+  if (!kit || !kit.shopfront || d._shopfronts) return;
+  const idx = window.__basemapIndex;
+  const entry = idx && (idx.islands || []).find(i => i.id === d.id);
+  if (!entry || !entry.extent) return;
+  const data = await shopfrontList();
+  const e = entry.extent, [ox, oy] = BMAP.islandOrigin(entry);
+  const mine = (data.venues || []).filter(v => {
+    const x = (v.lng - 54.42) * 101320, y = (v.lat - 24.49) * 111320;
+    return x >= e.x0 && x <= e.x1 && y >= e.y0 && y <= e.y1;
+  });
+  if (!mine.length) return;
+  d._shopfronts = true;
+  const roads = (entry._data && BMAP.roadsUnits) ? BMAP.roadsUnits(entry._data, [ox, oy]) : [];
+  const g = new THREE.Group(); g.name = 'shopfronts';
+  let placed = 0, onFace = 0;
+  for (const v of mine){
+    const x = (v.lng - 54.42) * 101320, y = (v.lat - 24.49) * 111320;
+    const ux = (x - ox) / BMAP.M_PER_UNIT, uz = -(y - oy) / BMAP.M_PER_UNIT;
+    /* The nearest footprint, measured to its edge, in the box's own frame. */
+    let best = null;
+    for (const b of list || []){
+      if (Math.abs(b.x - ux) > 12 || Math.abs(b.z - uz) > 12) continue;
+      const cs = Math.cos(b.rot), sn = Math.sin(b.rot);
+      const dx = ux - b.x, dz = uz - b.z;
+      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+      const hw = b.w / 2, hd = b.dp / 2;
+      const ex = Math.max(Math.abs(lx) - hw, 0), ez = Math.max(Math.abs(lz) - hd, 0);
+      const dist = Math.hypot(ex, ez);
+      if (dist <= 5 && (!best || dist < best.dist)) best = { b, lx, lz, hw, hd, dist, cs, sn };
+    }
+    let px, pz, ry;
+    if (best){
+      const { b, lx, lz, hw, hd, cs, sn } = best;
+      const xFace = Math.abs(lx) / hw >= Math.abs(lz) / hd;
+      let fx, fz, nx, nz;
+      if (xFace){ fx = Math.sign(lx || 1) * hw; fz = Math.max(-hd + 0.9, Math.min(hd - 0.9, lz)); nx = Math.sign(lx || 1); nz = 0; }
+      else      { fz = Math.sign(lz || 1) * hd; fx = Math.max(-hw + 0.9, Math.min(hw - 0.9, lx)); nx = 0; nz = Math.sign(lz || 1); }
+      /* Local box frame back to island units: the inverse of the rotation above. */
+      px = b.x + fx * cs + fz * sn; pz = b.z - fx * sn + fz * cs;
+      const wnx = nx * cs + nz * sn, wnz = -nx * sn + nz * cs;
+      px += wnx * 0.25; pz += wnz * 0.25;
+      ry = Math.atan2(wnx, wnz);
+      onFace++;
+    } else {
+      /* No wall to hang on: stand at the point, face the nearest road. */
+      let nr = null;
+      for (const r of roads) for (const [rx, rz] of r.pts){ const dd = (rx - ux) * (rx - ux) + (rz - uz) * (rz - uz); if (!nr || dd < nr.dd) nr = { dd, rx, rz }; }
+      px = ux; pz = uz;
+      ry = nr ? Math.atan2(nr.rx - ux, nr.rz - uz) : 0;
+    }
+    const s = kit.shopfront(v.name, v.color || '#E4572E');
+    s.position.set(px, 0, pz); s.rotation.y = ry;
+    s.userData.venueId = v.id;
+    g.add(s); placed++;
+  }
+  g.position.y = GROUND;
+  d.detail.add(g);
+  snapshotMats(g); registerLift(g); applyView(view);
+  console.info('shopfronts ' + d.id + ': ' + placed + ' placed, ' + onFace + ' on a building face');
+}
 function buildAndRegister(d){
   /* Same rule as the setDistrict path, and this is the case it matters for: the prefetch builds an
      island a whole leg before the camera arrives.

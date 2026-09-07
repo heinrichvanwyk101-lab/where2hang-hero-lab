@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v146';
+export const BUILD = 'city v149';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6224,6 +6224,65 @@ function saadiyatPark(x0, z0, land, R){
   return g;
 }
 
+/* ---------- SHOPFRONT (city v147, scaled v148, v149) ------------------------------------------------------------
+   What of a venue can be dressed when the venue is a tenant: its shopfront. One awning in the brand
+   colour, a sign board carrying the name (a canvas texture, lit on its own so it reads at night),
+   two posts, and a glow on the pavement in front. Built in metres over M_PER_U like every kit,
+   in a local frame where the sign's back sits on x = 0 .. the face line is the x axis and +z is
+   OUT into the street; the placer (world-nav addShopfronts) rotates the group so +z leaves the
+   building face it found. Small on purpose: at the place camera it is a coloured dab with a name,
+   which is exactly what a sign is from the air. */
+function shopfront(name, colorHex){
+  const g = new THREE.Group(), M = M_PER_U;
+  const c = new THREE.Color(colorHex);
+  const dusk = c.clone().multiplyScalar(0.82).getHex(), day = c.getHex();
+  const brand = saadKitMat(dusk, day, 0.7, 0, day, 0.3, 0.9);
+  const post = saadKitMat(0x3A3A3A, 0x4A4A4A, 0.6, 0.4);
+  /* THE NAME, painted once. The brand colour with the name in white: the texture is the day face
+     and the night emissive at once, so the sign is legible in every view. */
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 104;
+  const cx = cv.getContext('2d');
+  cx.fillStyle = '#' + c.getHexString(); cx.fillRect(0, 0, 512, 104);
+  cx.fillStyle = '#FFFFFF'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  let size = 64; cx.font = `700 ${size}px system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+  const label = String(name || '').slice(0, 26);
+  while (size > 26 && cx.measureText(label).width > 480){ size -= 4; cx.font = `700 ${size}px system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`; }
+  cx.fillText(label, 256, 54);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const face = new THREE.MeshStandardMaterial({ map:tex, color:0xFFFFFF, roughness:0.6, metalness:0, emissive:0xFFFFFF, emissiveMap:tex, emissiveIntensity:0.6 });
+  face.userData.duskColor = 0xFFFFFF; face.userData.glassOverride = false; face.userData.nightAlbedo = 1.0;
+  face.userData.dayMats = new THREE.MeshStandardMaterial({ map:tex, color:0xFFFFFF, roughness:0.6, metalness:0, emissive:0xFFFFFF, emissiveMap:tex, emissiveIntensity:0.35 });
+  /* AT DIORAMA SCALE, NOT STREET SCALE (city v148). A real sign is six metres wide and a dot from
+     the place camera, 400 m up. The landmarks are exaggerated to read from there and the shopfront
+     follows: a twelve-metre fascia, a totem at the corner tall enough to stand clear of the awning,
+     and a fourteen-metre glow on the pavement. From the air the colour is the identity; the name
+     is there for the close orbit. */
+  const board = new THREE.Mesh(new THREE.BoxGeometry(15.5 / M, 3.2 / M, 0.6 / M), brand);
+  board.position.set(0, 7.0 / M, 0.3 / M); g.add(board);
+  board.userData.hero = board.userData.kitName = 'shopfront';
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(15.2 / M, 3.0 / M), face);
+  plate.position.set(0, 7.0 / M, 0.62 / M); g.add(plate);
+  /* Awning: pitched out over the pavement, two posts under its outer corners. */
+  const awn = new THREE.Mesh(new THREE.BoxGeometry(16.5 / M, 0.35 / M, 4.4 / M), brand);
+  awn.position.set(0, 4.6 / M, 2.3 / M); awn.rotation.x = 0.22; g.add(awn);
+  for (const sx of [-1, 1]){
+    const pm = new THREE.Mesh(new THREE.CylinderGeometry(0.14 / M, 0.14 / M, 4.0 / M, 6), post);
+    pm.position.set(sx * 7.6 / M, 2.2 / M, 4.1 / M); g.add(pm);
+  }
+  /* The totem: a lit blade at the street corner of the frontage, the one piece tall enough to be
+     seen past the awning from above. */
+  const totem = new THREE.Mesh(new THREE.BoxGeometry(2.2 / M, 13 / M, 2.2 / M), brand);
+  totem.position.set(9.2 / M, 6.5 / M, 4.4 / M); g.add(totem);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6 / M, 0.7 / M, 2.6 / M), face);
+  cap.position.set(9.2 / M, 13.35 / M, 4.4 / M); g.add(cap);
+  /* The welcome mat: a disc of the brand colour on the pavement, the thing that reads from the
+     air at night. Emissive at a fraction so it glows rather than shouts. */
+  const mat = saadKitMat(c.clone().multiplyScalar(0.7).getHex(), c.clone().multiplyScalar(0.9).getHex(), 0.95, 0, day, 0.45, 1.0);
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(8.5 / M, 24), mat);
+  glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.06 / M, 4.2 / M); g.add(glow);
+  return g;
+}
+
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -6231,7 +6290,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, shamsBoutik, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb, shopfront };
 }
 
 

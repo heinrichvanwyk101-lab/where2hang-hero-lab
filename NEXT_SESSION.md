@@ -1,31 +1,93 @@
 # Next session — opening line
 
-> Read the where2hang-hero-lab repo. Check the `b` counter on the gf row for Yas,
-> then carry on with Yas Bay.
+> Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
+> Check the four `BUILD` stamps in the raw files before saying what is live.
 
-Nothing needs uploading. Files read from
-`raw.githubusercontent.com/heinrichvanwyk101-lab/where2hang-hero-lab/main/<path>`.
+Files read from `raw.githubusercontent.com/heinrichvanwyk101-lab/where2hang-hero-lab/main/<path>`.
+App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwexhlwnvqvkbzccxctt`).
 
-**Read the repo before saying anything about what is or is not deployed.** This
-was got wrong twice in the last session — three deploys were discussed as live
-when the stamps said otherwise. Check `export const BUILD` in the raw files.
+## Handed over on 7 September 2026
 
-**Verify parse with the exit code, never through a pipe.**
-`for f in *.js *.mjs; do node --check "$f" >/dev/null 2>&1 || echo "FAIL $f"; done`
-`node --check | head` reports the PIPE's status and once shipped a syntax error live.
-`preview.mjs` will not catch it either — the `file#fn` form lifts the function BODY,
-so nothing above the opening brace is ever parsed.
+Stamps at hand-over: `nav v225 / city v149 / world v323 / props v31 / basemap v21`. Verify with
+`grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
-## Handed over at
+### How work flows (both repos)
 
-`nav v176 / city v95 / world v236 / props v31 / basemap v18`
+- **hero-lab** (this repo): edit, bump the stamps (`city vNNN` in w2h-city.js, `world vNNN` in
+  w2h-world.js, `nav vNNN` in world-nav.html), run `node tools/bench/errcheck3.mjs` (3 to 6 min,
+  needs `errors: 0` and no bad materials), push straight to `main`. GitHub Pages deploys in about a
+  minute. Renders: `tools/bench/README.md`; frames land in `tools/bench/out/`. One render at a time.
+- **app**: work on branch `claude/repo-audit-hero-lab-6ok9z8`, PR to `main`, squash merge, then
+  reset the branch onto `origin/main` and force-push it. `npx tsc --noEmit` before every commit.
+- Commit trailers: `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and the session link.
+  Never put a model name in commit bodies or PR text. Kill bench processes by PID, never `pkill -f`.
+- The sandbox has no egress to where2hang.ae, supabase.co or github.io. Supabase is reached through
+  the MCP connector (SQL, migrations); GitHub through the MCP tools; anything that must reach the
+  outside runs as a GitHub Actions workflow in the app repo.
 
-Read out of the files in this repo on 3 September 2026, not remembered.
+### The 3D world: what changed this session
 
-**nav v176 is committed to `main`, but its GitHub Pages publication was NOT
-verified** — the session that pushed it had no network egress to `github.io`.
-First job, unchanged: open the embed and read the stamp in the corner. If it does
-not say `nav v176`, the deploy has not taken.
+- **Off-map results (nav v223, app PR #40).** A search whose venues are all off the six islands
+  sends the empty set with a count; the world steps back to the Abu Dhabi view with no pins.
+- **The Walk at Al Seef (city v145).** Restaurant lane west of the Al Seef mall; `zoneMargin` per kit.
+- **Saadiyat resorts named the right way round (city v146).** Jumeirah west, Park Hyatt east.
+- **Shopfronts (city v147/148, nav v224).** `data/shopfronts.json` lists venues with a street-level
+  frontage (from the app's `venues.frontage = 'shopfront'`). `kit.shopfront(name, colour)` builds a
+  fascia with the name, an awning, a totem and a pavement glow in the brand colour; the nav's
+  `addShopfronts(d, list)` hangs one on the nearest surveyed footprint's face toward the venue
+  point (falls back to facing the nearest road). 34 placed, 29 on a face. Scaled up in v148 because
+  a real-size sign is a dot from the place camera; v149 one size up again (15 m fascia, 13 m totem,
+  17 m glow). Judged on `coordview maryah "" 70 34 2.4 -39.8 -14.8` day and night: the sign hangs on
+  the Four Seasons podium face and the glow reads at night, but at the venue camera it is still a
+  small mark. If the owner wants more, the next lever is a lit pin-foot at the pavement disc, not a
+  bigger fascia. The red and green pools of light near lamp posts in night renders are the
+  traffic-signal props, not shopfronts.
+- **Camera for sets and clusters (nav v225).** `PITCH_CLUSTER 0.58` / `PITCH_VENUE 0.45` replace
+  the landmark pitch for pins; a tight set is the steepest shot; the area rail frames the pins
+  rather than the island; the second tap on a cluster lists only once `camSettled()`.
+- **Yas Waterworld**: the owner reports it "still in the wrong position and on a road". The kit
+  stands at (-4, -22) by the v319 note (east of the OSM entrance node at (-45.5, -21.4), clear of the
+  car-park lot). `tools/bench/venueprobe.mjs`-style measurement shows 12 minor/local road segments
+  crossing the kit's box at z -34..-39 (the entrance roads). Decide with a `kitview yas
+  yasWaterworld 760 380 2.4` render against the satellite; the truth is that the park lies west of
+  the mall's west car park, slides on the south side. Do not move it back onto the entrance node.
+
+  Rendered 7 Sept (`tools/bench/out/kit-yasWaterworld.png`): the kit sits north of Warner Bros
+  World and west of the mall, which is right, but the survey's minor service roads inside the park
+  are painted straight through it. KIT_ZONES suppress footprints and fabric only, never painted
+  roads (`paintGround`), so the real fix is a road-free zone honoured by the road painter for this
+  kit; nudging the kit only hides it.
+
+### The 3D world: open work, island by island (docs/VENUE-BUILDINGS.md has the detail)
+
+1. Yas: Yas Plaza hotel cluster (four slabs, satellite is enough). Waterworld check above.
+2. Al Maryah: kits exist; one render pass to close. Coya's coordinate was moved onto the Four
+   Seasons kit; 49ers' coordinate is in the sea and needs fixing in the database.
+3. Reem: Paragon Bay Mall podium (The Butcher Shop, New Shanghai) from the satellite.
+4. Saadiyat: Park Hyatt and Jumeirah resort kits are generic; photos wanted from the owner.
+5. Corniche: InterContinental Al Bateen (photos wanted), Mushrif Mall and Novotel Al Bustan
+   (satellite), everything else accepted as generic fabric.
+6. Raha: the mainland tenants land in water; the Raha strip needs widening to the shore.
+
+### The app: what changed this session (all merged to main)
+
+- Venue invitation email through **Resend** (`scripts/venue_invite_send.ts`, workflow
+  `Venue invitations`, manual). The Gmail connector strips every `<img>`, so Gmail is only read.
+  Graphics served from this repo's Pages origin, `email/`. Sender "The Where2Hang team".
+- **Gate:** `venues.building_status` must be `modelled` or `generic` before a venue is invited;
+  `venues.frontage` is `shopfront` or `inside`. Both set for the 58 audited venues.
+- Nightly jobs: verify-venues (1,000 a night now the Places quota is 6,000), vibes, hours,
+  triage-misses, harvest-contacts. Routine "Venue outreach inbox" (05:00 UTC) reads replies with
+  Gmail + Supabase attached, drafts only.
+- Nothing has been sent to any venue. The owner has not yet said "go". The first batch would be
+  Coya, Stars N Bars, Café del Mar plus the generic-fabric venues with an address.
+
+### Owner's standing decisions
+
+- Emails only after the venue's building is agreed on a render; island by island; most popular
+  first. Tenants are customised through their shopfront, if they have one (Coya is the model).
+- No personal names in outreach. Keep the unreferenced images in the app repo.
+- Vercel retention: 1 day previews, 7 days production.
 
 ### nav v176 — the temporal-dead-zone fix
 
