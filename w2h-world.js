@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v323';
+export const BUILD = 'world v326';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7965,7 +7965,15 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      lot. The park proper runs east of the lot to the second lot at x 25, and its centre is the
      places anchor (-4, -24): the kit's 260 m spread at (-4, -22) spans x -21..13, clear of both
      lots and of the entrance roads at z -31..-40. */
-  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-4.0, -22.0));
+  /* ON THE PARK ITSELF, SECOND READING (world v324). The v319 note took the OSM node at
+     (-45.5, -21.4) for the entrance at the edge of a car park and pushed the kit east to (-4, -22),
+     into the mall's road loop, which is where the owner saw it "on a road". The owner's satellite
+     frames (7 Sept) show the park SOUTH of the Warner Bros car-park rows and north of Yas Street,
+     700 m west of the mall: the lot at x -64..-38, z -48..-20 is that car park, north of the park,
+     and the survey's 38 small footprints at x -67..-31, z -20..-5 are the park's own buildings.
+     The kit's 260 m spread at (-47, -8) covers x -59..-35, z -20..4, on those footprints and off
+     every road: the service roads south of the park start at z 4. */
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-47.0, -8.0));
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
@@ -8010,6 +8018,12 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
       KIT_ZONES[yas.id].push({ x0:b.min.x - 6, x1:b.max.x + 6, z0:b.min.z - 6, z1:b.max.z + 6 });
     }
   }
+  /* THE WHOLE WATER PARK, NOT JUST THE KIT'S BOX (world v325). The survey carries 38 small
+     footprints in the park at x -67..-31, z -20..-5 — changing rooms, kiosks, slide towers —
+     and none of them has a height, so the height model bins them by area and stands ten-storey
+     towers inside the water park (kit-yasWaterworld.png, 7 Sept). The kit IS the park; the slot
+     between the car park north of it and the service roads south of it is its zone. */
+  KIT_ZONES[yas.id].push({ x0:-72, x1:-24, z0:-24, z1:6 });
 }
 
 /* ---------- the four placeholders ---------- */
@@ -8174,9 +8188,11 @@ KIT_ZONES[maryah.id] = [
   { x0:-56, x1:-26, z0:52, z1:80 },      // Cleveland Clinic podium and tower
   { x0:-50, x1:-30, z0:-22, z1:-7 },     // Four Seasons, 86.6 x 39 m (world v291)
   { x0:-55, x1:-38, z0:28, z1:41 },      // Rosewood, 78.7 x 31 m
+  { x0:-11, x1:7, z0:-15, z1:49 },       // the Galleria's east block, 466 x 113 m on rot 1.46 (world v326)
+  { x0:-51, x1:-37, z0:-6, z1:30 },      // the west waterfront row between the hotels (world v326)
 ];
 if (!NO_KIT && maryah && kit.adgmSquare){
-  for (const fn of ['adgmSquare', 'clevelandClinic', 'maryahHotels']){
+  for (const fn of ['adgmSquare', 'clevelandClinic', 'maryahHotels', 'galleriaEast', 'maryahPromenade']){
     if (!kit[fn]) continue;
     const m = kit[fn](); m.position.y = GROUND; maryah.detail.add(m);
   }

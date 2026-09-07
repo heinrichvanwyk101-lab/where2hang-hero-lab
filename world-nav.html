@@ -171,11 +171,17 @@
     box-shadow:0 1px 6px rgba(0,0,0,.55),0 0 0 6px rgba(232,181,71,.35)}
   /* A DESTINATION: a mall, a hotel, a waterfront precinct — one named pill for everything inside
      it (nav v207). It never splits into its members; a tap lists them once the camera is close. */
-  .w2hPin.dest{height:30px;padding:0 12px 0 10px;border-radius:999px;white-space:nowrap;
-    background:rgba(16,22,28,.92);color:#F2F5F7;font:800 11px/30px Inter,sans-serif;
-    letter-spacing:.04em;text-transform:uppercase;
-    box-shadow:0 2px 8px rgba(0,0,0,.45),0 0 0 2px rgba(0,194,168,.85)}
-  .w2hPin.dest b{color:#3DE9CD;font-weight:800;margin-left:6px}
+  /* SMALL ENOUGH TO SIT ON THE BUILDING IT NAMES (nav v227). At 30 px tall, 11 px caps and wide
+     tracking, "FOUR SEASONS ABU DHABI 12" was a bar wider than its own tower and three of them
+     covered the middle of Al Maryah. Two thirds the height, a smaller face, tighter tracking, and
+     a hard ceiling on the width with an ellipsis past it — the label is an identifier, not a
+     headline, and the model behind it is the thing worth seeing. */
+  .w2hPin.dest{height:21px;padding:0 8px 0 7px;border-radius:999px;white-space:nowrap;
+    max-width:132px;overflow:hidden;text-overflow:ellipsis;
+    background:rgba(16,22,28,.86);color:#F2F5F7;font:800 9.5px/21px Inter,sans-serif;
+    letter-spacing:.02em;text-transform:uppercase;
+    box-shadow:0 1px 5px rgba(0,0,0,.4),0 0 0 1.5px rgba(0,194,168,.8)}
+  .w2hPin.dest b{color:#3DE9CD;font-weight:800;margin-left:5px}
   /* YOU ARE HERE (nav v208): a gold dot with a breathing ring, always on once the host has a
      position, with a small label. Off the modelled land it sits on the nearest island's edge
      and the label says how far away you really are. */
@@ -742,7 +748,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v226', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v227', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2114,7 +2120,11 @@ function renderPinOverlay(){
     if (pins.length === 1 && pins[0].members){
       const p0 = pins[0];
       el.className = 'w2hPin dest';
-      el.textContent = p0.dest;
+      /* THE CITY'S NAME IS NOT INFORMATION HERE (nav v227). Every destination reads "... Abu Dhabi"
+         or "... Al Maryah Island", on a map that is entirely Abu Dhabi — so the suffix bought
+         nothing and cost a third of the pill's width. Trimmed only when something is left to name
+         by, so a destination actually called "Abu Dhabi" keeps it. */
+      el.textContent = destLabel(p0.dest);
       const b = document.createElement('b'); b.textContent = String(p0.members.length);
       el.appendChild(b);
     } else if (pins.length > 1){
@@ -2241,6 +2251,10 @@ function showVenueCard(v){
    does; once the camera is at that shot (or closer), the tap answers with the list of what is
    inside. The pin itself never splits: sixty restaurants in one mall cannot be told apart at
    any distance the camera can reach, and the list is what the person wanted anyway. */
+function destLabel(name){
+  const t = String(name || '').replace(/\s*[-–,]?\s*(abu dhabi|al maryah island|al maryah|yas island|saadiyat island)\s*$/i, '').trim();
+  return t.length >= 3 ? t : String(name || '');
+}
 function tapDestinationPin(p){
   const wantDist = fitDist(CLUSTER_FLOOR_R * 2.5, goal.fov || 46);
   const nowDist = cur.dist * (orbit.zoom || 1);

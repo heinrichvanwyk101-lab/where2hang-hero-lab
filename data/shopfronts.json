@@ -249,6 +249,30 @@
    "lat": 24.470170974731445,
    "lng": 54.37297058105469,
    "color": "#B5179E"
+  },
+  {
+   "id": 17,
+   "name": "Zuma",
+   "category": "Restaurant",
+   "lat": 24.5005,
+   "lng": 54.38792,
+   "color": "#B08D57"
+  },
+  {
+   "id": 4549,
+   "name": "Craft by Side Hustle",
+   "category": "Pub",
+   "lat": 24.49981117248535,
+   "lng": 54.38703918457031,
+   "color": "#E4572E"
+  },
+  {
+   "id": 4541,
+   "name": "BB Social",
+   "category": "Restaurant",
+   "lat": 24.499269485473633,
+   "lng": 54.3870964050293,
+   "color": "#2A9D8F"
   }
  ]
 }

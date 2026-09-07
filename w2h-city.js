@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v149';
+export const BUILD = 'city v154';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5487,24 +5487,35 @@ function saadiyatResorts(){
 function maryahHotels(){
   const g = new THREE.Group(), M = M_PER_U;
   const stone = saadKitMat(0xD7D2C8, 0xECE8E0, 0.8, 0), glassD = saadKitMat(0x22303A, 0x5C7A8C, 0.3, 0.3);
-  // Four Seasons: 86.6 x 39 m, 144 m, rot -0.371
+  // Four Seasons: 86.6 x 39 m, 144 m, rot -0.371 — dark faceted glass with two pale fins and a
+  // chamfered crown (city v153, to the owner's photograph); the stone stripes were a guess.
   { const x = -40.2, z = -14.4, rot = -0.371;
-    const t = new THREE.Mesh(new THREE.BoxGeometry(86.6 / M, 144 / M, 39 / M), stone);
+    /* 0x1E2429 (city v153) was darker and flatter than any other tower's dusk tone in this file
+       — every one of them sits between 0x22 and 0x33 with a blue cast — and rendered as a black
+       slab at dusk (place-maryah5_quay_dusk.png). Same facet, same day tone, dusk lifted onto the
+       range the rest of the city uses. */
+    const dark = kitGlass(0x2A3644, 0x5C6B78, 0.25, 0.3);
+    const t = new THREE.Mesh(shearBox(86.6, 39, 144, 5), dark);
     t.position.set(x, 72 / M, z); t.rotation.y = rot; t.userData.hero = t.userData.kitName = 'fourSeasonsMaryah'; g.add(t);
-    for (let i = 0; i < 9; i++){
-      const b = new THREE.Mesh(new THREE.BoxGeometry(87.2 / M, 9 / M, 39.6 / M), glassD);
-      b.position.set(x, (12 + i * 15) / M, z); b.rotation.y = rot; g.add(b);
+    for (const k of [-1, 1]){
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(3 / M, 146 / M, 41 / M), stone);
+      fin.position.set(x + Math.cos(rot) * k * 30 / M, 73 / M, z - Math.sin(rot) * k * 30 / M); fin.rotation.y = rot; g.add(fin);
     }
-    const crown = new THREE.Mesh(new THREE.BoxGeometry(92 / M, 4 / M, 44 / M), stone);
-    crown.position.set(x, 146 / M, z); crown.rotation.y = rot; g.add(crown);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(60 / M, 6 / M, 30 / M), dark);
+    crown.position.set(x, 147 / M, z); crown.rotation.y = rot + 0.2; g.add(crown);
     const pod = new THREE.Mesh(new THREE.BoxGeometry(110 / M, 12 / M, 60 / M), stone);
     pod.position.set(x, 6 / M, z); pod.rotation.y = rot; g.add(pod); }
-  // Rosewood: 78.7 x 31 m, 140 m, rot -0.187
+  // Rosewood: 78.7 x 31 m, 140 m, rot -0.187 — a rectangular slab with a pale service band and a
+  // stepped crown (city v153). THE BRONZE GLASS IS RESTORED (v154): v153 recoloured it grey, but the
+  // warm gold-lit tower in the owner's dusk photograph is this one, and the bronze it carried since
+  // world v291 was already right. Only the shape needed correcting.
   { const x = -46.3, z = 34.6, rot = -0.187;
-    const t = new THREE.Mesh(ellipTower(79, 31, 140, 0.18, 12, 36), kitGlass(0x3A2E22, 0xB39A78, 0.3, 0.15));
+    const t = new THREE.Mesh(new THREE.BoxGeometry(78.7 / M, 140 / M, 31 / M), kitGlass(0x3A2E22, 0xB39A78, 0.3, 0.15));
     t.position.set(x, 70 / M, z); t.rotation.y = rot; t.userData.hero = t.userData.kitName = 'rosewoodMaryah'; g.add(t);
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 148 / M, 34 / M), stone);
-    fin.position.set(x, 74 / M, z); fin.rotation.y = rot; g.add(fin);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(6 / M, 144 / M, 32 / M), stone);
+    band.position.set(x + Math.cos(rot) * 22 / M, 72 / M, z - Math.sin(rot) * 22 / M); band.rotation.y = rot; g.add(band);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(50 / M, 8 / M, 26 / M), kitGlass(0x3A2E22, 0xB39A78, 0.3, 0.15));
+    crown.position.set(x - Math.cos(rot) * 10 / M, 144 / M, z + Math.sin(rot) * 10 / M); crown.rotation.y = rot; g.add(crown);
     const pod = new THREE.Mesh(new THREE.BoxGeometry(100 / M, 10 / M, 56 / M), stone);
     pod.position.set(x, 5 / M, z); pod.rotation.y = rot; g.add(pod); }
   return g;
@@ -6283,6 +6294,102 @@ function shopfront(name, colorHex){
   return g;
 }
 
+/* ---------- THE GALLERIA, EAST BLOCK (city v150) ----------------------------------------------
+   Google's "The Galleria Al Maryah Island" is the 2019 extension: the 466 x 113 m block EAST of
+   the island's central street, not the podium under the ADGM towers that adgmSquare draws. The
+   survey has it (h 22, rot 1.46) and the fabric drew it as a flat brown box. Cream body, a paler
+   roof deck, a glazed spine down its length and the cross bars of rooftop plant the satellite
+   shows, on the surveyed record (island units, absolute). */
+function galleriaEast(){
+  const g = new THREE.Group(), M = M_PER_U, x0 = -2.2, z0 = 16.9, rot = 1.46, at = _placeRot(x0, z0, rot);
+  const cream = saadKitMat(0xD9D0BE, 0xEDE6D6, 0.85, 0), deck = saadKitMat(0xE4E0D6, 0xF3F0E8, 0.7, 0);
+  const glass = saadKitMat(0x2E4650, 0xBFDCE8, 0.3, 0.2, 0xBFE4EC, 0.2), plant = saadKitMat(0xB5B0A6, 0xC9C4BA, 0.9, 0);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(466 / M, 20 / M, 113 / M), cream);
+  body.position.set(x0, 10 / M, z0); body.rotation.y = rot; body.userData.hero = body.userData.kitName = 'galleriaEast'; g.add(body);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(450 / M, 2.5 / M, 100 / M), deck);
+  roof.position.set(x0, 21.2 / M, z0); roof.rotation.y = rot; g.add(roof);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(410 / M, 5 / M, 22 / M), glass);
+  spine.position.set(x0, 25 / M, z0); spine.rotation.y = rot; g.add(spine);
+  for (let i = -3; i <= 3; i++){
+    if (i === 0) continue;
+    const [px, pz] = at(i * 58 / M, 0);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(14 / M, 3.5 / M, 86 / M), plant);
+    bar.position.set(px, 24 / M, pz); bar.rotation.y = rot; g.add(bar);
+  }
+  /* The entrance canopies on the street side: two glazed porches on the west face. */
+  for (const dz of [-120, 110]){
+    const [px, pz] = at(dz / M, -62 / M);
+    const porch = new THREE.Mesh(new THREE.BoxGeometry(60 / M, 14 / M, 16 / M), glass);
+    porch.position.set(px, 7 / M, pz); porch.rotation.y = rot; g.add(porch);
+  }
+  return g;
+}
+/* ---------- THE WEST WATERFRONT (city v150, corrected v151) --------------------------------
+   Between the Four Seasons and the Rosewood the island's west quay is the Galleria podium's own
+   waterfront level: Craft and BB Social are INSIDE the mall, Zuma has its own shopfront on the
+   quay (owner, 7 Sept). So no free-standing pavilions: a paved promenade on the surveyed shoreline
+   (-47 at z -8, -42 at z 20, -50 at z 28) and a glazed arcade along the podium's west face, the
+   restaurant frontages that face the water. Zuma's own sign comes from data/shopfronts.json. */
+function maryahPromenade(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), glass = saadKitMat(0x2E4650, 0xBFDCE8, 0.3, 0.2, 0xBFE4EC, 0.3);
+  const timber = saadKitMat(0x8C6E4A, 0xA98B64, 0.9, 0), stone = saadKitMat(0xCFC8BA, 0xE3DDD0, 0.85, 0);
+  const strip = [[-45.5, -6], [-43.5, 4], [-42.5, 12], [-44.5, 20], [-48.0, 28]];
+  for (let i = 0; i + 1 < strip.length; i++){
+    const [ax, az] = strip[i], [bx, bz] = strip[i + 1];
+    const len = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.12, len + 0.6), pave);
+    seg.position.set((ax + bx) / 2, 0.06, (az + bz) / 2); seg.rotation.y = ang; g.add(seg);
+  }
+  g.children[0].userData.hero = g.children[0].userData.kitName = 'maryahPromenade';
+  /* THE TERRACES (city v153, to the owner's photographs): the Galleria's waterfront is a two-level
+     restaurant block that follows the curve of the quay, the lower level glazed under a run of
+     pale awnings, the upper level set back with its own terrace and a timber pergola. Built per
+     shoreline segment on the land side of the walk. */
+  const cream = saadKitMat(0xE2DED4, 0xF4F1EA, 0.8, 0, 0xFFE0B8, 0.1, 0.8);
+  const awning = saadKitMat(0xEDE8DC, 0xFBF8F0, 0.7, 0), planter = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  for (let i = 0; i + 1 < strip.length; i++){
+    const [ax, az] = strip[i], [bx, bz] = strip[i + 1];
+    const len = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / len, dz = (bz - az) / len;
+    let nx = dz, nz = -dx; if (nx < 0){ nx = -nx; nz = -nz; }     // the land side is +x
+    const ang = Math.atan2(dx, dz), cx = (ax + bx) / 2, cz = (az + bz) / 2;
+    const put = (off, w, h, y0, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h / M, len + 0.4), mat); m.position.set(cx + nx * off, (y0 + h / 2) / M, cz + nz * off); m.rotation.y = ang; g.add(m); return m; };
+    put(2.7, 1.1, 5.5, 0, glass);          // lower level, glazed to the water
+    put(2.15, 0.35, 0.3, 4.2, awning);     // the awning run over the walk
+    put(3.7, 0.9, 5.0, 5.5, cream);        // upper level, set back
+    put(3.15, 0.5, 0.25, 10.4, timber);    // pergola over the upper terrace
+    put(3.05, 0.35, 0.9, 5.5, planter);    // planters at the terrace edge
+    put(4.4, 0.5, 11, 0, stone);           // the podium wall behind
+  }
+  /* ZUMA (city v152, to the owner's photographs): a free-standing black-clad glass box on the
+     quay terrace, the bronze entrance portal on its street side, bamboo screen behind the glass.
+     28 x 18 m, 9 m high, the long glass face to the water. */
+  { const zx = -41.6, zz = 23.5, rot = 0.12, at = _placeRot(zx, zz, rot);
+    const black = saadKitMat(0x1C1C1C, 0x2A2A2A, 0.5, 0.2, undefined, undefined, 1.6);
+    const zglass = saadKitMat(0x2A3A44, 0x9FB8C8, 0.15, 0.4, 0xE0B070, 0.35, 1.0);
+    const bronze = saadKitMat(0x7A5A33, 0xB08D57, 0.4, 0.6, 0xC8964A, 0.25, 1.0);
+    const bamboo = saadKitMat(0x9C7A48, 0xC7A46A, 0.8, 0);
+    const terrace = new THREE.Mesh(new THREE.BoxGeometry(40 / M, 0.5 / M, 28 / M), pave);
+    terrace.position.set(zx, 0.25 / M, zz); terrace.rotation.y = rot; g.add(terrace);
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(28 / M, 9 / M, 18 / M), black);
+    shell.position.set(zx, 4.5 / M, zz); shell.rotation.y = rot; shell.userData.kitName = 'zumaMaryah'; g.add(shell);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(27 / M, 8.2 / M, 16.5 / M), bamboo);
+    screen.position.set(zx, 4.5 / M, zz); screen.rotation.y = rot; g.add(screen);
+    /* Glass on the water face and the north face: thin panes just outside the shell. */
+    for (const [ax, az, w, d] of [[-14.3, 0, 0.6, 18.2], [0, -9.3, 28.2, 0.6]]){
+      const [px, pz] = at(ax / M, az / M);
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(w / M, 8.6 / M, d / M), zglass);
+      pane.position.set(px, 4.5 / M, pz); pane.rotation.y = rot; g.add(pane);
+    }
+    const [dx, dz] = at(4 / M, -10.6 / M);
+    const portal = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 5 / M, 2.4 / M), bronze);
+    portal.position.set(dx, 2.5 / M, dz); portal.rotation.y = rot; g.add(portal);
+    const [cx2, cz2] = at(0, 0);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(29.5 / M, 0.6 / M, 19.5 / M), black);
+    cap.position.set(cx2, 9.3 / M, cz2); cap.rotation.y = rot; g.add(cap); }
+  return g;
+}
+
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -6290,7 +6397,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, shamsBoutik, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb, shopfront };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb, shopfront, galleriaEast, maryahPromenade };
 }
 
 

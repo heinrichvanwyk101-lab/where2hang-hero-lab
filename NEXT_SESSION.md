@@ -8,7 +8,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v225 / city v149 / world v323 / props v31 / basemap v21`. Verify with
+Stamps at hand-over: `nav v227 / city v154 / world v326 / props v31 / basemap v21`. Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)
@@ -19,8 +19,9 @@ Stamps at hand-over: `nav v225 / city v149 / world v323 / props v31 / basemap v2
   minute. Renders: `tools/bench/README.md`; frames land in `tools/bench/out/`. One render at a time.
 - **app**: work on branch `claude/repo-audit-hero-lab-6ok9z8`, PR to `main`, squash merge, then
   reset the branch onto `origin/main` and force-push it. `npx tsc --noEmit` before every commit.
-- Commit trailers: `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and the session link.
-  Never put a model name in commit bodies or PR text. Kill bench processes by PID, never `pkill -f`.
+- Commit trailers: the `Co-Authored-By:` line and session link your own session prompt gives you
+  (it names whichever model is running, and it changes when the model does — do not copy one from
+  an old commit). Never put a model name in commit bodies or PR text. Kill bench processes by PID, never `pkill -f`.
 - The sandbox has no egress to where2hang.ae, supabase.co or github.io. Supabase is reached through
   the MCP connector (SQL, migrations); GitHub through the MCP tools; anything that must reach the
   outside runs as a GitHub Actions workflow in the app repo.
@@ -45,18 +46,58 @@ Stamps at hand-over: `nav v225 / city v149 / world v323 / props v31 / basemap v2
 - **Camera for sets and clusters (nav v225).** `PITCH_CLUSTER 0.58` / `PITCH_VENUE 0.45` replace
   the landmark pitch for pins; a tight set is the steepest shot; the area rail frames the pins
   rather than the island; the second tap on a cluster lists only once `camSettled()`.
-- **Yas Waterworld**: the owner reports it "still in the wrong position and on a road". The kit
-  stands at (-4, -22) by the v319 note (east of the OSM entrance node at (-45.5, -21.4), clear of the
-  car-park lot). `tools/bench/venueprobe.mjs`-style measurement shows 12 minor/local road segments
-  crossing the kit's box at z -34..-39 (the entrance roads). Decide with a `kitview yas
-  yasWaterworld 760 380 2.4` render against the satellite; the truth is that the park lies west of
-  the mall's west car park, slides on the south side. Do not move it back onto the entrance node.
+- **Yas Waterworld (world v324).** The v319 note read the OSM node at (-45.5, -21.4) as an entrance
+  and pushed the kit east to (-4, -22), into the mall's road loop, which the owner saw as "on a
+  road". The owner's satellite frames (7 Sept) show the park south of the Warner Bros car-park
+  rows and north of Yas Street, 700 m west of the mall; the survey's 38 small footprints at
+  x -67..-31, z -20..-5 are the park's own buildings. The kit now stands at (-47, -8), on those
+  footprints and off every road. Frame: `tools/bench/out/kit-yasWaterworld.png`.
 
-  Rendered 7 Sept (`tools/bench/out/kit-yasWaterworld.png`): the kit sits north of Warner Bros
-  World and west of the mall, which is right, but the survey's minor service roads inside the park
-  are painted straight through it. KIT_ZONES suppress footprints and fabric only, never painted
-  roads (`paintGround`), so the real fix is a road-free zone honoured by the road painter for this
-  kit; nudging the kit only hides it.
+- **Al Maryah to the owner's Google frames (city v150 / world v326).** The Four Seasons (NW
+  waterfront), the four ADGM towers on the west podium, Rosewood (SW) and the clinic were already
+  on their surveyed records. Two things were not: Google's "The Galleria Al Maryah Island" is the
+  466 x 113 m east block across the central street, which the fabric drew as a flat brown box,
+  now `kit.galleriaEast` (cream body, roof deck, glazed spine, rooftop plant bars, two street
+  porches); and the west quay between the hotels was bare sand, now `kit.maryahPromenade`: a
+  paved strip on the surveyed shoreline, a glazed arcade along the podium's west face (Craft and
+  BB Social are INSIDE the Galleria with their own doors on the water side, so their signs hang
+  on that face), and Zuma as its own black-clad glass box with the bronze portal on the quay
+  terrace, to the owner's photographs (city v152). Both zoned. Frames:
+  `tools/bench/out/place-maryah3_top.png`, `place-maryah3_quay.png`, `place-maryah4_zuma*.png`.
+  The survey's 296 x 219 m podium rectangle overhangs the shore at its south-west corner; the
+  real podium is narrower there. Left as is for now.
+  **city v153/v154, judged on `place-maryah5_hotels.png` and `place-maryah5_quay_dusk.png`:** the
+  quay is a two-level terraced restaurant block following the shoreline under awnings with a
+  pergola; Rosewood is a rectangular slab with a pale service band and stepped crown; the Four
+  Seasons is faceted glass with two pale fins. v153 also recoloured Rosewood grey when the warm
+  gold-lit tower in the owner's photograph is that one, so v154 restores the bronze glass it had
+  carried since world v291; only the rectangular shape needed correcting.
+
+  **A WRONG DIAGNOSIS, WRITTEN DOWN SO IT IS NOT REPEATED.** Every glass tower on Al Maryah renders
+  near-black at dusk (`place-maryah5_quay_dusk.png`, `place-m154_dusk.png`). I first read that as the
+  Four Seasons' dusk hex being darker than the rest of the file (0x1E2429 against 0x22–0x33
+  elsewhere) and nudged it to 0x2A3644 in v154. **That is not the cause and the nudge changed
+  nothing.** `applyLift` does honour a material's own `duskColor` for glass — `e.m.color.setHex(
+  e.duskHex != null ? e.duskHex : ...)` — so the colour is being applied. They are black because at
+  dusk the sun is low and behind them and the faces the camera sees are unlit; dark glass on an
+  unlit face goes to near black. It is true of every kitGlass tower in the city, and the Corniche
+  stock behind them reads fine only because it is catching the light. So this is a city-wide
+  dusk-lighting question (a fill term, or a floor under glass albedo at dusk) that long predates
+  v153, not an Al Maryah kit fix. The 0x2A3644 stays: inert, but consistent with the file.
+
+  **Still to judge:** the terraces themselves are only a sliver at 330 units —
+  look at them with `coordview maryah "" 200 90 4.3 -42 14`, and if they sit in the water pull
+  `strip` in `maryahPromenade` one unit east. A close-up under 150 units puts the camera inside the
+  towers and shows nothing; do not spend frames there.
+- **Yas Waterworld zone (world v325).** The whole park slot is a kit zone now, so the survey's 38
+  heightless park structures stop being invented as towers around the pools.
+
+- **Destination pills (nav v227).** They were 30 px tall in 11 px caps with wide tracking, so
+  "FOUR SEASONS ABU DHABI 12" made a bar wider than its own tower and three of them covered the
+  middle of Al Maryah (owner, 7 Sept). Now 21 px in a 9.5 px face, tighter tracking, capped at
+  132 px with an ellipsis, and `destLabel()` trims the trailing city name — every destination read
+  "... Abu Dhabi" on a map that is entirely Abu Dhabi. It keeps the suffix when nothing else is
+  left, so a destination actually called "Abu Dhabi" survives.
 
 ### The 3D world: open work, island by island (docs/VENUE-BUILDINGS.md has the detail)
 
