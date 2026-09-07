@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v143';
+export const BUILD = 'city v144';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5644,6 +5644,46 @@ function alSeefVillage(x0, z0, rot){
   kitPalms(g, palms, 0.75);
   return g;
 }
+/* AL SEEF VILLAGE MALL (city v144) — the Arabesque neighbourhood mall in the Al Seef compound at
+   Al Qurm, on the survey's 101 by 92 m record at the villa grid's east edge with its car park
+   beside it: two cream storeys of arched arcades under a parapet, the octagonal entrance tower
+   with its arches and small dome at the front centre, corner turrets, the flags, and a row of
+   palms along the front. Warm windows after dark. Front is local +x, the car-park side. */
+function alSeefVillageMall(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  const cream = saadKitMat(0xE3D5B8, 0xF1E7D2, 0.85, 0, 0xFFD9A0, 0.06, 0.7), pale = saadKitMat(0xEFE8DA, 0xFAF6EE, 0.85, 0);
+  const arch = saadKitMat(0x4A3F32, 0x6B5C4A, 0.7, 0, 0xFFC878, 0.45, 1.0), dome = saadKitMat(0x2F6E5A, 0x3F8A70, 0.5, 0.2);
+  const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), flagpole = saadKitMat(0xD9DCE0, 0xF2F4F6, 0.5, 0.3);
+  const box = (ax, az, w, d, h, m, y0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), m); b.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); sub.add(b); return b; };
+  box(0, 0, 101, 92, 0.5, pave);
+  const body = box(0, 0, 96, 86, 9, cream); body.userData.hero = body.userData.kitName = 'alSeefVillageMall';
+  box(0, 0, 97, 87, 1.0, pale, 9);                                          // the parapet band
+  /* arcades: dark arched recesses on both storeys of every face, the pale piers between */
+  const arcade = (len, along, fixed, sgn, axisX) => {
+    for (let a = -len / 2 + 6; a <= len / 2 - 6; a += 6){
+      for (const y of [0.6, 5.2]){
+        if (axisX) box(a, sgn * fixed, 4, 0.5, 3.6, arch, y); else box(sgn * fixed, a, 0.5, 4, 3.6, arch, y);
+      }
+    }
+  };
+  arcade(96, 0, 43.2, 1, true); arcade(96, 0, 43.2, -1, true); arcade(86, 0, 48.2, 1, false); arcade(86, 0, 48.2, -1, false);
+  /* corner turrets */
+  for (const [ax, az] of [[-46, -41], [46, -41], [-46, 41], [46, 41]]){ box(ax, az, 8, 8, 12.5, cream); box(ax, az, 8.8, 8.8, 0.8, pale, 12.5); }
+  /* the octagonal entrance tower on the front (+x) face, arches round it, a small dome on top */
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(9 / M, 9.5 / M, 22 / M, 8), cream); tower.position.set(48 / M, 11 / M, 0); tower.rotation.y = Math.PI / 8; sub.add(tower);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(10.5 / M, 10.5 / M, 1 / M, 8), pale); cap.position.set(48 / M, 22.5 / M, 0); cap.rotation.y = Math.PI / 8; sub.add(cap);
+  for (let k = 0; k < 8; k++){ const th = k * Math.PI / 4 + Math.PI / 8; const a = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 7 / M, 0.5 / M), arch); a.position.set((48 + 9.2 * Math.cos(th)) / M, 15 / M, (9.2 * Math.sin(th)) / M); a.rotation.y = -th + Math.PI / 2; sub.add(a); }
+  const dm = new THREE.Mesh(new THREE.SphereGeometry(6 / M, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), dome); dm.position.set(48 / M, 23 / M, 0); sub.add(dm);
+  /* flags on the parapet and the entrance forecourt */
+  for (const az of [-14, 14]){ box(44, az, 0.4, 0.4, 7, flagpole, 10); box(44.5, az, 1.2, 2.4, 0.1, saadKitMat(0xD8342C, 0xE63B32, 0.8, 0), 16); }
+  box(58, 0, 18, 30, 0.4, pave, 0.5);
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
+  const palms = [], cs = Math.cos(rot || 0), sn = Math.sin(rot || 0);
+  const at = (ax, az) => [x0 + (ax * cs + az * sn) / M, z0 + (-ax * sn + az * cs) / M];
+  for (let az = -40; az <= 40; az += 10) palms.push(at(60, az));
+  kitPalms(g, palms, 0.55);
+  return g;
+}
 /* YAS BAY WATERFRONT (city v112) — the piece of Yas people actually walk: Pier71's restaurant
    row on the promontory deck (the deck itself is kit.yasBayPier, placed alongside), the bay
    promenade running from the Hilton past the arena to the eastern parcels, and the white
@@ -6160,7 +6200,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, shamsBoutik, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb };
+         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb };
 }
 
 

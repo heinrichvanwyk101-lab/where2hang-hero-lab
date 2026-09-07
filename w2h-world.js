@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v319';
+export const BUILD = 'world v320';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7608,6 +7608,10 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   const adnec    = kit.adnecHalls       ? kit.adnecHalls(561.5, 702.8, -0.29)     : new THREE.Group();
   const founder  = kit.foundersMemorial ? kit.foundersMemorial(-866.0, 47.6, 0.6)  : new THREE.Group();
   const babqasr  = kit.babAlQasr        ? kit.babAlQasr(-960.6, 153.1, -1.27)     : new THREE.Group();   // world v290
+  /* AL SEEF VILLAGE MALL (world v320) on the survey's 101 by 92 m record at (801.4, 476.6), rot
+     -0.709: the one big building in the Al Seef villa grid at Al Qurm, with its car park at the
+     +x end, which is the side the entrance tower faces. */
+  const seefMall = kit.alSeefVillageMall ? kit.alSeefVillageMall(801.4, 476.6, -0.709) : new THREE.Group();
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7630,7 +7634,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
   mosque.rotation.y = -Math.PI / 2;
   // The kit builds every landmark with its base at y = 0. One group offset each puts them on
   // the island instead of 2.9 units inside it.
-  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder, babqasr].forEach(o => { o.position.y = GROUND; D.add(o); });
+  if (!NO_KIT) [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder, babqasr, seefMall].forEach(o => { o.position.y = GROUND; D.add(o); });
 
   /* THE HAND-BUILT LANDMARK WINS, AND THE FOOTPRINT UNDERNEATH IT YIELDS.
 
@@ -7647,7 +7651,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      added to a parent yet, which is exactly why the box comes out in island-local coordinates —
      the frame the footprint specs are already in. */
   KIT_ZONES[corniche.id] = [];
-  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder, babqasr]){
+  if (!NO_KIT) for (const o of [palace, etihad, adnoc, qasr, marina, fairmont, mosque, capgate, hosn, nation, wtc, landmark, adnec, founder, babqasr, seefMall]){
     o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) continue;
@@ -8108,7 +8112,11 @@ saadiyat.styleZones = [{ x0:-520, x1:-275, z0:94, z1:262, style:'white' }];
 /* THE BREAKWATER IS LOW (world v288). The survey carries no heights out there — five of 162
    records — so the fabric was inventing a tower cluster round Marina Mall where the real spit
    is the Heritage Village, the mall, a few low hotels and open ground. Capped at six storeys. */
-corniche.styleZones = [{ x0:-1030, x1:-870, z0:-180, z1:-50, style:'low' }];
+corniche.styleZones = [{ x0:-1030, x1:-870, z0:-180, z1:-50, style:'low' },
+  /* AL SEEF AND AL QURM COMPOUNDS ARE VILLAS (world v320): eight hundred unmeasured 15 to 25 m
+     footprints north of the Al Bateen runway that the height resampler was raising to towers
+     round the new mall. Same fix as East Yas. */
+  { x0:640, x1:875, z0:395, z1:612, style:'villa' }];
 const LM_SAADIYAT = {
   louvre:     { x:-478.8, z:172.6 },
   znm:        { x:-371.6, z:177.8 },
