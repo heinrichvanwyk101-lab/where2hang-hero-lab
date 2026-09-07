@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v167';
+export const BUILD = 'city v169';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5423,10 +5423,15 @@ function yasWaterworld(x0, z0, scale, rot){
   const g = new THREE.Group(), M = M_PER_U;
   const at = (ax, az) => { const sx = ax * S, sz = az * S; return [x0 + (sx * ca + sz * sa) / M, z0 + (-sx * sa + sz * ca) / M]; };
   /* The traced boundary, kit-local metres, north-end first. Change this and the park changes. */
-  const PLOT = [[103,-128],[214,9],[253,84],[224,136],[149,104],[65,88],[-36,77],[-131,83],
-                [-253,125],[-199,60],[-145,-5],[-102,-47],[-50,-89],[3,-146],[46,-189],[95,-129]];
+  /* THE TRACE, PULLED OFF THE ROADS IT CROSSED. Four of the owner's eighteen taps landed on
+     carriageway — the northern corner by up to 10 m and two on the south-west side by 19 — which
+     is what "the northern corner clips the road" was. Each offending vertex was walked toward the
+     centroid until it cleared the nearest road edge by 5 m, tested against every road centreline
+     in roads-yas.json at its own class width. The shape is the owner's; only the overhang is gone. */
+  const PLOT = [[103,-128],[214,9],[237,78],[217,131],[149,104],[65,88],[-36,77],[-131,83],
+                [-253,125],[-199,60],[-145,-5],[-64,-31],[-26,-55],[3,-146],[46,-189],[95,-129]];
   const water = saadKitMat(0x1B6E88, 0x27A6C8, 0.55, 0, 0x7FE0F0, 0.20, 1.0);
-  const rock  = saadKitMat(0x6E5A48, 0x8C7458, 0.95, 0);
+  const rock  = saadKitMat(0x4A3B2C, 0x6B563E, 0.95, 0);   // darker: at 0x8C7458 the massif vanished into the apron
   const tan   = saadKitMat(0xC9B48E, 0xDCC7A0, 0.85, 0, undefined, undefined, 0.6);
   const pearl = saadKitMat(0xE8E6E0, 0xF8F6F0, 0.3, 0.1, 0xFFF0D8, 0.35, 0.9);
   const shade = saadKitMat(0xD9CBA8, 0xEEDFBC, 0.8, 0);
@@ -5462,8 +5467,12 @@ function yasWaterworld(x0, z0, scale, rot){
     geo.rotateX(-Math.PI / 2); geo.rotateY(ROT); geo.translate(x0, y / M, z0);
     const m = new THREE.Mesh(geo, mat); g.add(m); return m;
   };
-  mkPad(16, 0.6, 0.02, lawn);                     // the planted edge, a little proud of the plot
-  const pad = mkPad(0, 1.1, 0.06, apron);         // the park's own ground
+  /* NO WALL ROUND THE PARK. The ground was a 1.1 m slab with vertical sides and a green band
+     outside it, and from the ground that is a kerb you could sit on — reported as "the park
+     technically has a wall around it". It is a surface now, not a plinth: 0.3 m of apron, a
+     narrow verge rather than a skirt, and every wet surface re-levelled onto it. */
+  mkPad(9, 0.22, 0.02, lawn);                     // a verge, not a kerb
+  const pad = mkPad(0, 0.30, 0.03, apron);        // the park's own ground, a surface
   pad.userData.hero = pad.userData.kitName = 'yasWaterworld';
   /* ---- TWO WAYS TO GET LOCAL METRES INTO THE WORLD, AND THEY DIFFER BY A SIGN ----------------
      A THREE.Shape is built in XY and laid flat with rotateX(-PI/2), which sends (u, v, 0) to
@@ -5513,23 +5522,23 @@ function yasWaterworld(x0, z0, scale, rot){
        ground is a 1.1 m slab starting at 0.06, so its top surface is at 1.16 m — and the water was
        being laid at 1.00, underneath it. Only the coping at 1.30 cleared, which is exactly what
        rendered: pale rings round sand. Everything wet now sits above 1.16. */
-    flat(scaleAbout(rim, cx, cz, 1.07), 1.44, coping, [rim]);       // a thin coping course, no more
-    flat(rim, 1.34, shallow, [scaleAbout(rim, cx, cz, 0.93)]);      // a hint of shallow at the edge
-    flat(scaleAbout(rim, cx, cz, 0.93), 1.30, water);               // and the rest of it is water
+    flat(scaleAbout(rim, cx, cz, 1.07), 0.62, coping, [rim]);       // a thin coping course, no more
+    flat(rim, 0.53, shallow, [scaleAbout(rim, cx, cz, 0.93)]);      // a hint of shallow at the edge
+    flat(scaleAbout(rim, cx, cz, 0.93), 0.50, water);               // and the rest of it is water
     return rim;
   };
   /* THE POOLS, on the centres that cleared the traced ring by at least their own radius. */
   const wave = pool(170, 35, 37, 29, 1.2);                 // the wave pool, north end by the car park
-  flat(blob(146, 62, 28, 12, 2.1), 1.32, shade);           // its beach, the shallow end's sand crescent
+  flat(blob(146, 62, 28, 12, 2.1), 0.46, shade);           // its beach, the shallow end's sand crescent
   pool(-120, 25, 28, 21, 3.4);                             // the south pool
-  pool(-52, 4, 36, 26, 5.1);                               // the children's lagoon
+  pool(-52, 4, 33, 24, 5.1);                               // the children's lagoon
   /* THE LAZY RIVER, a channel with banks rather than a flat annulus: the water is the gap between
      two blobs, and a low bank rings both edges. */
   { const outer = blob(35, -25, 62, 50, 0.7), inner = scaleAbout(outer, 35, -25, 0.58);
-    flat(scaleAbout(outer, 35, -25, 1.07), 1.44, coping, [outer]);          // the outer bank, a ring
-    flat(inner, 1.44, coping, [scaleAbout(inner, 35, -25, 0.93)]);          // the inner bank, a ring
-    flat(scaleAbout(inner, 35, -25, 0.93), 1.40, lawn);                     // the island it circles
-    flat(outer, 1.30, water, [inner]); }                                    // the channel itself
+    flat(scaleAbout(outer, 35, -25, 1.07), 0.62, coping, [outer]);          // the outer bank, a ring
+    flat(inner, 0.62, coping, [scaleAbout(inner, 35, -25, 0.93)]);          // the inner bank, a ring
+    flat(scaleAbout(inner, 35, -25, 0.93), 0.56, lawn);                     // the island it circles
+    flat(outer, 0.50, water, [inner]); }                                    // the channel itself
   /* THE MOUNTAIN. One hero instead of seven identical sticks: a rock massif over the wide middle
      with the pearl on its summit and five flumes spiralling off it into a splash pool. The flumes
      are tubes on real helices, thick enough to read as rides from the air, which the flat torus
@@ -5576,18 +5585,24 @@ function yasWaterworld(x0, z0, scale, rot){
   }
   /* THE VILLAGE, as clusters of small cabanas under pitched canopies rather than one slab each:
      at this camera height a cluster reads as a place and a slab reads as a warehouse. */
+  /* A PALE CANOPY ON PALE SAND IS A PATCH, NOT A BUILDING. The first version roofed every cabana
+     in the same tone as the ground it stood on, and from the district camera — sun nearly
+     overhead, so almost no shadow to separate them — the whole village read as flat blotches.
+     Reported exactly that way. The roofs are terracotta now and stand a little proud of the
+     walls, which is the only thing at this distance that says "building". */
+  const roofT = saadKitMat(0x7E4A30, 0xB46A42, 0.85, 0, 0xFFB070, 0.06, 0.9);
   const cabana = (ax, az, n, spread, seed) => {
     for (let i = 0; i < n; i++){
       const a = seed + i * 2.399, r = spread * Math.sqrt((i + 0.6) / n);
       const cx = ax + Math.cos(a) * r, cz = az + Math.sin(a) * r;
-      const w = 15 + (i % 3) * 5, d = 12 + (i % 2) * 5, h = 8 + (i % 3) * 2;
+      const w = 16 + (i % 3) * 6, d = 13 + (i % 2) * 6, h = 9 + (i % 3) * 3;
       box(cx, cz, w, d, h, tan);
-      box(cx, cz, w + 6, d + 6, 0.9, shade, h + 0.8);
+      box(cx, cz, w + 5, d + 5, 2.2, roofT, h);
     }
   };
   /* THE ENTRANCE, at the +ax end where the park meets the survey's car park: one building big
      enough to read as a gate rather than another cabana. */
-  box(215, 72, 40, 20, 13, tan); box(215, 72, 48, 28, 1.2, shade, 14);
+  box(205, 74, 30, 16, 16, tan); box(205, 74, 36, 22, 3.0, roofT, 16);
   cabana(178, 78, 5, 14, 0.4);       // the village behind it
   cabana(150, 55, 5, 15, 1.7);
   cabana(20, 25, 5, 16, 3.1);
@@ -5606,20 +5621,22 @@ function yasWaterworld(x0, z0, scale, rot){
     edge(-120, 25, 28, 21, 0.4, 3.2, 1.35);
     edge(105, -48, 26, 18, 2.6, 5.4, 1.40);
     edge(35, -25, 62, 50, 1.4, 3.4, 1.22);
-    const geo = new THREE.BoxGeometry(3.4 * S / M, 0.6 * S / M, 1.5 * S / M);
+    /* PARASOLS, NOT LOUNGERS. A 3 m sunbed is four pixels at the district camera and vanished;
+       a 6 m parasol is a dot, and a run of dots along a pool edge is what says people. */
+    const geo = new THREE.ConeGeometry(3.2 * S / M, 1.6 * S / M, 7);
     const im = new THREE.InstancedMesh(geo, shade, rows.length);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
     rows.forEach(([ax, az, a], i) => {
       const [px, pz] = at(ax, az);
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ROT - a);
-      v.set(px, 1.52 * S / M, pz);
+      v.set(px, 4.2 * S / M, pz);
       im.setMatrixAt(i, m4.compose(v, q, sc));
     });
     im.instanceMatrix.needsUpdate = true; g.add(im); }
   /* PLANTING in the gaps the rides leave, so the ground is not one unbroken apron. */
-  [[90, 70, 18, 10, 1.1], [-60, 50, 22, 12, 2.4], [-80, -30, 21, 11, 3.7],
-   [70, -120, 20, 11, 0.6], [10, -120, 17, 9, 4.9]]
-    .forEach(([cx, cz, rx, rz, sd]) => flat(blob(cx, cz, rx, rz, sd, 18), 1.30, lawn));
+  [[90, 70, 18, 10, 1.1], [-60, 50, 22, 12, 2.4], [-100, 40, 16, 9, 3.7],
+   [70, -120, 20, 11, 0.6], [18, -108, 12, 7, 4.9]]
+    .forEach(([cx, cz, rx, rz, sd]) => flat(blob(cx, cz, rx, rz, sd, 18), 0.46, lawn));
   /* No shade rows of its own (city v143): the covered car park is the survey's lot, with its own
      baked structures and cars, and rows drawn here landed on the entrance road.
      PALMS FOLLOW THE TRACED EDGE, a few metres inside it, so the tree line is the park's own
