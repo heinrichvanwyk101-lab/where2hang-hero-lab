@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v157';
+export const BUILD = 'city v158';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5270,12 +5270,80 @@ function adgmSquare(){
   roof.userData.hero = roof.userData.kitName = 'adgmSquare'; g.add(roof);
   const band = new THREE.Mesh(new THREE.BoxGeometry(200 / M, 12 / M, 120 / M), saadKitMat(0x2E4650, 0xBFDCE8, 0.3, 0.2, 0xBFE4EC, 0.2));
   band.position.set(-24, 21 / M, 13); band.rotation.y = 1.51 + Math.PI / 2; g.add(band);
+  /* THE TOWERS, TO THE OWNER'S THREE PHOTOGRAPHS (city v158) --------------------------------
+     Four plain glass boxes was the whole of this cluster, and the note that came back was that it
+     does not resemble the real thing. What the photographs actually show, and what the boxes were
+     missing, is that ADGM Square reads as VERTICAL: every tower on it carries a close run of pale
+     fins from pavement to parapet, and they catch the light while the glass between them goes
+     dark, which is why the real cluster reads as pale and striped at dusk where the model read as
+     four black slabs. The surveyed records are untouched — same centres, same footprints, same
+     heights, same bearings — and the fins, the chamfered caps and the ground-floor recess are hung
+     on them. */
   const glass = kitGlass(0x223644, 0xA3BFD0, 0.3, 0.1);
+  const fin = saadKitMat(0xC8C4BA, 0xF0EDE6, 0.7, 0.05, 0xFFE8C8, 0.10, 1.4);
+  const capM = saadKitMat(0xB9B4AA, 0xDCD8D0, 0.6, 0.15, 0xFFEBD0, 0.12, 1.2);
   for (const [x, z, h, w, d, rot] of [[-16.8, 6.1, 155, 63.4, 39.7, 1.487], [-19, 23.5, 155, 64.1, 40.7, 1.46],
                                        [-27.6, 0.5, 131, 71.3, 40, -0.1], [-31.4, 26.4, 131, 70.5, 40.2, -0.088]]){
     const t = new THREE.Mesh(shearBox(w, d, h, 6), glass);
     t.position.set(x, h / M / 2, z); t.rotation.y = rot; g.add(t);
+    const tAt = _placeRot(x, z, rot);
+    /* Fins every ~7 m across both long faces, standing a little proud of the glass and running
+       past the parapet, which is what gives these towers their comb silhouette against the sky. */
+    const n = Math.max(6, Math.round(w / 7));
+    for (let i = 0; i <= n; i++){
+      const ax = (-w / 2 + (w * i) / n) / M;
+      for (const side of [-1, 1]){
+        const [px, pz] = tAt(ax, side * (d / 2 + 0.7) / M);
+        const f = new THREE.Mesh(new THREE.BoxGeometry(1.1 / M, (h + 5) / M, 1.6 / M), fin);
+        f.position.set(px, (h + 5) / M / 2, pz); f.rotation.y = rot; g.add(f);
+      }
+    }
+    /* A pale cap over the parapet, set in from the glass, and a recessed shadow line at the base
+       so the tower meets the podium instead of growing out of it. */
+    const cap = new THREE.Mesh(new THREE.BoxGeometry((w - 6) / M, 4.5 / M, (d - 5) / M), capM);
+    cap.position.set(x, (h + 4) / M, z); cap.rotation.y = rot; g.add(cap);
+    const base = new THREE.Mesh(new THREE.BoxGeometry((w - 9) / M, 9 / M, (d - 7) / M), capM);
+    base.position.set(x, 4.5 / M, z); base.rotation.y = rot; g.add(base);
   }
+  /* THE WATERFRONT PORTAL (city v158). The one thing in every frame the owner sent and the one
+     thing the model had nothing of: a monumental pale frame standing on the quay at the middle of
+     the podium's west face, lit warm from inside its own soffit, with the promenade running
+     through it. Placed in the podium record's own local frame so it stays on the face if that
+     record ever changes: 76 m wide, 36 m tall, an opening 46 by 24. */
+  { const pAt = _placeRot(-29.2, 10.6, 1.51);
+    const cream = saadKitMat(0xCFC9BC, 0xF2EFE7, 0.75, 0, 0xFFE4BC, 0.14, 1.5);
+    const soffit = saadKitMat(0xB08A5A, 0xE8D8B8, 0.7, 0, 0xFFC878, 0.55, 1.6);
+    const OUT = -(219 / 2 + 5) / M;
+    const pier = (side) => {
+      const [px, pz] = pAt(side * 31 / M, OUT);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(14 / M, 36 / M, 13 / M), cream);
+      m.position.set(px, 18 / M, pz); m.rotation.y = 1.51; g.add(m);
+    };
+    pier(-1); pier(1);
+    const [lx, lz] = pAt(0, OUT);
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(76 / M, 12 / M, 13 / M), cream);
+    lintel.position.set(lx, 30 / M, lz); lintel.rotation.y = 1.51; g.add(lintel);
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(46 / M, 1.2 / M, 12 / M), soffit);
+    glow.position.set(lx, 23.6 / M, lz); glow.rotation.y = 1.51; g.add(glow);
+    glow.userData.hero = glow.userData.kitName = 'galleriaPortal';
+    /* THE RAISED DECK beside it, on its columns: the white platform the daytime frame shows
+       standing off the podium over the promenade. */
+    const [dx2, dz2] = pAt(-96 / M, OUT + 7 / M);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(74 / M, 2.6 / M, 30 / M), capM);
+    deck.position.set(dx2, 15 / M, dz2); deck.rotation.y = 1.51; g.add(deck);
+    for (const c of [-30, -10, 10, 30]){
+      const [cx2, cz2] = pAt((-96 + c) / M, OUT + 7 / M);
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(1.3 / M, 1.3 / M, 15 / M, 10), capM);
+      col.position.set(cx2, 7.5 / M, cz2); g.add(col);
+    }
+    /* THE ENTRANCE CANOPY on the north half of the same face: the angled glass visor over the
+       mall doors in the dusk frame, tilted up toward the towers behind it. */
+    const [ex, ez] = pAt(84 / M, OUT + 3 / M);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(58 / M, 1.6 / M, 26 / M), glass);
+    canopy.position.set(ex, 17 / M, ez); canopy.rotation.set(0.20, 1.51, 0, 'YXZ'); g.add(canopy);
+    const [fx, fz] = pAt(84 / M, OUT + 15 / M);
+    const backer = new THREE.Mesh(new THREE.BoxGeometry(58 / M, 20 / M, 3 / M), glass);
+    backer.position.set(fx, 10 / M, fz); backer.rotation.y = 1.51; g.add(backer); }
   return g;
 }
 /* CLEVELAND CLINIC ABU DHABI — a white podium under a stepped 110 m tower with dark glass
