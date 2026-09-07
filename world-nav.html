@@ -748,7 +748,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v227', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v228', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3281,8 +3281,50 @@ function pickUpdateReadout(){
     return;
   }
   el.classList.add('on');
-  txt.textContent = PICK.mode + '(' + PICK.points.length + ')  ' +
+  const list = PICK.mode + '(' + PICK.points.length + ')  ' +
     JSON.stringify(PICK.points.map(pt => [pt.x, pt.z]));
+  const s = pickSummary();
+  txt.textContent = s ? list + '\n' + s : list;
+}
+
+/* THE NUMBERS A KIT PLACEMENT ACTUALLY TAKES, not just the vertices (nav v228).
+
+   Tracing an outline was only ever half the job: every one of the five wrong Yas Waterworld
+   passes then had to turn that outline into a centre and a bearing BY HAND, off a screenshot,
+   and the conversion is where the errors were. So poly mode now does it here, in the same units
+   the vertices are already in.
+
+   ROT IS THE PART TO TRUST AND NOT REDO. A kit's own at(ax, az) sends its local +ax to
+   (cos ROT, -sin ROT), so for a long axis (dx, dz) in island units the kit wants
+   ROT = atan2(-dz, dx). Getting that backwards puts a tapering kit on its plot the wrong way
+   round, which looks like a position error and is not one.
+
+   THE FIRST POINT TAPPED IS THE HEAD. A fitted axis has no direction of its own, so the axis is
+   flipped if need be to point from the centre toward the first vertex: tap the broad end first
+   and the kit faces the way you drew it. */
+function pickSummary(){
+  const P = PICK.points;
+  if (PICK.mode !== 'poly' || P.length < 3) return '';
+  const n = P.length;
+  const cx = P.reduce((a, pt) => a + pt.x, 0) / n, cz = P.reduce((a, pt) => a + pt.z, 0) / n;
+  let sxx = 0, szz = 0, sxz = 0;
+  P.forEach(pt => { const dx = pt.x - cx, dz = pt.z - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; });
+  sxx /= n; szz /= n; sxz /= n;
+  let th = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+  let ux = Math.cos(th), uz = Math.sin(th);
+  if ((P[0].x - cx) * ux + (P[0].z - cz) * uz < 0){ ux = -ux; uz = -uz; }
+  let L0 = 1e9, L1 = -1e9, T0 = 1e9, T1 = -1e9;
+  P.forEach(pt => { const dx = pt.x - cx, dz = pt.z - cz;
+    const l = dx * ux + dz * uz, t = -dx * uz + dz * ux;
+    L0 = Math.min(L0, l); L1 = Math.max(L1, l); T0 = Math.min(T0, t); T1 = Math.max(T1, t); });
+  const bx = cx + ux * (L0 + L1) / 2, bz = cz + uz * (L0 + L1) / 2;
+  const rot = Math.atan2(-uz, ux);
+  const M = 7.8;
+  const xs = P.map(pt => pt.x), zs = P.map(pt => pt.z);
+  return 'centre ' + bx.toFixed(1) + ',' + bz.toFixed(1) +
+         '  size ' + Math.round((L1 - L0) * M) + 'x' + Math.round((T1 - T0) * M) + 'm' +
+         '  ROT ' + rot.toFixed(3) +
+         '  zone x' + Math.min(...xs) + '..' + Math.max(...xs) + ' z' + Math.min(...zs) + '..' + Math.max(...zs);
 }
 
 /* WAIT FOR FOOTPRINTS, THE SAME TEST attractTick ALREADY TRUSTS, BEFORE FRAMING A PLACE.

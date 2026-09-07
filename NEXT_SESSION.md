@@ -26,6 +26,33 @@ Stamps at hand-over: `nav v227 / city v156 / world v330 / props v31 / basemap v2
   the MCP connector (SQL, migrations); GitHub through the MCP tools; anything that must reach the
   outside runs as a GitHub Actions workflow in the app repo.
 
+### PLOT: STOP READING SHAPES OFF SCREENSHOTS
+
+`plot.html` at the repo root, live at
+`https://heinrichvanwyk101-lab.github.io/where2hang-hero-lab/plot.html?isle=yas`.
+
+Yas Waterworld was moved five times and came back wrong five times, because every pass read a
+shape off a screenshot: which way is north on that frame, how many metres is a pixel, is that
+circle the wave pool or the lazy river. The owner drew the correct boundary by hand twice and it
+still had to be converted by eye. This page ends that.
+
+It draws ONE island straight from `data/isle-*.json` and `data/roads-*.json` as a plan — north up,
+east right, through the same projection the world builds with. Tap to drop vertices; the table
+gives their island-unit coordinates and the summary gives what a kit placement actually needs:
+centre, length, width, the axis-aligned box for `KIT_ZONES`, and the `ROT` value already converted.
+
+Two things worth knowing:
+
+- **Heightless footprints are drawn in red.** Those are the ones the height model invents a tower
+  for, so the "buildings standing on the water park" fault is visible on the page rather than
+  inferred from a render.
+- **Tap the broad end first.** A fitted axis has no head or tail; the first vertex decides which
+  way the kit faces, so a tapering kit cannot land back to front. Getting that backwards is its
+  own class of mistake and the page is built to prevent it.
+
+Do not convert `ROT` by hand. A kit's `at(ax, az)` sends its local `+ax` to `(cos ROT, -sin ROT)`,
+so for a long axis `(dx, dz)` in island units `ROT = atan2(-dz, dx)`. The page does it.
+
 ### THE BAKED OUTLINES ARE COARSER THAN THE BUILDINGS STANDING ON THEM
 
 Found while fixing the Galleria promenade, and it is not an Al Maryah problem. `outline` in

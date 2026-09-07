@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Where2Hang — Plot</title>
+<!--
+  PASTE TARGET: where2hang-hero-lab/plot.html
+
+  WHY THIS EXISTS. Yas Waterworld was moved five times and came back wrong five times, because
+  every pass read a shape off a screenshot and every reading was a guess: which way is north on
+  that frame, how many metres is a pixel, is that circle the wave pool or the lazy river. The
+  owner drew the correct boundary by hand twice and it still had to be converted by eye.
+
+  This ends that. It draws ONE island straight from the bake — the same data the world builds
+  from, through the same projection — as a plan, straight down, north up, east right. Tap to drop
+  vertices; the table gives their island-unit coordinates, and the summary gives exactly what a
+  kit placement needs: centre, length, width, and the ROT value the kit takes, already converted.
+  No screenshots, no pixel arithmetic, nothing typed twice.
+
+  PROJECTION, THE ONE THAT MATTERS: island units are ((x - extent.cx) / 7.8, -(y - extent.cy) / 7.8).
+  Positive x is east, positive z is SOUTH, so north is negative z and north is up on this page.
+
+  THE ROT CONVERSION, WHICH IS WHERE THE ERRORS CAME FROM. A kit's at(ax, az) maps its local +ax
+  to the island direction (cos ROT, -sin ROT). So for a long axis pointing (dx, dz) in island
+  units, ROT = atan2(-dz, dx). The summary does that for you; do not redo it by hand.
+-->
+<style>
+  :root{
+    --bg:#12171c; --panel:#1a2128; --ink:#e8e6e0; --ink2:#98a2ab; --rule:#2b343d;
+    --teal:#00c2a8; --gold:#e8b547; --red:#e06a4a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,sans-serif;
+       -webkit-text-size-adjust:100%}
+  header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--panel);
+         border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:5}
+  h1{font:700 15px/1 Inter,sans-serif;margin:0 8px 0 0;letter-spacing:-.01em}
+  select,button{font:600 13px/1 Inter,sans-serif;color:var(--ink);background:#222b33;border:1px solid var(--rule);
+                border-radius:8px;padding:8px 10px;cursor:pointer}
+  button.on{background:var(--teal);color:#04221d;border-color:var(--teal)}
+  button:active{transform:translateY(1px)}
+  #wrap{position:relative;touch-action:none}
+  canvas{display:block;width:100%;background:#0d1216;touch-action:none}
+  #hud{position:absolute;left:10px;top:10px;font:500 12px/1.5 ui-monospace,monospace;color:var(--ink2);
+       background:rgba(12,18,22,.72);border:1px solid var(--rule);border-radius:8px;padding:6px 9px;pointer-events:none}
+  section{padding:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font:500 13px/1.4 ui-monospace,monospace}
+  th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--rule)}
+  th:first-child,td:first-child{text-align:left;color:var(--ink2)}
+  thead th{color:var(--ink2);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+  pre{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:10px;overflow:auto;
+      font:500 12px/1.5 ui-monospace,monospace;color:var(--teal);white-space:pre-wrap;word-break:break-all}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-bottom:8px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .note{color:var(--ink2);font-size:12.5px;max-width:62ch}
+</style>
+</head>
+<body>
+<header>
+  <h1>Plot</h1>
+  <select id="isle"></select>
+  <button id="undo">Undo</button>
+  <button id="clear">Clear</button>
+  <button id="lyrB" class="on">Buildings</button>
+  <button id="lyrR" class="on">Roads</button>
+  <button id="lyrP" class="on">Parking</button>
+  <button id="lyrG" class="on">Parks</button>
+</header>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="hud">loading…</div>
+</div>
+
+<section>
+  <div class="legend">
+    <span><i style="background:#8a7a5c"></i>building with a height</span>
+    <span><i style="background:#e06a4a"></i>heightless (becomes an invented tower)</span>
+    <span><i style="background:#4a6b3c"></i>park</span>
+    <span><i style="background:#39424a"></i>parking</span>
+    <span><i style="background:#2e6a78"></i>water</span>
+  </div>
+  <p class="note">Drag to pan, pinch or scroll to zoom, tap to drop a vertex. North is up, east is
+  right. <b>Tap the broad end of the shape first</b> — that vertex sets which way the kit faces, so
+  a tapering kit does not land back to front. The summary below is in the form a kit placement
+  takes, ROT included.</p>
+
+  <div class="row"><button id="copy">Copy JSON</button><span id="msg" class="note"></span></div>
+  <pre id="out">Tap the map to start a polygon.</pre>
+
+  <table>
+    <thead><tr><th>#</th><th>x</th><th>z</th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table>
+</section>
+
+<script>
+const M = 7.8;
+const ISLES = [
+  ['yas','Yas'], ['maryah','Al Maryah'], ['corniche','Corniche'],
+  ['reem','Al Reem'], ['saadiyat','Saadiyat'], ['raha','Al Raha'],
+];
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const hud = document.getElementById('hud'), out = document.getElementById('out'), tb = document.getElementById('tb');
+const sel = document.getElementById('isle');
+ISLES.forEach(([id,label]) => { const o = document.createElement('option'); o.value = id; o.textContent = label; sel.appendChild(o); });
+
+let D = null, ROADS = null, poly = [], view = { x:0, z:0, k:4 };
+const layers = { B:true, R:true, P:true, G:true };
+
+function fit(){
+  const w = cv.clientWidth || window.innerWidth;
+  const h = Math.round(Math.min(window.innerHeight * 0.62, w * 1.25));
+  const r = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * r); cv.height = Math.round(h * r);
+  cv.style.height = h + 'px';
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  draw();
+}
+const u  = (x, y) => [ (x - D.extent.cx) / M, -(y - D.extent.cy) / M ];
+const sx = ux => (ux - view.x) * view.k + cv.clientWidth / 2;
+const sy = uz => (uz - view.z) * view.k + parseFloat(cv.style.height) / 2;
+const ix = px => (px - cv.clientWidth / 2) / view.k + view.x;
+const iz = py => (py - parseFloat(cv.style.height) / 2) / view.k + view.z;
+
+function path(ring, close){
+  ctx.beginPath();
+  ring.forEach((p, i) => { const q = u(p[0], p[1]); i ? ctx.lineTo(sx(q[0]), sy(q[1])) : ctx.moveTo(sx(q[0]), sy(q[1])); });
+  if (close) ctx.closePath();
+}
+
+function draw(){
+  const W = cv.clientWidth, H = parseFloat(cv.style.height);
+  ctx.clearRect(0, 0, W, H);
+  if (!D) return;
+  ctx.fillStyle = '#0d1216'; ctx.fillRect(0, 0, W, H);
+  // land
+  ctx.fillStyle = '#3a3226'; ctx.strokeStyle = '#6b5c44'; ctx.lineWidth = 1;
+  path(D.outline, true); ctx.fill(); ctx.stroke();
+  if (layers.G) { ctx.fillStyle = '#2c3b26'; (D.parks||[]).forEach(p => { path(p.r, true); ctx.fill(); }); }
+  ctx.fillStyle = '#1d3d45'; (D.water||[]).forEach(r => { path(r, true); ctx.fill(); });
+  if (layers.P) { ctx.fillStyle = '#39424a'; (D.parking||[]).forEach(r => { path(r, true); ctx.fill(); }); }
+  if (layers.R){
+    const wid = { major:3, minor:1.6, local:1 };
+    ctx.lineCap = 'round';
+    (ROADS.roads||[]).forEach(r => {
+      ctx.strokeStyle = r.cls === 'major' ? '#5c6670' : r.cls === 'minor' ? '#464f58' : '#39424a';
+      ctx.lineWidth = Math.max(0.6, (wid[r.cls] || 1) * view.k * 0.35);
+      path(r.pts, false); ctx.stroke();
+    });
+  }
+  if (layers.B){
+    (D.buildings||[]).forEach(b => {
+      const q = u(b.x, b.y), X = sx(q[0]), Y = sy(q[1]);
+      if (X < -40 || Y < -40 || X > W + 40 || Y > H + 40) return;
+      const w = b.w / M * view.k, d = b.d / M * view.k;
+      ctx.save(); ctx.translate(X, Y); ctx.rotate(-(b.rot || 0));
+      /* Heightless footprints get a height invented from their area, which is how park and car
+         park structures end up as towers. Marked so the fault is visible rather than inferred. */
+      ctx.fillStyle = b.h == null ? 'rgba(224,106,74,.55)' : 'rgba(138,122,92,.85)';
+      ctx.fillRect(-w / 2, -d / 2, Math.max(1, w), Math.max(1, d));
+      ctx.restore();
+    });
+  }
+  // the polygon
+  if (poly.length){
+    ctx.strokeStyle = '#00c2a8'; ctx.lineWidth = 2; ctx.fillStyle = 'rgba(0,194,168,.16)';
+    ctx.beginPath();
+    poly.forEach((p, i) => { i ? ctx.lineTo(sx(p[0]), sy(p[1])) : ctx.moveTo(sx(p[0]), sy(p[1])); });
+    if (poly.length > 2) { ctx.closePath(); ctx.fill(); }
+    ctx.stroke();
+    ctx.fillStyle = '#e8b547';
+    poly.forEach(p => { ctx.beginPath(); ctx.arc(sx(p[0]), sy(p[1]), 4, 0, 7); ctx.fill(); });
+    // the fitted box, drawn so the numbers below can be checked by eye
+    const s = summary();
+    if (s){
+      ctx.strokeStyle = '#e8b547'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      const c = Math.cos(s._th), n = Math.sin(s._th);
+      const hl = s.length_m / M / 2, hw = s.width_m / M / 2;
+      ctx.beginPath();
+      [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([a, b2], i) => {
+        const X = s.centre[0] + (a * hl) * c - (b2 * hw) * n;
+        const Z = s.centre[1] + (a * hl) * n + (b2 * hw) * c;
+        i ? ctx.lineTo(sx(X), sy(Z)) : ctx.moveTo(sx(X), sy(Z));
+      });
+      ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  hud.textContent = sel.value + '  ·  ' + poly.length + ' pts  ·  ' + view.k.toFixed(1) + ' px/unit';
+}
+
+/* Centre, extent and bearing of what has been drawn, in the form a kit placement takes.
+   _th is the long axis in island radians; ROT is the value the kit's own at() wants. */
+function summary(){
+  if (poly.length < 3) return null;
+  const n = poly.length;
+  const cx = poly.reduce((a, p) => a + p[0], 0) / n, cz = poly.reduce((a, p) => a + p[1], 0) / n;
+  let sxx = 0, szz = 0, sxz = 0;
+  poly.forEach(p => { const dx = p[0] - cx, dz = p[1] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; });
+  sxx /= n; szz /= n; sxz /= n;
+  let th = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+  let ux = Math.cos(th), uz = Math.sin(th);
+  /* A FITTED AXIS HAS NO HEAD AND NO TAIL, and a kit that tapers cares which end is which — get
+     it backwards and the broad end lands where the point should be, which is exactly the class of
+     mistake this page exists to stop. So the FIRST vertex tapped defines the head: the axis is
+     flipped, if need be, to point from the centre toward it. Tap the broad end first. */
+  { const hx = poly[0][0] - cx, hz = poly[0][1] - cz;
+    if (hx * ux + hz * uz < 0){ ux = -ux; uz = -uz; th = Math.atan2(uz, ux); } }
+  let L0 = 1e9, L1 = -1e9, T0 = 1e9, T1 = -1e9;
+  poly.forEach(p => { const dx = p[0] - cx, dz = p[1] - cz;
+    const l = dx * ux + dz * uz, t = -dx * uz + dz * ux;
+    L0 = Math.min(L0, l); L1 = Math.max(L1, l); T0 = Math.min(T0, t); T1 = Math.max(T1, t); });
+  const bx = cx + ux * (L0 + L1) / 2, bz = cz + uz * (L0 + L1) / 2;
+  /* The kit's +ax should run along the long axis. at() sends +ax to (cos ROT, -sin ROT), so for a
+     long axis (ux, uz) the kit wants ROT = atan2(-uz, ux). */
+  const rot = Math.atan2(-uz, ux);
+  const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+  return {
+    island: sel.value,
+    centre: [ +bx.toFixed(1), +bz.toFixed(1) ],
+    length_m: Math.round((L1 - L0) * M),
+    width_m: Math.round((T1 - T0) * M),
+    rot: +rot.toFixed(3),
+    rot_deg: +(rot * 180 / Math.PI).toFixed(1),
+    aabb: [ +Math.min(...xs).toFixed(1), +Math.max(...xs).toFixed(1), +Math.min(...zs).toFixed(1), +Math.max(...zs).toFixed(1) ],
+    points: poly.map(p => [ +p[0].toFixed(1), +p[1].toFixed(1) ]),
+    _th: th,
+  };
+}
+
+function report(){
+  const s = summary();
+  tb.innerHTML = poly.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p[0].toFixed(1) + '</td><td>' + p[1].toFixed(1) + '</td></tr>').join('');
+  if (!s){ out.textContent = poly.length ? 'Three points or more for a fit.' : 'Tap the map to start a polygon.'; return; }
+  const j = { ...s }; delete j._th;
+  out.textContent =
+    'centre  ' + j.centre[0] + ', ' + j.centre[1] + '   (island units)\n' +
+    'size    ' + j.length_m + ' m along  ×  ' + j.width_m + ' m across\n' +
+    'ROT     ' + j.rot + '   (' + j.rot_deg + '°, ready for the kit)\n' +
+    'zone    x ' + j.aabb[0] + '…' + j.aabb[1] + '   z ' + j.aabb[2] + '…' + j.aabb[3] + '\n\n' +
+    JSON.stringify(j);
+}
+
+async function load(id){
+  hud.textContent = 'loading ' + id + '…';
+  const [a, b] = await Promise.all([
+    fetch('data/isle-' + id + '.json').then(r => r.json()),
+    fetch('data/roads-' + id + '.json').then(r => r.json()),
+  ]);
+  D = a; ROADS = b; poly = [];
+  const xs = D.outline.map(p => u(p[0], p[1]));
+  const minx = Math.min(...xs.map(p => p[0])), maxx = Math.max(...xs.map(p => p[0]));
+  const minz = Math.min(...xs.map(p => p[1])), maxz = Math.max(...xs.map(p => p[1]));
+  view.x = (minx + maxx) / 2; view.z = (minz + maxz) / 2;
+  view.k = Math.min(cv.clientWidth / (maxx - minx + 20), parseFloat(cv.style.height) / (maxz - minz + 20));
+  report(); draw();
+}
+
+// ---- gestures: drag to pan, pinch or wheel to zoom, a clean tap drops a vertex ----
+let pts = new Map(), last = null, moved = 0, pinch = 0;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); moved = 0; last = [e.clientX, e.clientY]; });
+cv.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  pts.set(e.pointerId, [e.clientX, e.clientY]);
+  const a = [...pts.values()];
+  if (a.length === 2){
+    const d = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]);
+    if (pinch) view.k = Math.max(0.4, Math.min(60, view.k * d / pinch));
+    pinch = d; moved = 99; draw(); return;
+  }
+  const r = cv.getBoundingClientRect();
+  const dx = e.clientX - last[0], dy = e.clientY - last[1];
+  moved += Math.abs(dx) + Math.abs(dy);
+  view.x -= dx / view.k; view.z -= dy / view.k;
+  last = [e.clientX, e.clientY];
+  draw();
+});
+function up(e){
+  if (!pts.has(e.pointerId)) return;
+  pts.delete(e.pointerId); if (pts.size < 2) pinch = 0;
+  if (moved < 6){
+    const r = cv.getBoundingClientRect();
+    poly.push([ ix(e.clientX - r.left), iz(e.clientY - r.top) ]);
+    report();
+  }
+  draw();
+}
+cv.addEventListener('pointerup', up);
+cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => { e.preventDefault(); view.k = Math.max(0.4, Math.min(60, view.k * (e.deltaY < 0 ? 1.12 : 0.89))); draw(); }, { passive:false });
+
+document.getElementById('undo').onclick  = () => { poly.pop(); report(); draw(); };
+document.getElementById('clear').onclick = () => { poly = []; report(); draw(); };
+for (const k of ['B','R','P','G']){
+  const el = document.getElementById('lyr' + k);
+  el.onclick = () => { layers[k] = !layers[k]; el.classList.toggle('on', layers[k]); draw(); };
+}
+document.getElementById('copy').onclick = async () => {
+  const s = summary(); if (!s) return;
+  const j = { ...s }; delete j._th;
+  try { await navigator.clipboard.writeText(JSON.stringify(j)); document.getElementById('msg').textContent = 'copied'; }
+  catch { document.getElementById('msg').textContent = 'select the block above and copy'; }
+  setTimeout(() => document.getElementById('msg').textContent = '', 2500);
+};
+sel.onchange = () => load(sel.value);
+window.addEventListener('resize', fit);
+fit();
+const q = new URLSearchParams(location.search).get('isle');
+if (q && ISLES.some(i => i[0] === q)) sel.value = q;
+load(sel.value);
+</script>
+</body>
+</html>
