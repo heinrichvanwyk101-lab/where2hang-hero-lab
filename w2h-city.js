@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v142';
+export const BUILD = 'city v143';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -1564,7 +1564,7 @@ function ferrariWorld(x0, z0, facing){
     color:0x1A1A1C, roughness:0.85, side:THREE.DoubleSide });
 
   const roof = new THREE.Mesh(geo, [mRed, mPale, mDark]);
-  roof.userData.hero = true;
+  roof.userData.hero = true; roof.userData.kitName = 'ferrariWorld';
   roof.castShadow = true; roof.receiveShadow = true;
   g.add(roof);
 
@@ -4702,38 +4702,125 @@ function wAbuDhabi(x0, z0, bearing){
   return g;
 }
 
-/* GATE TOWERS (city v105) — three 66-storey towers on Al Reem joined at the top by a penthouse
-   bridge, the arch you see from the mainland. The survey holds them as one 256 by 50 m slab;
-   the kit splits it into the three towers, leans the outer two outward a little, and lays the
-   bridge across the top three floors. Pale stone and glass bands. */
-function gateTowers(x0, z0, rot){
+/* GATE TOWERS (city v105, rebuilt to the photographs in city v143) — three 66-storey towers on
+   Al Reem joined at the top by the penthouse bridge, the arch you see from the mainland. The
+   survey holds them as one 256 by 50 m slab; the kit splits it into the three towers and lays
+   the bridge across the top. To the photographs: blue-grey glass with the STAGGERED WHITE BARS
+   that pick the towers out of every skyline, the three towers on a shallow arc with the middle
+   one forward, the bridge a curved slab that overhangs the outer towers with a white truss along
+   its top, THE ARC (the crescent building) in front on its own 162 by 132 m record with the
+   podium of pools and tennis courts between, and palms round the deck. */
+function gateTowers(x0, z0, rot, arc){
   const g = new THREE.Group(), M = M_PER_U;
   const H = 240 / M, W = 60 / M, D = 46 / M;
-  /* GLAZED BY DAY (city v128). The day material was bare pale stone, so from the phone the three
-     towers were one flat beige monolith beside fabric towers that all carry the day window sheet.
-     cityMaterial gives the same night sheet and day sheet the fabric uses, at the fabric's own
-     tiling for a 60 m wide, 240 m tall tower, tinted the towers' blue-grey glass. */
-  const mat = cityMaterial(TEX_TOWER, 3, 1, 0.25, 0x5C6670);
-  mat.userData.duskColor = 0xB8C2CB; mat.userData.glassOverride = false;
+  /* Glazed by day and by night (city v128): the fabric's own window sheets, tinted the towers'
+     blue glass. The bars are separate white boxes on the faces, instanced. */
+  const mat = cityMaterial(TEX_TOWER, 3, 1, 0.25, 0x3E5470);
+  mat.userData.duskColor = 0x9FB3C4; mat.userData.glassOverride = false;
   mat.userData.dayMats = mat.userData.dayMats.clone();
-  mat.userData.dayMats.color.set(0xB4C0CA); mat.userData.dayMats.roughness = 0.5; mat.userData.dayMats.metalness = 0.2;
+  mat.userData.dayMats.color.set(0x7E98B2); mat.userData.dayMats.roughness = 0.35; mat.userData.dayMats.metalness = 0.3;
+  const bar = saadKitMat(0xE8E6E0, 0xF7F5F0, 0.6, 0, 0xFFF4E0, 0.10, 0.9);
+  const truss = saadKitMat(0xD9DCE0, 0xFFFFFF, 0.5, 0.3, 0xFFF0D0, 0.15, 0.9);
   const cs = Math.cos(rot), sn = Math.sin(rot);
+  const along = [cs, -sn];                                         // the slab's long axis
+  let px = sn, pz = cs;                                            // across it, toward the Arc
+  if (arc){ const dx = arc.x - x0, dz = arc.z - z0, L = Math.hypot(dx, dz) || 1; px = dx / L; pz = dz / L; }
+  const at = (a, p) => [x0 + along[0] * a + px * p, z0 + along[1] * a + pz * p];   // units: a along, p toward the Arc
+  const yawOf = (tx, tz) => Math.atan2(-tz, tx);                  // rotation.y that points local +x down (tx, tz)
+  let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  /* the staggered white bars, in a tower's own frame: x along, z across, metres */
+  const towerBars = (sub, w, d, h) => {
+    const items = [];
+    for (let y = 16; y < h - 10; y += 7.4){
+      for (const [face, len] of [['x', w], ['z', d]]) for (const sgn of [-1, 1]){
+        const n = 2 + Math.floor(rnd() * 2);
+        for (let k = 0; k < n; k++){
+          const bl = 5 + rnd() * 9, pos = -len / 2 + 4 + rnd() * (len - 8 - bl) + bl / 2;
+          if (face === 'x') items.push([pos / M, y / M, sgn * (d / 2 + 0.3) / M, bl / M, 0.8 / M, 0.6 / M]);
+          else items.push([sgn * (w / 2 + 0.3) / M, y / M, pos / M, 0.6 / M, 0.8 / M, bl / M]);
+        }
+      }
+    }
+    kitBoxes(sub, bar, items);
+  };
+  /* THE THREE TOWERS ON A SHALLOW ARC: the middle one 14 m forward, on a circle of radius 336 m
+     through the three centres, which the bridge follows. */
+  const R_ARC = 336, bowOf = a => 14 - (R_ARC - Math.sqrt(Math.max(0, R_ARC * R_ARC - a * a)));   // metres, a in metres
   [-1, 0, 1].forEach((k, i) => {
-    const off = k * 96 / M;
-    const t = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), mat);
-    t.position.set(x0 + cs * off, H / 2, z0 - sn * off);
-    t.rotation.set(0, rot, k * 0.035);                          // the outer two lean out
+    const a = k * 96, [tx, tz] = at(a / M, bowOf(a) / M);
+    const sub = new THREE.Group(); sub.position.set(tx, 0, tz); sub.rotation.set(0, rot, k * 0.03);   // the outer two lean out
+    const t = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), mat); t.position.y = H / 2; sub.add(t);
     if (i === 1) t.userData.hero = t.userData.kitName = 'gateTowers';
-    g.add(t);
+    towerBars(sub, 60, 46, 240);
+    g.add(sub);
   });
-  const bridge = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 14 / M, D * 1.05), saadKitMat(0x9AA3AA, 0xF1EDE5, 0.45, 0.35, 0xFFE0B0, 0.12));
-  bridge.position.set(x0, H - 7 / M, z0);
-  bridge.rotation.y = rot;
-  g.add(bridge);
-  const arch = new THREE.Mesh(new THREE.BoxGeometry(270 / M, 3 / M, D * 1.15), saadKitMat(0xC9CED3, 0xFFFFFF, 0.5, 0.3));
-  arch.position.set(x0, H + 1.5 / M, z0);
-  arch.rotation.y = rot;
-  g.add(arch);
+  /* THE BRIDGE: eleven segments of a curved slab along the same arc, 320 m end to end so it
+     overhangs the outer towers by 34 m each side, with the white truss along its top. */
+  const bridgeMat = saadKitMat(0x9AA3AA, 0xE9E6DF, 0.45, 0.35, 0xFFE0B0, 0.12);
+  const NSEG = 11, SPAN = 320, SEG = SPAN / NSEG;
+  for (let j = 0; j < NSEG; j++){
+    const a = -SPAN / 2 + SEG * (j + 0.5);
+    const slope = a / Math.sqrt(Math.max(1, R_ARC * R_ARC - a * a));   // d(bow)/d(a), the arc's tangent
+    const [sx, sz] = at(a / M, bowOf(a) / M);
+    const tx = along[0] - slope * px, tz = along[1] - slope * pz;
+    const seg = new THREE.Group(); seg.position.set(sx, 0, sz); seg.rotation.y = yawOf(tx, tz);
+    const slab = new THREE.Mesh(new THREE.BoxGeometry((SEG + 0.8) / M, 18 / M, 42 / M), bridgeMat); slab.position.y = (H * M - 9) / M; seg.add(slab);
+    const items = [];
+    for (const sgn of [-1, 1]){
+      items.push([0, (H * M + 7.2) / M, sgn * 20.5 / M, (SEG + 0.8) / M, 1.2 / M, 1.2 / M]);            // top chord
+      for (let q = -SEG / 2 + 4; q < SEG / 2; q += 8) items.push([q / M, (H * M + 3.6) / M, sgn * 20.5 / M, 0.9 / M, 7.2 / M, 0.9 / M]);   // posts
+    }
+    kitBoxes(seg, truss, items);
+    g.add(seg);
+  }
+  /* THE PODIUM BETWEEN THE TOWERS AND THE ARC: lawn deck, two pools, two tennis courts, palms. */
+  const lawn = saadKitMat(0x4E7A3E, 0x6FA25A, 0.95, 0), pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0);
+  const water = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.25, 1.0), court = saadKitMat(0x2F7A46, 0x3F9A5A, 0.9, 0), apron = saadKitMat(0x2E5FA8, 0x3F7BD0, 0.85, 0);
+  const deckBox = (a, p, w, dp, h, m, y0) => { const [bx, bz] = at(a / M, p / M); const b = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, dp / M), m); b.position.set(bx, ((y0 || 0) + h / 2) / M, bz); b.rotation.y = yawOf(along[0], along[1]); g.add(b); return b; };
+  deckBox(0, 78, 236, 100, 6, pave); deckBox(0, 78, 224, 88, 0.6, lawn, 6);
+  for (const [a, p, rx, rz] of [[-44, 70, 22, 15], [46, 84, 30, 14]]){
+    const [wx, wz] = at(a / M, p / M);
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.5 / M, 32), water); pool.scale.set(rx / M, 1, rz / M); pool.position.set(wx, 6.4 / M, wz); pool.rotation.y = yawOf(along[0], along[1]); g.add(pool);
+  }
+  for (const a of [-2, 40]){ deckBox(a, 108, 40, 22, 0.4, apron, 6.6); deckBox(a, 108, 34, 16, 0.5, court, 6.6); }
+  const palms = [];
+  for (let a = -112; a <= 112; a += 14) palms.push(at(a / M, 34 / M)), palms.push(at(a / M, 124 / M));
+  for (let p = 40; p <= 120; p += 16) palms.push(at(-116 / M, p / M)), palms.push(at(116 / M, p / M));
+  kitPalms(g, palms, 0.6);
+  /* THE ARC: a crescent of 30 storeys on its own record in front of the podium, its concave
+     face toward the towers, in the same glass. */
+  if (arc){
+    /* Two open cylinder walls (their UVs carry the window sheet, which an extruded shape's do
+       not), a flat top and two end walls. CylinderGeometry's theta runs from +z round toward +x,
+       so the sweep is centred on local -z and the mesh is turned so that faces away from the
+       towers. */
+    const R1 = 90 / M, R2 = 68 / M, T = 2.62, HA = 112 / M, TH0 = Math.PI - T / 2;
+    const arcG = new THREE.Group(); arcG.position.set(arc.x, 0, arc.z); arcG.rotation.y = yawOf(px, pz) - Math.PI / 2;
+    const outer = new THREE.Mesh(new THREE.CylinderGeometry(R1, R1, HA, 40, 1, true, TH0, T), mat); outer.position.y = HA / 2; outer.userData.kitName = 'theArc'; arcG.add(outer);
+    const inner = new THREE.Mesh(new THREE.CylinderGeometry(R2, R2, HA, 40, 1, true, TH0, T), mat); inner.position.y = HA / 2; inner.material = mat; arcG.add(inner);
+    const sh = new THREE.Shape(); sh.absarc(0, 0, R1 * 1.01, TH0 - Math.PI / 2, TH0 - Math.PI / 2 + T, false); sh.absarc(0, 0, R2 * 0.99, TH0 - Math.PI / 2 + T, TH0 - Math.PI / 2, true); sh.closePath();
+    const top = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 1.4 / M, bevelEnabled: false }), truss); top.rotation.x = -Math.PI / 2; top.position.y = HA; top.scale.z = -1; arcG.add(top);
+    for (const th of [TH0, TH0 + T]){
+      const rm = (R1 + R2) / 2, end = new THREE.Mesh(new THREE.BoxGeometry(R1 - R2, HA, 0.8 / M), mat);
+      end.position.set(Math.sin(th) * rm, HA / 2, Math.cos(th) * rm); end.rotation.y = th; arcG.add(end);
+    }
+    g.add(arcG);
+  }
+  return g;
+}
+/* SHAMS BOUTIK (city v143) — the boutique mall in the podium of the Sun and Sky towers on the
+   survey's 192 by 115 m, 15 m record: a long dark bronze mesh box over a glass ground floor,
+   the white ring of its sign on the long face. */
+function shamsBoutik(x0, z0, rot){
+  const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
+  const mesh = saadKitMat(0x3A2E24, 0x5C4736, 0.6, 0.35, 0xFFB070, 0.05, 0.6);
+  const glass = kitGlass(0x223038, 0x9BB4C4), rim = saadKitMat(0xD9DCE0, 0xF2F4F6, 0.6, 0.2), sign = saadKitMat(0xF2F4F6, 0xFFFFFF, 0.5, 0, 0xFFFFFF, 0.6, 0.95);
+  const box = (ax, az, w, d, h, m, y0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), m); b.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); sub.add(b); return b; };
+  box(0, 0, 188, 111, 4.5, glass);
+  const body = box(0, 0, 192, 115, 10.5, mesh, 4.5); body.userData.hero = body.userData.kitName = 'shamsBoutik';
+  box(0, 0, 193, 116, 0.6, rim, 15);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(4.5 / M, 0.5 / M, 8, 32), sign); ring.position.set(-60 / M, 9.5 / M, (115 / 2 + 0.4) / M); sub.add(ring);
+  sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
   return g;
 }
 /* SEAWORLD YAS ISLAND (city v126) — to the photographs, not the first guess: a great rectangular
@@ -5252,7 +5339,7 @@ function clevelandClinic(){
 function yasWaterworld(x0, z0){
   /* TO THE PHOTOGRAPHS (city v116): the pearl on its rock tower over the middle of the park, a
      field of coloured slide tubes on tan towers, the tan village buildings with their canopies,
-     the wave pool and the lazy river, and the car park's shade rows to the north. */
+     the wave pool and the lazy river. The car park is the survey's, not the kit's. */
   const g = new THREE.Group(), M = M_PER_U, at = (ax, az) => [x0 + ax / M, z0 + az / M];
   const water = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.2, 1.0);
   const rock = saadKitMat(0x6E5A48, 0x8C7458, 0.95, 0), tan = saadKitMat(0xC9B48E, 0xDCC7A0, 0.85, 0, undefined, undefined, 0.6);
@@ -5280,8 +5367,9 @@ function yasWaterworld(x0, z0){
     const run = new THREE.Mesh(new THREE.BoxGeometry(2.2 / M, 1.2 / M, (h * 1.6) / M), saadKitMat(cols[(i + 2) % 5][0], cols[(i + 2) % 5][1], 0.5, 0.1, undefined, undefined, 1.2));
     const [px, pz] = at(dx, dz + h * 0.8); run.position.set(px, h / M * 0.5, pz); run.rotation.x = -Math.atan2(h, h * 1.6); g.add(run);
   });
-  // the car park's shade rows to the north
-  for (let i = 0; i < 6; i++) box(-90 + i * 32, -110, 26, 60, 0.6, shade, 4);
+  /* No shade rows of its own (city v143): the real covered car park is the survey's lot west of
+     the park with its own baked shade-row buildings and cars, and rows drawn here landed on the
+     entrance road once the kit sat on the park proper. */
   const palms = [];
   for (let ax = -130; ax <= 130; ax += 12) palms.push(at(ax, 100)), palms.push(at(ax, -80));
   kitPalms(g, palms, 0.7);
@@ -5755,16 +5843,20 @@ function yasMarina(){
   return g;
 }
 
-/* CLYMB ABU DHABI (city v138) — the dark crystalline block between Yas Mall and Ferrari World
-   on its own 72 by 49 m survey record: a faceted charcoal boulder about 28 m high, the 43 m
-   climbing tower leaning out of one end as a taller angular prism, and the round flight chamber
-   of the indoor skydive at the other, in pale glass. Flat-shaded so the facets catch the light;
-   a thin blue-glass seam round the base. */
+/* CLYMB ABU DHABI (city v138, white and UV-lit from v143) — the crystalline block between Yas
+   Mall and Ferrari World on its own 72 by 49 m survey record: a faceted white boulder about 28 m
+   high, the 43 m climbing tower leaning out of one end as a taller angular prism, and the round
+   flight chamber of the indoor skydive at the other, in pale glass. Flat-shaded so the facets
+   catch the light; washed violet after dark with a violet light strip round the base. */
 function clymb(x0, z0, rot){
   const g = new THREE.Group(), M = M_PER_U, sub = new THREE.Group();
-  const dark = saadKitMat(0x24272B, 0x3A3E45, 0.85, 0.05); dark.flatShading = true; if (dark.userData.dayMats) dark.userData.dayMats.flatShading = true;
-  const seam = saadKitMat(0x1B3A5C, 0x2F6FA8, 0.3, 0.3, 0x4FA0FF, 0.35, 1.0);
-  const chamber = saadKitMat(0xC9D6DE, 0xE6EEF3, 0.3, 0.2, 0xBFE4FF, 0.12, 1.0);
+  /* WHITE, LIT ULTRAVIOLET AT NIGHT (city v143). The building is a white faceted shell, not the
+     charcoal it was drawn as, and after dark it is washed in violet light: the facets carry a
+     violet emissive that only the dusk and night materials show (the day material has none), the
+     night albedo stays high so the white reads white, and the base seam is a violet light strip. */
+  const dark = saadKitMat(0xD9DCE0, 0xF2F4F6, 0.55, 0.05, 0x7A3BE6, 0.32, 0.95); dark.flatShading = true; if (dark.userData.dayMats) dark.userData.dayMats.flatShading = true;
+  const seam = saadKitMat(0x5E2BD9, 0x6F6F78, 0.3, 0.3, 0x9A5CFF, 0.9, 1.0);
+  const chamber = saadKitMat(0xC9D6DE, 0xE6EEF3, 0.3, 0.2, 0xB48CFF, 0.25, 1.0);
   const facet = (ax, az, r, h, sides, y0, sx, sz, tilt, turn) => {
     const geo = new THREE.CylinderGeometry(r * 0.72 / M, r / M, h / M, sides, 1);
     const m = new THREE.Mesh(geo, dark); m.position.set(ax / M, ((y0 || 0) + h / 2) / M, az / M); m.scale.set(sx || 1, 1, sz || 1); m.rotation.set(tilt || 0, turn || 0, 0); m.castShadow = true; sub.add(m); return m;
@@ -6065,7 +6157,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
-         capitalGate, wAbuDhabi, gateTowers, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
+         capitalGate, wAbuDhabi, gateTowers, shamsBoutik, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
          maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb };

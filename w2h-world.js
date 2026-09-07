@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v318';
+export const BUILD = 'world v319';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7824,7 +7824,16 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
        MEASURED FROM THE OBJECT, NOT WRITTEN DOWN — same rule as the zones below. The valley edge
        is found by probing the built roof along the bearing, so if the tri-form's constants ever
        change the mall follows it instead of drifting. */
-    const bear = Math.atan2(ymA.z - fwA.z, ymA.x - fwA.x);
+    /* THE BEARING GOES TO THE MALL'S RETAIL RECORD, NOT ITS LABEL NODE (world v319). Both
+       anchors are snapped to the bake's landmark points at load, and the mall's point (56.4,
+       16.9) is a label 24 units from Ferrari World's, roughly WEST of it; the placement then
+       pushes the mall R = 72 units out along that bearing, which put the whole mall 500 m
+       west of itself, over Yas Waterworld's site and CLYMB's record. The survey's own 713 by
+       694 m retail record for the mall is centred at (74.8, -26.3), due north of Ferrari World
+       (the mall is at 24.4886 N, Ferrari World at 24.4837 N), so the bearing is taken to that
+       centre; the distance stays the measured one, so the retail end still meets the roof. */
+    const ymRec = { x: 74.8, z: -26.3 };
+    const bear = Math.atan2(ymRec.z - fwA.z, ymRec.x - fwA.x);
     const fwG = kit.ferrariWorld(fwA.x, fwA.z, bear);
     built.push(fwG);
 
@@ -7941,11 +7950,13 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      park's entrance rotunda, across the courtyard, its convex face toward the park: 344 m out
      from the hall's centre along its +z face and 60 m west of the axis, on the hall's own turn. */
   if (kit.wbHotel) built.push(kit.wbHotel(-72.0, -50.4, -0.68));
-  /* YAS WATERWORLD OFF ITS CAR PARK (world v304). (-45, -42) was the middle of the park's own
-     surface lot and ran the slides into the hotel's courtyard; the park proper is south-east of
-     the entrance, and (-34, -21) is the seat 18 units clear of every road and lot there, beside
-     the survey's landmark point for it. */
-  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-34.0, -21.0));
+  /* YAS WATERWORLD ON THE PARK ITSELF (world v319). The survey's covered car park is the lot at
+     x -64..-37, z -48..-20 with its shade-row buildings on the diagonal, and the OSM landmark node
+     (-45.5, -21.4) sits at its edge, the entrance. (-34, -21) put the kit's western half over that
+     lot. The park proper runs east of the lot to the second lot at x 25, and its centre is the
+     places anchor (-4, -24): the kit's 260 m spread at (-4, -22) spans x -21..13, clear of both
+     lots and of the entrance roads at z -31..-40. */
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-4.0, -22.0));
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
@@ -8124,14 +8135,21 @@ KIT_ZONES[saadiyat.id] = [
    (-1171, 403) m, rot -0.57), which the kit zone suppresses in favour of the three towers. */
 const reem = DISTRICTS.find(d => d.id === 'reem');
 KIT_ZONES[reem.id] = [{ x0:-24, x1:18, z0:-108, z1:-88 },
+  { x0:-10, x1:20, z0:-125, z1:-103 },   // the Gate Towers podium and The Arc's 162 x 132 m record (world v319)
+  { x0:-30, x1:-3, z0:-140, z1:-123 },   // Shams Boutik, the 192 x 115 m podium of Sun and Sky (world v319)
   { x0:-16, x1:12, z0:-144, z1:-126 },   // Sky Tower, 87 x 39 m, rot 0.47 (world v289)
   { x0:-33, x1:-15, z0:-141, z1:-126 },  // Sun Tower, 66 x 33 m
   { x0:6, x1:36, z0:-2, z1:27 },         // Reem Mall, 188 x 179 m
 ];
 if (!NO_KIT && reem && kit.gateTowers){
-  const gt = kit.gateTowers(-3.3, -98.4, -0.57);
+  /* THE ARC ON ITS RECORD (world v319): the survey's 162 by 132 m record at (5.6, -113.7) sits
+     across the slab's long axis from the towers, which is where the photographs put the crescent
+     with the pool podium between; the kit takes the centre and faces the concave side back. */
+  const gt = kit.gateTowers(-3.3, -98.4, -0.57, { x: 5.6, z: -113.7 });
   gt.position.y = GROUND;
   reem.detail.add(gt);
+  /* SHAMS BOUTIK (world v319) on the Sun and Sky podium record, 192 by 115 m at (-16.7, -131.3). */
+  if (kit.shamsBoutik){ const sb = kit.shamsBoutik(-16.7, -131.3, 0.548); sb.position.y = GROUND; reem.detail.add(sb); }
   if (kit.skyTower){ const st = kit.skyTower(-1.9, -135.2, 0.465, -24.0, -133.6, -0.564); st.position.y = GROUND; reem.detail.add(st); }
   if (kit.reemMall){ const rm = kit.reemMall(21.3, 12.4, -0.42); rm.position.y = GROUND; reem.detail.add(rm); }
 }
