@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v154';
+export const BUILD = 'city v155';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5336,21 +5336,30 @@ function clevelandClinic(){
 }
 /* YAS WATERWORLD — the pearl-shell canopy, three slide towers with their coloured spirals, the
    wave pool and the lazy river, on the park's centre. */
-function yasWaterworld(x0, z0){
+function yasWaterworld(x0, z0, scale, rot){
   /* TO THE PHOTOGRAPHS (city v116): the pearl on its rock tower over the middle of the park, a
      field of coloured slide tubes on tan towers, the tan village buildings with their canopies,
-     the wave pool and the lazy river. The car park is the survey's, not the kit's. */
-  const g = new THREE.Group(), M = M_PER_U, at = (ax, az) => [x0 + ax / M, z0 + az / M];
+     the wave pool and the lazy river. The car park is the survey's, not the kit's.
+
+     SIZED AND TURNED TO ITS PLOT (city v155). The kit was authored 260 m across and 180 m deep on
+     an east-west axis, and the ground it actually has is the block between the survey's car park
+     (its east edge at x -37.5) and the road running north-south at x -15: 175 m wide by 218 m
+     deep, the long way round. At full size on the old bearing it could only fit by lying across
+     the car park, which is what the owner saw. S scales every offset and every part; ROT turns
+     the whole composition, so the park's long axis can follow its plot instead of fighting it. */
+  const S = scale || 1, ROT = rot || 0, ca = Math.cos(ROT), sa = Math.sin(ROT);
+  const g = new THREE.Group(), M = M_PER_U;
+  const at = (ax, az) => { const sx = ax * S, sz = az * S; return [x0 + (sx * ca + sz * sa) / M, z0 + (-sx * sa + sz * ca) / M]; };
   const water = saadKitMat(0x2E8A9E, 0x4FC1D6, 0.2, 0.1, 0x7FE0F0, 0.2, 1.0);
   const rock = saadKitMat(0x6E5A48, 0x8C7458, 0.95, 0), tan = saadKitMat(0xC9B48E, 0xDCC7A0, 0.85, 0, undefined, undefined, 0.6);
   const pearl = saadKitMat(0xE8E6E0, 0xF8F6F0, 0.3, 0.1, 0xFFF0D8, 0.35, 0.9), shade = saadKitMat(0xD9CBA8, 0xEEDFBC, 0.8, 0);
-  const box = (ax, az, w, d, h, mat, y0) => { const [px, pz] = at(ax, az); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(px, ((y0 || 0) + h / 2) / M, pz); g.add(m); return m; };
+  const box = (ax, az, w, d, h, mat, y0) => { const [px, pz] = at(ax, az); const m = new THREE.Mesh(new THREE.BoxGeometry(w * S / M, h * S / M, d * S / M), mat); m.position.set(px, (((y0 || 0) + h / 2) * S) / M, pz); m.rotation.y = ROT; g.add(m); return m; };
   // pools
-  const wave = new THREE.Mesh(new THREE.CircleGeometry(40 / M, 32), water); wave.rotation.x = -Math.PI / 2; const [wx, wz] = at(-70, -10); wave.position.set(wx, 0.06, wz); g.add(wave);
-  const river = new THREE.Mesh(new THREE.RingGeometry(60 / M, 70 / M, 48), water); river.rotation.x = -Math.PI / 2; const [rx, rz] = at(20, 20); river.position.set(rx, 0.06, rz); g.add(river);
+  const wave = new THREE.Mesh(new THREE.CircleGeometry(40 * S / M, 32), water); wave.rotation.x = -Math.PI / 2; const [wx, wz] = at(-70, -10); wave.position.set(wx, 0.06, wz); g.add(wave);
+  const river = new THREE.Mesh(new THREE.RingGeometry(60 * S / M, 70 * S / M, 48), water); river.rotation.x = -Math.PI / 2; const [rx, rz] = at(20, 20); river.position.set(rx, 0.06, rz); g.add(river);
   // the pearl on its rock tower
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(5 / M, 9 / M, 46 / M, 10), rock); const [tx, tz] = at(0, -20); tower.position.set(tx, 23 / M, tz); g.add(tower);
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(11 / M, 24, 16), pearl); ball.position.set(tx, 56 / M, tz); ball.userData.hero = ball.userData.kitName = 'yasWaterworld'; g.add(ball);
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(5 * S / M, 9 * S / M, 46 * S / M, 10), rock); const [tx, tz] = at(0, -20); tower.position.set(tx, 23 * S / M, tz); g.add(tower);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(11 * S / M, 24, 16), pearl); ball.position.set(tx, 56 * S / M, tz); ball.userData.hero = ball.userData.kitName = 'yasWaterworld'; g.add(ball);
   // the village: tan blocks with canopies round the pools
   [[-110, -40, 40, 26, 12], [-100, 30, 30, 22, 10], [60, -60, 36, 24, 14], [90, 10, 28, 20, 9], [-40, 60, 44, 24, 11], [40, 70, 30, 20, 10]].forEach(([ax, az, w, d, h]) => {
     box(ax, az, w, d, h, tan); box(ax, az, w + 6, d + 6, 0.8, shade, h + 1);
@@ -5361,18 +5370,19 @@ function yasWaterworld(x0, z0){
     const tw = box(dx, dz, 8, 8, h, rock);
     for (let k = 0; k < 2; k++){
       const mat = saadKitMat(cols[(i + k) % 5][0], cols[(i + k) % 5][1], 0.5, 0.1, undefined, undefined, 1.2);
-      const tube = new THREE.Mesh(new THREE.TorusGeometry((14 + k * 5) / M, 1.5 / M, 8, 36, Math.PI * 1.7), mat);
-      tube.rotation.set(Math.PI / 2 - 0.4, 0, i * 1.1 + k * 2.1); const [px, pz] = at(dx, dz); tube.position.set(px, h / M * (0.6 - k * 0.2), pz); g.add(tube);
+      const tube = new THREE.Mesh(new THREE.TorusGeometry((14 + k * 5) * S / M, 1.5 * S / M, 8, 36, Math.PI * 1.7), mat);
+      tube.rotation.set(Math.PI / 2 - 0.4, ROT, i * 1.1 + k * 2.1); const [px, pz] = at(dx, dz); tube.position.set(px, h * S / M * (0.6 - k * 0.2), pz); g.add(tube);
     }
-    const run = new THREE.Mesh(new THREE.BoxGeometry(2.2 / M, 1.2 / M, (h * 1.6) / M), saadKitMat(cols[(i + 2) % 5][0], cols[(i + 2) % 5][1], 0.5, 0.1, undefined, undefined, 1.2));
-    const [px, pz] = at(dx, dz + h * 0.8); run.position.set(px, h / M * 0.5, pz); run.rotation.x = -Math.atan2(h, h * 1.6); g.add(run);
+    const run = new THREE.Mesh(new THREE.BoxGeometry(2.2 * S / M, 1.2 * S / M, (h * 1.6 * S) / M), saadKitMat(cols[(i + 2) % 5][0], cols[(i + 2) % 5][1], 0.5, 0.1, undefined, undefined, 1.2));
+    const [px, pz] = at(dx, dz + h * 0.8); run.position.set(px, h * S / M * 0.5, pz); run.rotation.set(-Math.atan2(h, h * 1.6), ROT, 0, 'YXZ'); g.add(run);
   });
   /* No shade rows of its own (city v143): the real covered car park is the survey's lot west of
      the park with its own baked shade-row buildings and cars, and rows drawn here landed on the
      entrance road once the kit sat on the park proper. */
   const palms = [];
   for (let ax = -130; ax <= 130; ax += 12) palms.push(at(ax, 100)), palms.push(at(ax, -80));
-  kitPalms(g, palms, 0.7);
+  // palm scale follows the kit so the trees do not tower over a shrunken park
+  kitPalms(g, palms, 0.7 * S);
   return g;
 }
 /* AL RAHA BEACH HOTEL — a low arcaded hotel in warm sandstone with a domed pavilion, on its

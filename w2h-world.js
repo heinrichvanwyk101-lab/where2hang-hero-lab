@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v327';
+export const BUILD = 'world v328';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7980,7 +7980,12 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      (8-unit cells at (-40,-32), (-32,-32), (-48,-24)), which is exactly the scatter of stray little
      buildings the owner circled and called incorrect. Centred on that lagoon the kit's 260 m spread
      covers x -52..-20, z -47..-15, which is the park and nothing else. */
-  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-36.0, -31.0));
+  /* IN THE BLOCK, NOT ACROSS THE CAR PARK (world v328). v327 put the kit on the pools but at full
+     size it is 260 m wide on an east-west axis, and the ground between the survey's car park
+     (east edge x -37.5) and the road at x -15 is 175 m wide by 218 m deep — the long way round.
+     Turned a quarter so its length runs with the plot, and at 0.72 it covers about 130 x 190 m,
+     inside the block on every side. Centre is the middle of that block. */
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-26.0, -34.0, 0.72, Math.PI / 2));
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
@@ -8033,7 +8038,7 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* Widened to the pools (world v327): the old box stopped at z -24 and left the park's own
      structures north of that line standing as invented buildings — the fault the owner reported.
      This spans the lagoon, the ride structures round it and the entrance apron below. */
-  KIT_ZONES[yas.id].push({ x0:-56, x1:-18, z0:-46, z1:-2 });
+  KIT_ZONES[yas.id].push({ x0:-40, x1:-13, z0:-50, z1:-16 });
 }
 
 /* ---------- the four placeholders ---------- */

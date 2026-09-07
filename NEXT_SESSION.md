@@ -8,7 +8,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v227 / city v154 / world v327 / props v31 / basemap v21`. Verify with
+Stamps at hand-over: `nav v227 / city v155 / world v328 / props v31 / basemap v21`. Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)
@@ -57,6 +57,18 @@ Stamps at hand-over: `nav v227 / city v154 / world v327 / props v31 / basemap v2
   footprints, every one of them heightless — nothing real is hidden. Frames: `place-ww_top.png`
   (before) and `place-ww_top2.png` (after) at the same camera. **Awaiting the owner's confirmation
   on the phone.**
+  **city v155 / world v328 — sized and turned to its plot.** v327 had it on the pools but still at
+  its authored size: 260 m across on an east-west axis, while the ground between the survey's car
+  park (east edge x -37.5) and the road at x -15 is 175 m wide by 218 m deep, the long way round.
+  At full size it could only fit by lying across the car park, which the owner reported. The kit
+  now takes `scale` and `rot`: called at (-26, -34) with 0.72 and a quarter turn, so its length
+  runs with the plot and it covers about 130 x 190 m, inside the block on every side. Zone pulled
+  in to match (x -40..-13, z -50..-16). Frame: `place-ww_top3.png`.
+  **A TRAP THIS EDIT FELL INTO, worth knowing:** adding the scale by text-replacing expressions
+  like `kitPalms(g, palms, 0.7)` hit FOUR other kits that share the same line, and the gate failed
+  with "S is not defined" from cafeDelMar. Kit bodies in this file are full of identical
+  expressions; scope any such edit to the function's own line range, and never trust a bare
+  replace. The gate catches it, which is why it runs before every push.
   The two earlier readings, kept because each was wrong in an instructive way:
 - **Yas Waterworld (world v324).** The v319 note read the OSM node at (-45.5, -21.4) as an entrance
   and pushed the kit east to (-4, -22), into the mall's road loop, which the owner saw as "on a
