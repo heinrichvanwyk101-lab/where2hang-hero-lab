@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v156';
+export const BUILD = 'city v157';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5341,12 +5341,21 @@ function yasWaterworld(x0, z0, scale, rot){
      field of coloured slide tubes on tan towers, the tan village buildings with their canopies,
      the wave pool and the lazy river. The car park is the survey's, not the kit's.
 
-     SIZED AND TURNED TO ITS PLOT (city v155). The kit was authored 260 m across and 180 m deep on
-     an east-west axis, and the ground it actually has is the block between the survey's car park
-     (its east edge at x -37.5) and the road running north-south at x -15: 175 m wide by 218 m
-     deep, the long way round. At full size on the old bearing it could only fit by lying across
-     the car park, which is what the owner saw. S scales every offset and every part; ROT turns
-     the whole composition, so the park's long axis can follow its plot instead of fighting it. */
+     RE-LAID TO THE PARK'S OWN SHAPE (city v157), after four wrong readings of it. The park was
+     placed and turned by eye every time, and every time it looked wrong because the composition
+     itself was a rough square — authored 260 m across by 200 m deep — while the ground it stands
+     on is nothing of the kind. Measured instead of guessed this time: the survey holds 42
+     heightless footprints in the block south and east of the car park lot, every one of them a
+     park structure the height model would otherwise invent a tower for, and a weighted principal
+     axis through them gives the site directly. Long axis 83.3 degrees off east, which is to say
+     very nearly due north-south with the north end leaned slightly east; 591 m along it, about
+     250 m across once the outliers are trimmed; centre (-41.9, 3.3) in island units. Nothing here
+     is remembered, and the world file places it on those same numbers.
+
+     So the composition is now laid ALONG that axis: +ax is north, and the elements run from the
+     wave pool and the village at the north end, where the satellite shows the park meeting its
+     car park, down a narrowing tail to the south. The taper is the point — it is why every square
+     version of this kit read as the wrong building on the right spot. */
   const S = scale || 1, ROT = rot || 0, ca = Math.cos(ROT), sa = Math.sin(ROT);
   const g = new THREE.Group(), M = M_PER_U;
   const at = (ax, az) => { const sx = ax * S, sz = az * S; return [x0 + (sx * ca + sz * sa) / M, z0 + (-sx * sa + sz * ca) / M]; };
@@ -5354,19 +5363,30 @@ function yasWaterworld(x0, z0, scale, rot){
   const rock = saadKitMat(0x6E5A48, 0x8C7458, 0.95, 0), tan = saadKitMat(0xC9B48E, 0xDCC7A0, 0.85, 0, undefined, undefined, 0.6);
   const pearl = saadKitMat(0xE8E6E0, 0xF8F6F0, 0.3, 0.1, 0xFFF0D8, 0.35, 0.9), shade = saadKitMat(0xD9CBA8, 0xEEDFBC, 0.8, 0);
   const box = (ax, az, w, d, h, mat, y0) => { const [px, pz] = at(ax, az); const m = new THREE.Mesh(new THREE.BoxGeometry(w * S / M, h * S / M, d * S / M), mat); m.position.set(px, (((y0 || 0) + h / 2) * S) / M, pz); m.rotation.y = ROT; g.add(m); return m; };
-  // pools
-  const wave = new THREE.Mesh(new THREE.CircleGeometry(40 * S / M, 32), water); wave.rotation.x = -Math.PI / 2; const [wx, wz] = at(-70, -10); wave.position.set(wx, 0.06, wz); g.add(wave);
-  const river = new THREE.Mesh(new THREE.RingGeometry(60 * S / M, 70 * S / M, 48), water); river.rotation.x = -Math.PI / 2; const [rx, rz] = at(20, 20); river.position.set(rx, 0.06, rz); g.add(river);
-  // the pearl on its rock tower
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(5 * S / M, 9 * S / M, 46 * S / M, 10), rock); const [tx, tz] = at(0, -20); tower.position.set(tx, 23 * S / M, tz); g.add(tower);
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(11 * S / M, 24, 16), pearl); ball.position.set(tx, 56 * S / M, tz); ball.userData.hero = ball.userData.kitName = 'yasWaterworld'; g.add(ball);
-  // the village: tan blocks with canopies round the pools
-  [[-110, -40, 40, 26, 12], [-100, 30, 30, 22, 10], [60, -60, 36, 24, 14], [90, 10, 28, 20, 9], [-40, 60, 44, 24, 11], [40, 70, 30, 20, 10]].forEach(([ax, az, w, d, h]) => {
+  /* THE POOLS. The wave pool is the big turquoise sheet at the north end on the satellite, hard
+     against the car park; the lazy river loops through the middle of the park below it. */
+  const wave = new THREE.Mesh(new THREE.CircleGeometry(52 * S / M, 32), water); wave.rotation.x = -Math.PI / 2;
+  const [wx, wz] = at(215, -10); wave.position.set(wx, 0.06, wz); g.add(wave);
+  const river = new THREE.Mesh(new THREE.RingGeometry(48 * S / M, 58 * S / M, 48), water); river.rotation.x = -Math.PI / 2;
+  const [rx, rz] = at(35, 0); river.position.set(rx, 0.06, rz); g.add(river);
+  const pool2 = new THREE.Mesh(new THREE.CircleGeometry(26 * S / M, 24), water); pool2.rotation.x = -Math.PI / 2;
+  const [p2x, p2z] = at(-170, 15); pool2.position.set(p2x, 0.06, p2z); g.add(pool2);
+  /* The pearl on its rock tower, over the middle of the park rather than over one end. */
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(5 * S / M, 9 * S / M, 46 * S / M, 10), rock);
+  const [tx, tz] = at(120, 20); tower.position.set(tx, 23 * S / M, tz); g.add(tower);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(11 * S / M, 24, 16), pearl);
+  ball.position.set(tx, 56 * S / M, tz); ball.userData.hero = ball.userData.kitName = 'yasWaterworld'; g.add(ball);
+  /* THE VILLAGE, down the spine and tapering with it: wide at the north end by the entrance,
+     single file by the southern tail. az stays inside about +/- 105 m at the top and +/- 45 at
+     the bottom, which is the width the survey's own structures keep. */
+  [[250, -70, 40, 26, 12], [245, 60, 34, 22, 10], [190, 85, 30, 20, 9], [170, -80, 36, 24, 14],
+   [95, -75, 30, 22, 10], [60, 70, 34, 22, 11], [-20, -60, 32, 22, 10], [-60, 45, 30, 20, 9],
+   [-140, -35, 28, 20, 10], [-215, 25, 26, 18, 9], [-270, -15, 24, 18, 8]].forEach(([ax, az, w, d, h]) => {
     box(ax, az, w, d, h, tan); box(ax, az, w + 6, d + 6, 0.8, shade, h + 1);
   });
-  // slide towers with coloured tubes: five towers, each with two tube spirals and a straight run
+  // slide towers with coloured tubes: each with two tube spirals and a straight run
   const cols = [[0xF2B233, 0xFFC94A], [0xE0522D, 0xFF6A3D], [0x2F86C9, 0x4FA8E8], [0x3FA36B, 0x5CC48A], [0xB04FC2, 0xCC6FE0]];
-  [[30, -50, 34], [-20, 30, 30], [60, 40, 26], [-60, -60, 28], [100, -30, 24]].forEach(([dx, dz, h], i) => {
+  [[160, 30, 34], [75, -30, 30], [10, 55, 26], [-75, -25, 28], [-155, 30, 24], [-235, -20, 22]].forEach(([dx, dz, h], i) => {
     const tw = box(dx, dz, 8, 8, h, rock);
     for (let k = 0; k < 2; k++){
       const mat = saadKitMat(cols[(i + k) % 5][0], cols[(i + k) % 5][1], 0.5, 0.1, undefined, undefined, 1.2);
@@ -5380,7 +5400,10 @@ function yasWaterworld(x0, z0, scale, rot){
      the park with its own baked shade-row buildings and cars, and rows drawn here landed on the
      entrance road once the kit sat on the park proper. */
   const palms = [];
-  for (let ax = -130; ax <= 130; ax += 12) palms.push(at(ax, 100)), palms.push(at(ax, -80));
+  for (let ax = -280; ax <= 280; ax += 22){
+    const half = 55 + 55 * (ax + 280) / 560;      // the tree line follows the taper
+    palms.push(at(ax, half)), palms.push(at(ax, -half));
+  }
   // palm scale follows the kit so the trees do not tower over a shrunken park
   kitPalms(g, palms, 0.7 * S);
   return g;

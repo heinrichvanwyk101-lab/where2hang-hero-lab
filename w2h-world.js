@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v330';
+export const BUILD = 'world v331';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7980,18 +7980,16 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      (8-unit cells at (-40,-32), (-32,-32), (-48,-24)), which is exactly the scatter of stray little
      buildings the owner circled and called incorrect. Centred on that lagoon the kit's 260 m spread
      covers x -52..-20, z -47..-15, which is the park and nothing else. */
-  /* IN THE BLOCK, NOT ACROSS THE CAR PARK (world v328). v327 put the kit on the pools but at full
-     size it is 260 m wide on an east-west axis, and the ground between the survey's car park
-     (east edge x -37.5) and the road at x -15 is 175 m wide by 218 m deep — the long way round.
-     ON THE OWNER'S OWN OUTLINE (world v329). They drew the same boundary twice, once on the
-     satellite and once on the model, which is what finally fixed the bearing: it is a WEDGE running
-     NORTH-EAST, its broad end on the pools at the south-west and its point up by the road junction.
-     Every earlier reading, this file's included, had the park square to the grid, which is why it
-     kept looking wrong however far it was moved. ROT = PI/4 turns the kit's length onto that
-     diagonal — at(ax, 0) maps to (+cos, -sin), so a positive quarter-of-a-half-turn runs east and
-     north — and 0.85 gives 220 m along the wedge by 170 m across, against roughly 290 by 156.
-     Centre (-25, -38) is the middle of the outline, not of the block. */
-  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-25.0, -38.0, 0.85, Math.PI / 4));
+  /* MEASURED, NOT READ OFF A PICTURE (world v331). Four passes moved this park by eye and four
+     came back wrong, so it is now derived. The survey holds 42 heightless footprints in the block
+     south and east of the car park lot (parking polygons at x -64.2..-37.5, z -48.4..-20.1 and
+     x -49..-38.2, z -53.6..-43.6) — every one a park structure, which is exactly why the height
+     model was standing towers on them. A weighted principal axis through those 42 gives the site:
+     centre (-41.9, 3.3), long axis 1.456 rad off east, 591 m along it and about 250 m across.
+     That axis is very nearly due north-south with the north end leaned slightly east, NOT the
+     north-east diagonal v329 used. The kit is authored to those proportions now, so it goes on at
+     full size. */
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-41.9, 3.3, 1.0, 1.456));
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
@@ -8044,7 +8042,11 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
   /* Widened to the pools (world v327): the old box stopped at z -24 and left the park's own
      structures north of that line standing as invented buildings — the fault the owner reported.
      This spans the lagoon, the ride structures round it and the entrance apron below. */
-  KIT_ZONES[yas.id].push({ x0:-43, x1:-7, z0:-55, z1:-23 });
+  /* THE PARK AND ITS CAR PARK (world v331). The zone is axis-aligned, so it takes the whole
+     block the 42 park structures occupy plus the two lots north-west of them; the invented
+     buildings the owner keeps seeing on the water park and in the parking are those footprints
+     standing up, and there is nothing there the kit and the lot paint do not replace. */
+  KIT_ZONES[yas.id].push({ x0:-66, x1:-18, z0:-56, z1:46 });
 }
 
 /* ---------- the four placeholders ---------- */
