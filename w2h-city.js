@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v155';
+export const BUILD = 'city v156';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6334,69 +6334,142 @@ function galleriaEast(){
   }
   return g;
 }
-/* ---------- THE WEST WATERFRONT (city v150, corrected v151) --------------------------------
-   Between the Four Seasons and the Rosewood the island's west quay is the Galleria podium's own
-   waterfront level: Craft and BB Social are INSIDE the mall, Zuma has its own shopfront on the
-   quay (owner, 7 Sept). So no free-standing pavilions: a paved promenade on the surveyed shoreline
-   (-47 at z -8, -42 at z 20, -50 at z 28) and a glazed arcade along the podium's west face, the
-   restaurant frontages that face the water. Zuma's own sign comes from data/shopfronts.json. */
+/* ---------- THE WEST QUAY (city v150, corrected v151 / v153, RE-LAID v156) ------------------
+   THE WALK WAS IN THE SEA. v151 wrote its own shoreline — [-45.5,-6], [-43.5,4], [-42.5,12],
+   [-44.5,20], [-48,28] — from three remembered points and two invented ones, and the two
+   invented ones are the whole fault: the surveyed outline runs -47.0 at z -8.8 then turns hard
+   inland to -38.3 at z 8.3 and -38.4 at z 14.9 before swinging back out to -42.0 at 20.3 and
+   -50.1 at 27.8. Through that middle stretch the guessed line sat five units — nearly forty
+   metres — WEST of the real quay, so the paving and the whole terraced block hung over open
+   water, which is what the owner's frames show. The line below is the outline itself
+   (data/isle-maryah.json, vertices 3 to 8, projected to island units), stepped INSET units
+   inland so the walk lands on the quay rather than on the edge of it. Nothing here is
+   remembered: change the survey and this changes with it.
+
+   AND IT STOPPED SHORT OF ITS OWN VENUES. Zuma is at (-38.2, 23.7), Craft by Side Hustle at
+   (-49.7, 33.6) and BB Social Dining at (-48.9, 41.3) — all three flagged frontage=shopfront on
+   this quay — while the old strip ended at z 28. The walk now runs to z 42.5, past the last of
+   them, on the same surveyed line extended to the next outline vertex.
+
+   The frontage — the two-level restaurant block the owner photographed, glazed to the water
+   under a run of awnings with the upper terrace set back behind a pergola — belongs to the
+   stretch between the Galleria and the Rosewood, so it is built only on the segments from z 20.3
+   south. North of that the quay is an open walk in front of the Four Seasons, which is what it
+   is on the ground. Keeping the block off the northern segments also keeps it clear of x -36:
+   the shore bulges to -38.4 up there and a twenty-metre-deep block on it would have stood in the
+   Galleria podium. */
 function maryahPromenade(){
   const g = new THREE.Group(), M = M_PER_U;
   const pave = saadKitMat(0xD8D0BE, 0xEDE6D6, 0.9, 0), glass = saadKitMat(0x2E4650, 0xBFDCE8, 0.3, 0.2, 0xBFE4EC, 0.3);
   const timber = saadKitMat(0x8C6E4A, 0xA98B64, 0.9, 0), stone = saadKitMat(0xCFC8BA, 0xE3DDD0, 0.85, 0);
-  const strip = [[-45.5, -6], [-43.5, 4], [-42.5, 12], [-44.5, 20], [-48.0, 28]];
-  for (let i = 0; i + 1 < strip.length; i++){
-    const [ax, az] = strip[i], [bx, bz] = strip[i + 1];
-    const len = Math.hypot(bx - ax, bz - az), ang = Math.atan2(bx - ax, bz - az);
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.12, len + 0.6), pave);
-    seg.position.set((ax + bx) / 2, 0.06, (az + bz) / 2); seg.rotation.y = ang; g.add(seg);
-  }
-  g.children[0].userData.hero = g.children[0].userData.kitName = 'maryahPromenade';
-  /* THE TERRACES (city v153, to the owner's photographs): the Galleria's waterfront is a two-level
-     restaurant block that follows the curve of the quay, the lower level glazed under a run of
-     pale awnings, the upper level set back with its own terrace and a timber pergola. Built per
-     shoreline segment on the land side of the walk. */
   const cream = saadKitMat(0xE2DED4, 0xF4F1EA, 0.8, 0, 0xFFE0B8, 0.1, 0.8);
   const awning = saadKitMat(0xEDE8DC, 0xFBF8F0, 0.7, 0), planter = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  /* THE WEST SHORELINE, island units, north to south: outline vertices 3 to 8 of
+     data/isle-maryah.json, plus one point continuing the outline's own bearing to z 42.5 so the
+     walk reaches BB Social. */
+  const SHORE = [[-47.0, -8.8], [-38.3, 8.3], [-38.4, 14.9], [-42.0, 20.3], [-50.1, 27.8], [-56.6, 39.4], [-57.3, 42.5]];
+  /* THE OUTLINE IS COARSER THAN THE BUILDINGS STANDING ON IT, AND THIS IS WHERE IT SHOWS. Between
+     z -8.8 and 8.3 the bake draws one straight chord 150 m long, and a chord cuts inside the arc
+     it replaces: through that stretch the recorded coast runs to x -38.4 while the ADGM/Galleria
+     podium — a surveyed 296 x 219 m record at (-29.2, 10.6) on rot 1.511, whose centre projects
+     to 24.5014 N 54.3886 E against Google's own Galleria pin at 24.5011 N 54.3885, so it is the
+     outline that is wrong and not the building — reaches x -44.4 and hangs some forty metres past
+     the drawn water's edge. Correcting the outline itself would move roads, beaches, palms and
+     parked cars on every pass that reads it, so instead the quay is built out to the podium here:
+     the walk follows whichever of the two is further west, and the apron below fills the gap so
+     the deck stands on quay rather than on open water. Both lines are surveyed; neither is
+     remembered. PODIUM_FACE is the podium record's own west face, derived from those numbers. */
+  const PODIUM_FACE = [[-42.08, -9.19], [-44.36, 28.69]];
+  const xAt = (poly, z) => {
+    if (z <= poly[0][1]) return poly[0][0];
+    if (z >= poly[poly.length - 1][1]) return poly[poly.length - 1][0];
+    for (let i = 0; i + 1 < poly.length; i++){
+      const [ax, az] = poly[i], [bx, bz] = poly[i + 1];
+      if (z >= az && z <= bz) return ax + (bx - ax) * (z - az) / (bz - az || 1);
+    }
+    return poly[poly.length - 1][0];
+  };
+  const INSET = 1.1;          // the walk sits this far inside the drawn water's edge
+  const QUAY  = 1.6;          // and this far outside the podium where the podium is the outer one
+  const ZS = [-8.8, -4, 0, 5, 10, 15, 20, 24, 27.8, 33, 39.4, 42.5];
+  const walkAt = (z) => {
+    const onShore = xAt(SHORE, z) + INSET;
+    const onQuay  = (z >= PODIUM_FACE[0][1] && z <= PODIUM_FACE[1][1]) ? xAt(PODIUM_FACE, z) - QUAY : Infinity;
+    return Math.min(onShore, onQuay);
+  };
+  const strip = ZS.map((z) => [walkAt(z), z]);
+  let first = null;
   for (let i = 0; i + 1 < strip.length; i++){
     const [ax, az] = strip[i], [bx, bz] = strip[i + 1];
     const len = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / len, dz = (bz - az) / len;
-    let nx = dz, nz = -dx; if (nx < 0){ nx = -nx; nz = -nz; }     // the land side is +x
+    let nx = dz, nz = -dx; if (nx < 0){ nx = -nx; nz = -nz; }     // the land side is +x on this coast
     const ang = Math.atan2(dx, dz), cx = (ax + bx) / 2, cz = (az + bz) / 2;
-    const put = (off, w, h, y0, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h / M, len + 0.4), mat); m.position.set(cx + nx * off, (y0 + h / 2) / M, cz + nz * off); m.rotation.y = ang; g.add(m); return m; };
-    put(2.7, 1.1, 5.5, 0, glass);          // lower level, glazed to the water
-    put(2.15, 0.35, 0.3, 4.2, awning);     // the awning run over the walk
-    put(3.7, 0.9, 5.0, 5.5, cream);        // upper level, set back
-    put(3.15, 0.5, 0.25, 10.4, timber);    // pergola over the upper terrace
-    put(3.05, 0.35, 0.9, 5.5, planter);    // planters at the terrace edge
-    put(4.4, 0.5, 11, 0, stone);           // the podium wall behind
+    /* off is measured from the WALK's centreline, so the whole frontage moves with the line. */
+    const put = (off, w, h, y0, mat) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h / M, len + 0.4), mat);
+      m.position.set(cx + nx * off, (y0 + h / 2) / M, cz + nz * off);
+      m.rotation.y = ang; g.add(m); return m;
+    };
+    const walk = put(0, 1.4, 0.9, -0.45, pave);
+    if (!first){ first = walk; walk.userData.hero = walk.userData.kitName = 'maryahPromenade'; }
+    /* THE APRON. Where the walk is out past the drawn coast it is standing on nothing, so fill
+       from the walk back to the outline and drop a quay wall to the water under its outer edge. */
+    const gapA = xAt(SHORE, az) - ax, gapB = xAt(SHORE, bz) - bx, gap = (gapA + gapB) / 2;
+    if (gap > 0.6){
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(gap + 1.4, 0.5 / M, len + 0.4), stone);
+      deck.position.set(cx + nx * (gap / 2), 0.25 / M, cz + nz * (gap / 2)); deck.rotation.y = ang; g.add(deck);
+      /* 2.6 units of skirt: ISLE_DEPTH is 2.4, so this reaches past the waterline whatever the
+         island's own bevel is doing, and the kit carries its own edge rather than depending on
+         what the band system paints underneath — the same rule cafeDelMar's deck follows. */
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.6, len + 0.4), stone);
+      wall.position.set(cx - nx * 0.6, -1.3, cz - nz * 0.6); wall.rotation.y = ang; g.add(wall);
+    }
+    /* THE RESTAURANT FRONTAGE, only where the Galleria and the Rosewood actually front the water:
+       Zuma sits at z 23.7 and Craft by Side Hustle at 33.6, both flagged frontage=shopfront on this
+       quay. North of z 2 the walk is open in front of the Four Seasons, which is what it is on the
+       ground, and south of 34 it runs on past the Rosewood to BB Social as an open walk. */
+    if (cz < 2 || cz > 34) continue;
+    put(1.55, 1.3, 5.5, 0, glass);         // lower level, glazed to the water
+    put(0.95, 0.5, 0.3, 4.2, awning);      // the awning run over the walk
+    put(2.50, 0.95, 5.0, 5.5, cream);      // upper level, set back
+    put(2.10, 0.45, 0.25, 10.4, timber);   // pergola over the upper terrace
+    put(1.95, 0.30, 0.9, 5.5, planter);    // planters at the terrace edge
+    put(3.30, 0.50, 11, 0, stone);         // the podium wall behind
   }
-  /* ZUMA (city v152, to the owner's photographs): a free-standing black-clad glass box on the
-     quay terrace, the bronze entrance portal on its street side, bamboo screen behind the glass.
-     28 x 18 m, 9 m high, the long glass face to the water. */
-  { const zx = -41.6, zz = 23.5, rot = 0.12, at = _placeRot(zx, zz, rot);
+  /* ZUMA (city v152, re-seated v156): a black-clad glass box on the quay terrace, bronze portal
+     on its street side, bamboo screen behind the glass. Its own coordinate is (-38.2, 23.7),
+     which Google puts inside the podium; the shopfront the owner describes is on the water, so
+     the box sits on the frontage line the walk defines at that latitude, turned with the quay by
+     sampling the walk three units either side of it. 28 x 18 m, 9 m. */
+  { const ZZ = 23.7, ax = walkAt(ZZ - 3), bx = walkAt(ZZ + 3);
+    const dx = bx - ax, dz = 6, len = Math.hypot(dx, dz);
+    let nx = dz / len, nz = -dx / len; if (nx < 0){ nx = -nx; nz = -nz; }
+    const rot = Math.atan2(dx / len, dz / len);
+    const zx = walkAt(ZZ) + nx * 1.55, zz = ZZ + nz * 1.55, at = _placeRot(zx, zz, rot);
     const black = saadKitMat(0x1C1C1C, 0x2A2A2A, 0.5, 0.2, undefined, undefined, 1.6);
     const zglass = saadKitMat(0x2A3A44, 0x9FB8C8, 0.15, 0.4, 0xE0B070, 0.35, 1.0);
     const bronze = saadKitMat(0x7A5A33, 0xB08D57, 0.4, 0.6, 0xC8964A, 0.25, 1.0);
     const bamboo = saadKitMat(0x9C7A48, 0xC7A46A, 0.8, 0);
-    const terrace = new THREE.Mesh(new THREE.BoxGeometry(40 / M, 0.5 / M, 28 / M), pave);
+    /* Local +x is inland and local +z runs south along the quay (_placeRot with this bearing),
+       so the 28 m side lies ALONG the water and the 18 m side reaches back — which is what the
+       photographs show and what the old comment claimed while the box was built the other way. */
+    const terrace = new THREE.Mesh(new THREE.BoxGeometry(26 / M, 0.5 / M, 34 / M), pave);
     terrace.position.set(zx, 0.25 / M, zz); terrace.rotation.y = rot; g.add(terrace);
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(28 / M, 9 / M, 18 / M), black);
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(18 / M, 9 / M, 28 / M), black);
     shell.position.set(zx, 4.5 / M, zz); shell.rotation.y = rot; shell.userData.kitName = 'zumaMaryah'; g.add(shell);
-    const screen = new THREE.Mesh(new THREE.BoxGeometry(27 / M, 8.2 / M, 16.5 / M), bamboo);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(17 / M, 8.2 / M, 26.5 / M), bamboo);
     screen.position.set(zx, 4.5 / M, zz); screen.rotation.y = rot; g.add(screen);
-    /* Glass on the water face and the north face: thin panes just outside the shell. */
-    for (const [ax, az, w, d] of [[-14.3, 0, 0.6, 18.2], [0, -9.3, 28.2, 0.6]]){
-      const [px, pz] = at(ax / M, az / M);
-      const pane = new THREE.Mesh(new THREE.BoxGeometry(w / M, 8.6 / M, d / M), zglass);
+    /* Glass on the water face and the north end: thin panes just outside the shell. */
+    for (const [px0, pz0, w, dd] of [[-9.3, 0, 0.6, 28.2], [0, -14.3, 18.2, 0.6]]){
+      const [px, pz] = at(px0 / M, pz0 / M);
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(w / M, 8.6 / M, dd / M), zglass);
       pane.position.set(px, 4.5 / M, pz); pane.rotation.y = rot; g.add(pane);
     }
-    const [dx, dz] = at(4 / M, -10.6 / M);
-    const portal = new THREE.Mesh(new THREE.BoxGeometry(4 / M, 5 / M, 2.4 / M), bronze);
-    portal.position.set(dx, 2.5 / M, dz); portal.rotation.y = rot; g.add(portal);
-    const [cx2, cz2] = at(0, 0);
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(29.5 / M, 0.6 / M, 19.5 / M), black);
-    cap.position.set(cx2, 9.3 / M, cz2); cap.rotation.y = rot; g.add(cap); }
+    const [bx2, bz2] = at(9.3 / M, 4 / M);
+    const portal = new THREE.Mesh(new THREE.BoxGeometry(2.4 / M, 5 / M, 4 / M), bronze);
+    portal.position.set(bx2, 2.5 / M, bz2); portal.rotation.y = rot; g.add(portal);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(19.5 / M, 0.6 / M, 29.5 / M), black);
+    cap.position.set(zx, 9.3 / M, zz); cap.rotation.y = rot; g.add(cap); }
   return g;
 }
 

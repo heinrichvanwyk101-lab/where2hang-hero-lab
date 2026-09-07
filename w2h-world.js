@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v329';
+export const BUILD = 'world v330';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8210,7 +8210,11 @@ KIT_ZONES[maryah.id] = [
   { x0:-50, x1:-30, z0:-22, z1:-7 },     // Four Seasons, 86.6 x 39 m (world v291)
   { x0:-55, x1:-38, z0:28, z1:41 },      // Rosewood, 78.7 x 31 m
   { x0:-11, x1:7, z0:-15, z1:49 },       // the Galleria's east block, 466 x 113 m on rot 1.46 (world v326)
-  { x0:-51, x1:-37, z0:-6, z1:30 },      // the west waterfront row between the hotels (world v326)
+  /* THE WEST QUAY (world v330): the walk is now the surveyed shoreline itself, from z -8.8 down
+     to 42.5, and the box follows it. Checked against the other five entries before widening —
+     it suppresses no footprint they were not already suppressing, because the two hotels on
+     this shore are kit-built and already have zones of their own. */
+  { x0:-60, x1:-36, z0:-10, z1:43 },     // the west quay walk and its restaurant frontage
 ];
 if (!NO_KIT && maryah && kit.adgmSquare){
   for (const fn of ['adgmSquare', 'clevelandClinic', 'maryahHotels', 'galleriaEast', 'maryahPromenade']){
