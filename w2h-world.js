@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v320';
+export const BUILD = 'world v321';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7612,6 +7612,7 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
      -0.709: the one big building in the Al Seef villa grid at Al Qurm, with its car park at the
      +x end, which is the side the entrance tower faces. */
   const seefMall = kit.alSeefVillageMall ? kit.alSeefVillageMall(801.4, 476.6, -0.709) : new THREE.Group();
+  seefMall.userData.zoneMargin = 1.5;   // the compound's villas come right up to the mall and The Walk (world v321)
   /* THE MOSQUE, BUILT THEN TURNED 90 DEGREES CLOCKWISE AROUND ITS OWN ANCHOR.
 
      Every mesh inside grandMosque() carries an ABSOLUTE position — x0+dx, not a relative offset
@@ -7676,7 +7677,11 @@ const corniche = DISTRICTS.find(d => d.id === 'corniche');
        Watan's own is closer to five to six by this same arithmetic — but it is a large, safe step
        in the right direction without inventing a second per-landmark table that could go stale
        exactly the way the object-measured box was written to avoid. */
-    KIT_ZONES[corniche.id].push({ x0:b.min.x - 6, x1:b.max.x + 6, z0:b.min.z - 6, z1:b.max.z + 6 });
+    /* A kit inside a fabric it belongs to can ask for less clearance (world v321): the Al Seef
+       mall stands in a villa compound and the six-unit margin, taken round the rotated kit's
+       axis-aligned box, was clearing a whole block of the compound round it. */
+    const mg = typeof o.userData.zoneMargin === 'number' ? o.userData.zoneMargin : 6;
+    KIT_ZONES[corniche.id].push({ x0:b.min.x - mg, x1:b.max.x + mg, z0:b.min.z - mg, z1:b.max.z + mg });
   }
 
   // Low-rise seaward of the towers: the scale contrast that makes the cluster read as enormous.

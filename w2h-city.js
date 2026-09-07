@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v144';
+export const BUILD = 'city v145';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5677,11 +5677,40 @@ function alSeefVillageMall(x0, z0, rot){
   /* flags on the parapet and the entrance forecourt */
   for (const az of [-14, 14]){ box(44, az, 0.4, 0.4, 7, flagpole, 10); box(44.5, az, 1.2, 2.4, 0.1, saadKitMat(0xD8342C, 0xE63B32, 0.8, 0), 16); }
   box(58, 0, 18, 30, 0.4, pave, 0.5);
+  /* THE WALK AT AL SEEF (city v145) — the restaurant street the compound is known for, running
+     west from the mall's back face (local -x) as the survey and the venue records place it:
+     a paved lane between two rows of two-storey cream pavilions with dark arched fronts under
+     canopies, umbrellas along the lane, palms, a small fountain square at the far end and the
+     pool court south of it. The pavilions carry the same warm arch glow as the mall after dark,
+     so the street reads as the lit village it is. */
+  const canopy = saadKitMat(0xD9C9A6, 0xEFE3C6, 0.7, 0, 0xFFD9A0, 0.18, 0.8), umbrella = saadKitMat(0xE6E1D3, 0xF8F4EA, 0.6, 0, 0xFFE4B8, 0.12, 0.9);
+  const water = saadKitMat(0x2E6A78, 0x4FA9BC, 0.2, 0.1), lawn = saadKitMat(0x4A6A3A, 0x6B8C4D, 0.9, 0);
+  const LZ = -12, X0 = -60, X1 = -140;
+  const lane = box((X0 + X1) / 2, LZ, X0 - X1 + 26, 9, 0.4, pave, 0.5); lane.userData.kitName = 'theWalkAlSeef';
+  for (let ax = X0; ax >= X1; ax -= 16){
+    for (const [az, face] of [[LZ - 11, LZ - 11 + 4.6], [LZ + 11, LZ + 11 - 4.6]]){
+      box(ax, az, 13, 9, 7.2, cream); box(ax, az, 13.6, 9.6, 0.6, pale, 7.2);
+      for (const dx of [-3.6, 3.6]) for (const y of [0.4, 4.0]) box(ax + dx, face, 3.2, 0.5, 2.9, arch, y);
+      box(ax, face + (az < LZ ? 1.6 : -1.6), 14.5, 2.8, 0.25, canopy, 3.5);
+    }
+    for (const dz of [-3.4, 3.4]){ const u = new THREE.Mesh(new THREE.CylinderGeometry(1.7 / M, 1.7 / M, 0.25 / M, 10), umbrella); u.position.set((ax - 8) / M, 2.6 / M, (LZ + dz) / M); sub.add(u); }
+  }
+  /* the fountain square at the west end */
+  box(X1 - 22, LZ, 22, 24, 0.4, pave, 0.5);
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(4.5 / M, 4.5 / M, 0.9 / M, 16), pale); basin.position.set((X1 - 22) / M, 0.9 / M, LZ / M); sub.add(basin);
+  const fw = new THREE.Mesh(new THREE.CylinderGeometry(4 / M, 4 / M, 0.3 / M, 16), water); fw.position.set((X1 - 22) / M, 1.4 / M, LZ / M); sub.add(fw);
+  /* the pool court south of the walk */
+  box(-100, LZ + 34, 44, 26, 0.3, lawn, 0.45); box(-100, LZ + 34, 20, 9, 0.3, water, 0.5); box(-100, LZ + 34, 24, 13, 0.15, pale, 0.42);
+  for (const dx of [-16, -8, 8, 16]){ const u = new THREE.Mesh(new THREE.CylinderGeometry(1.5 / M, 1.5 / M, 0.25 / M, 10), umbrella); u.position.set((-100 + dx) / M, 2.4 / M, (LZ + 42) / M); sub.add(u); }
   sub.rotation.y = rot || 0; sub.position.set(x0, 0, z0); g.add(sub);
-  const palms = [], cs = Math.cos(rot || 0), sn = Math.sin(rot || 0);
+  const palms = [], lamps = [], cs = Math.cos(rot || 0), sn = Math.sin(rot || 0);
   const at = (ax, az) => [x0 + (ax * cs + az * sn) / M, z0 + (-ax * sn + az * cs) / M];
   for (let az = -40; az <= 40; az += 10) palms.push(at(60, az));
+  for (let ax = X0 - 2; ax >= X1 - 6; ax -= 12){ palms.push(at(ax, LZ - 5.5)); palms.push(at(ax - 6, LZ + 5.5)); }
+  for (let ax = X0 + 4; ax >= X1 - 12; ax -= 20){ lamps.push(at(ax, LZ - 4.2)); lamps.push(at(ax - 10, LZ + 4.2)); }
+  for (const [ax, az] of [[-78, LZ + 22], [-122, LZ + 22], [-78, LZ + 46], [-122, LZ + 46]]) palms.push(at(ax, az));
   kitPalms(g, palms, 0.55);
+  if (typeof kitLamps === 'function') kitLamps(g, lamps);
   return g;
 }
 /* YAS BAY WATERFRONT (city v112) — the piece of Yas people actually walk: Pier71's restaurant
