@@ -8,7 +8,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v227 / city v154 / world v326 / props v31 / basemap v21`. Verify with
+Stamps at hand-over: `nav v227 / city v154 / world v327 / props v31 / basemap v21`. Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)
@@ -46,6 +46,18 @@ Stamps at hand-over: `nav v227 / city v154 / world v326 / props v31 / basemap v2
 - **Camera for sets and clusters (nav v225).** `PITCH_CLUSTER 0.58` / `PITCH_VENUE 0.45` replace
   the landmark pitch for pins; a tight set is the steepest shot; the area rail frames the pins
   rather than the island; the second tap on a cluster lists only once `camSettled()`.
+- **Yas Waterworld, third and final reading (world v327).** THE OWNER'S OWN CORRECTION SOLVED IT:
+  "the buildings there must be incorrect". The survey carries a real water body at x -38..-26,
+  z -38..-33 — the wave pool — ringed by the densest cluster of small HEIGHTLESS footprints on the
+  island. Heightless is the signature of park structures (slide towers, kiosks, changing rooms):
+  the height model, having nothing to read, invents a height and stands them up as ordinary
+  buildings, and that scatter is what the owner circled. So the park is 150 m NORTH of where v324
+  put it; the 38 footprints v324 read as the park are its entrance and car-park apron. The kit now
+  centres on the lagoon at (-36, -31) and the zone spans x -56..-18, z -46..-2, which suppresses 44
+  footprints, every one of them heightless — nothing real is hidden. Frames: `place-ww_top.png`
+  (before) and `place-ww_top2.png` (after) at the same camera. **Awaiting the owner's confirmation
+  on the phone.**
+  The two earlier readings, kept because each was wrong in an instructive way:
 - **Yas Waterworld (world v324).** The v319 note read the OSM node at (-45.5, -21.4) as an entrance
   and pushed the kit east to (-4, -22), into the mall's road loop, which the owner saw as "on a
   road". The owner's satellite frames (7 Sept) show the park south of the Warner Bros car-park

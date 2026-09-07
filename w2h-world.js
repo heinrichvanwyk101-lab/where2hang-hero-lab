@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v326';
+export const BUILD = 'world v327';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -7973,7 +7973,14 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      and the survey's 38 small footprints at x -67..-31, z -20..-5 are the park's own buildings.
      The kit's 260 m spread at (-47, -8) covers x -59..-35, z -20..4, on those footprints and off
      every road: the service roads south of the park start at z 4. */
-  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-47.0, -8.0));
+  /* ON THE POOLS THEMSELVES (world v327). v324 moved the kit to (-47, -8) on the reading that the
+     38 heightless footprints at z -20..-5 were the park. They are its entrance and car-park apron.
+     The park proper is 150 m north: the survey carries a real WATER body at x -38..-26, z -38..-33
+     — the wave pool — ringed by the densest cluster of small heightless structures on this island
+     (8-unit cells at (-40,-32), (-32,-32), (-48,-24)), which is exactly the scatter of stray little
+     buildings the owner circled and called incorrect. Centred on that lagoon the kit's 260 m spread
+     covers x -52..-20, z -47..-15, which is the park and nothing else. */
+  if (kit.yasWaterworld) built.push(kit.yasWaterworld(-36.0, -31.0));
   /* YAS BAY (world v292): Pier71's deck on the promontory centre the earlier note reserved for it,
      turned so its length runs down the promontory, and the waterfront kit — the restaurant row
      on that deck, the bay promenade and the parcels behind the arena. */
@@ -8023,7 +8030,10 @@ if (!NO_KIT && kit.ferrariWorld && kit.yasMall){
      and none of them has a height, so the height model bins them by area and stands ten-storey
      towers inside the water park (kit-yasWaterworld.png, 7 Sept). The kit IS the park; the slot
      between the car park north of it and the service roads south of it is its zone. */
-  KIT_ZONES[yas.id].push({ x0:-72, x1:-24, z0:-24, z1:6 });
+  /* Widened to the pools (world v327): the old box stopped at z -24 and left the park's own
+     structures north of that line standing as invented buildings — the fault the owner reported.
+     This spans the lagoon, the ride structures round it and the entrance apron below. */
+  KIT_ZONES[yas.id].push({ x0:-56, x1:-18, z0:-46, z1:-2 });
 }
 
 /* ---------- the four placeholders ---------- */
