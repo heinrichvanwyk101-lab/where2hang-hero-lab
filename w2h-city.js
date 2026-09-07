@@ -18,7 +18,7 @@ import * as THREE from 'three';
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v145';
+export const BUILD = 'city v146';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5451,8 +5451,10 @@ function babAlQasr(x0, z0, rot){
   return g;
 }
 /* SAADIYAT BEACH RESORTS — the two big resort parcels the survey carries on the north beach:
-   low white wings with terracotta roofs round a pool court. The names are the best reading of
-   the beach's order (Park Hyatt west of Jumeirah); the St. Regis parcel is not in the survey. */
+   low white wings with terracotta roofs round a pool court. Jumeirah at Saadiyat is the WESTERN
+   parcel and Park Hyatt the eastern one (city v146): the Park Grill's own coordinate, 24.5454 N
+   54.4349 E, projects onto the east parcel, and Jumeirah's Mare Mare sits west of it. The names
+   were the other way round from v290. The St. Regis parcel is not in the survey. */
 function saadiyatResorts(){
   const g = new THREE.Group(), M = M_PER_U;
   const white = saadKitMat(0xE0DCD2, 0xF3F0E8, 0.8, 0), roof = saadKitMat(0xA8654A, 0xC2775A, 0.85, 0);
@@ -5463,7 +5465,7 @@ function saadiyatResorts(){
     const r = new THREE.Mesh(new THREE.BoxGeometry((w + 3) / M, 2.2 / M, (d + 3) / M), roof); r.position.set(px, (h + 1.1) / M, pz); r.rotation.y = rot; g.add(r);
     return b;
   };
-  for (const [cx, cz, rot, W, D, name] of [[-35.8, 34, 0.63, 240, 225, 'parkHyattSaadiyat'], [-4.9, 11.4, 0.6, 249, 164, 'jumeirahSaadiyat']]){
+  for (const [cx, cz, rot, W, D, name] of [[-35.8, 34, 0.63, 240, 225, 'jumeirahSaadiyat'], [-4.9, 11.4, 0.6, 249, 164, 'parkHyattSaadiyat']]){
     const at = _placeRot(cx, cz, rot);
     const ground = new THREE.Mesh(new THREE.BoxGeometry(W / M, 1.2 / M, D / M), lawn); ground.position.set(cx, 0.6 / M, cz); ground.rotation.y = rot; g.add(ground);
     const main = wing(at, 0, -D / 2 + 30, W * 0.8, 40, 22, rot); main.userData.hero = main.userData.kitName = name;

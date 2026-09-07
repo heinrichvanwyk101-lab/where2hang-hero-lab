@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v321';
+export const BUILD = 'world v322';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5255,7 +5255,7 @@ const DISTRICTS = [
       { label:'Zayed Museum',     osm:'Zayed National Museum', x:-24, z: 22, h:10, r:40 },
       { label:'Manarat',          osm:'Manarat Al Saadiyat',   x:  4, z:-18, h: 6, r:38 },
       { label:'Berklee',          osm:'Berklee Abu Dhabi',     x: 28, z:-10, h: 6, r:34 },
-      { label:'Park Hyatt Saadiyat', x:-35.8, z:34.0, h: 3, r:30 },   // on the kit (world v290)
+      { label:'Park Hyatt Saadiyat', x:-4.9, z:11.4, h: 3, r:30 },    // the east parcel (city v146); v290 had the two resorts swapped
       { label:'Jumeirah Saadiyat',   x: -4.9, z:11.4, h: 3, r:30 },
       { label:'St. Regis Saadiyat',  x:-112.0, z:62.0, h: 4, r:34 },   // world v291
       { label:'NYU Abu Dhabi',       x: -8.0, z:310.0, h: 4, r:34 },
@@ -8138,8 +8138,8 @@ KIT_ZONES[saadiyat.id] = [
   { x0:-406, x1:-380, z0:252, z1:276 },   // teamLab Phenomena on its baked footprint beside the NHM (world v312)
   { x0:-232, x1:-197, z0:156, z1:171 },   // Manarat Al Saadiyat, 245 x 92 m (world v289)
   { x0:-227, x1:-213, z0:175, z1:188 },   // Berklee Abu Dhabi, 80 x 74 m
-  { x0:-57, x1:-14, z0:13, z1:55 },       // Park Hyatt parcel, 240 x 225 m (world v290)
-  { x0:-24, x1:14, z0:-6, z1:29 },        // Jumeirah parcel, 249 x 164 m
+  { x0:-57, x1:-14, z0:13, z1:55 },       // Jumeirah at Saadiyat parcel, 240 x 225 m (names swapped, city v146)
+  { x0:-24, x1:14, z0:-6, z1:29 },        // Park Hyatt parcel, 249 x 164 m
   { x0:-136, x1:-88, z0:48, z1:78 },      // St. Regis, grid-searched site (world v291)
   { x0:-46, x1:22, z0:286, z1:346 },      // NYU Abu Dhabi campus records
   { x0:-462, x1:-262, z0:100, z1:232, grove:true },   // Saadiyat Grove: the kit lays the whole district (world v296)
