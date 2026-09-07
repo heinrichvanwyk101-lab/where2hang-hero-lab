@@ -742,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v220', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v221', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3340,6 +3340,10 @@ document.getElementById('back').addEventListener('click', () => {
   const onAllShot = () => allShot && Math.abs(goal.dist - allShot.dist) < 1 && goal.target.distanceTo(allShot.target) < 1;
   if (allBtn) allBtn.addEventListener('click', () => {
     hideVenueCard();
+    /* THE LIST, NOT ONLY THE CAMERA (nav v221). "All results" read as "show me the results" and
+       the results are a list in the host app under the world band; reframing the pins alone
+       looked like nothing happened. The host is told first and scrolls its list into view. */
+    if (resultPins && resultPins.length) postToHost('allResults', { count: resultPins.length, label: resultsLabel });
     if (resultPins && resultPins.length && !onAllShot()){
       frameAllResults(resultsLabel);
       allShot = { dist: goal.dist, target: goal.target.clone() };
