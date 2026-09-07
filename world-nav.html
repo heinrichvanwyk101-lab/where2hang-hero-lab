@@ -742,7 +742,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v225', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v226', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2353,11 +2353,31 @@ function resultsBox(pts){
    roofs. */
 const RESULTS_MIN_R = 34;
 let lastResultsBox = null;
+/* THE ISLAND THAT HOLDS MOST OF THE SET (nav v226). A name search for one venue that also
+   matches a stray on another island used to span two islands and fall back to the whole-city
+   shot, so "Coya" showed the archipelago from 5,700 units with two pills on it and nothing zoomed.
+   If one island holds at least three in five of the pins, that island is the subject and the
+   shot is composed on its pins alone; the strays keep their pins and are still in the list. */
+function resultsMajority(pts){
+  const counts = new Map();
+  for (const p of pts){
+    for (const d of DISTRICTS){
+      const rr = (d.r * (d.dispScale || 1)) * 1.15;
+      if (Math.hypot(p.x - d.x, p.z - d.z) <= rr){ counts.set(d, (counts.get(d) || 0) + 1); break; }
+    }
+  }
+  let best = null, n = 0;
+  for (const [d, c] of counts) if (c > n){ best = d; n = c; }
+  if (!best || n < Math.ceil(pts.length * 0.6)) return null;
+  const rr = (best.r * (best.dispScale || 1)) * 1.15;
+  return { host: best, pts: pts.filter(p => Math.hypot(p.x - best.x, p.z - best.z) <= rr) };
+}
 function frameAllResults(label){
-  const pts = resultPins;
-  if (!pts || !pts.length) return false;
+  const all = resultPins;
+  if (!all || !all.length) return false;
+  let host = resultsHost(all), pts = all;
+  if (!host){ const m = resultsMajority(all); if (m){ host = m.host; pts = m.pts; } }
   const box = resultsBox(pts), { cx, cz, halfDiag } = box;
-  const host = resultsHost(pts);
 
   resetOrbit();
   state = host ? STATE.DISTRICT : STATE.WORLD;
@@ -2393,7 +2413,7 @@ function frameAllResults(label){
   }
   lastResultsBox = box;
   applyLOD();
-  ui(label || 'Results', pts.length + (pts.length === 1 ? ' result' : ' results'));
+  ui(label || 'Results', all.length + (all.length === 1 ? ' result' : ' results'));
   return true;
 }
 
