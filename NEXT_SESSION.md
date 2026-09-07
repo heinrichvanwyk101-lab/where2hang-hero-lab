@@ -8,7 +8,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v227 / city v155 / world v328 / props v31 / basemap v21`. Verify with
+Stamps at hand-over: `nav v227 / city v156 / world v330 / props v31 / basemap v21`. Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)
@@ -25,6 +25,28 @@ Stamps at hand-over: `nav v227 / city v155 / world v328 / props v31 / basemap v2
 - The sandbox has no egress to where2hang.ae, supabase.co or github.io. Supabase is reached through
   the MCP connector (SQL, migrations); GitHub through the MCP tools; anything that must reach the
   outside runs as a GitHub Actions workflow in the app repo.
+
+### THE BAKED OUTLINES ARE COARSER THAN THE BUILDINGS STANDING ON THEM
+
+Found while fixing the Galleria promenade, and it is not an Al Maryah problem. `outline` in
+`data/isle-*.json` is a heavily simplified ring — Al Maryah's whole west coast between z -8.8 and
+8.3 is ONE straight chord 150 m long — while `buildings` are full-resolution surveyed footprints.
+A chord cuts inside the arc it replaces, so a large footprint on a curved shore ends up hanging
+over open water. The ADGM/Galleria podium (296 x 219 m, centre projecting to 24.5014 N 54.3886 E
+against Google's Galleria pin at 24.5011 N 54.3885 — the building is right, the coast is not)
+reaches x -44.4 where the drawn coast is at -38.4: forty metres of deck over the sea.
+
+A corner-only point-in-polygon audit of every island counts big footprints crossing the outline —
+Raha 14, Corniche 8, Reem 8, Maryah 2, Saadiyat 1, Yas 1 — and it UNDERSTATES, because a long
+straight edge can cross an inward bulge with all four of its corners inside, which is exactly what
+the podium does.
+
+`maryahPromenade` works around it locally: the walk follows whichever of the outline and the
+podium's own west face is further west, an apron fills the gap behind and a wall drops to the
+water. That is a patch on one quay, not a fix. The real fix is a finer outline out of the bake, or
+a rule that pushes the outline out to contain its own surveyed footprints — and either one moves
+roads, beaches, palms and parked cars, since `insideIsle` reads the outline on every pass. Its own
+task; do not fold it into a kit change.
 
 ### The 3D world: what changed this session
 
