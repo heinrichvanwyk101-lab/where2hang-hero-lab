@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v21';
+export const BUILD = 'basemap v22';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -60,6 +60,41 @@ export const DAMP_P = 1 / 3;
    bringing a small island up to legibility; it is making it a big one. 2.6 leaves Al Raha (2.54)
    untouched and only Maryah and Reem come down. */
 export const SCALE_CAP = 2.6;
+
+/* PER-ISLAND SCALE, WHERE THE FORMULA'S ANSWER IS THE WRONG ONE.
+
+   damping() sizes an island against the reference and nothing else. It has no idea what sits
+   NEXT to the island, and on Al Maryah that is what goes wrong: the island physically belongs in
+   the channel between Corniche's north-east shore and Al Reem's west lobe, and that channel is
+   drawn at Corniche's scale of 1.0 while Al Maryah is drawn at the 2.6 cap. A 2.4 km island
+   comes out 812 units long — a third of the length of Abu Dhabi Island — and there is no room
+   left in the gap it belongs in.
+
+   Measured on the real outlines at the size they are drawn (tools/island-move.html), with the
+   layout solved from true bearings and every island held 110 units clear:
+
+     scale      to Corniche   to Al Reem   to Saadiyat   drawn length
+     2.60          117 u        442 u        162 u          812 u
+     1.60          110 u        401 u        360 u          500 u
+     1.30          110 u        343 u        380 u          406 u
+
+   The bearing barely moves — 313 degrees against a true 314 at 2.60, 308 at 1.30 — so the size
+   is NOT what puts Al Maryah on the correct side of Al Reem; the layout does that. What the size
+   buys is the gap: at 2.60 the island is wedged, holding 117 units off Corniche and crowding
+   Saadiyat to 162 while still sitting 442 off the island it is supposed to be beside. At 1.30 it
+   sits closer to Al Reem than to anything else, which is the relationship a viewer is looking
+   for, with room on all three sides.
+
+   1.30 is a composition decision and is stated rather than derived, the same standing SCALE_CAP
+   has. Lowering SCALE_CAP instead would have taken Al Reem down with it, and Al Reem's size is
+   not the thing that is wrong.
+
+   Nothing else needs to know. The scale is applied to the island GROUP, so the coastline, the
+   roads, the footprints, the kits, the props and every venue pin come down with it in step —
+   a uniform scale over a whole island is indistinguishable from viewing it from further away. */
+export const SCALE_OVERRIDE = {
+  maryah: 1.30,
+};
 
 const m2u = m => m / M_PER_UNIT;
 
@@ -106,6 +141,9 @@ export function damping(idx, p = DAMP_P){
   const R = span(ref);
   const out = {};
   for (const i of idx.islands || []){
+    /* An override wins outright — it is not a second cap. The point of stating one is that the
+       formula's answer, cap included, is the wrong size for that island's neighbours. */
+    if (SCALE_OVERRIDE[i.id] != null){ out[i.id] = SCALE_OVERRIDE[i.id]; continue; }
     /* s = (R / E)^(1-p). At p = 1 every s is 1 and nothing is damped; at p = 0 every island is
        scaled to the reference's size, which is the old diorama exactly. */
     out[i.id] = i.extent ? Math.min(SCALE_CAP, Math.pow(R / span(i), 1 - p)) : 1;
