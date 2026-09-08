@@ -155,8 +155,14 @@ const ISLANDS = [
      1.4 km2 keeps all 52 and every one of the four venues with over two hundred reviews. */
   { id:'masdar', name:'Masdar City', bbox:[24.4200, 54.6080, 24.4400, 54.6280], centre:[24.4300, 54.6180],
     noCoastline: true,
+    /* Traced the same way, at a 100 m cell because the district is a kilometre across. */
     outlineLL: [
-      [54.6125,24.4360], [54.6233,24.4360], [54.6233,24.4241], [54.6125,24.4241],
+      [54.6223,24.4224], [54.6233,24.4224], [54.6241,24.4232],
+      [54.6233,24.4268], [54.6248,24.4291], [54.6253,24.4345],
+      [54.6215,24.4378], [54.6177,24.4382], [54.6130,24.4373],
+      [54.6118,24.4362], [54.6113,24.4346], [54.6120,24.4311],
+      [54.6134,24.4296], [54.6166,24.4289], [54.6175,24.4279],
+      [54.6184,24.4242], [54.6215,24.4224],
     ] },
 
   /* ZAYED CITY. The gap the brief called "the part missing after the Grand Mosque up to the dead
@@ -175,8 +181,19 @@ const ISLANDS = [
      will come from the survey rather than from the trace. */
   { id:'zayed', name:'Zayed City', bbox:[24.3880, 54.4700, 24.4420, 54.5520], centre:[24.4160, 54.5100],
     noCoastline: true,
+    /* TRACED FROM THE STOCK, NOT TYPED (tools/frame-from-stock.mjs). The four-point rectangle put
+       the ground's south and east edges on ruled lines with nothing to justify them — a mainland
+       district framed by a box stops on the box. This boundary is the district's own 6,297
+       footprints rasterised at 150 m, closed by 2 cells to bridge the streets, largest blob, edge
+       walked and then Chaikin-smoothed so it does not read as the staircase a raster trace is.
+       The west edge is still hard at 54.4900: the built area runs on past Corniche's fetch box and
+       the trace followed it, which would hand the Grand Mosque precinct to two districts at once. */
     outlineLL: [
-      [54.4900,24.4300], [54.5420,24.4360], [54.5420,24.4000], [54.4900,24.3950],
+      [54.5092,24.3947], [54.5315,24.3968], [54.5411,24.3993],
+      [54.5453,24.4085], [54.5450,24.4240], [54.5439,24.4275],
+      [54.5372,24.4330], [54.5367,24.4357], [54.5292,24.4366],
+      [54.5117,24.4352], [54.4961,24.4311], [54.4952,24.4281],
+      [54.4910,24.4239], [54.4900,24.3937], [54.4996,24.3941],
     ] },
 
   /* ZAYED INTERNATIONAL AIRPORT — THE TERMINAL, WITH THE RUNWAYS CUT SHORT ON PURPOSE.
