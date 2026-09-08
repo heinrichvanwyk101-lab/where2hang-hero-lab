@@ -152,31 +152,33 @@ const ISLANDS = [
      is worth having. The frame follows the roads that actually bound it rather than a rectangle:
      the E10 along the north, the airport approach east, Sheikh Zayed bin Sultan south and west.
 
-     THE NORTH EDGE TRACKS AL RAHA'S SOUTHERN SHORE, 75 m off it, AND THE E10 IS WHY.
+     THE NORTH EDGE IS AL RAHA'S SOUTHERN BOUNDARY, 5 m OFF IT, AND THE MOTORWAY IS ALREADY RAHA'S.
 
-     Raha's own frame stops ON the motorway — its south edge was drawn along the E10. A level
-     north edge here first crossed Raha (its frame dips to lat 24.4360 near longitude 54.568,
-     south of where a straight E10 edge would run), and the obvious fix — drop Khalifa City to a
-     flat 24.4330 — cleared the collision by leaving a 432 m corridor belonging to NEITHER
-     district. The motorway that separates them, and every service road and interchange along it,
-     would have been fetched by nobody and drawn as bare ground between two built places.
+     Checked in the artefact rather than assumed. data/isle-raha.json carries the 5-lane E10 running
+     lat 24.4399 to 24.4519 across longitude 54.5812 to 54.6204, five of its ten vertices inside
+     Raha's own frame: the motorway is on Al Raha and it renders there. It follows Raha's southern
+     boundary almost exactly, which is presumably how that boundary was traced in the first place.
 
-     So the edge runs just under Raha's southern envelope instead: the E10 falls inside Khalifa City,
-     is drawn once, and the seam closes. Three vertices, because that envelope is a V — Raha's frame
-     runs down to its low point at longitude 54.568 and back up to the Yas channel — and two
-     straight lines follow it to within 31 m the whole way.
+     So Khalifa City must not reach up for it. An earlier version of this edge sat 75 m under Raha's
+     envelope on the theory that the motorway belonged to nobody — which was simply wrong about the
+     data, and would have laid a 31 m strip of bare ground along the far side of a road that is
+     already drawn. The edge now meets Raha's boundary as closely as the trace can express it, 5 m,
+     which is two thirds of one scene unit and invisible: the districts abut, Raha keeps the
+     motorway, Khalifa City starts on its south side, and there is no seam.
 
-     DERIVED FROM RAHA'S OWN outlineLL, NOT TYPED. Two earlier versions of this edge were drawn by
-     eye and both crossed it. The second is the instructive one: it sampled the envelope at ten
-     longitudes, every sample cleared, and the straight segment between two of them cut across the
-     notch at 54.5679 where Raha dips to 24.4360. Sampling a boundary is not the same as clearing
-     it. The generator now samples every 11 m and only drops a vertex when the line replacing it
-     stays south of the envelope along its whole span. West of 54.5620 Raha does not exist and the
-     edge goes back up. */
+     Three vertices, because that envelope is a V — Raha runs down to its low point at longitude
+     54.568 and back up to the Yas channel.
+
+     DERIVED FROM RAHA'S OWN outlineLL, NOT TYPED. Two earlier versions were drawn by eye and both
+     crossed it. The second is the instructive one: it sampled the envelope at ten longitudes, every
+     sample cleared, and the straight segment between two of them cut across the notch at 54.5679
+     where Raha dips to 24.4360. Sampling a boundary is not clearing it. The generator samples every
+     11 m and drops a vertex only when the line replacing it stays south of the envelope along its
+     whole span. West of 54.5620 Raha does not exist and the edge goes back up. */
   { id:'khalifa', name:'Khalifa City', bbox:[24.3930, 54.5380, 24.4470, 54.6110], centre:[24.4210, 54.5760],
     noCoastline: true,
     outlineLL: [
-      [54.5510,24.4400], [54.5620,24.4400], [54.5682,24.4354], [54.6055,24.4460],
+      [54.5510,24.4400], [54.5620,24.4400], [54.5678,24.4359], [54.6055,24.4466],
       [54.6055,24.4230], [54.6010,24.4020], [54.5680,24.3985], [54.5490,24.4180],
     ] },
 
