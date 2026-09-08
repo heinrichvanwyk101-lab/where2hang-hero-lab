@@ -152,14 +152,31 @@ const ISLANDS = [
      is worth having. The frame follows the roads that actually bound it rather than a rectangle:
      the E10 along the north, the airport approach east, Sheikh Zayed bin Sultan south and west.
 
-     THE NORTH EDGE STEPS DOWN AT 54.5645, and that step is Al Raha. Raha's frame dips to lat
-     24.4360 around longitude 54.568 — south of where a straight E10 edge would run — so a level
-     north edge crossed it and the two districts would have shared the canal strip's south bank.
-     West of 54.565 Raha does not exist and the edge goes back up. */
+     THE NORTH EDGE TRACKS AL RAHA'S SOUTHERN SHORE, 75 m off it, AND THE E10 IS WHY.
+
+     Raha's own frame stops ON the motorway — its south edge was drawn along the E10. A level
+     north edge here first crossed Raha (its frame dips to lat 24.4360 near longitude 54.568,
+     south of where a straight E10 edge would run), and the obvious fix — drop Khalifa City to a
+     flat 24.4330 — cleared the collision by leaving a 432 m corridor belonging to NEITHER
+     district. The motorway that separates them, and every service road and interchange along it,
+     would have been fetched by nobody and drawn as bare ground between two built places.
+
+     So the edge runs just under Raha's southern envelope instead: the E10 falls inside Khalifa City,
+     is drawn once, and the seam closes. Three vertices, because that envelope is a V — Raha's frame
+     runs down to its low point at longitude 54.568 and back up to the Yas channel — and two
+     straight lines follow it to within 31 m the whole way.
+
+     DERIVED FROM RAHA'S OWN outlineLL, NOT TYPED. Two earlier versions of this edge were drawn by
+     eye and both crossed it. The second is the instructive one: it sampled the envelope at ten
+     longitudes, every sample cleared, and the straight segment between two of them cut across the
+     notch at 54.5679 where Raha dips to 24.4360. Sampling a boundary is not the same as clearing
+     it. The generator now samples every 11 m and only drops a vertex when the line replacing it
+     stays south of the envelope along its whole span. West of 54.5620 Raha does not exist and the
+     edge goes back up. */
   { id:'khalifa', name:'Khalifa City', bbox:[24.3930, 54.5380, 24.4470, 54.6110], centre:[24.4210, 54.5760],
     noCoastline: true,
     outlineLL: [
-      [54.5510,24.4400], [54.5620,24.4400], [54.5645,24.4330], [54.6050,24.4330],
+      [54.5510,24.4400], [54.5620,24.4400], [54.5682,24.4354], [54.6055,24.4460],
       [54.6055,24.4230], [54.6010,24.4020], [54.5680,24.3985], [54.5490,24.4180],
     ] },
 
