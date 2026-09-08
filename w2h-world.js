@@ -5357,6 +5357,58 @@ const DISTRICTS = [
       { label:'Al Seef Village', x:216.6, z:-92.3, h:4, r:26 },   // on the kit (world v295)
       { label:'Al Raha Beach Resort', x:LM_RAHA.rahaResortA.x, z:LM_RAHA.rahaResortA.z, h:5, r:26 },
     ] },
+
+  /* ---------------------------------------------------------------------------------------------
+     THE THREE MAINLAND DISTRICTS. Added to give venues a home, which is the only reason to add
+     land: 375 venues in Zayed City, 52 in Masdar City and 22 in the airport terminal had nowhere
+     in the world to be flown to. Khalifa City was measured the same way and deferred — 380
+     buildings per venue anybody has been to, against 133, 132 and 70 for these three.
+
+     All three are noCoastline patches like Al Raha: their shape is a hand-drawn frame in
+     tools/bake-city.mjs, not a shoreline. r and x/z below are placeholder fallbacks; the real
+     values arrive from BASE[d.id] once the basemap transform runs, exactly as every island's do.
+     --------------------------------------------------------------------------------------------- */
+
+  /* ZAYED CITY. The corridor from the Grand Mosque to Al Raha — Rabdan, Officers City, the Capital
+     District — and the reason it is here is Al Qana: the waterfront sits at longitude 54.497, just
+     east of Abu Dhabi Island's fetch box, so the app has named it as a destination since
+     lib/destinations.ts was written and the world has had nowhere to put it.
+
+     seaAngle north, because the channel is its only water; south of it is Khalifa City, which the
+     model leaves as ground. */
+  { id:'zayed', name:'Zayed City', x:1584, z:761, r:30*ISLE_SCALE, rot:0, tint:0xC9B07A,
+    cam: { angle:20, dist:2600, elev:1180, tx:-180, tz:-40 },
+    seaAngle: 0,
+    fillAll:true, built:false, coreN:[-0.35, -0.2], places:[
+      /* Hand-identified, like LM_RAHA's: the bake's landmark list has never been asked for these
+         names, so pl.baked stays false and that is honest rather than a bug. */
+      { label:'Al Qana',               x:-247, z:-131, h:4, r:30 },
+      { label:'The National Aquarium', x:-260, z:-113, h:5, r:24 },
+    ] },
+
+  /* MASDAR CITY. A one-kilometre planned block with a street pattern and a massing that look like
+     nowhere else in the emirate, which is most of why it earns its own district rather than being
+     a corner of somewhere. 52 of its 53 venues sit in one cluster and the frame is drawn round it. */
+  { id:'masdar', name:'Masdar City', x:2174, z:542, r:12*ISLE_SCALE, rot:0, tint:0x7FA98F,
+    cam: { angle:200, dist:1150, elev:520, tx:0, tz:0 },
+    seaAngle: Math.PI,
+    fillAll:true, built:false, coreN:[0, 0], places:[
+      { label:'Masdar Institute',      x:1,   z:44,  h:4, r:22 },
+      { label:'My City Centre Masdar', x:-18, z:15,  h:3, r:20 },
+    ] },
+
+  /* ZAYED INTERNATIONAL. The terminal, with the runways running out of the frame rather than
+     shortened in the data — a cropped runway reads as an airport, a complete one reads as an
+     airfield laid across the corner of the diorama. 22 of its 26 venues are in the concourse.
+
+     GEN_TALLEST is 4 like the other two: an apron is flat and a terminal is a wide low shed, and
+     the generator has five height samples to work from, which is none. */
+  { id:'airport', name:'Zayed International', x:2526, z:272, r:16*ISLE_SCALE, rot:0, tint:0x9AA7B5,
+    cam: { angle:210, dist:1500, elev:680, tx:0, tz:0 },
+    seaAngle: Math.PI,
+    fillAll:true, built:false, coreN:[0, 0], places:[
+      { label:'Terminal A', x:0, z:0, h:5, r:34 },
+    ] },
 ];
 
 /* SIZE AND PLACE THE ISLANDS FROM THE DATA, before anything reads either.

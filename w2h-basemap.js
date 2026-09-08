@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v24';
+export const BUILD = 'basemap v25';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -187,14 +187,20 @@ export function islandOrigin(entry){
    when the real island is north-west of it, in the channel. Somebody who knows Abu Dhabi was being
    shown a city that is not the one they live in.
 
-   THE ONE DELIBERATE LIE IS YAS, AND IT IS MADE ONCE, TO A PAIR. Yas is 21 km east of Corniche —
-   2,714 units, against about 1,100 for the whole of the rest of the archipelago — so at true
-   spacing the diorama is four islands in one corner and two specks in the other. Yas and Al Raha
-   are therefore TRANSLATED in together, to 65 per cent of their real distance, along the true
-   bearing from Corniche to the pair's midpoint. Their separation from and bearing to each other
-   are untouched: Yas to Al Raha is the one relationship in this table that is honestly close
-   (1.5 km), and breaking it to fix the distance to Corniche would trade a true fact for an
-   invented one. The direction you look to find Yas stays right; only how far stays wrong.
+   THE ONE DELIBERATE LIE IS THE FAR CLUSTER, AND IT IS MADE ONCE, TO THE GROUP. Yas is 21 km east
+   of Corniche — 2,714 units, against about 1,100 for the whole of the rest of the archipelago — so
+   at true spacing the diorama is a handful of islands in one corner and specks in the other. Yas,
+   Al Raha, Masdar City and Zayed International are therefore TRANSLATED in together, as one rigid
+   body, to 72 per cent of the group's real distance along the true bearing from Corniche to its
+   midpoint. Every relationship INSIDE that group survives exactly — Yas to Al Raha is 1.5 km and
+   really is that close, and breaking it to fix the distance to Corniche would trade a true fact for
+   an invented one. The direction you look to find any of them stays right to within 3 degrees; only
+   how far stays wrong.
+
+   72 rather than 65: adding Masdar City to the group put it 1 unit into Zayed City at the old
+   figure, because Masdar was pulled west while Zayed City was not. 72 clears every pair with the
+   tightest gap in the whole layout still being Corniche to Al Maryah at 3 units, which is where it
+   was before any of this.
 
    WHAT "THEY DO NOT FIT" TURNED OUT TO MEAN. Placed here, the drawn coastlines graze by 2 to 12
    units in six places — 15 to 94 metres, on islands hundreds of units across, at tips rather than
@@ -208,9 +214,21 @@ export const DIORAMA = {
   corniche: [    0,     0 ],
   maryah:   [  -42,  -476 ],
   reem:     [  190,  -256 ],
-  saadiyat: [  535, -1101 ],
-  yas:      [ 1798,  -265 ],
-  raha:     [ 1603,   316 ],
+  saadiyat: [  535, -1102 ],
+  yas:      [ 1981,  -263 ],
+  raha:     [ 1786,   319 ],
+  /* ZAYED CITY IS NOT PULLED, AND IT CANNOT BE. It is 14 km out — far enough to look like part of
+     the eastern cluster — but pulling it runs it into Abu Dhabi Island: Corniche's own outline
+     reaches x = 1220 and a Zayed City at 72 per cent lands inside it. That is not a rounding
+     artefact, it is the geography. The two are contiguous mainland across the channel, so there
+     is nowhere to pull it TO. Left at its true position it clears by 28 units and its bearing from
+     Corniche is exact.
+     Tried and rejected: pulling all five eastern districts as one rigid group, which kept their
+     mutual geometry perfect and cost Zayed City 16 degrees of bearing from Corniche. Bearings from
+     Corniche are what a viewer reads; Zayed City to Masdar is a pair nobody compares. */
+  zayed:    [ 1584,   761 ],
+  masdar:   [ 2174,   542 ],
+  airport:  [ 2526,   272 ],
 };
 
 

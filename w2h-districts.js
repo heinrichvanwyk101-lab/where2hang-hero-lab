@@ -36,6 +36,11 @@ export const DISTRICT_FABRIC = {
   /* Dense, emphatic, long blocks aligned to the island axis, cut by wide
      arterials. This is the one that was already right — it is what the global
      constants were tuned to. Unchanged. */
+  /* The mainland districts. Wide superblocks and deep plots: villa compounds, government blocks
+     and an airport apron are all coarse-grained next to an island core. */
+  zayed:    { sb:[300, 210], plotFront:[40,  70], plotDepth:  46 },
+  masdar:   { sb:[160, 110], plotFront:[26,  40], plotDepth:  30 },
+  airport:  { sb:[500, 380], plotFront:[140, 300], plotDepth: 160 },
   corniche: { sb:[200, 130], plotFront:[30,  46], plotDepth:  34 },
 
   /* FINANCIAL. The bake returns 102 buildings for the whole island and that is
@@ -83,6 +88,17 @@ export function fabricFor(id){
 
 /* GENERATED STOCK. What urbanFabric may build up to. */
 export const GEN_TALLEST = {
+  /* THE THREE MAINLAND DISTRICTS, SET FROM THEIR OWN STOCK RATHER THAN GUESSED.
+
+     Overture carries height on almost none of them — 6 buildings of Zayed City's 6,297, 16 of
+     Masdar's 212, 5 of the airport's 158 — so the generated ceiling does the work, and a ceiling
+     set by eye is how a two-storey suburb ends up with a skyline. Al Raha is the calibration: its
+     6 (47 m) sits against a measured ninetieth percentile of 45 m, so the rule is p90 / 7.8. */
+  zayed:     4,   //  31 m — measured p90 is 12.8 m but on six samples, which is not a
+                  //         distribution; hedged up one because the Capital District has real
+                  //         mid-rise in it and Al Qana does not
+  masdar:    4,   //  31 m — measured p90 30.0 m on 16 samples. Masdar is designed at 4-6 storeys
+  airport:   4,   //  31 m — no usable sample; a terminal is a wide low shed, not a tower
   corniche: 34,   // 265 m — the cap below trims this further
   raha:      6,   //  47 m — Al Raha Beach's real stock: median 12.8 m, ninetieth percentile 45
   maryah:   26,   // 203 m  (was 40 = 312 m against a real ~200 m)

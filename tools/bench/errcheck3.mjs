@@ -23,7 +23,11 @@ page.on('console',m=>{ if(m.type()==='error'||/fail|Error|error/.test(m.text()))
 const errs=[]; page.on('pageerror',e=>errs.push(String(e.message).slice(0,300)+'\n'+String(e.stack||'').split('\n').slice(0,6).join('\n')));
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=night`,{waitUntil:'load',timeout:120000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:90000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+/* EVERY DISTRICT, NOT SIX. The literal 6 was the island count when this was written, so the moment
+   a seventh existed the gate stopped waiting as soon as six were up and reported the stragglers as
+   built:0 — which reads exactly like a failure and is not one. Asking DISTRICTS for its own length
+   means the next district added cannot quietly re-open the same gap. */
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:300000}).catch(()=>console.log('not all built'));
 console.log('built:', await page.evaluate(()=>window.W2H.DISTRICTS.map(d=>d.id+':'+(d.built?1:0)).join(' ')));
 // REVEAL EVERYTHING BEFORE LISTENING FOR RENDER ERRORS. Warm-up hides every mesh and reveals a
 // few per frame; on swiftshader the queue never empties inside this check, so a mesh that
