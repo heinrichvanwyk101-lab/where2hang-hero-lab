@@ -17,7 +17,10 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const port=server.address().port;
 const browser=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage']});
-const page=await browser.newPage({viewport:{width:900,height:1900}});
+/* Phone portrait by default, because that is the target. WV_W/WV_H override it — the archipelago
+   is wider than it is tall and a 900x1900 frame crops the eastern districts out of any shot
+   that also holds Corniche. */
+const page=await browser.newPage({viewport:{width:+(process.env.WV_W||900),height:+(process.env.WV_H||1900)}});
 page.on('pageerror',e=>console.log('PAGEERROR', String(e.stack||e.message).split('\n').slice(0,4).join(' | ')));
 page.on('console',m=>{ if(m.type()==='error'||/fail|Error|error/.test(m.text())) console.log('CONSOLE', m.text().slice(0,300)); });
 const ID = process.argv[2] || 'yas'; const LABEL = process.argv[3]; const LX = +process.argv[7], LZ = +process.argv[8]; const DIST = +process.argv[4] || 260; const ELEV = +process.argv[5] || 120; const ANG = +process.argv[6] || 2.4;
