@@ -132,7 +132,104 @@ const ISLANDS = [
       [54.6111108,24.4483492], [54.6089666,24.4542213], [54.6089935,24.4542328],
       [54.6081634,24.4553932], [54.5887981,24.4502185], [54.5880841,24.4500382],
     ] },
+
+  /* ------------------------------------------------------------------------------------------
+     THE MAINLAND DISTRICTS. Four additions, none of them islands, all using Al Raha's mechanism:
+     noCoastline plus a hand-drawn outlineLL frame that says where the district stops. Inland
+     frames have no coastline crossing them at all, which the clip path already handles by falling
+     back to the trace, so the frame simply is the ground.
+
+     THE FRAMES ARE DRAWN NOT TO TOUCH. Khalifa City stops at 54.6055 and Masdar starts at 54.609,
+     355 m clear; Zayed City stops at 54.542 and Khalifa City starts at 54.549, 709 m clear; the
+     airport frame starts at 54.638. Checked polygon to polygon, not box to box — the first cut of
+     these frames cleared on boxes and still shared a 50 m sliver at Khalifa City's east point. Two districts sharing ground would each claim the same
+     Overture footprints and draw them twice, and with the diorama now at true positions there is
+     no gap in the layout to hide it in.
+     ------------------------------------------------------------------------------------------ */
+
+  /* KHALIFA CITY. Villa compounds on a wide grid between the E10 and the airport road — low, green
+     and regular, the opposite of the towers everywhere else in this model, which is most of why it
+     is worth having. The frame follows the roads that actually bound it rather than a rectangle:
+     the E10 along the north, the airport approach east, Sheikh Zayed bin Sultan south and west.
+
+     THE NORTH EDGE STEPS DOWN AT 54.5645, and that step is Al Raha. Raha's frame dips to lat
+     24.4360 around longitude 54.568 — south of where a straight E10 edge would run — so a level
+     north edge crossed it and the two districts would have shared the canal strip's south bank.
+     West of 54.565 Raha does not exist and the edge goes back up. */
+  { id:'khalifa', name:'Khalifa City', bbox:[24.3930, 54.5380, 24.4470, 54.6110], centre:[24.4210, 54.5760],
+    noCoastline: true,
+    outlineLL: [
+      [54.5510,24.4400], [54.5620,24.4400], [54.5645,24.4330], [54.6050,24.4330],
+      [54.6055,24.4230], [54.6010,24.4020], [54.5680,24.3985], [54.5490,24.4180],
+    ] },
+
+  /* MASDAR CITY. Small and deliberately its own district rather than a corner of Khalifa City: it
+     is a single planned block about a kilometre square, with a street pattern and a massing that
+     look like nowhere else in the emirate. Kept tight so it reads as the enclave it is. */
+  { id:'masdar', name:'Masdar City', bbox:[24.4140, 54.6040, 24.4390, 54.6320], centre:[24.4270, 54.6180],
+    noCoastline: true,
+    outlineLL: [
+      [54.6090,24.4335], [54.6265,24.4335], [54.6265,24.4185], [54.6090,24.4185],
+    ] },
+
+  /* ZAYED CITY. The gap the brief called "the part missing after the Grand Mosque up to the dead
+     Raha area" — Rabdan, Officers City and the Capital District, the ground the Sheikh Zayed bridge
+     lands on. The west edge stops short of the Grand Mosque on purpose: the mosque sits inside Abu
+     Dhabi Island's own fetch box and is already built there, and two districts must not both claim
+     it. The north edge runs along the channel, so this frame does meet real coastline and the shore
+     will come from the survey rather than from the trace. */
+  { id:'zayed', name:'Zayed City', bbox:[24.3880, 54.4700, 24.4420, 54.5520], centre:[24.4160, 54.5100],
+    noCoastline: true,
+    outlineLL: [
+      [54.4780,24.4300], [54.5420,24.4360], [54.5420,24.4000],
+      [54.4880,24.3930], [54.4760,24.4080],
+    ] },
+
+  /* ZAYED INTERNATIONAL AIRPORT — THE TERMINAL, WITH THE RUNWAYS CUT SHORT ON PURPOSE.
+
+     The terminal is a landmark people know and arrive through, and it earns a place. The airfield
+     does not: the two runways are 4.1 km each on a 130/310 bearing, which at true positions would
+     lay six kilometres of tarmac across the corner of the diorama holding Khalifa City and Masdar,
+     and read as an aerodrome with a city attached rather than the reverse.
+
+     So the frame is drawn round Terminal A and its apron and lets the runways run out of it — about
+     2.6 by 2.1 km, which keeps a stub of each in view for what it is and drops the rest. The
+     runways are not shortened anywhere in the data; the frame just stops, exactly as Khalifa City's
+     stops at a road. This is a model, and a cropped runway reads as an airport where a complete one
+     would read as an airfield. */
+  { id:'airport', name:'Zayed International', bbox:[24.4260, 54.6300, 24.4600, 54.6720], centre:[24.4430, 54.6510],
+    noCoastline: true,
+    outlineLL: [
+      [54.6380,24.4520], [54.6640,24.4520], [54.6640,24.4330], [54.6380,24.4330],
+    ] },
 ];
+
+/* THE ORIGINS THIS BAKE MUST NOT MOVE. Read from the artefact already committed, so a re-bake
+   inherits every island's local origin instead of deriving a new one — see the extent block below
+   for what moving one costs. Missing file or missing island simply means "new", which is the
+   correct answer for a district being added for the first time. */
+/* TOP-LEVEL AWAIT AND A LOCAL IMPORT, because this file has no top-level `fs` on purpose — see the
+   note at loadOverture. The first version of this block used a bare `fs.readFileSync` inside a
+   try/catch, which is the exact failure that note already describes: ReferenceError at module load,
+   swallowed by the catch, PRIOR_EXTENTS silently {} and the pinning quietly doing nothing on every
+   island. A guard that fails open is worse than no guard, so a missing FILE returns {} — the honest
+   answer for a first bake — and anything else throws. */
+const PRIOR_EXTENTS = await (async () => {
+  const { readFile } = await import('node:fs/promises');
+  let raw;
+  try { raw = await readFile(new URL('../data/index.json', import.meta.url), 'utf8'); }
+  catch (e){
+    if (e.code === 'ENOENT'){
+      process.stderr.write('  no data/index.json — every island is new, origins from their outlines\n');
+      return {};
+    }
+    throw e;
+  }
+  const out = {};
+  for (const i of (JSON.parse(raw).islands || [])) if (i.extent) out[i.id] = i.extent;
+  process.stderr.write(`  origins held from data/index.json: ${Object.keys(out).join(', ') || 'none'}\n`);
+  return out;
+})();
 
 /* THE LANDMARKS, LOOKED UP BY NAME RATHER THAN TYPED AS COORDINATES.
 
@@ -1651,11 +1748,50 @@ async function bakeIsland(isle, proj){
     if (x < x0) x0 = x; if (x > x1) x1 = x;
     if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  const extent = outlineRings.length
-    ? { x0:rd1(x0), y0:rd1(y0), x1:rd1(x1), y1:rd1(y1),
-        w:rd1(x1 - x0), d:rd1(y1 - y0),
-        cx:rd1((x0 + x1) / 2), cy:rd1((y0 + y1) / 2) }
-    : null;
+  /* cx/cy IS THE LOCAL ORIGIN, AND A RE-BAKE MUST NOT MOVE IT.
+
+     islandOrigin() hands this pair to every converter in w2h-basemap.js, so it is the zero that
+     the outline, the roads, the footprints, the venue pins AND every hand-authored coordinate in
+     w2h-city.js and w2h-world.js are measured from — KIT_ZONES, the LM tables, every kit call site.
+     Recompute it as the centre of a new outline and all of that moves, off the island and into the
+     water, with nothing thrown and the outline itself looking perfect in plan.
+
+     That is not hypothetical. Redrawing Al Maryah's ring by hand shifted its centre 211 m — 27
+     units — and took the Galleria, Cleveland Clinic, Four Seasons, Rosewood, the west-quay
+     promenade and all six of that island's KIT_ZONES boxes with it. It was caught by rendering the
+     island, which is the only thing that would have caught it.
+
+     So an island that already has an origin keeps it, and only the SPAN moves. w/d are then
+     measured from the pinned origin rather than across the ring, so the normalised shape still
+     lands inside +/-1 with the origin off-centre; x0..x1/y0..y1 stay the outline's true bounds,
+     because locateReal and the app's ISLAND_EXTENTS use them as a hit box and want the real thing.
+
+     A NEW island has no origin to keep and takes the centre of its own outline, as every island
+     here originally did. Al Raha reached the same end by a different road — its outlineLL frame is
+     hand-drawn and therefore already fixed across re-bakes — and this makes that property general
+     instead of a side effect of how one district happens to be defined.
+
+     To deliberately re-centre an island: delete its entry from data/index.json and re-bake, then
+     migrate that island's hand-authored coordinates by the delta. */
+  const priorExtent = PRIOR_EXTENTS[isle.id];
+  let extent = null;
+  if (outlineRings.length){
+    const pinned = priorExtent && Number.isFinite(priorExtent.cx) && Number.isFinite(priorExtent.cy);
+    const cx = pinned ? priorExtent.cx : rd1((x0 + x1) / 2);
+    const cy = pinned ? priorExtent.cy : rd1((y0 + y1) / 2);
+    const pts = clipPoly || outlineRings.flat();
+    const w = pinned ? rd1(2 * Math.max(...pts.map(p => Math.abs(p[0] - cx)))) : rd1(x1 - x0);
+    const d = pinned ? rd1(2 * Math.max(...pts.map(p => Math.abs(p[1] - cy)))) : rd1(y1 - y0);
+    extent = { x0:rd1(x0), y0:rd1(y0), x1:rd1(x1), y1:rd1(y1), w, d, cx, cy };
+    if (pinned){
+      const drift = Math.hypot(rd1((x0+x1)/2) - cx, rd1((y0+y1)/2) - cy);
+      process.stderr.write(`  ${isle.id}: origin pinned at ${cx}, ${cy}` +
+        (drift > 1 ? ` — the new outline's own centre is ${Math.round(drift)} m away, and that much ` +
+                     `hand-placed work stayed where it was authored instead of moving\n` : `\n`));
+    } else {
+      process.stderr.write(`  ${isle.id}: NEW island, origin set from its own outline at ${cx}, ${cy}\n`);
+    }
+  }
 
   process.stderr.write(`  ${isle.id}: outline ${outlinePts}pt in ${outlineRings.length} ring(s), roads ${roads.length}, ` +
                        `buildings ${buildings.length} (${buildings.filter(b => b.h).length} with height), ` +
