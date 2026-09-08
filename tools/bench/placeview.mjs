@@ -23,7 +23,7 @@ page.on('console',m=>{ if(m.type()==='error'||/fail|Error|error/.test(m.text()))
 const ID = process.argv[2] || 'yas'; const LABEL = process.argv[3]; const DIST = +process.argv[4] || 260; const ELEV = +process.argv[5] || 120; const ANG = +process.argv[6] || 2.4;
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=${process.env.VIEW||'day'}&nowarm=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:200000}).catch(()=>console.log('not all built'));
 await page.evaluate(()=>{ const s=window.W2H.DISTRICTS[0].group.parent.parent; (function w(o){ if(o.isMesh&&o.userData&&o.userData.warmHidden){o.userData.warmHidden=false;o.visible=true;} (o.children||[]).forEach(w); })(s); });
 await page.evaluate(i=>window.W2H.go(i), ID); await page.waitForTimeout(1500);
 // snap the camera to its goal so the shot is the settled one

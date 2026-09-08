@@ -21,7 +21,7 @@ const page=await browser.newPage({viewport:{width:900,height:1900}});
 page.on('pageerror',e=>console.log('PAGEERROR', String(e.stack||e.message).split('\n').slice(0,4).join(' | ')));
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=day&nowarm=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:200000}).catch(()=>console.log('not all built'));
 const ray = await page.evaluate(()=>{
   const W=window.W2H, THREE=W.THREE||null; const res=[];
   const scene=W.scene; scene.updateMatrixWorld(true);

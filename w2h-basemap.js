@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v25';
+export const BUILD = 'basemap v26';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -583,6 +583,16 @@ export function buildingsUnits(island, origin){
        fall through to the height rule unchanged. */
     v:  b.v || 0,
     vk: b.vk || null,
+    /* THE OSM ID, CARRIED SO A KIT CAN CLAIM ONE BUILDING BY NAME.
+
+       KIT_ZONES excludes a hand-built landmark's ground with a rectangle, which is the right tool
+       when the landmark is a rectangle. Terminal A is not: its X-plan bounding box is 1,342 m
+       square and holds 42 of the airport's 158 footprints, of which exactly ONE is the terminal.
+       Suppressing it by box would delete forty-one buildings that are genuinely there — the fire
+       station, the hangars, the fuel farm — to remove one that is drawn twice.
+
+       An id costs four bytes on the payload and turns a 1.8 km2 guess into an exact statement. */
+    osm: b.osm != null ? b.osm : null,
     /* THE REAL FOOTPRINT, WHERE THE BAKE HAS ONE. An oriented box is the right reduction for
        twenty-six thousand background buildings and the wrong one for the handful you can walk up
        to: the Hilton on Yas measures 36,706 m² as a box and 19,672 m² as a ring, and the missing

@@ -23,7 +23,7 @@ page.on('console',m=>{ if(m.type()==='error'||/fail|Error|error/.test(m.text()))
 const errs=[]; page.on('pageerror',e=>errs.push(String(e.message).slice(0,200)));
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=day&nowarm=1&cam=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:200000}).catch(()=>console.log('not all built'));
 const members = [1,2,3,4].map(i=>({venueId:'m'+i, name:'Shop '+i, category:'Cafe', rating:4.2}));
 const pts = [
   {id:'yas', x:18538, z:-396, dest:'Yas Mall', name:'Yas Mall', members},

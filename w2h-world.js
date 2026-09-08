@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v333';
+export const BUILD = 'world v335';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2549,7 +2549,18 @@ function groundPlan(d, cells, blocks){
     nx > b.x0 - q && nx < b.x1 + q && ny > b.y0 - q && ny < b.y1 + q);
 
   const parks = [];
-  for (let nx = -0.95; nx <= 0.95; nx += q){
+  /* NOT ON AN AIRFIELD. The filler exists to green ground the generator could not describe, and on
+     every other island that is the right guess — undescribed ground in Abu Dhabi is usually
+     irrigated. Zayed International is the one district where it is exactly wrong: the undescribed
+     ground there is apron, taxiway and graded sand, and the filler was turning the whole island
+     into a lawn with palm trees scattered over it, which is what the first render of the terminal
+     showed underneath a perfectly good building.
+
+     A flag rather than a vacancy entry, deliberately. DISTRICT_VACANCY has an airport rule that
+     says exactly this — 8 per cent built, everything outside the concourse held clear — but every
+     one of its five call sites is gated on VAC_ON, which is only true when the URL carries ?vac.
+     The table is inert in the app and in every bench render, so it cannot be what stops this. */
+  for (let nx = -0.95; nx <= 0.95 && !d.noLawn; nx += q){
     for (let ny = -0.95; ny <= 0.95; ny += q){
       if (occ.has(Math.round(nx/q) + ',' + Math.round(ny/q))) continue;
       /* PLATTED GROUND IS NOT PARKLAND, and this line is why the vacancy mask can ship at all.
@@ -5424,8 +5435,9 @@ const DISTRICTS = [
     cam: { angle:210, dist:1500, elev:680, tx:0, tz:0 },
     seaAngle: Math.PI,
     lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:4.0 } ],   // 31 m — a terminal is wide, not tall
+    noLawn:true,                                         // an apron is not a lawn — see groundPlanFor
     fillAll:true, built:false, coreN:[0, 0], places:[
-      { label:'Terminal A', x:0, z:0, h:5, r:34 },
+      { label:'Terminal A', x:-23.64, z:-18.28, h:6.8, r:46 },
     ] },
 ];
 
@@ -8233,6 +8245,36 @@ const LM_SAADIYAT = {
   nhm:        { x:-412.6, z:248.2 },   // the 203 x 151 m baked footprint on the south peninsula; Google's pin is 9 units off it (world v312)
   teamlab:    { x:-393.1, z:264.1 },   // the 149 x 115 m footprint beside it, where the satellite has the museum's pale shell (world v312)
 };
+/* ZAYED INTERNATIONAL: TERMINAL A, ITS APRON AND A SHORT RUNWAY.
+
+   The airport district baked 158 real footprints, and one of them is the whole point of the
+   island — OSM relation -20328079, Terminal A, 1,191 x 1,082 m. As a payload extrusion it was a
+   dark comb on a green field. kit.zayedTerminal replaces it with the building the owner's
+   reference frames show: the undulating shell, the glass hung off it, four piers, and an aircraft
+   on every one of the 54 stands the survey's own gate notches enumerate.
+
+   BOTH ZONES NAME A BUILDING RATHER THAN FENCING GROUND, which is new and is the only honest way
+   to do it here. The terminal's bounding box holds 42 of the island's 158 footprints and exactly
+   one of them is the terminal; a rectangle would take the fire station, the hangars and the fuel
+   farm with it. The second id is the surveyed car park, which arrives as a flat 6.4 m slab and is
+   rebuilt as the five-level deck that stands there. */
+const airport = DISTRICTS.find(d => d.id === 'airport');
+if (airport){
+  KIT_ZONES[airport.id] = [
+    { osm: -20328079 },     // Terminal A — rebuilt by kit.zayedTerminal
+    { osm: 1233647932 },    // the 280 x 175 m car park — rebuilt as a deck by the same kit
+  ];
+  /* The terminal's own origin in island units: its surveyed centre (22609.1, -4421.5) against the
+     island origin (22793.5, -4564.1), over M_PER_UNIT, north flipped — the same conversion every
+     other coordinate on this island goes through. Written out rather than eyeballed because the
+     kit's whole geometry hangs off this one pair. */
+  if (!NO_KIT && kit.zayedTerminal){
+    const t = kit.zayedTerminal(-23.64, -18.28);
+    t.position.y = GROUND;
+    airport.detail.add(t);
+  }
+}
+
 KIT_ZONES[saadiyat.id] = [
   { x0:-497, x1:-460, z0:158, z1:187 },   // Louvre platform, 260 x 210 m
   { x0:-388, x1:-355, z0:160, z1:189 },   // Zayed National Museum podium and lagoon
@@ -9492,6 +9534,11 @@ function footprintsFor(d, list){
     if (zones.length){
       let blocked = false;
       for (const z of zones){
+        /* A ZONE MAY NAME ONE BUILDING INSTEAD OF FENCING GROUND. Every zone in this file is a
+           rectangle because every landmark that needed one was compact enough for a rectangle to
+           be honest about. Terminal A is not: see the note on `osm` in w2h-basemap.js. A zone
+           carrying an osm id claims that one footprint and no ground at all. */
+        if (z.osm != null){ if (b.osm === z.osm){ blocked = true; break; } continue; }
         if (b.x >= z.x0 && b.x <= z.x1 && b.z >= z.z0 && b.z <= z.z1){ blocked = true; break; }
       }
       if (blocked){ zoned++; continue; }

@@ -23,7 +23,7 @@ page.on('console',m=>{ if(m.type()==='error'||/fail|Error|error/.test(m.text()))
 const errs=[]; page.on('pageerror',e=>errs.push(String(e.message).slice(0,200)));
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=day&nowarm=1&cam=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:200000}).catch(()=>console.log('not all built'));
 // on-model: Yas Mall's landmark (18978, -528); off-model: Khalifa City (24.42 N, 54.60 E) clamped to Yas's south edge
 await page.evaluate(()=>window.postMessage({w2h:true,type:"setHere",id:"yas",x:18978,z:-528,off:false},"*"));
 await page.waitForTimeout(6000);

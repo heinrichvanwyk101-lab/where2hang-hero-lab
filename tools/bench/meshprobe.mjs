@@ -28,7 +28,7 @@ page.on('pageerror',e=>console.log('PAGEERROR', String(e.message).slice(0,200)))
 const ID = process.argv[2] || 'yas', UX = +process.argv[3], UZ = +process.argv[4], RAD = +process.argv[5] || 60;
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=day&nowarm=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:200000}).catch(()=>console.log('not all built'));
 const out = await page.evaluate(([id,ux,uz,rad])=>{
   const d = window.W2H.DISTRICTS.find(x=>x.id===id);
   const s = d.dispScale||1, c = Math.cos(d.rot), n = Math.sin(d.rot);

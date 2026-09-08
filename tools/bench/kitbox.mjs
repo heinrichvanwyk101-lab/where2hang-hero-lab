@@ -19,7 +19,7 @@ page.on('pageerror',e=>console.log('PAGEERROR', String(e.stack||e.message).split
 const ID = process.argv[2] || 'yas'; const NAMES = process.argv.slice(3);
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=day&nowarm=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:200000}).catch(()=>console.log('not all built'));
 const out = await page.evaluate(async ([id, names])=>{
   const dd=window.W2H.DISTRICTS.find(x=>x.id===id); const placesSeen=(dd.places||[]).filter(p=>/Ferrari|Yas Mall|Waterworld/.test(p.label)).map(p=>({label:p.label,x:p.x,z:p.z}));
   const THREE = await import('three');

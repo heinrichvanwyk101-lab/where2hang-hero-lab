@@ -13,12 +13,14 @@
    make the skyline reshuffle depending on which file happened to load first.
    ============================================================================================= */
 import * as THREE from 'three';
+/* Generated from the airport bake by tools/terminal-a-trace.mjs — see zayedTerminal below. */
+import { TERM_ENVELOPE, TERM_APRON, TERM_CORE, TERM_STANDS } from './w2h-terminal-a.js';
 
 /* BUILD STAMP. Shown in the #debug overlay alongside the stamps from the other three files.
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v170';
+export const BUILD = 'city v172';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6785,6 +6787,245 @@ function maryahPromenade(){
   if (typeof kitPalms === 'function') kitPalms(g, palms, 0.75);
   return g;
 }
+/* ZAYED INTERNATIONAL, TERMINAL A — BUILT ON THE SURVEY, NOT BESIDE IT.
+
+   The bake already carried this building: OSM relation -20328079, a 157-vertex ring 1191 x 1082 m
+   across, 230,726 m2, tagged 53 m tall. Extruded like any other footprint it rendered as a dark
+   comb — the X-plan legible from the air, every one of its fifty-odd gate teeth drawn as a 53 m
+   wall, no roof, no glass, nothing that says airport. The whole island read as a green field with
+   a brown starfish on it.
+
+   Everything structural here comes out of tools/terminal-a-trace.mjs, which reads that same ring
+   and separates it into the three things a terminal actually is (see w2h-terminal-a.js). Nothing
+   in this function places a pier, a stand or an apron edge by eye; what is authored is the part no
+   survey records — how high, what colour, and the shape of the roof.
+
+   THE ROOF IS THE BUILDING. In every photograph of this terminal the identity is one continuous
+   undulating white shell over the central processor, with the glass running full height underneath
+   it and dipping where the shell dips. So the shell is built first, as a height field, and the
+   curtain wall is hung FROM it: the glass's top edge is the roof's underside, sampled at the same
+   points. Model them independently and they disagree by a couple of metres somewhere around the
+   ring, which reads as a gap you can see daylight through.
+
+   The four piers are ordinary by comparison and are meant to be: a flat metal roof at 20 m, so the
+   shell is the only thing on the island with a curve in it. */
+function zayedTerminal(x0, z0){
+  const g = new THREE.Group(), M = M_PER_U;
+  /* ROT 0, DELIBERATELY. The bake's note on `p` is explicit that a footprint ring already carries
+     its own orientation and that anything drawing it must not also apply the box's `rot`. The
+     trace inherits that, so kit metres go straight to island units and the terminal lands on the
+     footprint it was measured from. */
+  const at = (ax, az) => [x0 + ax / M, z0 + az / M];
+
+  const shell = saadKitMat(0xBFC0BC, 0xF2F1EC, 0.42, 0.18, 0xFFF4E2, 0.07, 0.50);
+  const shellU= saadKitMat(0x8E8F8B, 0xCFCEC8, 0.60, 0.05, 0xFFE9C8, 0.04, 0.45);
+  const glass = kitGlass(0x2C4150, 0xBFD6E4, 0.22, 0.42);
+  const deck  = saadKitMat(0x6E6E69, 0xA9A9A2, 0.85, 0.02);
+  const conc  = saadKitMat(0x77746C, 0xB4B0A6, 0.92, 0);   // apron
+  const tar   = saadKitMat(0x3A3A38, 0x5C5B57, 0.95, 0);   // runway
+  const paint = saadKitMat(0xBDBDB4, 0xF4F3EC, 0.8, 0, 0xFFFFFF, 0.10, 0.7);
+  const body  = saadKitMat(0xC6C7C4, 0xF6F6F4, 0.4, 0.10, 0xFFF2DC, 0.05, 0.55);
+  const livery= saadKitMat(0x7A5B32, 0xC69A54, 0.5, 0.15);
+
+  const box = (ax, az, w, d, h, mat, y0, yaw) => {
+    const [px, pz] = at(ax, az);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat);
+    m.position.set(px, ((y0 || 0) + h / 2) / M, pz);
+    if (yaw) m.rotation.y = yaw;
+    g.add(m); return m;
+  };
+  /* A THREE.Shape is built in XY and ExtrudeGeometry then takes rotateX(-PI/2), which sends
+     (u, v, 0) to (u, 0, -v). at() sends kit az to +z. So the shape must be fed -az or the whole
+     terminal comes out mirrored about its long axis while the aircraft, placed through at(), stay
+     correct — the exact trap yasWaterworld's ground hit and records. */
+  const ringShape = (ring) => {
+    const sh = new THREE.Shape();
+    ring.forEach(([ax, az], i) => { const p = [ax / M, -az / M];
+      i ? sh.lineTo(p[0], p[1]) : sh.moveTo(p[0], p[1]); });
+    sh.closePath(); return sh;
+  };
+  const pad = (ring, h, y, mat) => {
+    const geo = new THREE.ExtrudeGeometry(ringShape(ring), { depth: h / M, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); geo.translate(x0, y / M, z0);
+    const m = new THREE.Mesh(geo, mat); g.add(m); return m;
+  };
+
+  /* ---- APRON AND PIERS ---------------------------------------------------------------------- */
+  pad(TERM_APRON, 0.9, 0.15, conc);
+  const piers = pad(TERM_ENVELOPE, 20, 0, glass);
+  pad(TERM_ENVELOPE, 2.4, 20, shell);              // the pier roof: flat, so the shell reads as the only curve
+
+  /* ---- THE SHELL ---------------------------------------------------------------------------- */
+  const CN = TERM_CORE.length;
+  let ccx = 0, ccz = 0; for (const p of TERM_CORE){ ccx += p[0]; ccz += p[1]; }
+  ccx /= CN; ccz /= CN;
+  const ROOF_Y = 45, WAVE_A = 14, SAG = 12, PER = 165, PH = 0.5, OVER = 1.13;
+  /* The height field. One directional wave across the plan, plus a quadratic droop toward the rim
+     so the shell settles onto its supports instead of ending in mid-air. s is the vertex's radial
+     fraction, which the fan below already knows, so nothing has to be measured back out of the
+     geometry. Centre runs 31-59 m and the rim 19-47, against the 53 m the survey tags — the high
+     points of the shell are about the building's stated height and the dips are the dips.
+
+     THE FIRST PASS WAS TOO TIMID TO SEE. At a 9 m amplitude over a 220 m period the shell rendered
+     as a smooth white blob from the district camera — technically a wave, visually a dome, and the
+     one thing every photograph of this terminal is about was the thing you could not make out. 14
+     over 165 puts two full humps across the 326 m processor instead of one and a half, which is
+     what the references show, and the overhang goes to 13 per cent so the rim throws a shadow line
+     the eye can find the roof's edge by. */
+  const roofY = (px, pz, s) =>
+    ROOF_Y + WAVE_A * Math.sin((px * 0.94 - pz * 0.34) / PER * Math.PI * 2 + PH) - SAG * s * s;
+
+  /* A fan from the centroid: NR rings of the core outline scaled 0 to OVER. The boundary is
+     therefore EXACT at the rim — a square grid clipped to the ring would stair-step the one edge
+     on this island anybody will look at — and the interior gets enough subdivision for the wave to
+     be a curve rather than a crease. The core is the fat middle of the plan by construction, so it
+     is star-shaped about its own centroid and the fan cannot fold over itself. */
+  const NR = 9, RES = 4;                            // RES: extra points per outline segment
+  const ring = [];
+  for (let i = 0; i < CN; i++){
+    const a = TERM_CORE[i], b = TERM_CORE[(i + 1) % CN];
+    for (let k = 0; k < RES; k++)
+      ring.push([a[0] + (b[0] - a[0]) * k / RES, a[1] + (b[1] - a[1]) * k / RES]);
+  }
+  const RN = ring.length;
+  const pos = [], idx = [];
+  for (let j = 0; j <= NR; j++){
+    const s = j / NR, k = s * OVER;
+    for (let i = 0; i < RN; i++){
+      const px = ccx + (ring[i][0] - ccx) * k, pz = ccz + (ring[i][1] - ccz) * k;
+      const [wx, wz] = at(px, pz);
+      pos.push(wx, roofY(px, pz, s) / M, wz);
+    }
+  }
+  for (let j = 0; j < NR; j++) for (let i = 0; i < RN; i++){
+    const a = j * RN + i, b = j * RN + (i + 1) % RN, c = (j + 1) * RN + i, d = (j + 1) * RN + (i + 1) % RN;
+    idx.push(a, c, b, b, c, d);
+  }
+  const shellGeo = new THREE.BufferGeometry();
+  shellGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  shellGeo.setIndex(idx); shellGeo.computeVertexNormals();
+  const shellMesh = new THREE.Mesh(shellGeo, shell);
+  shellMesh.userData.hero = shellMesh.userData.kitName = 'zayedTerminal';
+  g.add(shellMesh);
+  /* The soffit, 1.6 m under the same field and darker. Without it the shell is a single surface
+     and every view from below the rim — which at this camera is most of them — sees the lit top
+     face through it and the roof reads as paper. */
+  const under = shellGeo.clone();
+  const up = under.attributes.position;
+  for (let v = 0; v < up.count; v++) up.setY(v, up.getY(v) - 1.6 / M);
+  under.computeVertexNormals();
+  const um = new THREE.Mesh(under, shellU); um.material.side = THREE.BackSide; g.add(um);
+
+  /* ---- THE CURTAIN WALL, HUNG FROM THE SHELL ------------------------------------------------ */
+  /* Top edge sampled from the same height field at the same bearings, 3 m under the rim, and the
+     plan pulled in 3 per cent so the glass leans back under the overhang the way the photographs
+     show. Sampled, not re-derived: the two surfaces cannot drift apart. */
+  const gp = [], gi = [];
+  for (let i = 0; i < RN; i++){
+    const [bx, bz] = ring[i];
+    const [wx, wz] = at(bx, bz);
+    const tx = ccx + (bx - ccx) * 0.97, tz = ccz + (bz - ccz) * 0.97;
+    const [ux, uz] = at(tx, tz);
+    gp.push(wx, 0.15 / M, wz);
+    gp.push(ux, (roofY(tx, tz, 0.97) - 3) / M, uz);
+  }
+  for (let i = 0; i < RN; i++){
+    const a = i * 2, b = i * 2 + 1, c = ((i + 1) % RN) * 2, d = ((i + 1) % RN) * 2 + 1;
+    gi.push(a, b, c, c, b, d);
+  }
+  const gg = new THREE.BufferGeometry();
+  gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
+  gg.setIndex(gi); gg.computeVertexNormals();
+  const gm = new THREE.Mesh(gg, glass); gm.material.side = THREE.DoubleSide; g.add(gm);
+
+  /* ---- AIRCRAFT, ONE PER SURVEYED STAND ----------------------------------------------------- */
+  /* Four InstancedMeshes rather than 54 groups of four: the parts are identical, and 216 draw
+     calls for background dressing is the sort of thing that shows up on a phone as a frame rate
+     rather than as a picture. Each stand's `a` is the outward bearing of the notch it came from,
+     so the nose is turned back down it — a nose-in stand, which is what every one of these is. */
+  const N = TERM_STANDS.length;
+  const parts = [
+    [new THREE.CylinderGeometry(2.0 / M, 1.5 / M, 40 / M, 8), body,   [0, 3.6, 0],  'x'],
+    [new THREE.BoxGeometry(6 / M, 0.7 / M, 36 / M),           body,   [-2, 3.0, 0], null],
+    [new THREE.BoxGeometry(4 / M, 0.6 / M, 13 / M),           body,   [-16, 3.4, 0],null],
+    [new THREE.BoxGeometry(7 / M, 8 / M, 0.8 / M),            livery, [-17, 7.5, 0],null],
+  ];
+  const dummy = new THREE.Object3D();
+  for (const [geo, mat, off, axis] of parts){
+    if (axis === 'x') geo.rotateZ(Math.PI / 2);
+    const im = new THREE.InstancedMesh(geo, mat, N);
+    TERM_STANDS.forEach((s, i) => {
+      const yaw = -(s.a + Math.PI);
+      const ca = Math.cos(yaw), sa = Math.sin(yaw);
+      const [wx, wz] = at(s.x + off[0] * ca - 0 * sa, s.z - off[0] * sa - 0 * ca);
+      dummy.position.set(wx, off[1] / M, wz);
+      dummy.rotation.set(0, yaw, 0);
+      dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
+    });
+    im.instanceMatrix.needsUpdate = true; g.add(im);
+  }
+  /* Jet bridges: one box per stand, from the pier face out to the forward door. */
+  const bridge = new THREE.InstancedMesh(new THREE.BoxGeometry(26 / M, 3.4 / M, 3.6 / M), deck, N);
+  TERM_STANDS.forEach((s, i) => {
+    const yaw = -(s.a + Math.PI);
+    const ca = Math.cos(yaw), sa = Math.sin(yaw);
+    const [wx, wz] = at(s.x + 30 * ca, s.z - 30 * sa);
+    dummy.position.set(wx, 8.5 / M, wz); dummy.rotation.set(0, yaw, 0);
+    dummy.updateMatrix(); bridge.setMatrixAt(i, dummy.matrix);
+  });
+  bridge.instanceMatrix.needsUpdate = true; g.add(bridge);
+
+  /* ---- THE RUNWAY, SHORT ON PURPOSE --------------------------------------------------------- */
+  /* The real 13/31 pair is 4,100 m; this island is 2,229 m across, so a runway at true length is
+     not a feature of the model, it IS the model. 1,120 m on the true 131-degree bearing. It reads
+     as a runway from the air and leaves the terminal the biggest thing on the island, which is the
+     right way round.
+
+     PLACED AGAINST AN ELLIPSE INSCRIBED IN THE ISLAND, NOT AGAINST THE ISLAND. The airport's baked
+     outline is still a four-point rectangle, and the coastline generator rounds it — so a strip
+     that clears the outline by 20 m can be, and was, 59 m out over the beach at the corners. The
+     search that produced these numbers tested every quarter of the strip's width along its whole
+     length against the inscribed ellipse, which is strictly inside whatever the generator draws,
+     and kept 8 per cent of the semi-axis in hand. The graded shoulder came down from 270 m to 198
+     for the same reason: it is the shoulder that reaches the water first, never the tarmac. */
+  const RW_A = 0.7157, RL = 1120, RW = 60, RS_X = 250, RS_Z = -470;
+  const rc = [RS_X + Math.cos(RW_A) * RL / 2, RS_Z + Math.sin(RW_A) * RL / 2];
+  box(rc[0], rc[1], RL, RW * 3.3, 0.5, conc, 0.2, -RW_A);      // the graded strip
+  box(rc[0], rc[1], RL, RW, 0.4, tar, 0.7, -RW_A);
+  for (let i = -7; i <= 7; i++){
+    const tt = i * 70;
+    box(rc[0] + Math.cos(RW_A) * tt, rc[1] + Math.sin(RW_A) * tt, 30, 1.6, 0.1, paint, 1.1, -RW_A);
+  }
+  for (const e of [-1, 1]) for (let k = -3; k <= 3; k++)
+    box(rc[0] + Math.cos(RW_A) * (RL / 2 - 40) * e - Math.sin(RW_A) * k * 7,
+        rc[1] + Math.sin(RW_A) * (RL / 2 - 40) * e + Math.cos(RW_A) * k * 7,
+        44, 2.6, 0.1, paint, 1.1, -RW_A);
+  /* Taxiway back to the apron, so the runway is joined to the terminal rather than parked beside
+     it. Straight: at this scale a fillet is three more boxes nobody will resolve. */
+  box(RS_X + 205, RS_Z + 40, 300, 26, 0.4, tar, 0.7, -RW_A - 0.9);
+
+  /* ---- LANDSIDE: THE DECK AND THE LOOP ------------------------------------------------------ */
+  /* The car park is where the bake says it is — OSM 1233647932, a 280 x 175 m parking polygon 455 m
+     west and 287 m north of the terminal centre — but it comes through the payload as a 6.4 m slab,
+     and the reference is a five-level deck with the approach road curling round it. Five slabs on
+     columns is that, for eleven boxes. */
+  const CPX = -455, CPZ = -287;
+  for (let l = 0; l < 5; l++) box(CPX, CPZ, 280, 175, 0.9, deck, 3.4 * l + 0.4);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1])
+    box(CPX + sx * 132, CPZ + sz * 80, 12, 12, 17.5, deck, 0);
+  box(CPX, CPZ, 280, 175, 0.5, paint, 17.5);
+  /* The elevated loop in front of the doors. An arc of chords rather than a curve: sixteen boxes
+     round a 330 m radius centred on the processor, sweeping the landside quadrant the deck sits
+     in, on piers. */
+  for (let i = 0; i < 16; i++){
+    const th = -2.55 + i * 0.085;
+    const rx = ccx + Math.cos(th) * 330, rz = ccz + Math.sin(th) * 330;
+    box(rx, rz, 46, 16, 1.2, deck, 9.5, -th + Math.PI / 2);
+    if (i % 3 === 0) box(rx, rz, 4, 4, 9.5, deck, 0);
+  }
+  return g;
+}
+
 return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          etihadTowers, emiratesPalace, qasrAlWatan, marinaMall, fairmontMarina, adnocHQ, grandMosque, ferrariWorld, yasMall, etihadArena, yasBayPier,
          hiltonYasBay, cafeDelMar, yasBayJetty, boxTower, setbackTower, slabTower, taperTower, cityRow, lowRise, aldarHQ, rahaMall,
@@ -6792,7 +7033,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          capitalGate, wAbuDhabi, gateTowers, shamsBoutik, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
          yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
-         maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb, shopfront, galleriaEast, maryahPromenade };
+         zayedTerminal, maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb, shopfront, galleriaEast, maryahPromenade };
 }
 
 
