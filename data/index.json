@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-08T16:02:28.262Z",
+ "generated": "2026-09-08T16:04:53.616Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -14089,42 +14089,94 @@
    "name": "Masdar City",
    "file": "isle-masdar.json",
    "extent": {
-    "x0": 19501.1,
-    "y0": -7336,
-    "x1": 20595.2,
-    "y1": -6011.3,
-    "w": 1094.1,
-    "d": 1324.7,
+    "x0": 19379.5,
+    "y0": -7525.2,
+    "x1": 20797.8,
+    "y1": -5766.3,
+    "w": 1499.2,
+    "d": 1814.5,
     "cx": 20048.2,
     "cy": -6673.6
    },
    "outline": [
     [
-     19501.1,
-     -6011.3
+     20493.9,
+     -7525.2
     ],
     [
      20595.2,
-     -6011.3
+     -7525.2
+    ],
+    [
+     20676.2,
+     -7436.1
     ],
     [
      20595.2,
-     -7336
+     -7035.4
     ],
     [
-     19501.1,
-     -7336
+     20747.2,
+     -6779.4
+    ],
+    [
+     20797.8,
+     -6178.2
+    ],
+    [
+     20412.9,
+     -5810.9
+    ],
+    [
+     20027.9,
+     -5766.3
+    ],
+    [
+     19551.8,
+     -5866.5
+    ],
+    [
+     19430.2,
+     -5989
+    ],
+    [
+     19379.5,
+     -6167.1
+    ],
+    [
+     19450.5,
+     -6556.7
+    ],
+    [
+     19592.3,
+     -6723.7
+    ],
+    [
+     19916.5,
+     -6801.6
+    ],
+    [
+     20007.6,
+     -6912.9
+    ],
+    [
+     20098.8,
+     -7324.8
+    ],
+    [
+     20412.9,
+     -7525.2
     ]
    ],
    "landmarks": {},
-   "bytes": 82658,
+   "bytes": 91479,
    "counts": {
-    "outline": 4,
+    "outline": 17,
     "landmasses": 1,
     "roads": 280,
-    "buildings": 212,
+    "buildings": 258,
     "inBox": 420,
-    "withHeight": 16,
+    "withHeight": 17,
     "parks": 5,
     "paths": 24,
     "plazas": 0,
