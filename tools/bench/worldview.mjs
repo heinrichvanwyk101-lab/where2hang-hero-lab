@@ -26,7 +26,11 @@ page.on('console',m=>{ if(m.type()==='error'||/fail|Error|error/.test(m.text()))
 const ID = process.argv[2] || 'yas'; const LABEL = process.argv[3]; const LX = +process.argv[7], LZ = +process.argv[8]; const DIST = +process.argv[4] || 260; const ELEV = +process.argv[5] || 120; const ANG = +process.argv[6] || 2.4;
 await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=${process.env.VIEW||'day'}&nowarm=1${process.env.GPX?'&gpx='+process.env.GPX:''}`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
-await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:200000}).catch(()=>console.log('not all built'));
+/* EVERY DISTRICT, NOT SIX — the same stale literal errcheck3 carried. With nine districts this
+   stopped waiting as soon as six were up and fired the screenshot while the last two were still
+   building, so Masdar City and the airport photographed as bare sand and looked like a data
+   failure. They were simply not finished. */
+await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:300000}).catch(()=>console.log('not all built'));
 await page.evaluate(()=>{ const s=window.W2H.DISTRICTS[0].group.parent.parent; (function w(o){ if(o.isMesh&&o.userData&&o.userData.warmHidden){o.userData.warmHidden=false;o.visible=true;} (o.children||[]).forEach(w); })(s); });
 await page.evaluate(()=>window.W2H.world());
 // snap the camera to its goal so the shot is the settled one
@@ -35,5 +39,7 @@ await page.waitForTimeout(6000);
 const info = await page.evaluate(()=>{ const g=window.W2H.goal; return { angle: Math.round(g.angle*180/Math.PI), dist: Math.round(g.dist), elev: Math.round(g.elev), target:[Math.round(g.target.x),Math.round(g.target.z)], isles: window.W2H.DISTRICTS.map(d=>[d.id, Math.round(d.x), Math.round(d.z), +(d.dispScale||1).toFixed(2)]) }; });
 console.log('world', JSON.stringify(info));
 if (process.env.ZOOM){ await page.evaluate(k=>{ const g=window.W2H.goal, c=window.W2H.cur; g.dist*=k; g.elev*=k; c.dist=g.dist; c.elev=g.elev; }, +process.env.ZOOM); }
-await page.waitForTimeout(7000); await page.screenshot({ timeout: 150000, path: OUT + 'world.png' });
+/* The footprints load asynchronously after a district reports built, so the settle has to
+   outlast that too, not just the build. */
+await page.waitForTimeout(14000); await page.screenshot({ timeout: 150000, path: OUT + 'world.png' });
 await browser.close(); server.close();
