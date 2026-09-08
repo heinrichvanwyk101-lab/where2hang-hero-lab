@@ -186,14 +186,22 @@ const ISLANDS = [
        district framed by a box stops on the box. This boundary is the district's own 6,297
        footprints rasterised at 150 m, closed by 2 cells to bridge the streets, largest blob, edge
        walked and then Chaikin-smoothed so it does not read as the staircase a raster trace is.
+
+       SECOND ITERATION, AND THE TRACE CONVERGES. The first pass was traced from the rectangle's
+       bake, which had 6,297 footprints; baking that frame pulled in 426 more at the edges, and
+       re-tracing from those reaches ground the first pass had no evidence for. Measured on venues
+       rather than on area, which is the point of these districts: 356 landed inside the original
+       rectangle, 384 inside the first trace, 410 inside this one. A third pass moves 1.
        The west edge is still hard at 54.4900: the built area runs on past Corniche's fetch box and
        the trace followed it, which would hand the Grand Mosque precinct to two districts at once. */
     outlineLL: [
-      [54.5092,24.3947], [54.5315,24.3968], [54.5411,24.3993],
-      [54.5453,24.4085], [54.5450,24.4240], [54.5439,24.4275],
-      [54.5372,24.4330], [54.5367,24.4357], [54.5292,24.4366],
-      [54.5117,24.4352], [54.4961,24.4311], [54.4952,24.4281],
-      [54.4910,24.4239], [54.4900,24.3937], [54.4996,24.3941],
+      [54.4992,24.3919], [54.5155,24.3929], [54.5262,24.3962],
+      [54.5387,24.3965], [54.5412,24.3979], [54.5417,24.4007],
+      [54.5472,24.4078], [54.5486,24.4181], [54.5464,24.4247],
+      [54.5390,24.4312], [54.5368,24.4365], [54.5287,24.4376],
+      [54.5099,24.4357], [54.5020,24.4342], [54.4944,24.4311],
+      [54.4947,24.4281], [54.4920,24.4261], [54.4903,24.4196],
+      [54.4900,24.3924], [54.4946,24.3920],
     ] },
 
   /* ZAYED INTERNATIONAL AIRPORT — THE TERMINAL, WITH THE RUNWAYS CUT SHORT ON PURPOSE.

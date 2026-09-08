@@ -30,7 +30,26 @@ const idx  = JSON.parse(fs.readFileSync(new URL('../data/index.json', import.met
    on disk keeps the bake's own frame: x, y in emirate metres, w and d in metres. The first cut of
    this script read b.z and b.dp, got undefined, and rasterised 6,297 footprints into zero cells
    without complaining, because Math.floor(NaN) indexes nothing. */
-const pts = isle.buildings.map(b => [b.x, b.y]);
+let pts = isle.buildings.map(b => [b.x, b.y]);
+
+/* VENUES SEED THE RASTER TOO, AND LEAVING THEM OUT COST 43 OF THEM.
+
+   The whole reason these districts exist is to give venues a home, so a frame traced only from
+   building footprints is measuring the wrong thing: it drew Zayed City tight enough to exclude
+   The Boundary, the Athletics Club, Wave Bar and forty others that sit on graded parcels and
+   sports ground where Overture has no footprint to rasterise. They classified into the district
+   by its bounding box and then fell outside its outline, which means no pin at all — the exact
+   failure the district was added to fix.
+
+   W2H_SEEDS takes a JSON array of [x, y] in emirate metres and adds them to the raster before the
+   close, so the boundary covers where people actually go as well as where buildings stand. */
+if (process.env.W2H_SEEDS){
+  const seeds = JSON.parse(fs.readFileSync(process.env.W2H_SEEDS, 'utf8'));
+  const e2 = idx.islands.find(i => i.id === id).extent;
+  const near = seeds.filter(([x,y]) => x >= e2.x0-1500 && x <= e2.x1+1500 && y >= e2.y0-1500 && y <= e2.y1+1500);
+  pts = pts.concat(near);
+  process.stderr.write(`  ${near.length} venue seeds added to ${isle.buildings.length} footprints\n`);
+}
 if (!pts.length) throw new Error(id + ': no buildings to trace');
 
 const x0 = Math.min(...pts.map(p=>p[0])) - CELL*(DIL+2), x1 = Math.max(...pts.map(p=>p[0])) + CELL*(DIL+2);
