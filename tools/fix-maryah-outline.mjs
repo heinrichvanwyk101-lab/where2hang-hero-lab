@@ -59,15 +59,35 @@ const isl = JSON.parse(fs.readFileSync(new URL('../data/isle-maryah.json', impor
 const entry = idx.islands.find(v => v.id === 'maryah');
 const was = entry.extent;
 
+/* cx/cy ARE HELD AT THE BAKE'S ORIGINAL VALUES, AND THAT IS NOT A ROUNDING DECISION.
+
+   extent.cx/cy is the island's LOCAL ORIGIN — islandOrigin() hands it to every converter, so it is
+   the zero that the outline, the roads, the footprints, the venue pins AND every hand-authored
+   coordinate in w2h-city.js and w2h-world.js are measured from. Al Maryah's KIT_ZONES boxes, the
+   Galleria, Cleveland Clinic, Four Seasons, Rosewood and the west-quay promenade are all literals
+   in that frame.
+
+   The first version of this script recomputed cx/cy as the centre of the new ring. That moved the
+   origin 211 m — 27 units — and every one of those kits went with it, off the island and into the
+   water, while the outline itself looked perfect. A shape fix that silently relocates a season of
+   hand-placement is a worse bug than the shape it fixes.
+
+   So the origin is pinned and only the SPAN moves. w/d are measured from the pinned origin rather
+   than across the ring, so the normalised shape still lands inside +/-1 with the origin off-centre;
+   x0..x1/y0..y1 stay the ring's true bounds, because locateReal and the app's own ISLAND_EXTENTS
+   use them as a hit box and want the real thing. */
+const ORIGIN = { cx: -2952.2, cy: 1354 };
 const xs = ring.map(p=>p[0]), ys = ring.map(p=>p[1]);
 const ext = { x0:Math.min(...xs), x1:Math.max(...xs), y0:Math.min(...ys), y1:Math.max(...ys) };
-ext.cx = +((ext.x0+ext.x1)/2).toFixed(1); ext.cy = +((ext.y0+ext.y1)/2).toFixed(1);
-ext.w  = +(ext.x1-ext.x0).toFixed(1);     ext.d  = +(ext.y1-ext.y0).toFixed(1);
+ext.cx = ORIGIN.cx; ext.cy = ORIGIN.cy;
+ext.w = +(2 * Math.max(...xs.map(x=>Math.abs(x-ext.cx)))).toFixed(1);
+ext.d = +(2 * Math.max(...ys.map(y=>Math.abs(y-ext.cy)))).toFixed(1);
 
 console.log('outline ', (Array.isArray(entry.outline[0][0])?entry.outline[0]:entry.outline).length,
             '->', ring.length, 'vertices');
-console.log('size    ', Math.round(was.w)+' x '+Math.round(was.d)+' m  ->  '+ext.w+' x '+ext.d+' m',
-            '   (real island about 810 x 1220)');
+console.log('span    ', Math.round(was.w)+' x '+Math.round(was.d)+' m  ->  '+ext.w+' x '+ext.d+' m   (span about the pinned origin)');
+console.log('island  ', Math.round(ext.x1-ext.x0)+' x '+Math.round(ext.y1-ext.y0)+' m   (the real island is about 810 x 1220)');
+console.log('origin  ', 'cx '+ext.cx+' cy '+ext.cy+'  — unchanged, so every hand-placed kit stays put');
 console.log('lat     ', toLat(was.y0).toFixed(4)+'..'+toLat(was.y1).toFixed(4), '->',
             toLat(ext.y0).toFixed(4)+'..'+toLat(ext.y1).toFixed(4));
 console.log('lng     ', toLon(was.x0).toFixed(4)+'..'+toLon(was.x1).toFixed(4), '->',
