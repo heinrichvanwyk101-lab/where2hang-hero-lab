@@ -63,3 +63,31 @@ size. Only looking describes shape.
 Chromium instead: the boot check that gates every push (`errcheck3.mjs`), and per-building
 frames from the real scene (`kitview.mjs`, `placeview.mjs`, `coordview.mjs`). See
 `tools/bench/README.md` for setup, the conventions the kit relies on, and how sites are found.
+
+## The island layout tool (tools/island-move.html)
+
+Open it in a browser. It draws the six islands as their real baked coastlines, at the size
+`damping()` actually gives them, and lets you move, rotate and re-scale them — then hands back
+the `DIORAMA` table to paste into `w2h-basemap.js`. It touches nothing: it is a plan view, not
+the model.
+
+It reads the same three sources the world does, so it cannot drift from what it previews:
+`data/index.json` for the outlines and extents, `w2h-basemap.js` for `M_PER_UNIT`, `damping()`
+and the live `DIORAMA`, and the same `anchorWorld` arithmetic `world-nav.html` puts every venue
+pin through. Re-run `node tools/island-move-data.mjs` after a re-bake and paste the JSON over
+the `const DATA = …` literal at the top of its script block.
+
+Three things it measures that nothing else did:
+
+- **Water clearance**, coastline to coastline on the real outlines rather than bounding circles.
+  Circles overstate an irregular island's footprint badly — Corniche's circle is three times its
+  real area — and every earlier re-spacing of the diorama used them.
+- **Compass bearing** for all fifteen pairs, laid against true. The layout in the model today is
+  36° out on average and 89° out at worst.
+- **Whether an island fits where it really is.** Hold the damped sizes and slide to the map: the
+  answer for Al Maryah is no, and that is damping's bill, not a placement fault.
+
+`DIORAMA` is the only place island position lives. Everything on an island — the coastline, the
+surveyed roads, the Overture footprints, the hand-built kits, the props, the beach masks, the
+bridges, the venue pins and the place cameras — is authored about that island's own origin and
+carried by its group, so all of it moves with the two numbers this tool writes.
