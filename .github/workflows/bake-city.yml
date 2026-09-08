@@ -29,7 +29,7 @@ on:
         options: [probe, bake]
         default: probe
       island:
-        description: 'One island only (corniche, maryah, reem, saadiyat, yas, raha) — blank for all'
+        description: 'One district only (corniche, maryah, reem, saadiyat, yas, raha, khalifa, masdar, zayed, airport) — blank for all'
         required: false
         default: ''
       source:
@@ -91,7 +91,7 @@ jobs:
           duckdb -c "SELECT version();"
 
       # ------------------------------------------------------------------------------------
-      # ONE SCAN FOR ALL FIVE ISLANDS.
+      # ONE SCAN FOR EVERY DISTRICT.
       #
       # The union of the five fetch boxes, queried once, split in Node afterwards. Five separate
       # queries would be five scans of S3 over overlapping rows — Corniche's box already contains
@@ -152,7 +152,11 @@ jobs:
               FROM read_parquet(
                 's3://overturemaps-us-west-2/release/$REL/theme=buildings/type=building/*',
                 hive_partitioning=1)
-              WHERE bbox.xmin <= 54.6450 AND bbox.xmax >= 54.2800
+              -- The union of every district's fetch box. The east edge moved from 54.6450 to
+              -- 54.6800 for Zayed International and Masdar City: the airport frame reaches
+              -- 54.6640 and the old predicate stopped short of it, so the extract would have come
+              -- back plausible in size and silently missing the terminal.
+              WHERE bbox.xmin <= 54.6800 AND bbox.xmax >= 54.2800
                 AND bbox.ymin <= 24.5950 AND bbox.ymax >= 24.3800
             ) TO '$OUT' (FORMAT JSON);
           "
