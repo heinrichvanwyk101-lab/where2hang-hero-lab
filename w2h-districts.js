@@ -133,6 +133,27 @@ export const FP_TALLEST = {
   reem:     38,
   saadiyat:  8,
   yas:      14,
+  /* THE MAINLAND DISTRICTS, AND SETTING GEN_TALLEST FOR THEM WAS THE WRONG KNOB.
+
+     These three are almost entirely REAL Overture footprints with no height — 6,291 of Zayed
+     City's 6,297 carry none — so they are modelled here, in footprintsFor, and never touch
+     GEN_TALLEST at all. Capping the generated stock at 31 m and leaving these on
+     FP_TALLEST_DEFAULT put every one of them under a 187 m ceiling: Zayed City rendered as a
+     forest of thirty-storey slabs across Rabdan and the Al Qana waterfront, which is the exact
+     invented skyline the low GEN_TALLEST was meant to prevent. The note above this table says the
+     two are declared apart on purpose; this is what happens when only one of them is set.
+
+     Measured the same way as the generated ceilings, off each district's own height samples. */
+  /* AL RAHA WAS ALREADY IN THIS HOLE and nobody had noticed. Its GEN_TALLEST is 6 (47 m), set
+     from a measured p90 of 44.8 m, but it has never had an FP_TALLEST — so 389 of its 584
+     footprints, the ones Overture gives no height, have been modelled against the 187 m default
+     this whole time. Same number as its generated ceiling, for the same measurement. */
+  raha:      6,   //  47 m — measured p90 44.8 m on 195 samples, the best-sampled of the four
+  zayed:     6,   //  47 m — p90 12.8 m on six samples, hedged up for the Capital District's
+                  //         mid-rise; Al Qana itself is two and three storeys
+  masdar:    5,   //  39 m — measured p90 30 m, max 40 m, on 16 samples
+  airport:   4,   //  31 m — a terminal is wide, not tall, and the control tower is a landmark
+                  //         rather than a footprint the height model should be guessing at
 };
 export const FP_TALLEST_DEFAULT = 24;
 
@@ -255,6 +276,44 @@ export const DISTRICT_VACANCY = {
     zones: [
       (x, y) => y > 0.30,                      // Yas North
       (x, y) => y < -0.42 && x > -0.30,        // Yas Bay interior
+    ],
+  },
+
+  /* THE MAINLAND DISTRICTS, AND WITHOUT THESE THEY BUILD SOLID. vacantAt returns false for an
+     unlisted district — "unlisted island: unchanged" — which means 100 per cent of plots survive.
+     Zayed City generated 29,156 buildings on ground that carries 6,297 real ones and came out a
+     continuous wall of slabs with no ground visible between them. An island can get away with the
+     default because a coastline bounds it; a mainland patch cannot, because the frame is a box and
+     the generator fills every square metre of it. */
+
+  zayed: {
+    /* A corridor, not a city. Rabdan and the Capital District are built; between and south of
+       them are graded parcels, the bridge approaches and open desert, and the Al Qana waterfront
+       is a thin ribbon on the north edge with nothing behind it. */
+    builtRatio: 0.34, grain: 0.20, seed: 0x2A7E,
+    zones: [
+      (x, y) => y > 0.34,                       // the southern desert edge, toward Khalifa City
+      (x, y) => x > 0.30 && y > -0.10,          // graded parcels east of the Capital District
+    ],
+  },
+
+  masdar: {
+    /* Small, planned and largely finished, so the noise does most of the work. The south-east
+       quarter is still sand — the masterplan's unbuilt phases. */
+    builtRatio: 0.55, grain: 0.26, seed: 0x3D5A,
+    zones: [
+      (x, y) => x > 0.34 && y > 0.10,
+    ],
+  },
+
+  airport: {
+    /* AN AIRPORT IS MOSTLY GROUND. Apron, taxiway and runway are flat by definition, and the only
+       thing standing is the terminal and its piers. 8 per cent, with everything outside the
+       concourse held empty rather than left to the noise — a scattering of invented sheds across
+       an apron is the one thing that would give this away. */
+    builtRatio: 0.08, grain: 0.18, seed: 0x4A17,
+    zones: [
+      (x, y) => Math.hypot(x, y) > 0.42,
     ],
   },
 

@@ -5379,6 +5379,22 @@ const DISTRICTS = [
   { id:'zayed', name:'Zayed City', x:1584, z:761, r:30*ISLE_SCALE, rot:0, tint:0xC9B07A,
     cam: { angle:20, dist:2600, elev:1180, tx:-180, tz:-40 },
     seaAngle: 0,
+    /* A DISTRICT-WIDE lowRise BLOB, AND WITHOUT ONE THE HEIGHT MODEL IS UNCAPPED.
+
+       footprintsFor invents a height for an unmeasured footprint by resampling the SURVEYED stock
+       in its own area band. This district has six measured buildings, all 12.8 m or under, which is
+       below the eight-per-band minimum — so every band falls through to the cross-island pool, and
+       that pool's big bands are Corniche's towers. Rabdan and the Al Qana waterfront came out as a
+       field of thirty-storey slabs drawing their heights from Abu Dhabi Island.
+
+       FP_TALLEST does not stop it. The clamp is Math.min(h, cellCap(...)), and cellCap returns
+       INFINITY for a district with no lowRise zones — deliberately, so the ceiling is not applied
+       twice on islands that have one. A district with no zones therefore has no ceiling at all.
+       That is why Saadiyat caps at 50 m and this did not: Saadiyat has blobs.
+
+       So the ceiling is expressed the way the model expects it, as a zone. r0 covers the whole
+       district and r1 sits beyond it, so the blob is flat: one height everywhere, no falloff. */
+    lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:6.0 } ],   // 47 m — Zayed City
     fillAll:true, built:false, coreN:[-0.35, -0.2], places:[
       /* Hand-identified, like LM_RAHA's: the bake's landmark list has never been asked for these
          names, so pl.baked stays false and that is honest rather than a bug. */
@@ -5392,6 +5408,7 @@ const DISTRICTS = [
   { id:'masdar', name:'Masdar City', x:2174, z:542, r:12*ISLE_SCALE, rot:0, tint:0x7FA98F,
     cam: { angle:200, dist:1150, elev:520, tx:0, tz:0 },
     seaAngle: Math.PI,
+    lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:5.0 } ],   // 39 m — Masdar, measured p90 30 m
     fillAll:true, built:false, coreN:[0, 0], places:[
       { label:'Masdar Institute',      x:1,   z:44,  h:4, r:22 },
       { label:'My City Centre Masdar', x:-18, z:15,  h:3, r:20 },
@@ -5406,6 +5423,7 @@ const DISTRICTS = [
   { id:'airport', name:'Zayed International', x:2526, z:272, r:16*ISLE_SCALE, rot:0, tint:0x9AA7B5,
     cam: { angle:210, dist:1500, elev:680, tx:0, tz:0 },
     seaAngle: Math.PI,
+    lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:4.0 } ],   // 31 m — a terminal is wide, not tall
     fillAll:true, built:false, coreN:[0, 0], places:[
       { label:'Terminal A', x:0, z:0, h:5, r:34 },
     ] },
