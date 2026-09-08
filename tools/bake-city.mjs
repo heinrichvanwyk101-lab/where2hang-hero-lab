@@ -139,14 +139,96 @@ const ISLANDS = [
      frames have no coastline crossing them at all, which the clip path already handles by falling
      back to the trace, so the frame simply is the ground.
 
-     THE FRAMES ARE DRAWN NOT TO TOUCH. Khalifa City stops at 54.6055 and Masdar starts at 54.609,
-     355 m clear; Zayed City stops at 54.542 and Khalifa City starts at 54.549, 709 m clear; the
-     airport frame starts at 54.638. Checked polygon to polygon, not box to box — the first cut of
+     THE FRAMES ARE DRAWN NOT TO TOUCH. the frames clear each other by 709 m or more
+     (Masdar to the airport 1,273 m, Masdar to Al Raha 1,348 m). Checked polygon to polygon, not box to box — the first cut of
      these frames cleared on boxes and still shared a 50 m sliver at Khalifa City's east point. Two districts sharing ground would each claim the same
      Overture footprints and draw them twice, and with the diorama now at true positions there is
      no gap in the layout to hide it in.
      ------------------------------------------------------------------------------------------ */
 
+  /* MASDAR CITY. Its own district rather than a corner of Khalifa City: a single planned block with
+     a street pattern and a massing that look like nowhere else in the emirate.
+
+     THE FRAME IS THE VENUE CLUSTER, NOT THE ADMINISTRATIVE AREA. Clustered at a 700 m link, 52 of
+     Masdar's 53 venues fall in ONE group 640 m by 770 m — SushiArt, Zaatar w Zeit, Ethr ClubHaus,
+     Caesars, and the cafés around them. The first frame was 3.0 km2 of which most held nothing.
+     1.4 km2 keeps all 52 and every one of the four venues with over two hundred reviews. */
+  { id:'masdar', name:'Masdar City', bbox:[24.4200, 54.6080, 24.4400, 54.6280], centre:[24.4300, 54.6180],
+    noCoastline: true,
+    outlineLL: [
+      [54.6125,24.4360], [54.6233,24.4360], [54.6233,24.4241], [54.6125,24.4241],
+    ] },
+
+  /* ZAYED CITY. The gap the brief called "the part missing after the Grand Mosque up to the dead
+     Raha area" — and, on the venue count, the district that most earns its place. 375 venues live
+     inside this frame that no built district covers, 36 of them with over two hundred reviews, and
+     the reason is Al Qana: the whole waterfront complex (Al Qana itself, Al Safadi, The National
+     Aquarium, Ozo, Grand Beirut, SushiArt) sits at longitude 54.497, east of Abu Dhabi Island's
+     fetch box, so it is a destination the app already names and the world has nowhere to put.
+
+     THE WEST EDGE IS 54.4900 BECAUSE THAT IS WHERE CORNICHE'S FETCH BOX ENDS. The first frame ran
+     to 54.4760 and swallowed 49 venues Corniche already carries, the Sheikh Zayed Grand Mosque
+     among them — a compound that is already built, and would have been claimed and drawn by two
+     districts at once. Checked against the venue table rather than reasoned from the map.
+
+     The north edge runs along the channel, so this frame does meet real coastline and the shore
+     will come from the survey rather than from the trace. */
+  { id:'zayed', name:'Zayed City', bbox:[24.3880, 54.4700, 24.4420, 54.5520], centre:[24.4160, 54.5100],
+    noCoastline: true,
+    outlineLL: [
+      [54.4900,24.4300], [54.5420,24.4360], [54.5420,24.4000], [54.4900,24.3950],
+    ] },
+
+  /* ZAYED INTERNATIONAL AIRPORT — THE TERMINAL, WITH THE RUNWAYS CUT SHORT ON PURPOSE.
+
+     The terminal is a landmark people know and arrive through, and it earns a place. The airfield
+     does not: the two runways are 4.1 km each on a 130/310 bearing, which at true positions would
+     lay six kilometres of tarmac across the corner of the diorama holding Khalifa City and Masdar,
+     and read as an aerodrome with a city attached rather than the reverse.
+
+     So the frame is drawn round Terminal A and its apron and lets the runways run out of it. The
+     runways are not shortened anywhere in the data; the frame just stops. This is a model, and a
+     cropped runway reads as an airport where a complete one would read as an airfield.
+
+     SIZED FROM THE VENUES, WHICH MADE IT SMALLER STILL. 22 of the airport's 26 venues sit in one
+     cluster 780 m by 400 m — the terminal concourse: Todd English Market and Pub, The Majlis, Culto,
+     Jones the Grocer, So!Coffee. 2.2 by 1.6 km round that keeps all of them and every one of the
+     eight with over two hundred reviews, on 3.5 km2 instead of 5.6, and still cuts both runways so
+     a stub of each reads. Best land-for-venue ratio of the four: about 70 footprints per venue
+     anybody has actually been to, against Khalifa City's 380. */
+  { id:'airport', name:'Zayed International', bbox:[24.4360, 54.6280, 24.4620, 54.6620], centre:[24.4490, 54.6450],
+    noCoastline: true,
+    outlineLL: [
+      [54.6340,24.4560], [54.6560,24.4560], [54.6560,24.4420], [54.6340,24.4420],
+    ] },
+];
+
+/* ---------------------------------------------------------------------------------------------
+   DEFERRED — DEFINED, MEASURED, AND DELIBERATELY NOT BAKED.
+
+   Kept out of ISLANDS rather than left in it, so a run with a blank island input cannot pick it up
+   by accident. Restoring it is a cut and paste.
+
+   KHALIFA CITY does not pay for its land. The probe returns 10,269 footprints, second only to
+   Corniche's 22,161 — and the venue table says 393 venues live there, of which 27 have more than
+   two hundred reviews. That is about 380 buildings per venue anybody has actually been to, against
+   133 for Zayed City, 132 for Masdar and 70 for the airport terminal.
+
+   AND IT CANNOT BE TIGHTENED, which is the part that settles it. The same 700 m single-link
+   clustering that shrank Masdar City by half and the airport by 78 per cent finds no cluster here:
+   all 393 venues form ONE group spanning the whole district, lat 24.3993 to 24.4421 and lng 54.5499
+   to 54.6055. A frame drawn round them is LARGER than the one it would replace. Khalifa City is a
+   villa suburb with a café every few streets, so there is no concentration to draw round — the
+   choice is the whole 23 km2 of two-storey housing or none of it.
+
+   None of those 393 venues is lost to the app by deferring. They stay searchable, rateable and
+   listed exactly as the other 4,886 off-island venues do; they simply have no 3D home to fly to,
+   which is the same deal the rest of the emirate has today.
+
+   Worth revisiting if the villa stock ever renders well enough to be worth looking at, or if the
+   generated height model gets a cap low enough for it — Overture has height on 22 of the 10,269,
+   so today the model would invent a skyline that is not there. */
+const DEFERRED = [
   /* KHALIFA CITY. Villa compounds on a wide grid between the E10 and the airport road — low, green
      and regular, the opposite of the towers everywhere else in this model, which is most of why it
      is worth having. The frame follows the roads that actually bound it rather than a rectangle:
@@ -181,47 +263,8 @@ const ISLANDS = [
       [54.5510,24.4400], [54.5620,24.4400], [54.5678,24.4359], [54.6055,24.4466],
       [54.6055,24.4230], [54.6010,24.4020], [54.5680,24.3985], [54.5490,24.4180],
     ] },
-
-  /* MASDAR CITY. Small and deliberately its own district rather than a corner of Khalifa City: it
-     is a single planned block about a kilometre square, with a street pattern and a massing that
-     look like nowhere else in the emirate. Kept tight so it reads as the enclave it is. */
-  { id:'masdar', name:'Masdar City', bbox:[24.4140, 54.6040, 24.4390, 54.6320], centre:[24.4270, 54.6180],
-    noCoastline: true,
-    outlineLL: [
-      [54.6090,24.4335], [54.6265,24.4335], [54.6265,24.4185], [54.6090,24.4185],
-    ] },
-
-  /* ZAYED CITY. The gap the brief called "the part missing after the Grand Mosque up to the dead
-     Raha area" — Rabdan, Officers City and the Capital District, the ground the Sheikh Zayed bridge
-     lands on. The west edge stops short of the Grand Mosque on purpose: the mosque sits inside Abu
-     Dhabi Island's own fetch box and is already built there, and two districts must not both claim
-     it. The north edge runs along the channel, so this frame does meet real coastline and the shore
-     will come from the survey rather than from the trace. */
-  { id:'zayed', name:'Zayed City', bbox:[24.3880, 54.4700, 24.4420, 54.5520], centre:[24.4160, 54.5100],
-    noCoastline: true,
-    outlineLL: [
-      [54.4780,24.4300], [54.5420,24.4360], [54.5420,24.4000],
-      [54.4880,24.3930], [54.4760,24.4080],
-    ] },
-
-  /* ZAYED INTERNATIONAL AIRPORT — THE TERMINAL, WITH THE RUNWAYS CUT SHORT ON PURPOSE.
-
-     The terminal is a landmark people know and arrive through, and it earns a place. The airfield
-     does not: the two runways are 4.1 km each on a 130/310 bearing, which at true positions would
-     lay six kilometres of tarmac across the corner of the diorama holding Khalifa City and Masdar,
-     and read as an aerodrome with a city attached rather than the reverse.
-
-     So the frame is drawn round Terminal A and its apron and lets the runways run out of it — about
-     2.6 by 2.1 km, which keeps a stub of each in view for what it is and drops the rest. The
-     runways are not shortened anywhere in the data; the frame just stops, exactly as Khalifa City's
-     stops at a road. This is a model, and a cropped runway reads as an airport where a complete one
-     would read as an airfield. */
-  { id:'airport', name:'Zayed International', bbox:[24.4260, 54.6300, 24.4600, 54.6720], centre:[24.4430, 54.6510],
-    noCoastline: true,
-    outlineLL: [
-      [54.6380,24.4520], [54.6640,24.4520], [54.6640,24.4330], [54.6380,24.4330],
-    ] },
 ];
+void DEFERRED;   // referenced so a linter does not strip the record of why it is not baked
 
 /* THE ORIGINS THIS BAKE MUST NOT MOVE. Read from the artefact already committed, so a re-bake
    inherits every island's local origin instead of deriving a new one — see the extent block below
