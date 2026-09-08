@@ -2163,9 +2163,28 @@ async function main(){
        far more than a district that is not there. */
     const outlinePts = !baked.outline || !baked.outline.length ? 0
       : Array.isArray(baked.outline[0][0]) ? baked.outline.reduce((n, r) => n + r.length, 0) : baked.outline.length;
-    if (outlinePts < 8 || !baked.extent){
-      process.stderr.write(`  ${baked.id}: NOT WRITTEN — outline ${outlinePts} pt, ` +
-        `extent ${baked.extent ? 'ok' : 'null'}. Overpass almost certainly failed for this island; ` +
+    /* THE FLOOR IS NOT EIGHT FOR EVERY DISTRICT, AND A FLAT EIGHT REJECTED A GOOD BAKE.
+
+       Masdar City came back with 212 buildings, 19 cycle ways, 497 foot ways and its venues joined,
+       and was thrown away for having a four-point outline. It is a four-point outline on purpose:
+       an inland district's shape IS its hand-drawn outlineLL frame, and with no coastline crossing
+       it there is nothing to clip against and no reason for the vertex count to grow. The guard was
+       written for islands whose outline comes from pickIsland, where a short one really does mean
+       Overpass died.
+
+       So a framed district is held to its own frame's vertex count, and the "did Overpass answer at
+       all" question — which is what this guard is actually for — is asked directly instead: a
+       district with no roads got nothing back, whatever its outline looks like. Al Maryah's original
+       failure (outline 0, roads 0, 401 Overture buildings) trips both tests, which is the point. */
+    const def = ISLANDS.find(i => i.id === baked.id) || {};
+    const framed = !!(def.noCoastline && def.outlineLL && def.outlineLL.length);
+    const floor = framed ? def.outlineLL.length : 8;
+    const mute = !baked.roads || !baked.roads.length;
+    if (outlinePts < floor || !baked.extent || mute){
+      process.stderr.write(`  ${baked.id}: NOT WRITTEN — outline ${outlinePts} pt (floor ${floor}` +
+        `${framed ? ', its own frame' : ''}), extent ${baked.extent ? 'ok' : 'null'}, ` +
+        `roads ${baked.roads ? baked.roads.length : 0}. ` +
+        `Overpass almost certainly failed for this island; ` +
         `the previous ${path} is left in place. Re-run the bake.\n`);
       failed.push(baked.id);
       continue;
