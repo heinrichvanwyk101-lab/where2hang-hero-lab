@@ -54,15 +54,30 @@ const browser = await chromium.launch();
   say('--- PUBLISHED WORLD ---');
   say('url:', WORLD);
   say('state:', JSON.stringify(state));
-  await page.waitForTimeout(20000);
-  const after = await page.evaluate(() => {
-    const W = window.W2H; if (!W) return null;
-    return { built: (W.DISTRICTS || []).filter(d => d.built).length, of: (W.DISTRICTS || []).length };
-  }).catch(() => null);
-  say('after 20s:', JSON.stringify(after));
+  /* HOW LONG UNTIL EVERY DISTRICT IS UP, sampled rather than waited on in one lump. The first run
+     of this check reported "5 of 9 after 20 s" and that number alone cannot tell you whether the
+     world is broken or merely slow — which is the entire question when the complaint is "no model
+     loading". A curve can: if the count climbs, it is load time; if it stalls, it is a fault. */
+  const t0 = Date.now();
+  let last = -1;
+  for (let i = 0; i < 36; i++){
+    const n = await page.evaluate(() => {
+      const W = window.W2H; if (!W) return null;
+      return { b: (W.DISTRICTS || []).filter(d => d.built).length, of: (W.DISTRICTS || []).length,
+               fp: (W.DISTRICTS || []).reduce((a, d) => a + (d.fpCount || 0), 0) };
+    }).catch(() => null);
+    if (n && n.b !== last){ say('  t+' + ((Date.now()-t0)/1000).toFixed(0) + 's  built ' + n.b + '/' + n.of + '  footprints ' + n.fp); last = n.b; }
+    if (n && n.of && n.b >= n.of) break;
+    await page.waitForTimeout(5000);
+  }
+  say('time to all built:', ((Date.now() - t0) / 1000).toFixed(0) + 's');
   say('errors:', errs.length);
   errs.slice(0, 40).forEach(e => say('  ' + e));
-  await page.screenshot({ path: OUT + 'world.png' });
+  /* Software GL on a runner makes a full-page capture slow enough to blow the 30 s default, which
+     is what killed the first run BEFORE it ever reached the app page — the half of the check that
+     matters most. Generous timeout, and non-fatal either way. */
+  try { await page.screenshot({ path: OUT + 'world.png', timeout: 120000 }); }
+  catch (e){ say('world screenshot skipped:', e.message.split('\n')[0]); }
   await page.close();
   if (!ok) process.exitCode = 1;
 }
@@ -87,9 +102,20 @@ const browser = await chromium.launch();
   say('url:', APP);
   say('iframe:', JSON.stringify(iframe));
   say('frames:', JSON.stringify(frames));
+  const inner = page.frames().find(f => /world-nav\.html/.test(f.url() || ''));
+  if (inner){
+    const st = await inner.evaluate(() => {
+      const W = window.W2H; if (!W) return { W2H: false };
+      return { W2H: true, built: (W.DISTRICTS || []).filter(d => d.built).length, of: (W.DISTRICTS || []).length };
+    }).catch(e => ({ evalError: e.message }));
+    say('embedded world:', JSON.stringify(st));
+  } else {
+    say('embedded world: NO world-nav frame on the page');
+  }
   say('errors:', errs.length);
   errs.slice(0, 40).forEach(e => say('  ' + e));
-  await page.screenshot({ path: OUT + 'app.png', fullPage: false });
+  try { await page.screenshot({ path: OUT + 'app.png', fullPage: false, timeout: 120000 }); }
+  catch (e){ say('app screenshot skipped:', e.message.split('\n')[0]); }
   await page.close();
 }
 
