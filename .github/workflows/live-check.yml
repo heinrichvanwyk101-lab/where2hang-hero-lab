@@ -1,0 +1,31 @@
+name: Live check
+
+# WHY THIS EXISTS. The bench renders world-nav.html from a local checkout over a local server that
+# rewrites the three CDN imports to node_modules. That is the right harness for judging geometry and
+# it cannot see the one thing that actually breaks a deploy: what the PUBLISHED page does, over the
+# real CDN, from the real origin, inside the app's iframe. "No model loading on the actual web page"
+# is not reproducible on the bench by construction, and the session that has to diagnose it has no
+# egress to either host. A runner does.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: The app page to load
+        default: https://where2hang.ae/home
+        required: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm i -D playwright@1.47.2 && npx playwright install --with-deps chromium
+      - run: node tools/live/live-check.mjs "${{ inputs.app_url || 'https://where2hang.ae/home' }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-check
+          path: tools/live/out/
