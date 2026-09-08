@@ -315,6 +315,15 @@
      still wins. */
   body.embed .tiltBtn{bottom:auto;top:calc(50vh + 48px)}
   body.embed .allBtn{bottom:auto;top:calc(50vh + 96px);right:12px}
+  /* CHROME FOLLOWS TOUCH (nav v229). Pan, tilt and Back are the embed's only controls, and every
+     one of them is a thing you do with a finger. The host route decides whether a finger ever
+     reaches this frame — on a venue page the world is awake and drawn but pointer-events:none, so
+     these three sat over someone's venue page looking like buttons and doing nothing when tapped.
+     Reported from a Coya screenshot: the move handle, the grid and the Back pill floating over the
+     verification cards. The host is the only side that knows, so it says so (setControls), exactly
+     as it already does for its own bottom-bar layout with setChromeInset. Absent the message
+     nothing changes — every existing embed keeps its controls. */
+  body.noControls .panBtn, body.noControls .tiltBtn, body.noControls .allBtn{display:none !important}
   body.hasChromeInset .allBtn, body.hasChromeInset .tiltBtn{top:auto;bottom:calc(42vh + 18px)}
   body.hasChromeInset .allBtn{right:60px}
   body.hasChromeInset .panBtn{top:28vh}
@@ -748,7 +757,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v228', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v229', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2966,6 +2975,12 @@ if (/[?&]embed=1/.test(location.search)){
          Home included — gets the normal bottom:18px, unaffected). */
       else if (m.type === 'setChromeInset'){
         document.body.classList.toggle('hasChromeInset', !!m.on);
+      }
+      /* setControls {on}: does a finger reach this frame on the host's current route. Off hides
+         pan, tilt and Back — see the .noControls rule in the CSS for why. The camera is
+         unaffected either way; this is chrome, not behaviour. */
+      else if (m.type === 'setControls'){
+        document.body.classList.toggle('noControls', !m.on);
       }
     } catch (e) { console.warn('embed message failed:', m.type, e && e.message); }
   });
