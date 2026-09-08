@@ -43,15 +43,38 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v22';
+export const BUILD = 'basemap v24';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
 export const M_PER_UNIT = 7.8;
 
-/* p = 1/3. See the note above; this is the only number in the file with an aesthetic argument
-   behind it rather than an arithmetic one. */
-export const DAMP_P = 1 / 3;
+/* p = 1 — DAMPING OFF, and the note above is the argument it lost.
+
+   That note says a true-scale Al Maryah would be "invisible in the world view", and that a
+   uniform per-island scale is a smaller lie than drawing all five the same size. Both are true.
+   What neither accounts for is what damping does to the WATER once the islands are placed where
+   they really are: every island is inflated toward the reference's size while the channels
+   between them are not, so the channels close. Rendered, the six islands at their true positions
+   under p = 1/3 are not an archipelago at all — they are one continuous landmass with Al Maryah
+   welded into the Corniche shore and Saadiyat's peninsula joined to Al Reem.
+
+   That was not visible while the layout was hand-composed, because a hand-composed layout spaces
+   the islands to whatever the damped sizes need. The gap was doing the hiding.
+
+   So the choice was never "damped sizes or tiny islands". It is "damped sizes or true positions",
+   and true positions win: a viewer who knows Abu Dhabi reads bearings and channels, not whether
+   Al Maryah is drawn larger than it should be. At p = 1 every scale is 1, the islands sit exactly
+   as the map has them, and the channels are the real ones — Al Maryah's is about 86 metres wide
+   and it is there.
+
+   Legibility is bought back with the camera instead, which is free: the whole archipelago is
+   compact at true scale, so the world shot simply comes closer. Nothing about a uniform scale on
+   ALL islands is a distortion — that is just viewing distance.
+
+   Dial it back if a district needs the size: this is one number, damping() is unchanged, and
+   SCALE_OVERRIDE below still takes a single island out of the formula. */
+export const DAMP_P = 1;
 
 /* THE CAP (basemap v21). p = 1/3 alone gave Al Maryah 3.94 and Al Reem 3.04: a 2.4 km island
    drawn 1,230 units long, longer than half of Abu Dhabi Island, which is the only island the
@@ -63,38 +86,29 @@ export const SCALE_CAP = 2.6;
 
 /* PER-ISLAND SCALE, WHERE THE FORMULA'S ANSWER IS THE WRONG ONE.
 
-   damping() sizes an island against the reference and nothing else. It has no idea what sits
-   NEXT to the island, and on Al Maryah that is what goes wrong: the island physically belongs in
-   the channel between Corniche's north-east shore and Al Reem's west lobe, and that channel is
-   drawn at Corniche's scale of 1.0 while Al Maryah is drawn at the 2.6 cap. A 2.4 km island
-   comes out 812 units long — a third of the length of Abu Dhabi Island — and there is no room
-   left in the gap it belongs in.
+   damping() sizes an island against the reference and knows nothing about what sits next to it.
+   With the islands at their true relative positions (see DIORAMA below), the drawn coastlines
+   graze in a handful of places — the biggest of them Al Maryah against Saadiyat, because
+   Saadiyat drawn at 1.62 is 1,932 units across while its real centre is only 851 units from Al
+   Maryah's, so the inflated island reaches over a channel that is genuinely open water.
 
-   Measured on the real outlines at the size they are drawn (tools/island-move.html), with the
-   layout solved from true bearings and every island held 110 units clear:
-
-     scale      to Corniche   to Al Reem   to Saadiyat   drawn length
-     2.60          117 u        442 u        162 u          812 u
-     1.60          110 u        401 u        360 u          500 u
-     1.30          110 u        343 u        380 u          406 u
-
-   The bearing barely moves — 313 degrees against a true 314 at 2.60, 308 at 1.30 — so the size
-   is NOT what puts Al Maryah on the correct side of Al Reem; the layout does that. What the size
-   buys is the gap: at 2.60 the island is wedged, holding 117 units off Corniche and crowding
-   Saadiyat to 162 while still sitting 442 off the island it is supposed to be beside. At 1.30 it
-   sits closer to Al Reem than to anything else, which is the relationship a viewer is looking
-   for, with room on all three sides.
-
-   1.30 is a composition decision and is stated rather than derived, the same standing SCALE_CAP
-   has. Lowering SCALE_CAP instead would have taken Al Reem down with it, and Al Reem's size is
-   not the thing that is wrong.
+   2.34 is Al Maryah down ten per cent from the cap. It is a trim, not a shrink: the earlier
+   1.30 in this file was solving a problem that turned out not to exist, and it made the island
+   half its length for nothing. Ten per cent takes the worst graze off without the island
+   stopping reading as a place you can go.
 
    Nothing else needs to know. The scale is applied to the island GROUP, so the coastline, the
    roads, the footprints, the kits, the props and every venue pin come down with it in step —
-   a uniform scale over a whole island is indistinguishable from viewing it from further away. */
+   a uniform scale over a whole island is indistinguishable from viewing it from further away —
+   and r stays derived from the extent, so every metre conversion in w2h-world.js is untouched. */
 export const SCALE_OVERRIDE = {
-  maryah: 1.30,
+  /* Empty, and it is meant to be. At p = 1 the formula gives every island 1.0 — its true size
+     relative to the others — and an override here would be a deliberate departure from that for
+     one island's sake. Al Maryah carried 2.34 and then 1.30 while this file was still trying to
+     make a damped island fit a real channel; neither is needed now that the channel is real.
+     Put an island here only when its neighbours make the true size the wrong one. */
 };
+
 
 const m2u = m => m / M_PER_UNIT;
 
@@ -159,75 +173,46 @@ export function islandOrigin(entry){
   return entry.extent ? [entry.extent.cx, entry.extent.cy] : [0, 0];
 }
 
-/* The diorama layout: where the islands sit when t = 0. Kept as a table rather than derived,
-   because this is a composition — the archipelago is arranged to read well in the opening shot,
-   and no formula produces that. Units, +x east, +z south. */
-/* RE-SPACED (basemap v21) against the real coastline polygons under SCALE_CAP, by search: every
-   pair now clears by at least 65 units of water (Corniche to Saadiyat, bridged in reality, is
-   the tightest), Maryah sits in the channel east of Corniche's tip and west of Reem, and Yas and
-   Al Raha moved east together so Reem's east lobe no longer lies under Yas Marina. Corniche and
-   Saadiyat are unchanged. */
+/* THE DIORAMA LAYOUT: where the islands sit when t = 0.
+
+   REAL POSITIONS. Corniche, Al Maryah, Al Reem and Saadiyat are at their true relative positions
+   in scene units — the actual map, not a composition of it and not a compression of it. Nothing
+   is fitted, pushed or spaced; the numbers are (extent.cx, extent.cy) out of data/index.json
+   divided by M_PER_UNIT with north flipped, measured from Corniche.
+
+   Every version of this table before it was hand-composed, and each one traded a true bearing for
+   a tidy gap without recording the cost. Measured (tools/island-move.html), the layout it replaced
+   was 36 degrees out on average and 89 at worst: Saadiyat read north-west of Corniche when it is
+   north-east, Yas read north-east when it is due east, and Al Maryah sat south-west of Al Reem
+   when the real island is north-west of it, in the channel. Somebody who knows Abu Dhabi was being
+   shown a city that is not the one they live in.
+
+   THE ONE DELIBERATE LIE IS YAS, AND IT IS MADE ONCE, TO A PAIR. Yas is 21 km east of Corniche —
+   2,714 units, against about 1,100 for the whole of the rest of the archipelago — so at true
+   spacing the diorama is four islands in one corner and two specks in the other. Yas and Al Raha
+   are therefore TRANSLATED in together, to 65 per cent of their real distance, along the true
+   bearing from Corniche to the pair's midpoint. Their separation from and bearing to each other
+   are untouched: Yas to Al Raha is the one relationship in this table that is honestly close
+   (1.5 km), and breaking it to fix the distance to Corniche would trade a true fact for an
+   invented one. The direction you look to find Yas stays right; only how far stays wrong.
+
+   WHAT "THEY DO NOT FIT" TURNED OUT TO MEAN. Placed here, the drawn coastlines graze by 2 to 12
+   units in six places — 15 to 94 metres, on islands hundreds of units across, at tips rather than
+   bodies. An earlier attempt at this layout enforced 110 units of open water between every pair
+   and concluded the islands could not be placed truthfully at all. The floor was the problem: the
+   real islands do not overlap, so nothing but damping was pushing them apart, and holding out for
+   a gap the real city does not have cost every bearing in the table.
+
+   Units, +x east, +z south. Re-derive with tools/island-move.html — "Real positions", pull 0.65. */
 export const DIORAMA = {
-  corniche: [   0,    0 ],
-  maryah:   [1080, -120 ],
-  reem:     [1750, -690 ],
-  saadiyat: [ 520, -1560],
-  yas:      [2710, -1450],
-  /* AL RAHA. Real bearing from Yas is ~1,517 m west and ~4,537 m south — genuinely Yas's nearest
-     neighbour of the six, closer to it than Saadiyat or Reem are to anything else in this table.
-     Composed close to Yas for exactly that reason: this is the one pair where "near" is honest
-     rather than a compression artefact, so the diorama gap is deliberately tighter than the
-     others rather than forced to match their spacing. */
-  /* AL RAHA. The first position here — [2080,-860], "close to Yas because that's honestly how
-     close it is" — was wrong, and not by a small amount: it never accounted for DAMPING. Raha's
-     real span (4,692 m) is not that much smaller than Yas's (7,335 m), so the compression this
-     file applies to make small islands visible barely shrinks the gap between them — Raha's own
-     damped display radius comes out to 765 units, nearly as large as Yas's own 888. Two islands
-     that size, placed 565 and 388 units from their respective centres, overlap by construction;
-     checked against the real damping() output rather than guessed a second time. That is what
-     "mashed into Al Reem and Yas" actually was — not a rendering bug, a placement that put two
-     large damped circles on top of two others.
-
-     [3900,-2300] is the closest point to Yas that clears EVERY island's real damped radius with
-     at least 300 units to spare — found by search against damping()'s actual output, not by
-     eye. The true bearing (Raha sits west of Yas) is lost here; every other island in this table
-     already makes that same trade for the sake of a composition that doesn't collide, and this
-     is the same trade, just forced by the numbers to sit some distance further round than "next
-     door" actually allows in a compressed diorama. */
-  /* AL RAHA. SECOND REVISION — the first fix ([3900,-2300]) solved the overlap but broke
-     something else: it put Raha NORTH of Yas, when the real building is south. Checked and
-     confirmed wrong, not a matter of taste — Al Raha's true position is south-southwest of Yas,
-     and a diorama position that reads as north is a worse error than tight compression, since it
-     actively misinforms rather than merely compresses.
-
-     THIS TIME SOLVED ALONG THE EXACT TRUE BEARING, not the nearest clear direction regardless of
-     angle. Walked the real vector from Yas's true position to Raha's true position (from the
-     baked extents, not eyeballed) outward from Yas's diorama position until every island's real
-     damped radius cleared with 300 units to spare. That point turned out to be gated by CORNICHE,
-     not Yas — heading southwest from Yas curves toward Corniche's own southern extent, since
-     Corniche is centred near the origin and dominates the whole layout. [1270,1902] is 3,250
-     units from Yas along that bearing — further than the [3900,-2300] compromise was, and the
-     honest cost of keeping the direction correct rather than merely the separation. */
-  /* AL RAHA. FIFTH REVISION — a fine-alignment against Reem, not another repositioning.
-     Confirmed against the ACTUAL coastline polygons (shapely, not the circle-radius model every
-     earlier revision here used) that [1959,287] never collided with anything — the "-456, -271,
-     -147" overlaps the fourth revision flagged were an artefact of treating every irregular
-     island as its own bounding circle, which overstates real islands' footprint by a wide margin
-     (Corniche alone: circle area ~4.7M unit², real coastline area 1.5M). That correction stands;
-     this revision is a separate, smaller adjustment on top of it.
-
-     TWO PICKED POINTS were given as "the Reem side edge of Raha" — [2324,-246] and [1295,504].
-     Raha's own actual Reem-facing edge was found the same way, not assumed: projected every
-     outline vertex onto the raha-to-reem centroid direction and took the ones with the highest
-     projection, which cluster into two corners at roughly (1195,390) and (1527,271), 353 units
-     apart. The picked pair is 1,273 units apart — this transform has no rotation or scale for an
-     individual island, only translation, so the real edge cannot be stretched to span both
-     points exactly. Centred instead: translated so the real edge's midpoint (1361,330.5) lands
-     on the picked pair's midpoint (1809.5,129), a delta of [+448.5,-201.5]. Reverified against
-     every real coastline polygon at the new position — clear of all five, Reem included at 136
-     units, not a circle-model number this time. */
-  raha:     [2818, -170 ],
+  corniche: [    0,     0 ],
+  maryah:   [  -42,  -476 ],
+  reem:     [  190,  -256 ],
+  saadiyat: [  535, -1101 ],
+  yas:      [ 1798,  -265 ],
+  raha:     [ 1603,   316 ],
 };
+
 
 /* THE ONE FUNCTION EVERYTHING ELSE GOES THROUGH.
 

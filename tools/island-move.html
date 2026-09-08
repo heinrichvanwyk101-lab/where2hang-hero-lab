@@ -194,7 +194,8 @@ pre.out{
         <div class="seg" id="segLayout">
           <button data-k="current" aria-pressed="true">In the model now</button>
           <button data-k="radial" aria-pressed="false">Radial</button>
-          <button data-k="proposed" aria-pressed="false">True bearings</button>
+          <button data-k="real" aria-pressed="false">Real positions</button>
+          <button data-k="proposed" aria-pressed="false">Fitted</button>
         </div>
         <div class="row">
           <label for="pc">Compression</label>
@@ -205,6 +206,11 @@ pre.out{
           <label for="spread">Spread</label>
           <input type="range" id="spread" min="1800" max="5200" step="50" value="3073">
           <span class="val" id="spreadV">3073</span>
+        </div>
+        <div class="row">
+          <label for="pull">Yas pull-in</label>
+          <input type="range" id="pull" min="0.20" max="1.00" step="0.01" value="0.45">
+          <span class="val" id="pullV">0.45</span>
         </div>
         <div class="row">
           <label for="floor">Water floor</label>
@@ -227,7 +233,7 @@ pre.out{
         </div>
         <div class="row">
           <label for="dp">Damping p</label>
-          <input type="range" id="dp" min="0.30" max="0.90" step="0.01" value="0.33">
+          <input type="range" id="dp" min="0.30" max="1.00" step="0.01" value="0.33">
           <span class="val" id="dpV">0.33</span>
         </div>
         <label class="chk"><input type="checkbox" id="hold"> Hold damped sizes across the map slider</label>
@@ -318,7 +324,7 @@ const L = {};
 for (const i of ALL) L[i.id] = { x:(i.current||i.truePos)[0], z:(i.current||i.truePos)[1], rot:0, scale:null };
 const MODEL = JSON.parse(JSON.stringify(L));
 
-const S = { t:0, dp:0.33, pc:0.55, floor:110, hold:false, spread:3073, ghost:true, arms:true, future:false,
+const S = { t:0, dp:0.33, pc:0.55, floor:110, hold:false, pull:0.45, spread:3073, ghost:true, arms:true, future:false,
             mode:'current', sel:'maryah' };
 
 /* Spread default: how far the model's own layout already reaches from the anchor, so a re-derive
@@ -327,10 +333,12 @@ S.spread = Math.round(Math.max(...BUILT.map(i =>
   Math.hypot(MODEL[i.id].x - MODEL[ANCHOR].x, MODEL[i.id].z - MODEL[ANCHOR].z))));
 
 const $ = s => document.querySelector(s);
+/* damping(), computed rather than looked up. It used to read a table baked by the generator,
+   which meant w2h-basemap.js's SCALE_OVERRIDE leaked into it and every exploration of p came back
+   with Al Maryah pinned wherever the model happened to have it — the one island the question was
+   about. The formula is three lines; the table was only ever a shortcut, and a contaminating one. */
 const dampOf = (i, p) => {
-  const tbl = DATA.dampByP[p.toFixed(2)] || DATA.dampByP[DATA.DAMP_P.toFixed(2)];
-  if (tbl && tbl[i.id] != null) return tbl[i.id];
-  const R = byId[DATA.referenceId].spanM;                    // the unbuilt three are not in the table
+  const R = byId[DATA.referenceId].spanM;
   return Math.min(DATA.SCALE_CAP, Math.pow(R / i.spanM, 1 - p));
 };
 
@@ -622,6 +630,8 @@ function tables(){
 
   $('#layoutNote').textContent = S.mode === 'current'
     ? 'The table exactly as w2h-basemap.js carries it today.'
+    : S.mode === 'real'
+    ? 'Corniche, Al Maryah, Al Reem and Saadiyat at their true relative positions, unaltered. Yas and Al Raha translated in as one rigid pair to ' + Math.round(S.pull*100) + '% of their real distance, along the true bearing — their separation from each other is untouched. Every bearing here is exact; only that one distance is not.'
     : S.mode === 'radial'
     ? 'Every island pushed straight out from ' + A.name + ' on its real bearing, D = k·d^' + S.pc.toFixed(2) + '. Bearings from ' + A.name + ' are exact and every other pair drifts — and nothing clears, because ' + A.name + '\u2019s centre sits inland.'
     : S.mode === 'proposed'
@@ -729,6 +739,38 @@ function nearestPair(a, b, floor){
   if (hit){ best = -best; vx = pb.x - pa.x; vz = pb.z - pa.z; }
   const m = Math.hypot(vx, vz) || 1;
   return { gap: best, ux: vx/m, uz: vz/m };
+}
+/* REAL POSITIONS — the layout the brief actually asks for.
+
+   Not a compression of the real map, the real map: Corniche, Al Maryah, Al Reem and Saadiyat go
+   to their true relative positions in scene units, exactly where they are, and nothing is pushed
+   or fitted. There is nothing to solve for those four.
+
+   YAS AND AL RAHA COME IN AS ONE RIGID PAIR. Yas is 21 km east of Corniche — 2,714 units, against
+   1,100 for the whole of the rest of the archipelago — so at true spacing the diorama is four
+   islands in one corner and two specks in the other. Pulling them in is the one deliberate lie in
+   this layout, and it is made once, to the pair: their own separation and bearing to each other
+   are untouched, because Yas to Al Raha is the single relationship in this table that is honestly
+   close, and breaking it to fix the distance to Corniche would trade a true fact for a made-up one.
+
+   The pull runs along the true bearing from the anchor to the pair's midpoint, so the direction
+   you look to find Yas stays right however far in it is brought. */
+const FAR_GROUP = ['yas', 'raha'];
+function realPositions(){
+  const A = byId[ANCHOR], base = { x:MODEL[ANCHOR].x, z:MODEL[ANCHOR].z };
+  const set = ALL.filter(i => !(i.speculative && !S.future));
+  for (const i of set){
+    L[i.id] = { x: base.x + (i.truePos[0] - A.truePos[0]),
+                z: base.z + (i.truePos[1] - A.truePos[1]),
+                rot: 0, scale: L[i.id].scale };
+  }
+  const far = set.filter(i => FAR_GROUP.includes(i.id));
+  if (!far.length || S.pull >= 0.999) return;
+  const mx = far.reduce((a, i) => a + L[i.id].x, 0) / far.length;
+  const mz = far.reduce((a, i) => a + L[i.id].z, 0) / far.length;
+  /* Translate the pair — no scaling inside it, so Yas and Al Raha keep their true separation. */
+  const dx = (base.x - mx) * (1 - S.pull), dz = (base.z - mz) * (1 - S.pull);
+  for (const i of far){ L[i.id].x += dx; L[i.id].z += dz; }
 }
 function relax(){
   for (const i of ALL) i._dr = null;
@@ -850,7 +892,8 @@ addEventListener('keydown', e => {
 
 document.querySelectorAll('#segLayout button').forEach(b => b.onclick = () => {
   S.mode = b.dataset.k;
-  if (S.mode === 'current') revert(); else if (S.mode === 'radial') derive(); else relax();
+  if (S.mode === 'current') revert(); else if (S.mode === 'radial') derive();
+  else if (S.mode === 'real') realPositions(); else relax();
   syncSeg(); fit(); render();
 });
 $('#reDerive').onclick = () => { S.mode = 'proposed'; relax(); syncSeg(); fit(); render(); };
@@ -867,13 +910,14 @@ const bind = (id, key, fmt, after) => {
 };
 bind('t', 't', v => v.toFixed(2));
 bind('dp', 'dp', v => v.toFixed(2));
-bind('pc', 'pc', v => v.toFixed(2), () => { if (S.mode === 'proposed') relax(); else if (S.mode === 'radial') derive(); });
+bind('pc', 'pc', v => v.toFixed(2), () => { if (S.mode === 'proposed') relax(); else if (S.mode === 'radial') derive(); else if (S.mode === 'real') realPositions(); });
 bind('spread', 'spread', v => String(Math.round(v)), () => { if (S.mode === 'proposed') relax(); else if (S.mode === 'radial') derive(); });
 bind('floor', 'floor', v => String(Math.round(v)), () => { if (S.mode === 'proposed') relax(); });
+bind('pull', 'pull', v => v.toFixed(2), () => { if (S.mode === 'real') realPositions(); });
 
 for (const [id, key] of [['ghost','ghost'], ['arms','arms'], ['future','future'], ['hold','hold']]){
   const el = $('#' + id); el.checked = S[key];
-  el.onchange = () => { S[key] = el.checked; if (key === 'future'){ if (S.mode === 'proposed') relax(); else if (S.mode === 'radial') derive(); } render(); };
+  el.onchange = () => { S[key] = el.checked; if (key === 'future'){ if (S.mode === 'proposed') relax(); else if (S.mode === 'radial') derive(); else if (S.mode === 'real') realPositions(); } render(); };
 }
 
 $('#copy').onclick = async () => {
