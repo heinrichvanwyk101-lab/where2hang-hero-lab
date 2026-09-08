@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-08T15:12:37.595Z",
+ "generated": "2026-09-08T15:14:38.811Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -15452,6 +15452,60 @@
     "hardEdge": 43,
     "parking": 182,
     "withVenues": 96
+   }
+  },
+  {
+   "id": "airport",
+   "name": "Zayed International",
+   "file": "isle-airport.json",
+   "extent": {
+    "x0": 21679.2,
+    "y0": -5343.3,
+    "x1": 23907.9,
+    "y1": -3784.9,
+    "w": 2228.7,
+    "d": 1558.5,
+    "cx": 22793.5,
+    "cy": -4564.1
+   },
+   "outline": [
+    [
+     21679.2,
+     -3784.9
+    ],
+    [
+     23907.9,
+     -3784.9
+    ],
+    [
+     23907.9,
+     -5343.3
+    ],
+    [
+     21679.2,
+     -5343.3
+    ]
+   ],
+   "landmarks": {},
+   "bytes": 53721,
+   "counts": {
+    "outline": 4,
+    "landmasses": 1,
+    "roads": 95,
+    "buildings": 158,
+    "inBox": 526,
+    "withHeight": 3,
+    "parks": 16,
+    "paths": 5,
+    "plazas": 0,
+    "golf": 0,
+    "raceway": 0,
+    "water": 0,
+    "waterIslands": 0,
+    "beaches": 0,
+    "hardEdge": 0,
+    "parking": 8,
+    "withVenues": 1
    }
   }
  ]
