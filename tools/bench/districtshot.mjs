@@ -35,14 +35,29 @@ await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
 await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=window.W2H.DISTRICTS.length,null,{timeout:300000}).catch(()=>console.log('not all built'));
 await page.evaluate(()=>{ const s=window.W2H.DISTRICTS[0].group.parent.parent; (function w(o){ if(o.isMesh&&o.userData&&o.userData.warmHidden){o.userData.warmHidden=false;o.visible=true;} (o.children||[]).forEach(w); })(s); });
+/* NOTHING BUT THE WORLD IN THE PICTURE. embed=1 already drops the rail, but the Back pill and the
+   two control buttons stay, and they were baked into the first set of cards. */
+await page.addStyleTag({ content: '#back, button, .back, .pill { display: none !important; }' });
 for (const id of IDS){
   await page.evaluate(i=>window.W2H.go(i), id);
   await page.waitForTimeout(1500);
-  /* Pull the camera down and in from the district's authored framing: the nav shot is composed for
-     a phone in portrait with UI over it, and a 3:2 card wants the ground filling the frame. */
-  await page.evaluate(()=>{ const g=window.W2H.goal, c=window.W2H.cur;
-    g.dist *= 0.62; g.elev *= 0.55; g.fov = 40;
-    c.target.copy(g.target); c.dist=g.dist; c.elev=g.elev; c.angle=g.angle; c.fov=g.fov; });
+  /* FRAMED FROM THE DISTRICT'S OWN RADIUS, NOT BY SCALING ITS AUTHORED SHOT.
+
+     The first pass multiplied each district's nav dist and elev by a constant and the islands came
+     out as specks: those numbers are composed for a phone in portrait with UI over the frame and a
+     card wants the ground filling it, so the right factor differs per district and there is no one
+     constant that works. dist = R / tan(fov/2) puts a sphere of radius R exactly across the frame;
+     1.15 leaves a little air round it. R is the island's real displayed radius, which the world
+     already knows. */
+  await page.evaluate(i=>{
+    const d = window.W2H.DISTRICTS.find(x => x.id === i);
+    const R = d.r * (d.dispScale || 1);
+    const fov = 42, dist = R / Math.tan(fov * Math.PI / 360) * 1.15;
+    const g = window.W2H.goal, c = window.W2H.cur;
+    g.target.set(d.x, 3, d.z);
+    g.fov = fov; g.dist = dist; g.elev = dist * 0.62;
+    c.target.copy(g.target); c.dist = g.dist; c.elev = g.elev; c.angle = g.angle; c.fov = g.fov;
+  }, id);
   await page.waitForTimeout(9000);
   await page.screenshot({ timeout:150000, path: OUT + 'card-' + id + '.png' });
   console.log('shot', id);
