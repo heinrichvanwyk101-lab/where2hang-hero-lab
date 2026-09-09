@@ -820,7 +820,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v243', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v244', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -6635,13 +6635,31 @@ let _frame0 = true, _tick0Done = false;
 /* Set on the frame that draws, posted once the canvas is actually visible. #gl starts at opacity 0
    in embed mode and only the 'ready' class reveals it, so a drawn frame on a transparent canvas is
    still a black screen to the viewer — both have to have happened before this claims anything. */
-let _paintedPending = false, _paintedSent = false;
+let _paintedPending = false, _paintedSent = false, _paintedFrom = 0;
+/* WHAT THE APP IS ACTUALLY WAITING FOR IS A WORLD THAT LOOKS BUILT, NOT A FRAME.
+
+   The phone's own numbers settled this. Six runs through events_log: the page reaches its first
+   frame in 4.9 to 7.6 seconds and firstFrame itself is 124 to 339 ms — there is no GPU stall, and
+   the nineteen-second sync this file's older notes describe is not what happens on this build. But
+   every one of those runs reports built:2 at the twelve-second mark. buildWorld returns with two
+   islands up and the prefetch pump lays in the other four over the following ten seconds or so,
+   which is the fourteen seconds a person actually spends looking at an empty sea.
+
+   So posting on frame one would take the spinner down over almost nothing. This waits for most of
+   the eager islands as well, with a ceiling so a slow or failed island can never hold the reveal
+   for ever — past the ceiling, whatever is up is what gets shown. */
+const PAINT_MIN_ISLES = 4;     // of the six eager districts; Corniche and its neighbours carry the shot
+const PAINT_CEILING_MS = 9000; // from the first drawn frame, after which show what there is
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
   if (g && !g.classList.contains('ready')) return;
+  const eager = DISTRICTS.filter(d => !d.onDemand);
+  const up = eager.filter(d => d.built).length;
+  if (up < Math.min(PAINT_MIN_ISLES, eager.length) &&
+      performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
   _paintedSent = true;
-  try { post('painted', { ms: Math.round(PH['#page'] || 0), build: B_NAV }); } catch (e){}
+  try { post('painted', { ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV }); } catch (e){}
 }
 
 /* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
@@ -7334,6 +7352,7 @@ function frame(){
        every queued command behind the paint. The app reveals on this one and keeps waiting until
        then; an older cached world never sends it, which is why the app also keeps a fallback. */
     _paintedPending = true;
+    _paintedFrom = performance.now();
     /* THE SECOND GROUND PAINT STARTS HERE, and here is the whole point of it. The ground is built
        at half resolution so that this frame happens sooner; repainting it at full resolution is
        the other half of that bargain and it must not begin until the frame it paid for is on
