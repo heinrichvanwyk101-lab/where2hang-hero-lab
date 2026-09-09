@@ -1,0 +1,143 @@
+# GROUND TRUTH FOR ONE WINDOW, COMMITTED SO IT CAN BE DRAWN.
+#
+# WHY THIS EXISTS. Every question about whether a district's SHAPE is right has been answered so
+# far by comparing our layers against each other, and twice that produced a confident answer that
+# was an artefact of the measure. The only fix is to compare against a survey we did not make.
+# tools/bench/plan.mjs draws ours flat so it can be put beside a satellite view by hand; this
+# fetches an independent survey of the same window so the comparison can be made in code.
+#
+# The sandbox these bakes are driven from has no outbound network, so an artefact download is no
+# use — the file has to arrive in the repository. It is small (one clipped window, geometry only,
+# no attributes) and nothing in the world loads it: data/probe/ is for reading, not for shipping.
+#
+# TO RUN: Actions tab -> "Export an Overture window" -> Run workflow.
+name: Export an Overture window
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Short name for the file, e.g. rabdan. Becomes data/probe/overture-<label>.geojson"
+        required: true
+      south:
+        description: "bbox south (lat)"
+        required: true
+      west:
+        description: "bbox west (lng)"
+        required: true
+      north:
+        description: "bbox north (lat)"
+        required: true
+      east:
+        description: "bbox east (lng)"
+        required: true
+      types:
+        description: "Space-separated base types to export"
+        default: "land water infrastructure"
+      release:
+        description: "Overture release. Blank resolves the latest from the STAC catalog."
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install DuckDB
+        run: |
+          set -e
+          curl -sSL https://install.duckdb.org | sh
+          echo "$HOME/.duckdb/cli/latest" >> "$GITHUB_PATH"
+
+      - name: Resolve the release
+        id: rel
+        run: |
+          set -e
+          REL='${{ inputs.release }}'
+          if [ -z "$REL" ]; then
+            REL=$(duckdb -noheader -list -c \
+              "INSTALL httpfs; LOAD httpfs;
+               SELECT latest FROM read_json_auto('https://stac.overturemaps.org/catalog.json');" \
+              | tail -1 | tr -d '[:space:]')
+          fi
+          if [ -z "$REL" ]; then echo "Could not resolve an Overture release."; exit 1; fi
+          echo "release=$REL" >> "$GITHUB_OUTPUT"
+          echo "Overture release: $REL"
+
+      - name: Export the window
+        env:
+          REL: ${{ steps.rel.outputs.release }}
+          S: ${{ inputs.south }}
+          W: ${{ inputs.west }}
+          N: ${{ inputs.north }}
+          E: ${{ inputs.east }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          set -e
+          mkdir -p data/probe
+          : > /tmp/rows.ndjson
+          for TYPE in ${{ inputs.types }}; do
+            echo "--- theme=base type=$TYPE ---"
+            # THE PREDICATE IS AN INTERSECTION, NOT A CONTAINMENT, and that distinction is the
+            # whole reason an earlier probe under-reported. A landmass polygon covering half the
+            # emirate has its bbox.xmin hundreds of kilometres away, so a "xmin BETWEEN W AND E"
+            # test drops exactly the feature the window is asking about. The extra one-degree
+            # guards keep the row-group pruning that makes this cheap.
+            duckdb -c "
+              INSTALL httpfs; LOAD httpfs;
+              INSTALL spatial; LOAD spatial;
+              SET s3_region='us-west-2';
+              COPY (
+                SELECT '$TYPE' AS layer,
+                       COALESCE(subtype,'') AS subtype,
+                       COALESCE(class,'')   AS class,
+                       COALESCE(names.primary,'') AS name,
+                       ST_AsGeoJSON(ST_Intersection(geometry,
+                         ST_MakeEnvelope($W, $S, $E, $N))) AS g
+                FROM read_parquet('s3://overturemaps-us-west-2/release/$REL/theme=base/type=$TYPE/*',
+                                  hive_partitioning=1)
+                WHERE bbox.xmin <= $E AND bbox.xmax >= $W
+                  AND bbox.ymin <= $N AND bbox.ymax >= $S
+                  AND bbox.xmin > $W - 1 AND bbox.ymin > $S - 1
+                  AND NOT ST_IsEmpty(ST_Intersection(geometry, ST_MakeEnvelope($W, $S, $E, $N)))
+              ) TO '/tmp/$TYPE.ndjson' (FORMAT JSON, ARRAY false);
+            " || { echo "  (type=$TYPE unavailable in this release)"; continue; }
+            wc -l < "/tmp/$TYPE.ndjson" | sed 's/^/  rows: /'
+            cat "/tmp/$TYPE.ndjson" >> /tmp/rows.ndjson
+          done
+
+          node -e '
+            const fs = require("fs");
+            const lines = fs.readFileSync("/tmp/rows.ndjson", "utf8").split("\n").filter(Boolean);
+            const features = lines.map(l => {
+              const r = JSON.parse(l);
+              return { type: "Feature",
+                       properties: { layer: r.layer, subtype: r.subtype, class: r.class, name: r.name },
+                       geometry: JSON.parse(r.g) };
+            });
+            const out = { type: "FeatureCollection",
+                          window: { south: +process.env.S, west: +process.env.W,
+                                    north: +process.env.N, east: +process.env.E },
+                          release: process.env.REL,
+                          features };
+            const path = `data/probe/overture-${process.env.LABEL}.geojson`;
+            fs.writeFileSync(path, JSON.stringify(out));
+            const by = {};
+            for (const f of features) by[f.properties.layer] = (by[f.properties.layer] || 0) + 1;
+            console.log(`${path}  ${features.length} features  ${JSON.stringify(by)}  ` +
+                        `${(fs.statSync(path).size / 1024).toFixed(0)} KB`);
+          '
+
+      - name: Commit
+        run: |
+          set -e
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/probe
+          git diff --cached --quiet && { echo "nothing changed"; exit 0; }
+          git commit -m "Probe: Overture ${{ inputs.label }} window (${{ steps.rel.outputs.release }})"
+          git pull --rebase origin main
+          git push origin HEAD:main
