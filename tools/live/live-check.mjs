@@ -20,6 +20,27 @@ const OUT   = new URL('./out/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 
 const lines = [];
+
+/* A DIAGNOSTIC THAT CAN HANG IS NOT A DIAGNOSTIC.
+
+   Two runs of this have now overrun every bounded loop inside it and been killed with nothing to
+   show, because page.evaluate against a frame whose main thread is pinned does not reject — it
+   simply never returns, and no amount of care with the loops around it helps. The whole script gets
+   a wall clock: at the deadline it writes down everything gathered so far and leaves. Partial
+   evidence beats a cancelled run, and the hang itself is a finding worth recording rather than a
+   reason to see nothing. */
+const DEADLINE_MS = 8 * 60 * 1000;
+const deadline = setTimeout(() => {
+  try {
+    lines.push('', 'DEADLINE: ' + (DEADLINE_MS / 60000) + ' min elapsed — a call did not return.');
+    lines.push('That is itself the finding: an evaluate() into the world frame does not come back');
+    lines.push('while it is building, which is the main thread being held, not a dead page.');
+    writeFileSync(OUT + 'report.txt', lines.join('\n') + '\n');
+    console.log(lines.join('\n'));
+  } catch {}
+  process.exit(2);
+}, DEADLINE_MS);
+deadline.unref?.();
 const say = (...a) => { const s = a.join(' '); lines.push(s); console.log(s); };
 
 function watch(page, tag){
