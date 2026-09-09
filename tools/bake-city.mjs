@@ -118,7 +118,27 @@ const ISLANDS = [
      it reaches that is not the island is dropped — the companion-ring guards are written against
      exactly this, since a wider box is what makes a neighbour reachable in the first place. */
   { id:'maryah',   name:'Al Maryah',        bbox:[24.4900, 54.3700, 24.5180, 54.4060], centre:[24.5015, 54.3905] },
-  { id:'reem',     name:'Al Reem',          bbox:[24.4820, 54.3850, 24.5260, 54.4420], centre:[24.4980, 54.4060] },
+
+  /* AL REEM'S SECOND LANDMASS, AND WHY IT IS NAMED HERE RATHER THAN INFERRED.
+
+     `also` is a list of extra points known to be on the island, exactly what `centre` is, and
+     every closed ring holding one is kept alongside the ring the centre picks. Al Reem needs one:
+     its north-west lobe — the reclaimed ground between Al Maryah and Shams, 1.36 km2 of it — is a
+     separate closed coastline ring, joined to the rest of Al Reem only by bridges, which carry no
+     natural=coastline. The old picker took the ring holding the centre and dropped this one on
+     the floor. That is the missing north-north-west the owner marked on the satellite.
+
+     THE FIRST ATTEMPT INFERRED IT AND GOT IT WRONG, which is why this is a named point. The rule
+     was "keep any closed ring wholly inside the fetch box that does not contain another
+     district's centre", and it handed this lobe to AL MARYAH: the lobe sits between the two
+     islands, Al Maryah's box reaches it, and Al Reem's centre is 300 m east of the lobe's edge so
+     the guard never fired. A rule that assigns land by which box happens to reach it will keep
+     making that mistake in a channel; a point on the ground cannot.
+
+     The point below is the deepest interior point of the lobe, 384 m clear of its own boundary,
+     so it survives any plausible re-survey of the shore. */
+  { id:'reem',     name:'Al Reem',          bbox:[24.4820, 54.3850, 24.5260, 54.4420], centre:[24.4980, 54.4060],
+    also:[[24.49950, 54.39725]] },
   { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
   { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
   /* AL RAHA — A MAINLAND PATCH, NOT AN ISLAND, AND SAID SO VIA noCoastline. Al Raha Beach is a
@@ -1416,27 +1436,27 @@ function coastCensus(chains, centre, proj, boxRing, taken){
 /* THE ISLAND IS NOT ALWAYS ONE RING, AND ASSUMING IT WAS IS WHAT LOST THE LAND.
 
    The old rule took the largest closed ring containing the centre and threw the rest away. That
-   is right for a simple island and wrong for a reclaimed one: Al Reem's northern reclamation and
-   Al Maryah's western quay are separate landmasses in OSM, joined to the parent by a causeway
-   that carries no coastline, so the stitcher closes them as rings of their own and the old rule
-   dropped them on the floor. The owner saw exactly that — a piece of Reem and a lot of Al Maryah
-   missing — and the answer is not to redraw a shore by hand but to keep what the survey holds.
+   is right for a simple island and wrong for a reclaimed one: Al Reem's north-west lobe is a
+   separate landmass in OSM, joined to the rest of the island by bridges that carry no coastline,
+   so the stitcher closes it as a ring of its own and the old rule dropped it. The owner saw
+   exactly that — a piece of Reem missing at the north-north-west — and the answer is not to
+   redraw a shore by hand but to keep what the survey holds.
 
-   COMPANION RINGS ARE ADMITTED UNDER FOUR GUARDS, and every one of them is there to stop this
-   turning into a district that swallows its neighbours:
-     - wholly inside the fetch box. The mainland and Abu Dhabi Island run past every box that
-       clips them, so this alone excludes them; a ring the box contains entirely is a small
-       landmass the query captured whole.
-     - not containing another district's centre. Belt and braces for the box test.
-     - not inside the ring already taken, which would be an islet in a lagoon, and is water's job.
-     - above a floor area and below a multiple of the primary, so a sandbar does not become a
-       district and a neighbour does not outvote the island it sits beside.
-   Anything rejected is still counted in the census with the reason, so a missing piece is a line
-   to read rather than a bake to re-run. */
+   COMPANION RINGS ARE NAMED, NOT INFERRED, and that is the whole lesson of the first attempt.
+   The rule tried first was geometric — keep any closed ring wholly inside the fetch box that does
+   not contain another district's centre — and its very first run handed Al Reem's lobe to Al
+   Maryah, because in a channel between two islands both boxes reach the same ground and neither
+   centre is inside it. Any rule of that shape is guessing which island a piece of land belongs
+   to. `also` on the island entry says it instead: a point known to be on the island, the same
+   thing `centre` already is, and every closed ring holding one is kept.
+
+   The guards that remain are sanity, not assignment: above an area floor, not the ring already
+   taken, and not a ring that swallows the primary. Everything else the stitcher found is counted
+   in the census with its size and position, so the next missing landmass is a line to read rather
+   than a bake to re-run. */
 function pickIsland(chains, centre, opts = {}){
   const CLOSE_M = 60;   // a ring closes when its ends meet within a way's own node spacing
   const MIN_COMPANION_M2 = 20000;
-  const MAX_COMPANION_RATIO = 6;
   const closed = chains.filter(c => c.length > 3 &&
     Math.hypot(c[0][0] - c[c.length-1][0], c[0][1] - c[c.length-1][1]) < CLOSE_M);
   const hit = closed.filter(c => contains(c, centre)).sort((a, b) => area(b) - area(a));
@@ -1449,26 +1469,27 @@ function pickIsland(chains, centre, opts = {}){
              why:'NO CLOSED RING FOUND — fell back to the longest chain, CHECK THIS' };
   }
   const primary = hit[0];
-  const box = opts.boxRing || null;
-  const others = opts.otherCentres || [];
+  const also = opts.alsoPoints || [];
   const comps = [];
   const rejected = [];
-  for (const c of closed){
-    if (c === primary) continue;
+  for (const pt of also){
+    const holding = closed.filter(c => c !== primary && c !== undefined && contains(c, pt))
+      .sort((a, b) => area(b) - area(a));
+    if (!holding.length){
+      rejected.push(`no closed ring holds the also point ${pt.map(v => Math.round(v)).join(', ')} ` +
+                    `— CHECK THIS, the island is short a landmass`);
+      continue;
+    }
+    const c = holding[0];
+    if (comps.includes(c)) continue;
     const a = area(c);
-    let no = null;
-    if (a < MIN_COMPANION_M2) no = `${Math.round(a)} m2 under the ${MIN_COMPANION_M2} m2 floor`;
-    else if (a > area(primary) * MAX_COMPANION_RATIO) no = `${Math.round(a/1e4)/100} km2 is over ${MAX_COMPANION_RATIO}x the primary`;
-    else if (box && !c.every(p => contains(box, p))) no = 'runs outside the fetch box';
-    else if (contains(c, centre)) no = 'contains the island centre — a larger landmass around us';
-    else if (contains(primary, c[0])) no = 'sits inside the ring already taken';
-    else if (others.some(o => contains(c, o))) no = "contains another district's centre";
-    if (no) rejected.push(no); else comps.push(c);
+    if (a < MIN_COMPANION_M2){ rejected.push(`also point lands on a ${Math.round(a)} m2 ring, under the floor`); continue; }
+    if (contains(c, primary[0])){ rejected.push('also point lands on a ring that swallows the primary'); continue; }
+    comps.push(c);
   }
   const why = comps.length
-    ? `closed ring containing the island centre plus ${comps.length} companion ring(s) ` +
-      `(${rejected.length} other closed ring(s) rejected)`
-    : `closed ring containing the island centre (${rejected.length} other closed ring(s) rejected)`;
+    ? `closed ring containing the island centre plus ${comps.length} named companion ring(s)`
+    : 'closed ring containing the island centre';
   return { rings: [primary, ...comps], why, rejected };
 }
 
@@ -1904,10 +1925,8 @@ async function bakeIsland(isle, proj){
     /* The fetch box as a ring in the same metric frame the chains live in — the guard that keeps
        a companion ring from being a neighbour the query happened to clip. */
     const boxRing = [[s0,w0],[s0,e0],[n0,e0],[n0,w0]].map(([la, lo]) => proj.fwd(la, lo));
-    const otherCentres = ISLANDS.filter(o => o.id !== isle.id && o.centre)
-      .map(o => proj.fwd(o.centre[0], o.centre[1]));
-    const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]),
-      { boxRing, otherCentres });
+    const alsoPoints = (isle.also || []).map(([la, lo]) => proj.fwd(la, lo));
+    const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]), { alsoPoints });
     const rings = picked.rings.map(r => simplify(r, SIMPLIFY_M * 3).map(rd1)).filter(r => r.length >= 4);
     outline = !rings.length ? [] : rings.length > 1 ? rings : rings[0];
     census = coastCensus(chains, proj.fwd(isle.centre[0], isle.centre[1]), proj, boxRing, picked.rings);
