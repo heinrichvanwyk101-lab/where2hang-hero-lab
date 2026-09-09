@@ -2479,7 +2479,12 @@ window.__w2hSetResults = setResults;
    ONE AT A TIME, SPACED, AFTER CORNICHE. Corniche is the opening subject and by far the
    heaviest; anything building alongside it lengthens the one wait a visitor actually sees. */
 {
-  const queue = DISTRICTS.filter(d => d !== corniche);
+  /* THE THREE MAINLAND DISTRICTS ARE NOT IN THIS QUEUE. See the onDemand note in w2h-world.js:
+     this pump is a serial run of synchronous island builds, and adding Zayed City, Masdar and the
+     airport to it took the world from five builds to eight and from zero to 31,726 footprints,
+     which pinned the frame's main thread long enough that the model never appeared at all. They
+     build on the first rail tap instead, through setDistrict, which handles a pending island. */
+  const queue = DISTRICTS.filter(d => d !== corniche && !d.onDemand);
   let qi = 0;
   /* RETRY, NOT JUST ONE ATTEMPT AND MOVE ON. buildIsland's own comment on the road-wait gate is
      explicit: "pending stays set: the next visit or attract leg retries". Attract normally
@@ -3097,7 +3102,7 @@ function setDistrict(d){
   if (buildIsland && d && d.pending && typeof roadsIn === 'function' && !roadsIn(d.id)){
     whenRoads(d.id, 2500).then(() => buildAndRegister(d));
   } else {
-    if (buildIsland && d && buildIsland(d.id)){
+    if (buildIsland && d && buildIsland(d.id, true)){
       snapshotMats(d.group);
       registerLift(d.group);
       fitClip();
@@ -6099,7 +6104,7 @@ function buildAndRegister(d){
      straight past addFootprints, and nothing here ever called it again. addFootprints' own guard
      (fpState.has(d.id)) already safely no-ops if it was genuinely already called, so calling it
      unconditionally here costs nothing on the common case and fixes the stuck one. */
-  if (buildIsland(d.id)){
+  if (buildIsland(d.id, true)){
     snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   }
   addFootprints(d);

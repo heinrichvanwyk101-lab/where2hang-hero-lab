@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v335';
+export const BUILD = 'world v336';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5388,6 +5388,25 @@ const DISTRICTS = [
      seaAngle north, because the channel is its only water; south of it is Khalifa City, which the
      model leaves as ground. */
   { id:'zayed', name:'Zayed City', x:1584, z:761, r:30*ISLE_SCALE, rot:0, tint:0xC9B07A,
+    /* NOT BUILT BY THE OPENING PUMP — ONLY WHEN SOMEONE GOES THERE (world v335).
+
+       world-nav's prefetch pump builds every island after Corniche, one at a time, 1.4 s apart,
+       and each build is a synchronous block on the frame's main thread. That was sized for five
+       islands. These three took it to eight, and they are the heaviest in the world: Zayed City
+       alone carries 7,190 real footprints against Al Raha's 1,400, and the three together added
+       31,726 footprints to a load that used to have none of them.
+
+       Measured on a runner: the world reached 9 of 9 in 97 seconds, and while a district was
+       building the embedded frame stopped answering evaluate() altogether — the main thread was
+       pinned. On a phone that is not "slow", it is a home screen whose model never arrives, which
+       is exactly what came back: "rails changed but model not coming up at all".
+
+       Deferring them costs nothing anyone can see. Coastline, platform and beach are built in the
+       loop far above and are not deferred, so all three still sit there as land at world zoom;
+       what waits is the city on top, which at that distance is invisible anyway. A rail tap goes
+       through setDistrict, which builds a pending island itself — so the ground is there the
+       moment it is asked for, and the opening load goes back to what it was before they existed. */
+    onDemand:true,
     cam: { angle:20, dist:2600, elev:1180, tx:-180, tz:-40 },
     seaAngle: 0,
     /* A DISTRICT-WIDE lowRise BLOB, AND WITHOUT ONE THE HEIGHT MODEL IS UNCAPPED.
@@ -5417,6 +5436,25 @@ const DISTRICTS = [
      nowhere else in the emirate, which is most of why it earns its own district rather than being
      a corner of somewhere. 52 of its 53 venues sit in one cluster and the frame is drawn round it. */
   { id:'masdar', name:'Masdar City', x:2174, z:542, r:12*ISLE_SCALE, rot:0, tint:0x7FA98F,
+    /* NOT BUILT BY THE OPENING PUMP — ONLY WHEN SOMEONE GOES THERE (world v335).
+
+       world-nav's prefetch pump builds every island after Corniche, one at a time, 1.4 s apart,
+       and each build is a synchronous block on the frame's main thread. That was sized for five
+       islands. These three took it to eight, and they are the heaviest in the world: Zayed City
+       alone carries 7,190 real footprints against Al Raha's 1,400, and the three together added
+       31,726 footprints to a load that used to have none of them.
+
+       Measured on a runner: the world reached 9 of 9 in 97 seconds, and while a district was
+       building the embedded frame stopped answering evaluate() altogether — the main thread was
+       pinned. On a phone that is not "slow", it is a home screen whose model never arrives, which
+       is exactly what came back: "rails changed but model not coming up at all".
+
+       Deferring them costs nothing anyone can see. Coastline, platform and beach are built in the
+       loop far above and are not deferred, so all three still sit there as land at world zoom;
+       what waits is the city on top, which at that distance is invisible anyway. A rail tap goes
+       through setDistrict, which builds a pending island itself — so the ground is there the
+       moment it is asked for, and the opening load goes back to what it was before they existed. */
+    onDemand:true,
     cam: { angle:200, dist:1150, elev:520, tx:0, tz:0 },
     seaAngle: Math.PI,
     lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:5.0 } ],   // 39 m — Masdar, measured p90 30 m
@@ -5432,6 +5470,25 @@ const DISTRICTS = [
      GEN_TALLEST is 4 like the other two: an apron is flat and a terminal is a wide low shed, and
      the generator has five height samples to work from, which is none. */
   { id:'airport', name:'Zayed International', x:2526, z:272, r:16*ISLE_SCALE, rot:0, tint:0x9AA7B5,
+    /* NOT BUILT BY THE OPENING PUMP — ONLY WHEN SOMEONE GOES THERE (world v335).
+
+       world-nav's prefetch pump builds every island after Corniche, one at a time, 1.4 s apart,
+       and each build is a synchronous block on the frame's main thread. That was sized for five
+       islands. These three took it to eight, and they are the heaviest in the world: Zayed City
+       alone carries 7,190 real footprints against Al Raha's 1,400, and the three together added
+       31,726 footprints to a load that used to have none of them.
+
+       Measured on a runner: the world reached 9 of 9 in 97 seconds, and while a district was
+       building the embedded frame stopped answering evaluate() altogether — the main thread was
+       pinned. On a phone that is not "slow", it is a home screen whose model never arrives, which
+       is exactly what came back: "rails changed but model not coming up at all".
+
+       Deferring them costs nothing anyone can see. Coastline, platform and beach are built in the
+       loop far above and are not deferred, so all three still sit there as land at world zoom;
+       what waits is the city on top, which at that distance is invisible anyway. A rail tap goes
+       through setDistrict, which builds a pending island itself — so the ground is there the
+       moment it is asked for, and the opening load goes back to what it was before they existed. */
+    onDemand:true,
     cam: { angle:210, dist:1500, elev:680, tx:0, tz:0 },
     seaAngle: Math.PI,
     lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:4.0 } ],   // 31 m — a terminal is wide, not tall
@@ -10402,9 +10459,20 @@ function buildCornicheRest(){
   return true;
 }
 
-function buildIsland(id){
+function buildIsland(id, force){
   const d = DISTRICTS.find(x => x.id === id);
   if (!d || !d.pending) return false;
+  /* AN onDemand DISTRICT BUILDS ONLY WHEN SOMEONE ASKS FOR IT, AND THE GATE HAS TO BE HERE.
+
+     Keeping the three mainland districts out of world-nav's prefetch queue was not enough: that
+     pump is not the only thing that builds a pending island. addWaterGeometry builds one the
+     moment its payload lands, and it runs for every island, so Zayed City was still coming up
+     eleven seconds into a load with the pump told to skip it — measured, not supposed.
+
+     Chasing each driver would mean finding all of them and getting every one right. One gate in
+     the function they all call cannot be gone round. `force` is what a deliberate visit passes:
+     setDistrict and buildAndRegister, the two paths a rail tap or a direct navigation take. */
+  if (d.onDemand && !force) return false;
   /* WAIT FOR THE REAL ROAD NETWORK, ON THE ISLANDS THAT HAVE NOTHING ELSE TO FALL BACK ON.
 
      buildGroundFor runs exactly once — from here, behind d.pending — and the first thing it does
