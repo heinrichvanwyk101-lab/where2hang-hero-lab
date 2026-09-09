@@ -1259,6 +1259,82 @@ function clipToOutline(buildings, outline, margin){
    looser of the two. Swept from 40 m to 250 m before this was written, the kept-way count moves
    by one to three per cent on every island — roads are either on the island or kilometres away,
    with nothing in between — so the number is not load-bearing and no island depends on it. */
+/* PUT BACK THE WAYS THAT LEAVE THE ISLAND AND COME STRAIGHT BACK.
+
+   The way-level clip keeps a road only if some part of it comes within the margin of the land, and
+   that is right for a mainland street but wrong for half an interchange. OSM splits a road at
+   every junction, so a slip road that swings out over the water and rejoins is several ways, and
+   the middle ones touch nothing. They were dropped, and what the owner saw on the phone was the
+   result: a road running out over the water and stopping. Checked against satellite, those roads
+   cross, turn and join again — they are loops, not stubs.
+
+   THE TEST IS A CYCLE, NOT A DISTANCE, and that distinction is the whole reason this is safe.
+   Widening the margin instead would drag in the mainland grid, which on Al Raha begins immediately
+   across the E10. A dropped way is restored only if there is a route from one of its ends, back
+   round to its other end, WITHOUT USING THE WAY ITSELF — that is what "leaves and comes back"
+   means, and a mainland spur cannot satisfy it: the only route home is the way you came.
+
+   The budget bounds the detour. Swept on Al Raha before it was chosen: 6 ways come back at 300 m,
+   18 at 600 m, 25 at 1000 m, and then it STOPS — 25 again at 1500 m — because the loops are all
+   found. It only climbs again at 2500 m, and what it picks up there is local streets, which is the
+   mainland starting to leak. 1000 m is the middle of that plateau: 25 ways of 729 dropped. */
+const LOOP_BUDGET_M = 1000;
+
+function restoreLoops(kept, dropped, ptsOf){
+  if (!kept.length || !dropped.length) return [];
+  const key = p => `${Math.round(p[0] * 10)},${Math.round(p[1] * 10)}`;   // 10 cm
+  const wlen = p => { let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0]-p[i-1][0], p[i][1]-p[i-1][1]); return L; };
+
+  /* Reaching a kept way is reaching home, so its endpoints are the search's destinations. */
+  const home = new Set();
+  for (const w of kept){ const p = ptsOf(w); home.add(key(p[0])); home.add(key(p[p.length-1])); }
+
+  const adj = new Map();
+  const meta = dropped.map((w, i) => {
+    const p = ptsOf(w), u = key(p[0]), v = key(p[p.length-1]), L = wlen(p);
+    if (!adj.has(u)) adj.set(u, []); if (!adj.has(v)) adj.set(v, []);
+    adj.get(u).push({ to: v, L, i }); adj.get(v).push({ to: u, L, i });
+    return { u, v, L };
+  });
+
+  /* Shortest way home from a node over the dropped ways, never using `skip`, giving up past the
+     budget rather than exploring the emirate. */
+  const distHome = (start, skip, budget) => {
+    if (home.has(start)) return 0;
+    if (budget < 0) return Infinity;
+    const dist = new Map([[start, 0]]);
+    const q = [[0, start]];
+    while (q.length){
+      q.sort((a, b) => a[0] - b[0]);
+      const [d, n] = q.shift();
+      if (d > budget) return Infinity;
+      if (d > (dist.get(n) ?? Infinity)) continue;
+      for (const e of (adj.get(n) || [])){
+        if (e.i === skip) continue;
+        const nd = d + e.L;
+        if (nd > budget) continue;
+        if (nd < (dist.get(e.to) ?? Infinity)){
+          dist.set(e.to, nd);
+          if (home.has(e.to)) return nd;
+          q.push([nd, e.to]);
+        }
+      }
+    }
+    return Infinity;
+  };
+
+  const back = [];
+  meta.forEach((m, i) => {
+    if (m.L > LOOP_BUDGET_M) return;
+    const du = distHome(m.u, i, LOOP_BUDGET_M - m.L);
+    if (!isFinite(du)) return;
+    const dv = distHome(m.v, i, LOOP_BUDGET_M - m.L - du);
+    if (!isFinite(dv)) return;
+    if (du + m.L + dv <= LOOP_BUDGET_M) back.push(dropped[i]);
+  });
+  return back;
+}
+
 function clipWaysToOutline(items, outline, margin, pointsOf){
   if (!outline || outline.length < 1 || !items || !items.length) return items;
   const rings = Array.isArray(outline[0][0]) ? outline : [outline];
@@ -2267,7 +2343,11 @@ async function bakeIsland(isle, proj){
      tell those apart. */
   const onIsle = (items, pointsOf) => clipWaysToOutline(items, outline, CLIP_MARGIN_M, pointsOf);
   const PTS = it => it.pts, RING = it => it, PARK = it => it.r;
-  const roadsOn   = onIsle(roads,      PTS);
+  let   roadsOn   = onIsle(roads,      PTS);
+  /* Before anything is reported, put back the slip roads and bridges that leave and return. */
+  const roadsKept = new Set(roadsOn);
+  const roadsBack = restoreLoops(roadsOn, roads.filter(r => !roadsKept.has(r)), PTS);
+  roadsOn = roadsOn.concat(roadsBack);
   const pathsOn   = onIsle(paths,      PTS);
   const racewayOn = onIsle(raceway,    PTS);
   const plazasOn  = onIsle(plazasKept, RING);
@@ -2286,6 +2366,13 @@ async function bakeIsland(isle, proj){
                  row('hardEdge', hardEdge, hardEdgeOn);
     process.stderr.write(`  ${isle.id}: off-island pre-clip at ${CLIP_MARGIN_M} m — ` +
                          (line || 'nothing dropped, every layer was already on the island') + `\n`);
+    if (roadsBack.length){
+      const cls = {};
+      for (const r of roadsBack) cls[r.cls] = (cls[r.cls] || 0) + 1;
+      process.stderr.write(`  ${isle.id}: ${roadsBack.length} road way(s) put back — they leave the ` +
+        `island and rejoin it within ${LOOP_BUDGET_M} m (` +
+        Object.entries(cls).map(([k, n]) => `${k} ${n}`).join(', ') + `)\n`);
+    }
   }
   return { id:isle.id, name:isle.name, extent, landmarks:marks, outline,
            roads:roadsOn, buildings, parks:parksOn,
