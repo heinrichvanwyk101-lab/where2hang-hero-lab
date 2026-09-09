@@ -711,6 +711,10 @@ const PROG = typeof location !== 'undefined' && location.search.includes('prog')
 const VAC_ON = location.search.includes('vac');
 
 const PH = {}; let _phT = performance.now();
+/* Readable from a bench. The phase marks are the only record of where the wall clock goes
+   before the first frame, and until now they existed only for the perf message posted to the
+   parent page — which no bench receives. */
+if (typeof window !== 'undefined') window.__PH = PH;
 const phase = name => { PH[name] = performance.now() - _phT; _phT = performance.now(); };
 /* phase() charges everything since the previous marker, which is right for a sequence and wrong
    for a span you want isolated inside one. phaseAt takes its own start and still moves the marker,
