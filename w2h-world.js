@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v340';
+export const BUILD = 'world v341';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -1143,6 +1143,9 @@ function pointInRing(ring, x, y){
    the beginning: perimeter divided by the target segment. COAST_SEG_M is the one number to move. */
 const COAST_SEG_M = 6;                  // metres of coastline per segment
 const GROUND_W    = 896;                // ground canvas width in pixels; see paintGround
+/* ?gprog=0 paints the ground once at full resolution, as it did before world v341. On by default:
+   the two-paint path is what takes the ground off the critical path to the first frame. */
+const GROUND_PROGRESSIVE = !(typeof location !== 'undefined' && /[?&]gprog=0\b/.test(location.search));
 
 function closedSpline(pts, n){
   const N = pts.length;
@@ -2759,7 +2762,7 @@ function paintMacroTint(g, W, H, PX, PY, U, darkHex, lightHex, strength){
   g.drawImage(small, 0, 0, W, H);
   g.restore();
 }
-function paintGround(d, plan){
+function paintGround(d, plan, qual){
   /* THE CANVAS IS CUT TO THE ISLAND, and this is where the ground plan gets its resolution back.
 
      Corniche's top cap used to land on canvas pixels 78..956 by 337..738 of a 1024 square: 878
@@ -2838,8 +2841,12 @@ function paintGround(d, plan){
      painted three times finer than Corniche. */
   const FINEST_M_PER_PX = 3;
   const floorW = Math.min(GROUND_W, Math.round(spanM / FINEST_M_PER_PX));
-  const W  = d.r >= 50 ? Math.min(3072, Math.max(floorW, Math.round(spanM / TARGET_M_PER_PX)))
-                       : 768;
+  const Wfull = d.r >= 50 ? Math.min(3072, Math.max(floorW, Math.round(spanM / TARGET_M_PER_PX)))
+                          : 768;
+  /* qual < 1 IS THE FIRST OF TWO PAINTS. Every length in this function is derived from W, so one
+     multiplier here scales the whole drawing — road widths, hatch spacing, text — and the canvas
+     stays a faithful smaller copy rather than a full-detail drawing on a small sheet. */
+  const W  = Math.max(64, Math.round(Wfull * (qual || 1)));
   const H  = Math.max(64, Math.round(W * h.y / h.x));
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -10354,7 +10361,21 @@ function buildGroundFor(d){
     sp.renderOrder = 20;
     d.group.add(sp);
   });
-  const tex = paintGround(d, plan);
+  /* PROGRESSIVE GROUND (world v341). paintGround and the texture upload behind it are the largest
+     single cost in the load — 42 per cent of buildWorld, which is itself 59 per cent of the wait
+     before anything is on screen. The opening shot is the whole archipelago, where Corniche's
+     ground is on screen at a few hundred pixels and 9 m/px is detail nobody can resolve.
+
+     So the ground is painted twice: once at half the linear resolution, which is a quarter of the
+     pixels and roughly a quarter of the cost, and again at full resolution once the world is up
+     and idle. The second paint swaps the map on the materials that already exist, so nothing is
+     rebuilt and nothing moves — the ground simply sharpens.
+
+     ?gprog=0 turns it off and paints once at full resolution, which is the behaviour before this
+     change. The dial is here because this one IS visible, unlike the canvas-size work: on a slow
+     device the sharpen can land late enough to notice. */
+  const gq = GROUND_PROGRESSIVE ? 0.5 : 1;
+  const tex = paintGround(d, plan, gq);
   /* Props into the DETAIL layer only. At world scale a palm is a third of a pixel; paying for
      four hundred of them per island at exactly the moment five islands are on screen would be
      paying for invisible geometry. The LOD swap already exists and this is what it is for. */
@@ -10418,6 +10439,34 @@ function buildGroundFor(d){
     m.userData.planMats = [planTop, planSide];
     m.userData.ground   = true;
   });
+
+  /* THE SECOND PAINT. Held as a closure on the district rather than run on a timer inside
+     buildWorld, because only the page knows when the first frame is actually on screen — running
+     it from here would put the expensive paint back on the startup path with extra steps.
+
+     Every material above shares the one canvas, so the swap is five map assignments and a
+     regenerated emissive glow. The old texture is disposed after the new one is attached, never
+     before: dropping a texture that is still the active map is a black island for one frame. */
+  if (gq < 1){
+    d.refineGround = () => {
+      d.refineGround = null;
+      const full = paintGround(d, plan, 1);
+      const glow = roadGlowMap(full.image);
+      const old  = tex, oldGlow = night.emissiveMap;
+      for (const mat of [night, day, dusk, planTop]){
+        if (!mat) continue;
+        mat.map = full;
+        mat.needsUpdate = true;
+      }
+      if (glow && night.emissive){
+        night.emissiveMap = glow;
+        night.emissiveIntensity = GROUND_NIGHT_EMI * 4;
+        night.needsUpdate = true;
+      }
+      if (old && old.dispose) old.dispose();
+      if (oldGlow && oldGlow !== glow && oldGlow.dispose) oldGlow.dispose();
+    };
+  }
 }
 
 /* THE UNBUILT PLATFORM HAD NO DAY OR DUSK MATERIAL, AND THAT IS THE GREY ISLAND.
@@ -10572,6 +10621,16 @@ function buildIsland(id, force){
 }
 
 return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, PERF,
+         /* THE SECOND GROUND PAINT, for the page to call once the first frame is on screen. One
+            island per call and it returns whether any work is left, so the caller can spread the
+            repaints across idle callbacks instead of spending them all in one frame — six full
+            canvases back to back would be a stall exactly where the load stopped being one. */
+         refineGroundStep: () => {
+           const d = DISTRICTS.find(x => typeof x.refineGround === 'function');
+           if (!d) return false;
+           d.refineGround();
+           return DISTRICTS.some(x => typeof x.refineGround === 'function');
+         },
          refreshBeach: buildBeachFor,
          beachPending,
          buildIsland, buildCornicheRest, buildCornicheMass, footprintsFor, groundFeaturesFor,

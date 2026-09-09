@@ -1395,7 +1395,7 @@ phase('propKit');
 // filtering — and only the renderer knows how much is available.
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
-        footprintsFor,
+        footprintsFor, refineGroundStep,
         groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline } =
   buildWorld(scene, kit, {
     districts: DIST,
@@ -6632,6 +6632,25 @@ phase('prefetch');
    measuring something other than what it claims and every conclusion drawn from it is suspect. */
 const FRAME_MS = [];
 let _frame0 = true, _tick0Done = false;
+
+/* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
+   (Safari still has none), and a generous first delay so the opening camera move — which is the
+   part a person is actually watching — is over before any of this runs. refineGroundStep returns
+   whether work is left, so this stops on its own and never polls. */
+function scheduleGroundRefine(delay){
+  if (typeof refineGroundStep !== 'function') return;
+  const run = () => {
+    let more = false;
+    try { more = refineGroundStep(); }
+    catch (e){ console.warn('ground refine failed, leaving the half-resolution paint', e); return; }
+    if (more) scheduleGroundRefine(120);
+  };
+  const ms = delay === undefined ? 1200 : delay;
+  setTimeout(() => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 2000 });
+    else run();
+  }, ms);
+}
 /* IDLE, BECAUSE THE WORLD NEVER UNMOUNTS.
 
    The world is the background of every route — home, search, events, map, profile — so it is
@@ -7258,6 +7277,12 @@ function frame(){
     PH.firstFrame = performance.now() - _phT;
     PH['#page']   = performance.now() - PAGE_T0;
     _frame0 = false;
+    /* THE SECOND GROUND PAINT STARTS HERE, and here is the whole point of it. The ground is built
+       at half resolution so that this frame happens sooner; repainting it at full resolution is
+       the other half of that bargain and it must not begin until the frame it paid for is on
+       screen. One island per idle callback, never two in a frame, so the sharpen costs a slice of
+       idle time rather than a stall in the middle of the opening move. */
+    scheduleGroundRefine();
   }
   const _fms = performance.now() - t0;
   /* Charged to the mesh revealed at the top of this frame. Only in ?warm1, where exactly one was. */

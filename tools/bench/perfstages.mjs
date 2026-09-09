@@ -78,6 +78,17 @@ else {
     console.log(`  ${String(Math.round(x.ms)).padStart(6)}  ${String((x.ms / denom * 100).toFixed(1) + '%').padStart(6)}  ` +
       `${String(x.calls ?? '').padStart(6)}  ${String(x.calls ? (x.ms / x.calls).toFixed(2) : '').padStart(8)}  ${x.stage}`);
   }
+  /* PROGRESSIVE GROUND MAKES THIS TABLE LIE IF NOTHING SAYS SO. From world v341 the ground is
+     painted twice — half resolution during the build, full resolution on idle afterwards — and
+     both land in the same PERF key. So paintGround's total here is build-time plus refine-time
+     while #total is build-time alone, which is why the share can exceed 100 per cent. The call
+     count is the tell: two per island rather than one. */
+  const pg = r.rows.find(x => x.stage === 'paintGround');
+  if (pg && pg.calls > r.built) {
+    console.log(`\n  NOTE: paintGround ran ${pg.calls} times for ${r.built} districts — progressive ground is on,`);
+    console.log('        so its ms above is both passes and the shares are inflated. Use firstframe.mjs');
+    console.log('        for the number that matters, or ?gprog=0 to measure the single-paint path.');
+  }
   if (r.total) {
     const rest = Math.max(0, r.total - named);
     console.log(`  ${String(Math.round(rest)).padStart(6)}  ${String((rest / denom * 100).toFixed(1) + '%').padStart(6)}` +
