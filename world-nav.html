@@ -7591,6 +7591,12 @@ window.W2H = {
      the same point — a bench that reimplements anchorWorld is testing its own copy. See
      tools/bench/transform-check.mjs. */
   anchorWorld, bmap: BMAP,
+  /* THE STAGE BREAKDOWN, so it can be read rather than inferred. buildWorld is 70 per cent of the
+     load and PERF has held the per-stage millisecond totals and call counts the whole time — but
+     only two things could see them: a console nobody is holding, and the top eight forwarded to
+     the parent in the perf message. Exposing the table lets tools/bench/perfstages.mjs read all of
+     it, including the call counts, which are what say whether a stage is slow or merely frequent. */
+  PERF,
   /* Frames actually drawn, for a bench to read the settled-frame cap (nav v212). */
   frames: () => renderer.info.render.frame,
 };

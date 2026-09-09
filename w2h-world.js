@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v339';
+export const BUILD = 'world v340';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2821,7 +2821,24 @@ function paintGround(d, plan){
     return isFinite(v) && v >= 2 && v <= 40 ? v : 6;
   })();
   const spanM = 2 * d.r * M_PER_UNIT * h.x * GROUND_PAD;
-  const W  = d.r >= 50 ? Math.min(3072, Math.max(GROUND_W, Math.round(spanM / TARGET_M_PER_PX)))
+  /* THE FLOOR IS A FLOOR ON PIXELS, AND ON A NARROW ISLAND THAT IS THE WRONG UNIT.
+
+     GROUND_W exists to give the short axis enough pixels for a road to read, and on the islands it
+     was reasoned about it does exactly that. Al Maryah is the case it was never checked against:
+     the island is 1,075 m across and 2.65 times as long as it is wide, so the floor pins W at 896
+     — 1.2 metres to the pixel — and H follows the aspect to 2,373. That is a 2.13 megapixel canvas
+     for the SMALLEST island in the world, second only to Corniche, which is nineteen kilometres
+     across and gets 9.0 m/px. Measured: the six ground canvases are 10.7 Mpx and Al Maryah alone
+     is a fifth of them, for detail no viewer can resolve.
+
+     So the floor now yields when it would paint finer than FINEST_M_PER_PX. It still gives the
+     short axis its 896 pixels on every island where 896 pixels are not absurd — Al Reem, Yas and
+     Al Raha all keep exactly the canvas they had, because their spans are wide enough that 896 is
+     already coarser than this limit. Only Al Maryah moves, 2.13 Mpx to 0.34, and it is still
+     painted three times finer than Corniche. */
+  const FINEST_M_PER_PX = 3;
+  const floorW = Math.min(GROUND_W, Math.round(spanM / FINEST_M_PER_PX));
+  const W  = d.r >= 50 ? Math.min(3072, Math.max(floorW, Math.round(spanM / TARGET_M_PER_PX)))
                        : 768;
   const H  = Math.max(64, Math.round(W * h.y / h.x));
   const cv = document.createElement('canvas');
