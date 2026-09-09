@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-09T17:19:29.561Z",
+ "generated": "2026-09-09T17:35:29.055Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -7667,7 +7667,7 @@
      "y": -3491
     }
    },
-   "bytes": 1422132,
+   "bytes": 1417074,
    "coast": {
     "why": "93 coast chains, took the closed ring containing the island centre",
     "rings": [
@@ -9410,7 +9410,7 @@
    "counts": {
     "outline": 1905,
     "landmasses": 1,
-    "roads": 7937,
+    "roads": 7875,
     "roadsInBox": 10687,
     "buildings": 20258,
     "inBox": 32583,
@@ -9647,7 +9647,7 @@
      "y": 1272.9
     }
    },
-   "bytes": 30949,
+   "bytes": 21235,
    "coast": {
     "why": "10 coast chains, took the closed ring containing the island centre",
     "rings": [
@@ -9840,7 +9840,7 @@
    "counts": {
     "outline": 47,
     "landmasses": 1,
-    "roads": 271,
+    "roads": 159,
     "roadsInBox": 1253,
     "buildings": 106,
     "inBox": 1132,
@@ -11811,7 +11811,7 @@
      "y": 689.5
     }
    },
-   "bytes": 126424,
+   "bytes": 124467,
    "coast": {
     "why": "21 coast chains, took the closed ring containing the island centre plus 2 named companion ring(s)",
     "rings": [
@@ -12204,7 +12204,7 @@
    "counts": {
     "outline": 481,
     "landmasses": 3,
-    "roads": 807,
+    "roads": 782,
     "roadsInBox": 1210,
     "buildings": 372,
     "inBox": 960,
@@ -17784,7 +17784,7 @@
     ]
    ],
    "landmarks": {},
-   "bytes": 85927,
+   "bytes": 85123,
    "coast": {
     "why": "13 coast chains, 5 coast run(s) sewn to the boundary: 9 landmass(es) inside the traced boundary (0 sliver(s) under 5000 m² dropped, 0 lagoon(s) to water)",
     "rings": null
@@ -17792,7 +17792,7 @@
    "counts": {
     "outline": 319,
     "landmasses": 9,
-    "roads": 449,
+    "roads": 439,
     "roadsInBox": 1153,
     "buildings": 584,
     "inBox": 3644,
@@ -17896,7 +17896,7 @@
     ]
    ],
    "landmarks": {},
-   "bytes": 28666,
+   "bytes": 28585,
    "coast": {
     "why": "traced shape as drawn (17 pts) — no coastline crosses the boundary (0 island ring(s) inside)",
     "rings": null
@@ -17904,7 +17904,7 @@
    "counts": {
     "outline": 17,
     "landmasses": 1,
-    "roads": 186,
+    "roads": 185,
     "roadsInBox": 280,
     "buildings": 258,
     "inBox": 420,
@@ -19484,7 +19484,7 @@
     ]
    ],
    "landmarks": {},
-   "bytes": 229571,
+   "bytes": 228040,
    "coast": {
     "why": "8 coast chains, 10 coast run(s) sewn to the boundary: 2 landmass(es) inside the traced boundary (0 sliver(s) under 5000 m² dropped, 0 lagoon(s) to water)",
     "rings": null
@@ -19492,7 +19492,7 @@
    "counts": {
     "outline": 385,
     "landmasses": 2,
-    "roads": 1229,
+    "roads": 1222,
     "roadsInBox": 1710,
     "buildings": 7490,
     "inBox": 10675,
@@ -19507,7 +19507,7 @@
     "waterIslands": 0,
     "beaches": 8,
     "hardEdge": 19,
-    "parking": 125,
+    "parking": 118,
     "withVenues": 105
    }
   },
