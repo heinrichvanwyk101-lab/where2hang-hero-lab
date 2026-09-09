@@ -509,6 +509,63 @@
 </div>
 <div id="err"></div>
 
+<!-- A FAILURE THAT CANNOT HIDE, REGISTERED BEFORE THE MODULE THAT MIGHT FAIL.
+
+     The module below installs its own window 'error' handler and writes to #err — which works for
+     every fault INSIDE the module and for none of the faults that stop it running at all. If the
+     import map is not honoured, or a CDN module 404s, or the browser rejects the module graph, that
+     handler is never registered, nothing is written, and the page sits there with an empty canvas
+     and no clue anywhere. "Not loading" on a browser I cannot reach was exactly that: the app
+     around the iframe was healthy, the rail updated, and the world was silent.
+
+     This is a CLASSIC script, deliberately — it runs and registers even when no module does. It
+     also carries a watchdog: if window.W2H has not appeared after 25 seconds the world did not come
+     up, and the reasons that are worth knowing are printed on the spot rather than needing a
+     desktop and a cable to find. HTMLScriptElement.supports('importmap') is the first of them,
+     because a browser without import-map support cannot resolve the bare "three" specifier this
+     page is built on, and Samsung Internet trails Chromium by several versions.
+
+     Everything here is additive and guarded. It must never be the thing that breaks the page. -->
+<script>
+(function(){
+  var el = document.getElementById('err');
+  var seen = [];
+  function show(text){
+    if (!el) el = document.getElementById('err');
+    if (el){ el.style.display = 'block'; el.textContent = text; }
+    try { parent.postMessage({ w2h:true, type:'worldError', text:text }, '*'); } catch (e) {}
+  }
+  window.__w2hFail = function(where, e){
+    var msg = where + '\n' + (e && e.stack ? e.stack : e);
+    seen.push(msg); console.error(where, e); show(msg);
+  };
+  window.addEventListener('error', function(ev){
+    /* A failed <script>/module load fires an error event on the ELEMENT, which arrives here in the
+       capture phase with no ev.error — that is the case this whole block exists for, so it is
+       reported by target rather than skipped for having no Error object. */
+    if (ev.target && ev.target !== window && ev.target.src){ window.__w2hFail('load ' + ev.target.src, ev.message || 'failed to load'); return; }
+    window.__w2hFail('window', ev.error || ev.message);
+  }, true);
+  window.addEventListener('unhandledrejection', function(ev){ window.__w2hFail('promise', ev.reason); });
+  setTimeout(function(){
+    if (window.W2H) return;                     // it came up; nothing to say
+    var gl = null, ver = 'none';
+    try {
+      var c = document.createElement('canvas');
+      gl = c.getContext('webgl2'); if (gl) ver = 'webgl2';
+      else { gl = c.getContext('webgl'); if (gl) ver = 'webgl1'; }
+    } catch (e) { ver = 'threw: ' + e.message; }
+    var imp = 'unknown';
+    try { imp = (window.HTMLScriptElement && HTMLScriptElement.supports) ? String(HTMLScriptElement.supports('importmap')) : 'no supports()'; } catch (e) {}
+    show('World did not start in 25s.\n' +
+         'importmap: ' + imp + '\n' +
+         'webgl: ' + ver + '\n' +
+         'ua: ' + navigator.userAgent + '\n' +
+         (seen.length ? seen.join('\n---\n') : 'no error was reported'));
+  }, 25000);
+})();
+</script>
+
 <script type="importmap">{ "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
@@ -516,12 +573,14 @@
 
 <script type="module">
 const errEl = document.getElementById('err');
+/* Delegates to the classic-script reporter above so there is one path to the screen and to the
+   host, instead of two that can disagree. Falls back to its own writing if that block is absent. */
 function fail(where, e){
+  if (window.__w2hFail) return window.__w2hFail(where, e);
   errEl.style.display='block';
   errEl.textContent = where + '\n' + (e && e.stack ? e.stack : e);
   console.error(where, e);
 }
-window.addEventListener('error', ev => fail('window', ev.error || ev.message));
 /* DECLARED HERE, NOT NEAR paintDiag WHICH USES IT, AND THAT PLACEMENT IS THE FIX ITSELF. This
    was a `let` declared far down the file, right next to paintDiag — reads naturally there,
    keeps related code together. But setWorld() runs synchronously at module top level (see its
@@ -757,7 +816,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v229', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v230', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
