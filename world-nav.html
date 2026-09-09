@@ -816,7 +816,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v236', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v237', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2855,7 +2855,31 @@ if (/[?&]embed=1/.test(location.search)){
          direct feedback that the tighter default read as zooming onto the building face rather
          than placing it. Worth tuning further once seen live against more venues. */
       else if (m.type === 'setVenue'){
-        const d = DISTRICTS.find(x => x.id === m.id);
+        /* THE ISLAND IS DECIDED HERE TOO (nav v237), and setResultsReal has said so since v201:
+           "The app classifies a venue by the bake's bounding boxes, and those overlap." setVenue
+           was left trusting the id the app sends, so the same class of fault stayed live on the
+           one path where it is most visible — tapping a venue and flying to it.
+
+           It bit exactly as predicted. The app's ISLAND_EXTENTS is a HARDCODED COPY of numbers the
+           bake owns, and this morning's re-bake grew Al Reem's extent from y1 1274.9 to 2561 to
+           take in its restored northern landmasses. The app's copy did not move, so 68 venues on
+           that new ground fell out of Al Reem's box, through the ordered list, and into Corniche's
+           mainland catch-all — drawn against the wrong island's diorama origin, which puts them a
+           kilometre or more from where they are.
+
+           locateReal tests the real outlines, so it cannot drift with a re-bake: the outlines ARE
+           the bake. The app's id is now a hint, used only when the point is on no modelled land.
+           A disagreement is reported rather than silently corrected — a hint that is wrong means
+           the app's table has drifted again, and that should be visible the first time it happens
+           rather than the next time somebody films it. */
+        const realId = (typeof locateReal === 'function' && Number.isFinite(m.x) && Number.isFinite(m.z))
+          ? locateReal(m.x, m.z, m.id) : null;
+        if (realId && realId !== m.id){
+          const msg = 'setVenue: app said ' + m.id + ', outlines say ' + realId + ' — app island table has drifted from the bake';
+          console.warn(msg);
+          try { parent.postMessage({ w2h:true, type:'worldError', text:msg }, '*'); } catch(e){}
+        }
+        const d = DISTRICTS.find(x => x.id === (realId || m.id));
         if (d && Number.isFinite(m.x) && Number.isFinite(m.z)){
           const idx = window.__basemapIndex;
           const entry = idx && (idx.islands || []).find(x => x.id === d.id);
