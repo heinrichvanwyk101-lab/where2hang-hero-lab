@@ -1,0 +1,155 @@
+# Does Overture's base theme hold the coastline OpenStreetMap is missing?
+#
+# WHY THIS EXISTS. Al Raha's land ring stops short of ground that exists: drawn flat beside a
+# satellite view (tools/bench/plan.mjs) a dozen Overture footprints stand in open sea east of the
+# coastline, with roads crossing the water beside them. The island is noCoastline:true, so its land
+# comes from clipping OSM's natural=coastline to a hand-drawn frame — and where OSM's coastline does
+# not close around Al Raha Beach's recent reclamation, no land ring forms and the ground is simply
+# absent. As baked: 9 rings, 2.6 km2, largest described by 87 points (one vertex per 93 m), and
+# inland water of 9 slivers totalling 0.00 km2 against Yas's 2.94.
+#
+# Overture's base theme carries land and water polygons from the same release the buildings already
+# come from, reached by the same DuckDB + httpfs + spatial path. Whether it is BETTER here is a
+# question about the data, not about our code, so this asks it before anything is written.
+#
+# WRITES NOTHING AND COMMITS NOTHING, deliberately — the point is to look before changing a bake
+# that feeds nine islands. Run it, read the numbers, then decide.
+#
+# TO RUN: Actions tab -> "Probe Overture coastline" -> Run workflow.
+name: Probe Overture coastline
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Overture release, e.g. 2026-07-22.0. Blank resolves the latest from the STAC catalog."
+        required: false
+        default: ""
+      south:
+        description: "bbox south (lat)"
+        default: "24.4300"
+      west:
+        description: "bbox west (lng)"
+        default: "54.5600"
+      north:
+        description: "bbox north (lat)"
+        default: "24.4600"
+      east:
+        description: "bbox east (lng)"
+        default: "54.6150"
+      label:
+        description: "What this window is, for the log"
+        default: "Al Raha"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install DuckDB
+        run: |
+          set -e
+          curl -sSL https://install.duckdb.org | sh
+          echo "$HOME/.duckdb/cli/latest" >> "$GITHUB_PATH"
+
+      - name: Resolve the release
+        id: rel
+        run: |
+          set -e
+          REL='${{ inputs.release }}'
+          if [ -z "$REL" ]; then
+            REL=$(duckdb -noheader -list -c \
+              "INSTALL httpfs; LOAD httpfs;
+               SELECT latest FROM read_json_auto('https://stac.overturemaps.org/catalog.json');" \
+              | tail -1 | tr -d '[:space:]')
+          fi
+          if [ -z "$REL" ]; then echo "Could not resolve an Overture release."; exit 1; fi
+          echo "release=$REL" >> "$GITHUB_OUTPUT"
+          echo "Overture release: $REL"
+
+      - name: What Overture holds in this window
+        env:
+          REL: ${{ steps.rel.outputs.release }}
+          S: ${{ inputs.south }}
+          W: ${{ inputs.west }}
+          N: ${{ inputs.north }}
+          E: ${{ inputs.east }}
+        run: |
+          set -e
+          echo "=== ${{ inputs.label }}  lat $S..$N  lng $W..$E  release $REL ==="
+          echo
+          # bbox is a struct on every Overture row and is what makes this cheap: the predicate
+          # prunes row groups before any geometry is read, so a window this size is seconds.
+          for TYPE in water land land_cover infrastructure; do
+            echo "--- theme=base type=$TYPE ---"
+            duckdb -c "
+              INSTALL httpfs; LOAD httpfs;
+              INSTALL spatial; LOAD spatial;
+              SET s3_region='us-west-2';
+              SELECT
+                COALESCE(subtype,'(none)')                      AS subtype,
+                COALESCE(class,'(none)')                        AS class,
+                COUNT(*)                                        AS n,
+                ROUND(SUM(ST_Area_Spheroid(geometry))/1e6, 3)   AS km2,
+                ROUND(AVG(ST_NPoints(geometry)), 1)             AS avg_pts,
+                MAX(ST_NPoints(geometry))                       AS max_pts
+              FROM read_parquet('s3://overturemaps-us-west-2/release/$REL/theme=base/type=$TYPE/*',
+                                hive_partitioning=1)
+              WHERE bbox.xmin BETWEEN $W AND $E
+                AND bbox.ymin BETWEEN $S AND $N
+              GROUP BY 1,2
+              ORDER BY km2 DESC NULLS LAST, n DESC
+              LIMIT 25;
+            " || echo "  (type=$TYPE not present in this release, or the query failed)"
+            echo
+          done
+
+      - name: How much detail, compared with what we ship
+        env:
+          REL: ${{ steps.rel.outputs.release }}
+          S: ${{ inputs.south }}
+          W: ${{ inputs.west }}
+          N: ${{ inputs.north }}
+          E: ${{ inputs.east }}
+        run: |
+          set -e
+          # The number that decides this. Our Al Raha coast runs one vertex per 93 m, which cannot
+          # describe Al Muneera's spirals or Al Bandar's marina fingers. If Overture's water and
+          # land polygons here are of the same order, the source is no better and the fix has to be
+          # a hand trace instead.
+          echo "--- perimeter detail of the largest water and land polygons in the window ---"
+          duckdb -c "
+            INSTALL httpfs; LOAD httpfs;
+            INSTALL spatial; LOAD spatial;
+            SET s3_region='us-west-2';
+            SELECT 'water' AS layer,
+                   COALESCE(names.primary, class, subtype, '(unnamed)') AS name,
+                   ROUND(ST_Area_Spheroid(geometry)/1e6, 3)            AS km2,
+                   ST_NPoints(geometry)                                 AS pts,
+                   ROUND(ST_Perimeter_Spheroid(geometry) / NULLIF(ST_NPoints(geometry),0), 1) AS m_per_vertex
+            FROM read_parquet('s3://overturemaps-us-west-2/release/$REL/theme=base/type=water/*',
+                              hive_partitioning=1)
+            WHERE bbox.xmin BETWEEN $W AND $E AND bbox.ymin BETWEEN $S AND $N
+            ORDER BY km2 DESC NULLS LAST
+            LIMIT 12;
+          " || echo "  (water detail query failed)"
+          echo
+          duckdb -c "
+            INSTALL httpfs; LOAD httpfs;
+            INSTALL spatial; LOAD spatial;
+            SET s3_region='us-west-2';
+            SELECT 'land' AS layer,
+                   COALESCE(names.primary, class, subtype, '(unnamed)') AS name,
+                   ROUND(ST_Area_Spheroid(geometry)/1e6, 3)            AS km2,
+                   ST_NPoints(geometry)                                 AS pts,
+                   ROUND(ST_Perimeter_Spheroid(geometry) / NULLIF(ST_NPoints(geometry),0), 1) AS m_per_vertex
+            FROM read_parquet('s3://overturemaps-us-west-2/release/$REL/theme=base/type=land/*',
+                              hive_partitioning=1)
+            WHERE bbox.xmin BETWEEN $W AND $E AND bbox.ymin BETWEEN $S AND $N
+            ORDER BY km2 DESC NULLS LAST
+            LIMIT 12;
+          " || echo "  (land detail query failed)"
+          echo
+          echo "For comparison, what data/isle-raha.json ships today:"
+          echo "  land    9 rings, 2.6 km2 total, largest 1.37 km2 in 87 points = 93 m per vertex"
+          echo "  water   9 slivers, 4 to 336 m2 each, 0.00 km2 total"
