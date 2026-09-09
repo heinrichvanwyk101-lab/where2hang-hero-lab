@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-08T16:25:07.146Z",
+ "generated": "2026-09-09T03:53:43.974Z",
  "source": "Buildings: Overture Maps Foundation, ODbL 1.0 (conflated from OpenStreetMap, Esri Community Maps, Microsoft ML Buildings, Google Open Buildings). Coastline, roads, parks and landmarks: OpenStreetMap contributors, ODbL 1.0.",
  "buildingSource": "overture",
  "origin": {
@@ -9137,11 +9137,11 @@
      "y": 689.5
     }
    },
-   "bytes": 173378,
+   "bytes": 175606,
    "counts": {
     "outline": 296,
     "landmasses": 1,
-    "roads": 883,
+    "roads": 902,
     "buildings": 180,
     "inBox": 519,
     "withHeight": 56,
