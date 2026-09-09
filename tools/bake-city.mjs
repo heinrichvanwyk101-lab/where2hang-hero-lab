@@ -163,15 +163,31 @@ const ISLANDS = [
      every island (Al Bandar, Al Muneera, Al Zeina, Al Dana …) come from the survey. The frame also
      sets the island's extent, so the hand-placed coordinates in w2h-world.js keep their origin
      across re-bakes. The bbox only has to fetch everything the frame needs. */
-  { id:'raha', name:'Al Raha', bbox:[24.4300, 54.5600, 24.4600, 54.6150], centre:[24.4460, 54.5850],
+  /* THE EAST CUT USED TO LAND MID-DISTRICT. It sat at longitude 54.6112, which is short of Al
+     Zeina and the east end of Al Raha Boulevard: 36 venues addressed "Al Raha Beach, Al Zeina",
+     "Al Raha Blvd" and "Beach - Precinct B" fell outside the frame and so outside the modelled
+     land, and the world had nowhere to fly them to. They span lat 24.4501 to 24.4560 and lng
+     54.6114 to 54.6182. The cut now clears them.
+
+     THE NORTH EDGE THREADS A 185 m GAP AND THE NUMBER IS NOT NEGOTIABLE. Yas's own baked outline
+     reaches south to lat 24.45770 in this longitude range (its south-west corner across the
+     channel), and the venues reach north to 24.45603. A frame drawn past Yas's shore would let
+     landFromCoast attach a slice of Yas to Al Raha, which is the one failure mode that would be
+     invisible in the diff and obvious on screen. 24.4569 sits 75 m clear of the venues and 90 m
+     clear of Yas — checked against data/isle-yas.json, not assumed.
+
+     The southern envelope is untouched, deliberately: Khalifa City's north edge is DERIVED from
+     it (see DEFERRED below) and the E10 belongs to Al Raha. Everything south of that line is
+     Khalifa City's, and Khalifa City is deferred on its own merits, not by accident. */
+  { id:'raha', name:'Al Raha', bbox:[24.4300, 54.5600, 24.4620, 54.6250], centre:[24.4460, 54.5850],
     noCoastline: true,
     outlineLL: [
       [54.5881734,24.4489563], [54.5881551,24.4490593], [54.5811947,24.4475319],
       [54.5811347,24.4475377], [54.5750014,24.4461074], [54.5748943,24.4461175],
       [54.5667020,24.4433125], [54.5666481,24.4433784], [54.5649171,24.4428256],
       [54.5648651,24.4428712], [54.5680941,24.4391831], [54.5679853,24.4392190],
-      [54.5678800,24.4359913], [54.5677624,24.4359725], [54.6111797,24.4483072],
-      [54.6111108,24.4483492], [54.6089666,24.4542213], [54.6089935,24.4542328],
+      [54.5678800,24.4359913], [54.5677624,24.4359725], [54.6210000,24.4476000],
+      [54.6210000,24.4569000], [54.6100000,24.4569000],
       [54.6081634,24.4553932], [54.5887981,24.4502185], [54.5880841,24.4500382],
     ] },
 
