@@ -30,7 +30,39 @@ const idx  = JSON.parse(fs.readFileSync(new URL('../data/index.json', import.met
    on disk keeps the bake's own frame: x, y in emirate metres, w and d in metres. The first cut of
    this script read b.z and b.dp, got undefined, and rasterised 6,297 footprints into zero cells
    without complaining, because Math.floor(NaN) indexes nothing. */
-let pts = isle.buildings.map(b => [b.x, b.y]);
+/* TWO THINGS BROKE THIS SINCE IT WAS WRITTEN, AND BOTH ARE FIXED HERE.
+
+   FIRST, isle.buildings IS EMPTY NOW. The bake splits footprints into data/fp-<id>.json so the
+   island shell stays small, and the key was left in place as an empty array — so this rasterised
+   nothing and threw "no buildings to trace" rather than reporting a moved file. Read the split
+   file when the shell has none.
+
+   SECOND, AND THIS IS THE REAL FAULT: tracing the BAKED island is a feedback loop. Those
+   footprints have already been clipped to within CLIP_MARGIN_M of the frame this trace is meant
+   to replace, so a pass can only ever push the boundary out by that margin, and the run recorded
+   as converging after three passes ("a third pass moves 1") was the loop throttling itself. It is
+   visible on the ground: Zayed City's north edge stops mid-suburb with streets and stock 500 m
+   beyond it, and Overture shows continuous land for another 1.6 km after that.
+
+   W2H_STOCK points at an unclipped export of the fetch box — the raw building centroids the bake
+   itself sees and throws away, fetched by .github/workflows/overture-window.yml with stock=true.
+   Trace from that and the boundary can reach the actual edge of the city in one pass. */
+let pts;
+if (process.env.W2H_STOCK){
+  const raw = JSON.parse(fs.readFileSync(process.env.W2H_STOCK, 'utf8'));
+  const K2 = Math.cos(OLAT * Math.PI / 180), D = Math.PI / 180;
+  pts = raw.pts.map(([lon, lat]) => [(lon - OLON) * D * R * K2, (lat - OLAT) * D * R]);
+  process.stderr.write(`  ${pts.length} unclipped centroids from ${process.env.W2H_STOCK}\n`);
+} else {
+  let stock = isle.buildings;
+  if (!stock || !stock.length){
+    const fp = new URL(`../data/fp-${id}.json`, import.meta.url);
+    stock = JSON.parse(fs.readFileSync(fp, 'utf8')).buildings;
+    process.stderr.write(`  ${stock.length} footprints from fp-${id}.json (the shell carries none)\n`);
+    process.stderr.write(`  NOTE: these are CLIPPED to the current frame — set W2H_STOCK to trace honestly\n`);
+  }
+  pts = stock.map(b => [b.x, b.y]);
+}
 
 /* VENUES SEED THE RASTER TOO, AND LEAVING THEM OUT COST 43 OF THEM.
 

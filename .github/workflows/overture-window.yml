@@ -37,6 +37,10 @@ on:
       release:
         description: "Overture release. Blank resolves the latest from the STAC catalog."
         default: ""
+      stock:
+        description: "Also export every building centroid in the window (for tracing a district frame)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -132,6 +136,55 @@ jobs:
             for (const f of features) by[f.properties.layer] = (by[f.properties.layer] || 0) + 1;
             console.log(`${path}  ${features.length} features  ${JSON.stringify(by)}  ` +
                         `${(fs.statSync(path).size / 1024).toFixed(0)} KB`);
+          '
+
+      # THE UNCLIPPED STOCK, AND WHY IT HAS TO COME FROM HERE.
+      #
+      # tools/frame-from-stock.mjs traces a mainland district's boundary from its own buildings.
+      # It reads the BAKED island — which has already been clipped to within 150 m of the frame the
+      # trace is meant to replace. So the boundary can only ever grow by the clip margin per pass,
+      # and the run that "converged" after three passes was the loop throttling itself, not the
+      # edge being found: Zayed City's frame stops mid-suburb with streets and footprints 500 m
+      # beyond it. Tracing needs the stock the FETCH BOX held, and the bake writes that to the
+      # runner's temp directory and throws it away.
+      #
+      # Centroids only. The frame comes from where buildings are, not what shape they are, and
+      # ten thousand polygons would be megabytes where ten thousand points are a couple of hundred
+      # kilobytes.
+      - name: Export the unclipped building stock
+        if: inputs.stock
+        env:
+          REL: ${{ steps.rel.outputs.release }}
+          S: ${{ inputs.south }}
+          W: ${{ inputs.west }}
+          N: ${{ inputs.north }}
+          E: ${{ inputs.east }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          set -e
+          mkdir -p data/probe
+          duckdb -c "
+            INSTALL httpfs; LOAD httpfs;
+            INSTALL spatial; LOAD spatial;
+            SET s3_region='us-west-2';
+            COPY (
+              SELECT ROUND(ST_X(ST_Centroid(geometry)), 5) AS lon,
+                     ROUND(ST_Y(ST_Centroid(geometry)), 5) AS lat
+              FROM read_parquet('s3://overturemaps-us-west-2/release/$REL/theme=buildings/type=building/*',
+                                hive_partitioning=1)
+              WHERE bbox.xmin BETWEEN $W AND $E AND bbox.ymin BETWEEN $S AND $N
+            ) TO '/tmp/stock.ndjson' (FORMAT JSON, ARRAY false);
+          "
+          node -e '
+            const fs = require("fs");
+            const pts = fs.readFileSync("/tmp/stock.ndjson", "utf8").split("\n").filter(Boolean)
+              .map(l => { const r = JSON.parse(l); return [r.lon, r.lat]; });
+            const path = `data/probe/stock-${process.env.LABEL}.json`;
+            fs.writeFileSync(path, JSON.stringify({
+              window: { south: +process.env.S, west: +process.env.W,
+                        north: +process.env.N, east: +process.env.E },
+              release: process.env.REL, n: pts.length, pts }));
+            console.log(`${path}  ${pts.length} centroids  ${(fs.statSync(path).size/1024).toFixed(0)} KB`);
           '
 
       - name: Commit
