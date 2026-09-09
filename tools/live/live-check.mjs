@@ -86,9 +86,10 @@ const browser = await chromium.launch();
 {
   const page = await browser.newPage({ viewport: { width: 420, height: 900 } });
   const errs = watch(page, 'app');
+  page.on('crash', () => errs.push('PAGE CRASHED (renderer gone — out of memory is the usual cause)'));
   try { await page.goto(APP, { waitUntil: 'load', timeout: 120000 }); }
   catch (e){ say('APP goto failed:', e.message); }
-  await page.waitForTimeout(25000);
+  await page.waitForTimeout(20000);
   const frames = page.frames().map(f => f.url()).filter(u => u && u !== 'about:blank');
   const iframe = await page.evaluate(() => {
     const f = document.querySelector('iframe');
@@ -104,11 +105,45 @@ const browser = await chromium.launch();
   say('frames:', JSON.stringify(frames));
   const inner = page.frames().find(f => /world-nav\.html/.test(f.url() || ''));
   if (inner){
-    const st = await inner.evaluate(() => {
-      const W = window.W2H; if (!W) return { W2H: false };
-      return { W2H: true, built: (W.DISTRICTS || []).filter(d => d.built).length, of: (W.DISTRICTS || []).length };
-    }).catch(e => ({ evalError: e.message }));
-    say('embedded world:', JSON.stringify(st));
+    /* SAMPLED, LIKE THE STANDALONE LOAD, AND FOR A HARDER REASON. "Not coming up at all" and "not
+       finished yet" look identical in one sample, and the standalone world took 97 s to reach 9/9
+       on this same runner — so a single reading inside the app tells you nothing you can act on.
+       What separates them is the shape: a count that climbs is slow, a count that stops is stuck,
+       and a frame that stops answering has died. The last case is the one worth catching, because
+       a renderer that runs out of memory on a phone takes the canvas with it and the page around
+       it stays perfectly healthy — which is exactly what "the rail changed but the model never
+       came up" would look like. */
+    const t1 = Date.now(); let seen = -1, dead = false;
+    for (let i = 0; i < 36; i++){
+      const st = await inner.evaluate(() => {
+        const W = window.W2H;
+        const perf = performance;
+        const mem = perf && perf.memory ? Math.round(perf.memory.usedJSHeapSize / 1048576) : null;
+        if (!W) return { W2H: false, mem };
+        return { W2H: true, built: (W.DISTRICTS || []).filter(d => d.built).length,
+                 of: (W.DISTRICTS || []).length,
+                 fp: (W.DISTRICTS || []).reduce((a, d) => a + (d.fpCount || 0), 0), mem };
+      }).catch(e => ({ gone: e.message.split('\n')[0] }));
+      if (st.gone){ say('  t+' + ((Date.now()-t1)/1000).toFixed(0) + 's  FRAME NOT ANSWERING: ' + st.gone); dead = true; break; }
+      if (st.built !== seen){
+        say('  t+' + ((Date.now()-t1)/1000).toFixed(0) + 's  embedded built ' + st.built + '/' + st.of +
+            '  footprints ' + st.fp + '  heap ' + st.mem + 'MB');
+        seen = st.built;
+      }
+      if (st.of && st.built >= st.of) break;
+      await page.waitForTimeout(5000);
+    }
+    if (!dead) say('embedded world settled after', ((Date.now() - t1) / 1000).toFixed(0) + 's');
+    /* Is anything actually on the canvas, or is it a clear buffer? A world that "loads" and draws
+       nothing is the failure the built count cannot see. */
+    const painted = await inner.evaluate(() => {
+      const c = document.querySelector('canvas');
+      if (!c) return { canvas: false };
+      const r = c.getBoundingClientRect();
+      return { canvas: true, w: Math.round(r.width), h: Math.round(r.height),
+               lost: !!(c.getContext('webgl2') || {}).isContextLost?.() };
+    }).catch(() => ({ canvas: 'unreadable' }));
+    say('canvas:', JSON.stringify(painted));
   } else {
     say('embedded world: NO world-nav frame on the page');
   }
