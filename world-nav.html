@@ -816,7 +816,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v231', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v232', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3140,6 +3140,35 @@ if (/[?&]embed=1/.test(location.search)){
   setTimeout(() => { const g2 = document.getElementById('gl'); if (g2) g2.classList.add('ready'); }, 4000);
 
   post('ready', { build: B_NAV });
+
+  /* THE STARTUP NUMBERS, FROM THE DEVICE THAT ACTUALLY HAS THE PROBLEM (nav v232).
+
+     PH has recorded first-frame cost, texture upload, shader compile and the wait for the first
+     animation frame since the load work began, and every one of those numbers has only ever been
+     read on a development machine — where the world is fast and the question does not arise. The
+     owner's phone is where it takes twenty seconds, and nothing has ever carried these back from
+     it. Screen recordings can time the black screen but cannot say which part of it was shader
+     compilation and which was the island build.
+
+     Posted two seconds after ready rather than with it: several of these fields are written by
+     the first frame and by the texture-upload pass, and a payload assembled at `ready` would
+     report undefined for exactly the entries worth having. The host records it through the same
+     diagnostic channel it already uses for mount/src/ready/error/stuck.
+
+     Numbers only, rounded, no strings from anywhere but this file — it goes into a row in a table
+     and it should stay something a query can average. */
+  setTimeout(() => {
+    const pick = ['#page', 'firstFrame', 'rafWait', 'attract0', 'render0', 'texUp', 'texCount',
+                  'texWorst', 'f0plain', 'f0shadow', 'f0post', 'labels0', 'warmDone'];
+    const out = {};
+    for (const k of pick) if (typeof PH[k] === 'number' && isFinite(PH[k])) out[k] = Math.round(PH[k]);
+    out.dpr = Math.round((window.devicePixelRatio || 1) * 100) / 100;
+    out.vw = window.innerWidth; out.vh = window.innerHeight;
+    out.built = DISTRICTS.filter(d => d.built).length;
+    out.districts = DISTRICTS.length;
+    post('perf', out);
+  }, 2000);
+
   let lastId = null;
   setInterval(() => {
     const id = activeDistrict ? activeDistrict.id : null;
