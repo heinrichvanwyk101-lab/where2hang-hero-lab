@@ -82,6 +82,30 @@ if (process.env.W2H_SEEDS){
   pts = pts.concat(near);
   process.stderr.write(`  ${near.length} venue seeds added to ${isle.buildings.length} footprints\n`);
 }
+/* THE INTENT BOX, AND IT IS NOT A FAILING OF THE TRACE THAT IT NEEDS ONE.
+
+   On an island the stock defines its own boundary: the sea ends it. On the mainland it does not —
+   Zayed City's fabric runs unbroken into Khalifa City, Mussafah and the Corniche, so the largest
+   connected blob of an unclipped window is the window, not a district. Where a district ENDS is a
+   decision about what the model should show; all a trace can do is follow the real edge of the
+   city wherever one exists inside that decision.
+
+   So W2H_BOX states the decision — "s,w,n,e" in degrees — and the trace refines the edge within
+   it. Where the city genuinely stops inside the box the boundary follows the buildings; where it
+   runs on past, the boundary is the box, which is what every mainland frame here already is. That
+   is a smaller claim than "traced from the stock" and it is the true one.
+
+   Generalises W2H_CLIP_W below, which does the same job for one edge and is kept because Zayed
+   City's west limit is a district hand-off rather than an extent. */
+if (process.env.W2H_BOX){
+  const [bs, bw, bn, be] = process.env.W2H_BOX.split(',').map(Number);
+  const K3 = Math.cos(OLAT * Math.PI / 180), D3 = Math.PI / 180;
+  const [mx0, my0] = [(bw - OLON) * D3 * R * K3, (bs - OLAT) * D3 * R];
+  const [mx1, my1] = [(be - OLON) * D3 * R * K3, (bn - OLAT) * D3 * R];
+  const before = pts.length;
+  pts = pts.filter(([x, y]) => x >= mx0 && x <= mx1 && y >= my0 && y <= my1);
+  process.stderr.write(`  intent box ${bs},${bw},${bn},${be} keeps ${pts.length} of ${before}\n`);
+}
 if (!pts.length) throw new Error(id + ': no buildings to trace');
 
 const x0 = Math.min(...pts.map(p=>p[0])) - CELL*(DIL+2), x1 = Math.max(...pts.map(p=>p[0])) + CELL*(DIL+2);
@@ -120,20 +144,56 @@ for (let s=0;s<W*H;s++){ if(!g[s]||lab[s]>=0) continue;
   if (cur.length>best.length) best=cur; nb++; }
 const keep = new Uint8Array(W*H); for (const c of best) keep[c]=1;
 
-/* Walk the boundary: square-tracing (Moore neighbourhood) round the outside of the blob. */
-const at=(i,j)=> (i<0||i>=W||j<0||j>=H) ? 0 : keep[j*W+i];
-let sx=-1, sy=-1;
-outer: for (let j=0;j<H;j++) for (let i=0;i<W;i++) if(at(i,j)){ sx=i; sy=j; break outer; }
-const N8=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
-const ring=[]; let cx=sx, cy=sy, dir=6;
-for (let guard=0; guard<W*H*8; guard++){
-  ring.push([cx,cy]);
-  let moved=false;
-  for (let k=0;k<8;k++){ const d=(dir+5+k)%8; const [dx,dy]=N8[d];
-    if (at(cx+dx, cy+dy)){ cx+=dx; cy+=dy; dir=d; moved=true; break; } }
-  if (!moved) break;
-  if (cx===sx && cy===sy) break;
+/* THE BOUNDARY AS CELL EDGES, NOT AS A WALK — AND THE WALK IS WHY THIS IS BEING REWRITTEN.
+
+   The previous version square-traced the blob with a Moore neighbourhood, which works on a compact
+   shape and fails silently on a complicated one: on the unclipped Zayed City stock it returned
+   after three cells and reported a two-vertex boundary enclosing no area, having found a spur it
+   could walk out of and straight back into. A trace that can return "0.0 km2" without erroring is
+   not a tool anybody can rely on twice.
+
+   So the boundary is CONSTRUCTED rather than walked. Every side of every solid cell whose
+   neighbour is empty is a piece of the boundary, exactly and by definition; emit each as a
+   directed segment oriented counter-clockwise around solid ground, then chain them head to tail.
+   There is no traversal state to get stuck in, spurs and one-cell isthmuses come out correctly,
+   and holes fall out as their own rings for free.
+
+   Cell (i,j) spans x in [i, i+1] and y in [j, j+1] cells from the raster origin; corners are held
+   as integers so chaining is an exact key lookup rather than a distance test. */
+const solidAt = (i,j) => (i<0||i>=W||j<0||j>=H) ? 0 : keep[j*W+i];
+const segs = new Map();                       // "x,y" of the tail -> [head]
+for (let j=0;j<H;j++) for (let i=0;i<W;i++){
+  if (!solidAt(i,j)) continue;
+  if (!solidAt(i,   j-1)) segs.set(`${i},${j}`,     [i+1, j    ]);   // bottom, left to right
+  if (!solidAt(i+1, j  )) segs.set(`${i+1},${j}`,   [i+1, j+1  ]);   // right, up
+  if (!solidAt(i,   j+1)) segs.set(`${i+1},${j+1}`, [i,   j+1  ]);   // top, right to left
+  if (!solidAt(i-1, j  )) segs.set(`${i},${j+1}`,   [i,   j    ]);   // left, down
 }
+const rings = [];
+while (segs.size){
+  const startKey = segs.keys().next().value;
+  let [cx, cy] = startKey.split(',').map(Number);
+  const ring = [];
+  for (;;){
+    const k = `${cx},${cy}`;
+    const nxt = segs.get(k);
+    if (!nxt) break;
+    segs.delete(k);
+    ring.push([cx, cy]);
+    [cx, cy] = nxt;
+    if (cx === +startKey.split(',')[0] && cy === +startKey.split(',')[1]) break;
+  }
+  if (ring.length >= 4) rings.push(ring);
+}
+/* The outer boundary is the ring of greatest area. A hole is a ring of the opposite winding, and
+   a district frame is a single closed shape, so the holes are dropped rather than carried — the
+   bake's own coastline clip is what puts water back inside a district. */
+const ringArea = P => { let a=0; for(let i=0;i<P.length;i++){const q=P[(i+1)%P.length]; a+=P[i][0]*q[1]-q[0]*P[i][1];} return a/2; };
+rings.sort((a,b) => Math.abs(ringArea(b)) - Math.abs(ringArea(a)));
+const ring = rings[0] || [];
+if (!ring.length) throw new Error(id + ': the stock rasterised to no boundary at all');
+process.stderr.write(`  ${rings.length} boundary ring(s), outer has ${ring.length} corners\n`);
+
 /* Douglas-Peucker in metres. */
 const dp=(p,tol)=>{ if(p.length<3) return p;
   const d=(q,a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy;
@@ -142,7 +202,9 @@ const dp=(p,tol)=>{ if(p.length<3) return p;
   let mi=0,md=0; for(let i=1;i<p.length-1;i++){const v=d(p[i],p[0],p[p.length-1]); if(v>md){md=v;mi=i;}}
   if(md<=tol) return [p[0],p[p.length-1]];
   return dp(p.slice(0,mi+1),tol).slice(0,-1).concat(dp(p.slice(mi),tol)); };
-let world = ring.map(([i,j]) => [x0 + (i+0.5)*CELL, y0 + (j+0.5)*CELL]);
+/* Corners, not cell centres: the ring is made of cell EDGES now, so a corner is already the
+   boundary's own position and the half-cell offset the walk needed would push it outward. */
+let world = ring.map(([i,j]) => [x0 + i*CELL, y0 + j*CELL]);
 
 /* A HARD WEST LIMIT, because the stock does not know where the neighbouring district ends. Zayed
    City's built area runs on past Corniche's fetch box and the trace followed it, which would have
