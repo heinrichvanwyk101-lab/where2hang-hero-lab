@@ -135,10 +135,19 @@ const ISLANDS = [
      the guard never fired. A rule that assigns land by which box happens to reach it will keep
      making that mistake in a channel; a point on the ground cannot.
 
-     The point below is the deepest interior point of the lobe, 384 m clear of its own boundary,
-     so it survives any plausible re-survey of the shore. */
+     TWO POINTS, NOT ONE. The census from the first run with the lobe named listed a THIRD Al Reem
+     landmass the picker was also dropping: 1.56 km2 at 24.4962..24.5126 / 54.4017..54.4193, the
+     island's northern shore either side of Reem Mall. Al Reem is three closed rings in OSM and had
+     been shipping as one, which is 2.9 km2 — a third of the island — rendering as open sea. Both
+     points below are the deepest interior point of their ring, 381 m and 454 m clear of their own
+     boundaries, so they survive any plausible re-survey of the shore.
+
+     WHAT IS DELIBERATELY NOT NAMED, because the census lists it and somebody will wonder: a
+     23 km2 ring to the north (Saadiyat), 2.93 km2 to the east and 0.79 km2 to the south-east
+     (mainland across the channel), and Al Maryah's own 1.16 km2. A wider fetch box reaches all of
+     them and none of them is Al Reem. That is exactly why these are named rather than inferred. */
   { id:'reem',     name:'Al Reem',          bbox:[24.4820, 54.3850, 24.5260, 54.4420], centre:[24.4980, 54.4060],
-    also:[[24.49950, 54.39725]] },
+    also:[[24.49950, 54.39725], [24.50525, 54.41031]] },
   { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
   { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
   /* AL RAHA — A MAINLAND PATCH, NOT AN ISLAND, AND SAID SO VIA noCoastline. Al Raha Beach is a

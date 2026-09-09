@@ -197,6 +197,20 @@ jobs:
               'height', String(i.counts.withHeight).padStart(5),
               (i.bytes/1048576).toFixed(2)+' MB');"
 
+      # ------------------------------------------------------------------------------------
+      # THE PUSH REBASES, AND IT LEARNED TO THE HARD WAY.
+      #
+      # A bake takes three minutes end to end and the branch it started from is not the branch it
+      # finishes on. One run lost a complete Al Reem bake to `! [rejected] main -> main` because a
+      # single unrelated commit landed on main while the S3 scan was running: the data was right,
+      # the census was right, and all of it went in the bin because the push was not.
+      #
+      # Rebase and retry. Only data/ is touched here, and this job is the only writer of those
+      # files — the concurrency group makes sure two bakes never run at once — so a rebase onto
+      # whatever arrived meanwhile cannot conflict with anything except another bake, which cannot
+      # exist. Three attempts covers a burst; failing after that is a real problem worth stopping
+      # for rather than looping on.
+      # ------------------------------------------------------------------------------------
       - name: Commit
         if: inputs.mode == 'bake'
         run: |
@@ -205,7 +219,18 @@ jobs:
           git add data/
           if git diff --staged --quiet; then
             echo 'No change in the source data.'
-          else
-            git commit -m "Bake city data (${{ inputs.source }})${{ inputs.island && format(' — {0}', inputs.island) || '' }}"
-            git push
+            exit 0
           fi
+          git commit -m "Bake city data (${{ inputs.source }})${{ inputs.island && format(' — {0}', inputs.island) || '' }}"
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected on attempt $attempt — rebasing onto origin/main and trying again"
+            git fetch origin main
+            git rebase origin/main
+            sleep $((attempt * 5))
+          done
+          echo 'Could not push the bake after three attempts.'
+          exit 1
