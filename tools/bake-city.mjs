@@ -1206,6 +1206,54 @@ function clipToOutline(buildings, outline, margin){
   return out;
 }
 
+/* THE SAME CLIP, FOR EVERYTHING THAT IS NOT A BUILDING.
+
+   clipToOutline above tests one point per building and has run since the pre-clip was written.
+   Nothing else the bake returns is tested at all — roads, paths, plazas, parks, parking and
+   beaches are written exactly as the fetch box returned them, and every fetch box is far bigger
+   than its island. So the artefacts have always carried a neighbourhood's worth of geometry that
+   is not on the island, and the renderer draws all of it: streets over open sea, lawn and asphalt
+   floating off the shore. That is what "roads and buildings not aligning" on Al Raha turned out
+   to be — the buildings were clipped, the roads never were, so the two layers disagreed about
+   where the island ends.
+
+   WAY-LEVEL, NOT VERTEX-LEVEL, AND THAT IS THE WHOLE DESIGN. Cutting a line where it leaves the
+   land would delete every bridge and causeway in the city — the Sheikh Zayed and Al Maqta
+   crossings, the Yas link roads, Al Raha's own channel bridges — because the middle of a bridge
+   is over water by definition. Keeping or dropping the WHOLE way instead preserves them: a bridge
+   reaches land at each end, so one of its points is always on the island, while a mainland street
+   two kilometres inland has no point anywhere near it. The cost is that a kept bridge trails its
+   far half across the neighbour's ground, which is what a bridge does.
+
+   The margin is the buildings' 150 m for the same reason it is 150 m there: our coastline is a
+   simplified sampling and the runtime clips against a resampled one, so the bake must be the
+   looser of the two. Swept from 40 m to 250 m before this was written, the kept-way count moves
+   by one to three per cent on every island — roads are either on the island or kilometres away,
+   with nothing in between — so the number is not load-bearing and no island depends on it. */
+function clipWaysToOutline(items, outline, margin, pointsOf){
+  if (!outline || outline.length < 1 || !items || !items.length) return items;
+  const rings = Array.isArray(outline[0][0]) ? outline : [outline];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of rings.flat()){
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const out = [];
+  for (const it of items){
+    const pts = pointsOf(it);
+    if (!pts || !pts.length) continue;
+    /* The bounding box first, as above: on Corniche this settles most of ten thousand ways
+       without a segment test, and the ways it settles are the ones with the most points. */
+    let touches = false;
+    for (const p of pts){
+      if (p[0] < x0 - margin || p[0] > x1 + margin || p[1] < y0 - margin || p[1] > y1 + margin) continue;
+      if (rings.some(r => contains(r, p) || nearRing(r, p[0], p[1], margin))){ touches = true; break; }
+    }
+    if (touches) out.push(it);
+  }
+  return out;
+}
+
 /* WATER GETS ITS OWN CLIP, NOT clipToOutline ABOVE — that function tests a single point per
    building; a water body is the shape itself, and a naive point test on one polygon's centroid
    would happily pass something the size of the open Gulf if its centroid landed anywhere near
@@ -2172,17 +2220,63 @@ async function bakeIsland(isle, proj){
     if (before !== buildings.length)
       process.stderr.write(`  ${isle.id}: dropped ${before - buildings.length} machine-derived footprint(s) on golf courses\n`);
   }
-  return { id:isle.id, name:isle.name, extent, landmarks:marks, outline, roads, buildings, parks,
-           paths, plazas:plazasKept,
-           golf, raceway, water:finalWater, waterIslands,
-           beaches, hardEdge, parking,
+
+  /* ---- the pre-clip, for every layer that never had one ---------------------------------------
+
+     Buildings and water are clipped further up, the moment the coastline exists. Everything else
+     reached the artefact untested, and the renderer drew it: on Al Raha 729 of 1153 road ways are
+     not on Al Raha, which is why its streets ran out over the water while its buildings — clipped
+     — stopped at the shore. The owner reported that as roads and buildings not aligning, and it is
+     exactly that: two layers with different ideas of where the island ends.
+
+     Runs LAST, after the golf-spoil filter, so that filter still sees the courses the fetch box
+     returned and nothing changes about which footprints it removes.
+
+     Every layer reports its own before and after. These counts are the check on the margin: a
+     layer that loses nearly everything is either a small island in a large box (Al Maryah keeps
+     10 per cent of its roads and should) or a sign the outline is wrong, and only the log can
+     tell those apart. */
+  const onIsle = (items, pointsOf) => clipWaysToOutline(items, outline, CLIP_MARGIN_M, pointsOf);
+  const PTS = it => it.pts, RING = it => it, PARK = it => it.r;
+  const roadsOn   = onIsle(roads,      PTS);
+  const pathsOn   = onIsle(paths,      PTS);
+  const racewayOn = onIsle(raceway,    PTS);
+  const plazasOn  = onIsle(plazasKept, RING);
+  const parksOn   = onIsle(parks,      PARK);
+  const parkingOn = onIsle(parking,    RING);
+  const beachesOn = onIsle(beaches,    RING);
+  const golfOn    = onIsle(golf,       RING);
+  const hardEdgeOn= onIsle(hardEdge,   RING);
+  if (outlineRings.length){
+    const row = (name, was, now) => was.length === now.length ? '' :
+      `${name} ${was.length}->${now.length}  `;
+    const line = row('roads', roads, roadsOn) + row('paths', paths, pathsOn) +
+                 row('raceway', raceway, racewayOn) + row('plazas', plazasKept, plazasOn) +
+                 row('parks', parks, parksOn) + row('parking', parking, parkingOn) +
+                 row('beaches', beaches, beachesOn) + row('golf', golf, golfOn) +
+                 row('hardEdge', hardEdge, hardEdgeOn);
+    process.stderr.write(`  ${isle.id}: off-island pre-clip at ${CLIP_MARGIN_M} m — ` +
+                         (line || 'nothing dropped, every layer was already on the island') + `\n`);
+  }
+  return { id:isle.id, name:isle.name, extent, landmarks:marks, outline,
+           roads:roadsOn, buildings, parks:parksOn,
+           paths:pathsOn, plazas:plazasOn,
+           golf:golfOn, raceway:racewayOn, water:finalWater, waterIslands,
+           beaches:beachesOn, hardEdge:hardEdgeOn, parking:parkingOn,
            /* THE CENSUS RIDES ALONGSIDE inBox AND FOR THE SAME REASON — it is a measurement about
               the bake rather than geometry to draw, so it goes to the index and never into the
               island file. `pickedWhy` with it: the picker's verdict has always existed and has
               always been thrown away on stderr, which is why "which ring did it take, and what
               did it leave" could not be answered without re-running the bake. */
            coastWhy: pickedWhy, coastRings: census,
-           inBox: isle._inBox != null ? isle._inBox : buildings.length };
+           inBox: isle._inBox != null ? isle._inBox : buildings.length,
+           /* THE ROADS' OWN inBox, and it exists for the same reason the buildings' does.
+              Roads now depend on the outline, which they never did before, so a broken
+              outline can silently take an island's whole street network with it. A count
+              of what shipped cannot detect that on its own — 424 roads on Al Raha is
+              correct today and would be alarming if the box had returned 400 — so the
+              guard needs the fraction KEPT, and that needs the number the box held. */
+           roadsInBox: roads.length };
 }
 
 /* WHAT THE PHONE DOES NOT NEED TO DOWNLOAD OR PARSE.
@@ -2584,6 +2678,7 @@ async function main(){
                          counts:{ outline:outlinePts,
                                   landmasses:Array.isArray(baked.outline[0][0]) ? baked.outline.length : 1,
                                   roads:baked.roads.length,
+                                  roadsInBox:baked.roadsInBox,
                                   buildings:baked.buildings.length,
                                   inBox:baked.inBox,
                                   coastChains:baked.coastRings ? baked.coastRings.length : null,
@@ -2621,6 +2716,25 @@ async function main(){
     } else if (was){
       process.stderr.write(`  ${baked.id}: no comparable previous count ` +
         `(the committed index predates the coastline pre-clip) — regression check skipped\n`);
+    }
+
+    /* THE SAME GUARD FOR ROADS, AND IT IS NEW BECAUSE THE COUPLING IS NEW. Until the off-island
+       pre-clip the road layer did not depend on the outline at all, so no outline fault could
+       reach it. Now one can, and the failure is quiet: an island whose coastline came out as a
+       sliver keeps a handful of roads and ships, looking merely sparse.
+
+       COMPARES FRACTIONS, NOT COUNTS. Every island legitimately drops most of what its box
+       returns — Al Maryah keeps a tenth — so a fall in the raw count says nothing. What should
+       be stable between two bakes of the same island is the SHARE of the box that turns out to
+       be on it, and a share that collapses against the previous run is the outline breaking. */
+    if (was && was.roadsInBox && baked.roadsInBox){
+      const kept = baked.roads.length / baked.roadsInBox;
+      const keptWas = was.roads / was.roadsInBox;
+      if (keptWas > 0 && kept < keptWas * 0.6){
+        process.stderr.write(`  !! ${baked.id}: ROADS FELL ${was.roads}/${was.roadsInBox} ` +
+          `(${Math.round(100*keptWas)}% of the box) -> ${baked.roads.length}/${baked.roadsInBox} ` +
+          `(${Math.round(100*kept)}%). The outline is the first thing to look at.\n`);
+      }
     }
   }
 
