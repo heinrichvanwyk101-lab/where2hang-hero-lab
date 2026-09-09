@@ -1408,6 +1408,45 @@ function landFromCoast(clipIn, chains, log = () => {}){
    So every stitched chain is now measured and the measurement is KEPT, in data/index.json beside
    the island it describes. Areas in km2, bounds in lat/lon so they can be pasted into a satellite
    view, and for each ring the verdict: taken, or the reason it was not. */
+/* THE DEEPEST INTERIOR POINT OF A RING, reported in lat/lon so it can be pasted straight into an
+   island's `also` list. A ring the picker declined is only half an answer without one: naming a
+   landmass needs a point known to be on it, and eyeballing one off a bounding box fails the moment
+   the shape is concave — which a reclaimed coastline usually is. An 80 x 80 grid over the bounding
+   box, keeping the inside point furthest from the boundary, is coarse and completely sufficient:
+   the clearance it reports says how much slack the point has, and anything over a hundred metres
+   will survive a re-survey of the shore. */
+function deepPoint(ring, proj){
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of ring){
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const distTo = (px, py) => {
+    let best = Infinity;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+      const ax = ring[j][0], ay = ring[j][1];
+      const dx = ring[i][0] - ax, dy = ring[i][1] - ay;
+      const L2 = dx*dx + dy*dy;
+      let t = L2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = ax + t*dx - px, qy = ay + t*dy - py;
+      const d2 = qx*qx + qy*qy;
+      if (d2 < best) best = d2;
+    }
+    return Math.sqrt(best);
+  };
+  let bp = null, bd = -1;
+  for (let i = 1; i < 80; i++) for (let j = 1; j < 80; j++){
+    const px = x0 + (x1 - x0) * i / 80, py = y0 + (y1 - y0) * j / 80;
+    if (!contains(ring, [px, py])) continue;
+    const d = distTo(px, py);
+    if (d > bd){ bd = d; bp = [px, py]; }
+  }
+  if (!bp) return null;
+  const [la, lo] = proj.inv(bp[0], bp[1]);
+  return { ll:[Math.round(la * 1e5) / 1e5, Math.round(lo * 1e5) / 1e5], clearM: Math.round(bd) };
+}
+
 function coastCensus(chains, centre, proj, boxRing, taken){
   const CLOSE_M = 60;
   return chains.map(c => {
@@ -1428,6 +1467,9 @@ function coastCensus(chains, centre, proj, boxRing, taken){
       inBox: boxRing ? c.every(p => contains(boxRing, p)) : null,
       ll: [Math.round(s * 1e4) / 1e4, Math.round(w * 1e4) / 1e4,
            Math.round(n * 1e4) / 1e4, Math.round(e * 1e4) / 1e4],
+      /* Only for rings big enough to be a landmass — the deep point on a five-node roundabout
+         island is noise, and the grid search is the one expensive thing in this function. */
+      deep: isClosed && area(c) >= 20000 ? deepPoint(c, proj) : null,
       taken: taken.includes(c),
     };
   }).sort((a, b) => (b.km2 || 0) - (a.km2 || 0));
@@ -1942,7 +1984,8 @@ async function bakeIsland(isle, proj){
         `${c.closed ? 'closed' : `open gap ${c.gapM}m`} ${c.pts} pts` +
         `${c.km2 != null ? ` ${c.km2} km2` : ''}${c.hasCentre ? ' [has centre]' : ''}` +
         `${c.inBox === false ? ' [runs outside the box]' : ''}` +
-        ` at ${c.ll[0]}..${c.ll[2]} / ${c.ll[1]}..${c.ll[3]}\n`);
+        ` at ${c.ll[0]}..${c.ll[2]} / ${c.ll[1]}..${c.ll[3]}` +
+        `${c.deep ? ` — also:[[${c.deep.ll[0]}, ${c.deep.ll[1]}]] (${c.deep.clearM} m clear)` : ''}\n`);
     }
   }
   /* One ring or several: outline is a flat ring for five islands and a list of rings for a
