@@ -6632,6 +6632,17 @@ phase('prefetch');
    measuring something other than what it claims and every conclusion drawn from it is suspect. */
 const FRAME_MS = [];
 let _frame0 = true, _tick0Done = false;
+/* Set on the frame that draws, posted once the canvas is actually visible. #gl starts at opacity 0
+   in embed mode and only the 'ready' class reveals it, so a drawn frame on a transparent canvas is
+   still a black screen to the viewer — both have to have happened before this claims anything. */
+let _paintedPending = false, _paintedSent = false;
+function maybePostPainted(){
+  if (_paintedSent || !_paintedPending) return;
+  const g = document.getElementById('gl');
+  if (g && !g.classList.contains('ready')) return;
+  _paintedSent = true;
+  try { post('painted', { ms: Math.round(PH['#page'] || 0), build: B_NAV }); } catch (e){}
+}
 
 /* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
    (Safari still has none), and a generous first delay so the opening camera move — which is the
@@ -7277,6 +7288,21 @@ function frame(){
     PH.firstFrame = performance.now() - _phT;
     PH['#page']   = performance.now() - PAGE_T0;
     _frame0 = false;
+    /* 'ready' MEANS BUILT. 'painted' MEANS THERE IS SOMETHING TO LOOK AT, AND THEY ARE NOT THE
+       SAME MOMENT — on the owner's phone they are 13.5 seconds apart.
+
+       Measured off a screen recording: the loading spinner and the photo backdrop come down at
+       8.0 s and the world does not draw until 22.0 s, so a person watches thirteen and a half
+       seconds of pure black believing the app has finished loading and broken. 'ready' fires the
+       instant buildWorld returns, which is the right signal for the app to start SENDING commands
+       and the wrong one for it to stop showing a spinner: everything expensive about the first
+       frame — texture upload, shader compile, the GPU sync this file's own notes measured at
+       nineteen seconds — happens after it.
+
+       So the two are separated rather than 'ready' being moved, because moving it would delay
+       every queued command behind the paint. The app reveals on this one and keeps waiting until
+       then; an older cached world never sends it, which is why the app also keeps a fallback. */
+    _paintedPending = true;
     /* THE SECOND GROUND PAINT STARTS HERE, and here is the whole point of it. The ground is built
        at half resolution so that this frame happens sooner; repainting it at full resolution is
        the other half of that bargain and it must not begin until the frame it paid for is on
@@ -7284,6 +7310,7 @@ function frame(){
        idle time rather than a stall in the middle of the opening move. */
     scheduleGroundRefine();
   }
+  if (_paintedPending && !_paintedSent) maybePostPainted();
   const _fms = performance.now() - t0;
   /* Charged to the mesh revealed at the top of this frame. Only in ?warm1, where exactly one was. */
   if (_warmLast){
