@@ -820,7 +820,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v239', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v243', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -6648,13 +6648,44 @@ function maybePostPainted(){
    (Safari still has none), and a generous first delay so the opening camera move — which is the
    part a person is actually watching — is over before any of this runs. refineGroundStep returns
    whether work is left, so this stops on its own and never polls. */
+/* THE THREE DEFERRED ISLANDS, BUILT AFTER THE GROUND IS SHARP AND NOT BEFORE.
+
+   Zayed City, Masdar and the airport start hidden — an unbuilt island is a bare sand plate and
+   three of them beside five built ones is the thing the owner called ugly. Each reveals itself as
+   it finishes, so the world fills in rather than showing its scaffolding.
+
+   Ordered behind the ground refines deliberately: both want idle time, and a sharp ground under
+   the islands a person is actually looking at beats a fourth island appearing sooner. Zayed City
+   carries six thousand footprints, so they go one per idle slice with a gap — a visit through the
+   rail passes force and jumps the queue anyway. */
+function scheduleDeferredIsland(delay){
+  const run = () => {
+    const d = DISTRICTS.find(x => x.onDemand && x.pending);
+    if (!d) return;
+    /* buildAndRegister, NOT buildIsland. A raw buildIsland leaves the island black: the day and
+       dusk materials are assigned by applyView, which ran at startup and will never run again on
+       its own, and the footprints, ground features and water are all registered separately.
+       buildAndRegister is the sequence a rail visit already performs, and skipping it was exactly
+       how Zayed City came out as a dark plate in the first render of this change. */
+    try { buildAndRegister(d); }
+    catch (e){ console.warn('deferred island build failed', e); return; }
+    if (DISTRICTS.some(x => x.onDemand && x.pending)) scheduleDeferredIsland(900);
+    else scheduleDeferredIsland(2500);   // one last pass for anything whose roads arrived late
+  };
+  setTimeout(() => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4000 });
+    else run();
+  }, delay === undefined ? 900 : delay);
+}
+
 function scheduleGroundRefine(delay){
   if (typeof refineGroundStep !== 'function') return;
   const run = () => {
     let more = false;
     try { more = refineGroundStep(); }
-    catch (e){ console.warn('ground refine failed, leaving the half-resolution paint', e); return; }
+    catch (e){ console.warn('ground refine failed, leaving the half-resolution paint', e); more = false; }
     if (more) scheduleGroundRefine(120);
+    else scheduleDeferredIsland(600);
   };
   const ms = delay === undefined ? 1200 : delay;
   setTimeout(() => {

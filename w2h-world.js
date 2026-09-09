@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v341';
+export const BUILD = 'world v342';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -10504,6 +10504,28 @@ function flatGroundMats(d){
   });
 }
 DISTRICTS.forEach(d => { if (!d.pending) buildGroundFor(d); else flatGroundMats(d); });
+
+/* AN UNBUILT ISLAND IS A BARE SAND SLAB, AND THREE OF THEM ARE IN THE OPENING SHOT.
+
+   Zayed City, Masdar and the airport are onDemand: they carry a coastline and a flat ground
+   material and nothing else until someone visits them. flatGroundMats above is what stopped them
+   reading as slate-grey holes, but sand-coloured is not the same as good — the owner's word for
+   the result was "ugly", and it is, because a featureless plate beside five built islands reads as
+   something broken rather than as something not yet arrived.
+
+   They are hidden until they have something to show. Not skipped: world-nav builds them on idle
+   once the first frame is up and each one reveals itself as it finishes, so the world still ends
+   up complete — the viewer simply never sees the intermediate state. Hiding the GROUP, not the
+   meshes, so nothing has to be tracked and revealing is one flag.
+
+   The rail still reaches them: setDistrict passes force to buildIsland, which builds and reveals
+   on the spot, so a deliberate visit never waits for the idle queue to get there. */
+DISTRICTS.forEach(d => { if (d.onDemand && d.pending && d.group) d.group.visible = false; });
+/* REVEALING IS NOT DONE HERE, deliberately. world-nav already owns two reveal paths — attractTick
+   shows an island once isleReady says its footprints have settled, and a six-second fallback shows
+   it regardless — and both exist so an island never appears half-assembled. Flipping visible back
+   on inside buildIsland would jump that gate and put the raw island on screen a beat early, which
+   is the thing those two paths were written to prevent. Hidden here, revealed there. */
 
 /* ---------- shadow flags, one sweep ---------- */
 world.traverse(o => {
