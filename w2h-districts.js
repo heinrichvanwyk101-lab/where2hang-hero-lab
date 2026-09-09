@@ -232,27 +232,29 @@ export const DISTRICT_VACANCY = {
   },
 
   maryah: {
-    /* THE HALF-PLANE. The single most recognisable condition on this island:
-       glass towers stop and graded sand begins, along a hard line. Everything
-       west of it is held empty.
+    /* THE HALF-PLANE IS GONE, AT THE OWNER'S INSTRUCTION.
 
-       TUNING NOTE. The island is elongated and carries rot 0.30, so if the
-       empty half comes out on the wrong side, negate the comparison rather
-       than rotating anything — jx is already in the island's own frame. */
-    builtRatio: 0.50, grain: 0.20, seed: 0x1A7A,
-    zones: [
-      (x, y) => x < -0.06,
-    ],
+       It held everything west of x -0.06 empty — glass towers stop, graded
+       sand begins — which is a real and recognisable condition on this island.
+       It is also the exact ground the owner says is missing from Al Maryah and
+       wants back: "for these 2 we actually want the vacant area back". A zone
+       that blanks the west half would contradict that the moment ?vac is
+       passed, so the zone comes out rather than sit here as a contradiction
+       waiting for a flag. The noise stays, at a ratio raised to match: broken
+       ground reads as a city still filling in, a swept half-island does not. */
+    builtRatio: 0.62, grain: 0.20, seed: 0x1A7A,
+    zones: [],
   },
 
   reem: {
-    /* REEM HILLS, east side: terraced earthworks and plotted villa curls,
-       largely unbuilt. Najmat in the south-east is patchy. Shams in the
-       north-west stays dense, which the noise handles. */
+    /* REEM HILLS' EAST ZONE IS GONE FOR THE SAME REASON as Al Maryah's
+       half-plane above — the owner's north and east ground is to be present,
+       not kerbed. Terraced earthworks and plotted villa curls are genuinely
+       thin on the ground there, so the noise carries it instead of a hard
+       rectangle; underConstruction on the district already dresses roadless
+       ground as works, which is what that corner actually looks like. */
     builtRatio: 0.55, grain: 0.15, seed: 0x2EE3,
-    zones: [
-      (x, y) => x > 0.40 && y > -0.20,
-    ],
+    zones: [],
   },
 
   saadiyat: {
