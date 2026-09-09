@@ -816,7 +816,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v235', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v236', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -3208,6 +3208,32 @@ if (/[?&]embed=1/.test(location.search)){
       out.fpMs = Math.round(fpMs);     out.fpKb = fpKb;     out.nFp = nFp;
       out.roadsMs = Math.round(roadsMs);
       out.cachedFiles = cached;
+    } catch (e) {}
+    /* AND INSIDE buildWorld, WHICH IS 70 PER CENT OF THE LOAD (nav v236).
+
+       Two warm loads put buildWorld at 5,070 and 5,221 ms of a 7.4 and 8.1 second page, with the
+       network at zero and the renderer at a quarter of a second. w2h-world has accumulated a
+       per-stage breakdown of exactly that the whole time — PERF, with a millisecond total and a
+       call count per stage, and a reporting block that prints it to a console nobody is holding.
+
+       The top eight stages by cost go out with the rest, prefixed so they cannot collide with the
+       page's own phase names. Everything the wrapped stages do not account for is geometry
+       construction and upload, and PERF's own note is right that naming it honestly matters, so
+       the remainder rides along too. */
+    try {
+      const P = (typeof PERF !== "undefined") ? PERF : null;
+      if (P){
+        const stages = Object.keys(P).filter(k => k[0] !== '#')
+          .map(k => ({ k, ms: P[k] }))
+          .sort((a, b) => b.ms - a.ms).slice(0, 8);
+        let named = 0;
+        for (const st of stages){ out['b.' + st.k] = Math.round(st.ms); named += st.ms; }
+        if (typeof P['#total'] === 'number'){
+          out['b.total'] = Math.round(P['#total']);
+          out['b.other'] = Math.round(P['#total'] - Object.keys(P)
+            .filter(k => k[0] !== '#').reduce((a, k) => a + P[k], 0));
+        }
+      }
     } catch (e) {}
     out.dpr = Math.round((window.devicePixelRatio || 1) * 100) / 100;
     out.vw = window.innerWidth; out.vh = window.innerHeight;
