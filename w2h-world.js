@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v337';
+export const BUILD = 'world v338';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -881,7 +881,35 @@ const ISLE_SHAPES = {
 
    It also means the collinear runs stay collinear. Saadiyat's beach survives as a straight line,
    which no spline through the same points would have allowed. */
+/* A RING NO DISTRICT WOULD CHOOSE, WHICH IS THE POINT. Twelve points on a slightly squashed
+   circle, normalised like every ISLE_SHAPES entry. It is what a district falls back to when it has
+   neither a baked outline nor a hand-drawn one, and it is deliberately bland: an island that looks
+   generic is a bug report you can see, and it is a great deal better than the alternative this
+   replaces, which was the whole world failing to start. */
+const FALLBACK_RING = Array.from({ length: 12 }, (_, i) => {
+  const t = i / 12 * Math.PI * 2;
+  return [Math.cos(t) * 0.92, Math.sin(t) * 0.78];
+});
+
 function chaikin(pts, passes){
+  /* GUARDED, AND THE OWNER'S PHONE IS WHY.
+
+     world_diag caught this three times in seven minutes on the live site:
+
+       module top level
+       TypeError: Cannot read properties of undefined (reading 'map')
+         at chaikin -> isleSmooth -> isleHalf
+
+     isleSmooth falls back to chaikin(ISLE_SHAPES[id]) when a district has no baked shape, and
+     ISLE_SHAPES holds only the original five — corniche, maryah, reem, saadiyat, yas. Al Raha,
+     Zayed City, Masdar and the airport have no hand-drawn shape at all, so the moment one of them
+     was asked for its outline before data/index.json had landed, this threw at MODULE TOP LEVEL
+     and took the entire world down with it. One island's missing data, and the screen is black.
+
+     Both timestamps fall inside a window when bakes were being pushed, which is exactly when a
+     client can fetch a half-updated set of files from Pages. That is not a rare condition to
+     engineer against — it is every deploy. */
+  if (!Array.isArray(pts) || pts.length < 3) pts = FALLBACK_RING;
   let p = pts.map(a => [a[0], a[1]]);
   for (let k = 0; k < passes; k++){
     const out = [];
@@ -955,7 +983,15 @@ function isleCoasts(id){
 function isleSmooth(id){
   let sm = smoothCache.get(id);
   if (!sm){
-    sm = (BASE && BASE[id] && BASE[id].shape) ? BASE[id].shape : chaikin(ISLE_SHAPES[id], 2);
+    const baked = BASE && BASE[id] && BASE[id].shape;
+    const drawn = ISLE_SHAPES[id];
+    /* SAID OUT LOUD RATHER THAN SWALLOWED. chaikin's guard already stops the throw, but a district
+       silently wearing a generic ring is the kind of thing that ships and stays. Four of the nine
+       districts have no ISLE_SHAPES entry, so this line is the difference between "the airport
+       looks wrong" and "the airport's data did not load, here is when". */
+    if (!baked && (!Array.isArray(drawn) || drawn.length < 3))
+      console.warn(`[w2h] ${id}: no baked outline and no ISLE_SHAPES fallback — drawing a placeholder ring`);
+    sm = baked ? BASE[id].shape : chaikin(drawn, 2);
     smoothCache.set(id, sm);
   }
   return sm;
