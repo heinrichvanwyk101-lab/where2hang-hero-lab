@@ -18,6 +18,12 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # THE GUARD THAT CANNOT BE DEFEATED FROM INSIDE THE SCRIPT. live-check.mjs carries its own
+    # eight-minute deadline and a run has now overrun it anyway — the timer is correct, sits at the
+    # top of the file, and still did not end the process, which means the wall clock belongs
+    # somewhere the script cannot influence at all. The runner kills the job; a diagnostic that
+    # cannot be trusted to stop is not a diagnostic, and a cancelled run teaches nothing.
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

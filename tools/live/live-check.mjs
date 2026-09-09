@@ -40,7 +40,10 @@ const deadline = setTimeout(() => {
   } catch {}
   process.exit(2);
 }, DEADLINE_MS);
-deadline.unref?.();
+/* NOT unref'd. unref tells Node this timer must not keep the process alive, which is the opposite
+   of what a deadline wants: staying alive long enough to fire is its entire job. It was there out
+   of habit and it is the one difference between this timer and one that works. The workflow's
+   timeout-minutes is the real backstop either way — see the note there. */
 const say = (...a) => { const s = a.join(' '); lines.push(s); console.log(s); };
 
 function watch(page, tag){
