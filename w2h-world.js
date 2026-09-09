@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v336';
+export const BUILD = 'world v337';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8385,7 +8385,7 @@ KIT_ZONES[maryah.id] = [
   { x0:-60, x1:-36, z0:-10, z1:43 },     // the west quay walk and its restaurant frontage
 ];
 if (!NO_KIT && maryah && kit.adgmSquare){
-  for (const fn of ['adgmSquare', 'clevelandClinic', 'maryahHotels', 'galleriaEast', 'maryahPromenade']){
+  for (const fn of ['adgmSquare', 'clevelandClinic', 'maryahHotels', 'galleriaEast']){
     if (!kit[fn]) continue;
     const m = kit[fn](); m.position.y = GROUND; maryah.detail.add(m);
   }
