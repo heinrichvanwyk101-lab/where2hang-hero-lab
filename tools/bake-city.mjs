@@ -104,8 +104,21 @@ const ISLANDS = [
      kilometres of land with no city standing on it — which would render as desert inside a
      shoreline and read as a hole in the data rather than as the edge of a query. */
   { id:'corniche', name:'Abu Dhabi Island', bbox:[24.3800, 54.2800, 24.5450, 54.4900], centre:[24.4750, 54.3500] },
-  { id:'maryah',   name:'Al Maryah',        bbox:[24.4930, 54.3760, 24.5150, 54.4020], centre:[24.5015, 54.3905] },
-  { id:'reem',     name:'Al Reem',          bbox:[24.4850, 54.3850, 24.5200, 54.4300], centre:[24.4980, 54.4060] },
+  /* AL MARYAH AND AL REEM, WIDENED — AND WHY THAT IS NOT COSMETIC.
+
+     The owner compared both against a satellite view and said the same thing about each: the
+     position is right and the shape is wrong, with a piece of Al Reem's north and a large part of
+     Al Maryah simply absent. Two things could produce that and both are in this file: a fetch box
+     that cuts the coastline, and a picker that keeps one ring and throws the rest away. The
+     picker is fixed below (see pickIsland). These boxes remove the other explanation rather than
+     leave it to be discovered on the next pass.
+
+     A wider box costs a bigger Overpass response and nothing else. Every consumer downstream is
+     clipped to the OUTLINE, not to the box, so land the box does not reach cannot appear and land
+     it reaches that is not the island is dropped — the companion-ring guards are written against
+     exactly this, since a wider box is what makes a neighbour reachable in the first place. */
+  { id:'maryah',   name:'Al Maryah',        bbox:[24.4900, 54.3700, 24.5180, 54.4060], centre:[24.5015, 54.3905] },
+  { id:'reem',     name:'Al Reem',          bbox:[24.4820, 54.3850, 24.5260, 54.4420], centre:[24.4980, 54.4060] },
   { id:'saadiyat', name:'Saadiyat',         bbox:[24.5150, 54.3800, 24.5950, 54.4800], centre:[24.5450, 54.4300] },
   { id:'yas',      name:'Yas',              bbox:[24.4450, 54.5550, 24.5250, 54.6450], centre:[24.4880, 54.6050] },
   /* AL RAHA — A MAINLAND PATCH, NOT AN ISLAND, AND SAID SO VIA noCoastline. Al Raha Beach is a
@@ -850,6 +863,14 @@ function projector(lat0, lon0){
       (lon - lon0) * Math.PI / 180 * R_EARTH * k,
       (lat - lat0) * Math.PI / 180 * R_EARTH,
     ],
+    /* THE INVERSE EXISTS SO THE COASTLINE CENSUS CAN BE CHECKED AGAINST A MAP. Every other
+       consumer works in metres and never needs it; a ring reported as "area 0.34 km2 at
+       24.5031..24.5118 / 54.3841..54.3969" can be pasted straight into a satellite view and
+       either recognised or not, which is the whole point of the census. */
+    inv: (x, y) => [
+      lat0 + y / R_EARTH * 180 / Math.PI,
+      lon0 + x / (R_EARTH * k) * 180 / Math.PI,
+    ],
   };
 }
 
@@ -1356,18 +1377,99 @@ function landFromCoast(clipIn, chains, log = () => {}){
   return { rings: rings.concat(islands), water: lagoons, why: `${runs.length} coast run(s) sewn to the boundary`, dangling, wrong };
 }
 
-function pickIsland(chains, centre){
+/* ---------- THE COASTLINE CENSUS -------------------------------------------------------------
+
+   WHY THIS EXISTS. For a long time this file made one decision about an island's shape — which
+   closed ring to take — and reported it as a single sentence on stderr that scrolled away with
+   the run. When the owner said Al Reem was missing its north and Al Maryah "a whole lot", there
+   was no way to answer the only question that mattered — what else did the stitcher find, and
+   why was it not used — without re-running the bake and watching the log go past.
+
+   So every stitched chain is now measured and the measurement is KEPT, in data/index.json beside
+   the island it describes. Areas in km2, bounds in lat/lon so they can be pasted into a satellite
+   view, and for each ring the verdict: taken, or the reason it was not. */
+function coastCensus(chains, centre, proj, boxRing, taken){
+  const CLOSE_M = 60;
+  return chains.map(c => {
+    const gap = Math.hypot(c[0][0] - c[c.length-1][0], c[0][1] - c[c.length-1][1]);
+    const isClosed = c.length > 3 && gap < CLOSE_M;
+    let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+    for (const p of c){
+      const [la, lo] = proj.inv(p[0], p[1]);
+      if (la < s) s = la; if (la > n) n = la;
+      if (lo < w) w = lo; if (lo > e) e = lo;
+    }
+    return {
+      pts: c.length,
+      closed: isClosed,
+      gapM: Math.round(gap),
+      km2: isClosed ? Math.round(area(c) / 1e4) / 100 : null,
+      hasCentre: isClosed ? contains(c, centre) : false,
+      inBox: boxRing ? c.every(p => contains(boxRing, p)) : null,
+      ll: [Math.round(s * 1e4) / 1e4, Math.round(w * 1e4) / 1e4,
+           Math.round(n * 1e4) / 1e4, Math.round(e * 1e4) / 1e4],
+      taken: taken.includes(c),
+    };
+  }).sort((a, b) => (b.km2 || 0) - (a.km2 || 0));
+}
+
+/* THE ISLAND IS NOT ALWAYS ONE RING, AND ASSUMING IT WAS IS WHAT LOST THE LAND.
+
+   The old rule took the largest closed ring containing the centre and threw the rest away. That
+   is right for a simple island and wrong for a reclaimed one: Al Reem's northern reclamation and
+   Al Maryah's western quay are separate landmasses in OSM, joined to the parent by a causeway
+   that carries no coastline, so the stitcher closes them as rings of their own and the old rule
+   dropped them on the floor. The owner saw exactly that — a piece of Reem and a lot of Al Maryah
+   missing — and the answer is not to redraw a shore by hand but to keep what the survey holds.
+
+   COMPANION RINGS ARE ADMITTED UNDER FOUR GUARDS, and every one of them is there to stop this
+   turning into a district that swallows its neighbours:
+     - wholly inside the fetch box. The mainland and Abu Dhabi Island run past every box that
+       clips them, so this alone excludes them; a ring the box contains entirely is a small
+       landmass the query captured whole.
+     - not containing another district's centre. Belt and braces for the box test.
+     - not inside the ring already taken, which would be an islet in a lagoon, and is water's job.
+     - above a floor area and below a multiple of the primary, so a sandbar does not become a
+       district and a neighbour does not outvote the island it sits beside.
+   Anything rejected is still counted in the census with the reason, so a missing piece is a line
+   to read rather than a bake to re-run. */
+function pickIsland(chains, centre, opts = {}){
   const CLOSE_M = 60;   // a ring closes when its ends meet within a way's own node spacing
+  const MIN_COMPANION_M2 = 20000;
+  const MAX_COMPANION_RATIO = 6;
   const closed = chains.filter(c => c.length > 3 &&
     Math.hypot(c[0][0] - c[c.length-1][0], c[0][1] - c[c.length-1][1]) < CLOSE_M);
   const hit = closed.filter(c => contains(c, centre)).sort((a, b) => area(b) - area(a));
-  if (hit.length) return { ring:hit[0], why:'closed ring containing the island centre' };
-
-  /* No ring contains the centre. Almost always a coastline edit upstream that has left a way
-     unclosed, and the honest thing is to say so rather than silently ship the mainland: the
-     fallback is loud, and the extent it produces will be visibly wrong in the report. */
-  const best = chains.slice().sort((a, b) => b.length - a.length)[0] || [];
-  return { ring:best, why:'NO CLOSED RING FOUND — fell back to the longest chain, CHECK THIS' };
+  if (!hit.length){
+    /* No ring contains the centre. Almost always a coastline edit upstream that has left a way
+       unclosed, and the honest thing is to say so rather than silently ship the mainland: the
+       fallback is loud, and the extent it produces will be visibly wrong in the report. */
+    const best = chains.slice().sort((a, b) => b.length - a.length)[0] || [];
+    return { rings: best.length ? [best] : [],
+             why:'NO CLOSED RING FOUND — fell back to the longest chain, CHECK THIS' };
+  }
+  const primary = hit[0];
+  const box = opts.boxRing || null;
+  const others = opts.otherCentres || [];
+  const comps = [];
+  const rejected = [];
+  for (const c of closed){
+    if (c === primary) continue;
+    const a = area(c);
+    let no = null;
+    if (a < MIN_COMPANION_M2) no = `${Math.round(a)} m2 under the ${MIN_COMPANION_M2} m2 floor`;
+    else if (a > area(primary) * MAX_COMPANION_RATIO) no = `${Math.round(a/1e4)/100} km2 is over ${MAX_COMPANION_RATIO}x the primary`;
+    else if (box && !c.every(p => contains(box, p))) no = 'runs outside the fetch box';
+    else if (contains(c, centre)) no = 'contains the island centre — a larger landmass around us';
+    else if (contains(primary, c[0])) no = 'sits inside the ring already taken';
+    else if (others.some(o => contains(c, o))) no = "contains another district's centre";
+    if (no) rejected.push(no); else comps.push(c);
+  }
+  const why = comps.length
+    ? `closed ring containing the island centre plus ${comps.length} companion ring(s) ` +
+      `(${rejected.length} other closed ring(s) rejected)`
+    : `closed ring containing the island centre (${rejected.length} other closed ring(s) rejected)`;
+  return { rings: [primary, ...comps], why, rejected };
 }
 
 function heightOf(tags){
@@ -1758,7 +1860,7 @@ async function bakeIsland(isle, proj){
      a plain rectangle if it does not. Everything downstream — the coastline pre-clip, the extent
      computation, the renderer's ground shape — reads `outline` the same way regardless of which
      path produced it, so nothing else in this file needs to know the difference. */
-  let outline, pickedWhy;
+  let outline, pickedWhy, census = null;
   /* THE TRACED SHAPE IS THE BOUNDARY, THE COASTLINE IS THE SHORE — see landFromCoast. For a
      mainland patch the trace (or the fetch box) says how much of the mainland to show, and OSM's
      own coastline, cut to that boundary, says where the land ends: shore, canals and every
@@ -1798,11 +1900,32 @@ async function bakeIsland(isle, proj){
     }
   } else {
     const chains = stitch(coastWays);
-    const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]));
-    outline = picked.ring.length ? simplify(picked.ring, SIMPLIFY_M * 3).map(rd1) : [];
+    const [s0, w0, n0, e0] = isle.bbox;
+    /* The fetch box as a ring in the same metric frame the chains live in — the guard that keeps
+       a companion ring from being a neighbour the query happened to clip. */
+    const boxRing = [[s0,w0],[s0,e0],[n0,e0],[n0,w0]].map(([la, lo]) => proj.fwd(la, lo));
+    const otherCentres = ISLANDS.filter(o => o.id !== isle.id && o.centre)
+      .map(o => proj.fwd(o.centre[0], o.centre[1]));
+    const picked = pickIsland(chains, proj.fwd(isle.centre[0], isle.centre[1]),
+      { boxRing, otherCentres });
+    const rings = picked.rings.map(r => simplify(r, SIMPLIFY_M * 3).map(rd1)).filter(r => r.length >= 4);
+    outline = !rings.length ? [] : rings.length > 1 ? rings : rings[0];
+    census = coastCensus(chains, proj.fwd(isle.centre[0], isle.centre[1]), proj, boxRing, picked.rings);
     pickedWhy = `${chains.length} coast chains, took the ${picked.why}`;
+    if (picked.rejected && picked.rejected.length){
+      for (const r of picked.rejected) process.stderr.write(`    ${isle.id}: ring rejected — ${r}\n`);
+    }
   }
   process.stderr.write(`  ${isle.id}: ${pickedWhy}\n`);
+  if (census){
+    for (const c of census){
+      process.stderr.write(`    ${isle.id}: ${c.taken ? 'TAKEN ' : '      '}` +
+        `${c.closed ? 'closed' : `open gap ${c.gapM}m`} ${c.pts} pts` +
+        `${c.km2 != null ? ` ${c.km2} km2` : ''}${c.hasCentre ? ' [has centre]' : ''}` +
+        `${c.inBox === false ? ' [runs outside the box]' : ''}` +
+        ` at ${c.ll[0]}..${c.ll[2]} / ${c.ll[1]}..${c.ll[3]}\n`);
+    }
+  }
   /* One ring or several: outline is a flat ring for five islands and a list of rings for a
      landmass the coastline splits. Everything below that measures or clips works on the list. */
   const outlineRings = !outline.length ? [] : Array.isArray(outline[0][0]) ? outline : [outline];
@@ -1950,6 +2073,12 @@ async function bakeIsland(isle, proj){
            paths, plazas:plazasKept,
            golf, raceway, water:finalWater, waterIslands,
            beaches, hardEdge, parking,
+           /* THE CENSUS RIDES ALONGSIDE inBox AND FOR THE SAME REASON — it is a measurement about
+              the bake rather than geometry to draw, so it goes to the index and never into the
+              island file. `pickedWhy` with it: the picker's verdict has always existed and has
+              always been thrown away on stderr, which is why "which ring did it take, and what
+              did it leave" could not be answered without re-running the bake. */
+           coastWhy: pickedWhy, coastRings: census,
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
@@ -2217,7 +2346,7 @@ async function main(){
 
     /* inBox is bookkeeping for the index and the guard. It does not go in the artefact the hero
        downloads — a field with no consumer is a question for whoever reads this next. */
-    const { inBox, ...file } = baked;
+    const { inBox, coastWhy, coastRings, ...file } = baked;
     await fs.writeFile(path, JSON.stringify(file));
     const bytes = (await fs.stat(path)).size;
 
@@ -2269,6 +2398,12 @@ async function main(){
     index.islands.push({ id:baked.id, name:baked.name, file:`isle-${baked.id}.json`,
                          extent:baked.extent, outline:baked.outline,
                          landmarks:baked.landmarks, bytes,
+                         /* WHY THE ISLAND IS THE SHAPE IT IS, KEPT WHERE IT CAN BE READ. One
+                            sentence for the decision and one row per stitched coastline chain:
+                            closed or open, how big, where in lat/lon, and whether it was taken.
+                            A ring the picker declined is now a line in this file instead of a
+                            line that scrolled past in an Action log three weeks ago. */
+                         coast:{ why:baked.coastWhy || null, rings:baked.coastRings || null },
                          /* inBox is what the fetch box held before the coastline pre-clip, and it
                             exists so `buildings` can never again be compared against a number that
                             counted something else. The first Overture bake tripped its own
@@ -2281,6 +2416,7 @@ async function main(){
                                   roads:baked.roads.length,
                                   buildings:baked.buildings.length,
                                   inBox:baked.inBox,
+                                  coastChains:baked.coastRings ? baked.coastRings.length : null,
                                   withHeight:baked.buildings.filter(b => b.h).length,
                                   parks:baked.parks.length,
                                   paths:baked.paths.length,
