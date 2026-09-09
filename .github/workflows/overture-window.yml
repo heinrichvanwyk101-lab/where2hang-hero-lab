@@ -116,7 +116,10 @@ jobs:
               const r = JSON.parse(l);
               return { type: "Feature",
                        properties: { layer: r.layer, subtype: r.subtype, class: r.class, name: r.name },
-                       geometry: JSON.parse(r.g) };
+                       /* DuckDB'"'"'s JSON writer recognises ST_AsGeoJSON'"'"'s output as JSON and emits it
+                          already parsed, so parsing it again throws on "[object Object]". Accept
+                          either shape rather than depending on which it does. */
+                       geometry: typeof r.g === "string" ? JSON.parse(r.g) : r.g };
             });
             const out = { type: "FeatureCollection",
                           window: { south: +process.env.S, west: +process.env.W,
