@@ -2136,7 +2136,19 @@ async function bakeIsland(isle, proj){
      one with an OSM id. A surveyed clubhouse keeps its id and stays. */
   {
     const before = buildings.length;
-    buildings = buildings.filter(bd => bd.osm || !golf.some(g => contains(g, [bd.x, bd.y])));
+    /* A BUILDING A VENUE STANDS ON IS NEVER SPOIL, WHATEVER IT SITS INSIDE.
+
+       The rule above is right about what it was written for — Yas Links carried 43 machine-derived
+       tee shelters and Saadiyat Beach 13 — but it had no exception for the one case where a
+       footprint on a golf course is the whole point. On Saadiyat it deleted the ground under the
+       Saadiyat Beach Golf Club, Hawksbill Restaurant and the Viya Golf Performance Institute:
+       three real, listed venues whose pins then stood about 300 m from the nearest surviving
+       building, on a course with nothing on it.
+
+       That was read as bad venue coordinates when the venue audit first ran, and it is the
+       opposite — the coordinates are right and the model had thrown the building away. attachVenues
+       has already run by this point, so `v` is on the record and the test costs nothing. */
+    buildings = buildings.filter(bd => bd.osm || bd.v || !golf.some(g => contains(g, [bd.x, bd.y])));
     if (before !== buildings.length)
       process.stderr.write(`  ${isle.id}: dropped ${before - buildings.length} machine-derived footprint(s) on golf courses\n`);
   }
