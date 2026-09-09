@@ -2153,6 +2153,49 @@ async function bakeIsland(isle, proj){
            inBox: isle._inBox != null ? isle._inBox : buildings.length };
 }
 
+/* WHAT THE PHONE DOES NOT NEED TO DOWNLOAD OR PARSE.
+
+   The world's own perf telemetry, off the owner's phone, ended an argument: of a 10.2 second cold
+   load, the RENDERER accounts for about four tenths of a second — 294 ms for the first frame and
+   123 ms for all 176 texture uploads, with a 1 ms wait for the first animation frame. The other
+   nine and a half seconds are fetch and parse. Corniche is 5.48 MB of that, and 3.64 MB of Corniche
+   is its 20,258 buildings.
+
+   Two things in those buildings carry no information at all:
+
+     THE NULLS. Every building is written with every field, whether it has one or not. Measured on
+     Corniche: `osm` is present 20,258 times and non-null ZERO times; so is `rc`; `fm` and `fc` are
+     non-null once each; `rs` is 3 per cent populated, `h` 17, `cls` 28, `sub` 30. That is roughly
+     eighty thousand `:null` entries whose only content is that there is no content.
+
+     THE ID. A 36-character UUID on every building, 100 per cent present, and read by nothing.
+     Every `.id` in the consumer is a DISTRICT id — checked across w2h-basemap, w2h-world and
+     world-nav before removing it.
+
+   SAFE BECAUSE THE CONSUMER ALREADY READS DEFENSIVELY. w2h-basemap normalises each field on the
+   way in — `osm: b.osm != null ? b.osm : null`, `p: b.p ? ... : null`, `vk: b.vk || null` — so a
+   MISSING field and an explicit null arrive at the renderer as exactly the same value. Nothing in
+   the world tests a building field against null identically; that was checked too.
+
+   Measured on the committed Corniche: 5.48 -> 3.21 MB raw (-41%), and 1.29 -> 0.80 MB gzipped as
+   Pages serves it (-38%). Parse cost falls with the raw number, which is the half the phone feels.
+
+   NOT APPLIED TO ROADS OR ANYTHING ELSE, deliberately. Buildings are where the measurement is; the
+   rest would be a change without a number behind it. */
+function slimBuildings(list){
+  if (!Array.isArray(list)) return list;
+  return list.map(b => {
+    const out = {};
+    for (const k in b){
+      if (k === 'id') continue;
+      const v = b[k];
+      if (v === null || v === undefined) continue;
+      out[k] = v;
+    }
+    return out;
+  });
+}
+
 const rd1 = p => Array.isArray(p) ? [Math.round(p[0]*10)/10, Math.round(p[1]*10)/10]
                                   : Math.round(p*10)/10;
 const rd2 = p => [Math.round(p[0]*10)/10, Math.round(p[1]*10)/10];
@@ -2418,6 +2461,7 @@ async function main(){
     /* inBox is bookkeeping for the index and the guard. It does not go in the artefact the hero
        downloads — a field with no consumer is a question for whoever reads this next. */
     const { inBox, coastWhy, coastRings, ...file } = baked;
+    file.buildings = slimBuildings(file.buildings);
     await fs.writeFile(path, JSON.stringify(file));
     const bytes = (await fs.stat(path)).size;
 
