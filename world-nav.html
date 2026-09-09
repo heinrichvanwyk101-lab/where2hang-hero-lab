@@ -816,7 +816,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v230', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v231', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -2492,6 +2492,19 @@ function frameAllResults(label){
     goal.dist = Math.min(fitDist(r, goal.fov), fitDist(islandR * 1.1, goal.fov));
     goal.elev = goal.dist * pitch;
     goal.angle = sunSafe(goal.angle || 0);
+    /* THE SUBJECT SITS LOW, THE CARDS OWN THE TOP (nav v231). setDistrict has done this since
+       v197 and this function never did — and this function, not setDistrict, is what composes
+       every shot the area rail shows: the rail sends the island's venues straight after, and
+       frameAllResults recomposes on the pins. So the correction that stopped districts hanging
+       under the cards was being applied to a camera the rail immediately replaced.
+
+       The look target is screen centre; the app's header and rail cover the top third. Pushing
+       the target out along the view direction drops the subject into the window the cards leave,
+       which is the owner's "enormous empty water below" on Zayed City and the "huge dead
+       foreground" on Saadiyat. Same 0.16 as setDistrict, for the same frame. */
+    const push = goal.dist * 0.16;
+    goal.target.x -= Math.sin(goal.angle) * push;
+    goal.target.z -= Math.cos(goal.angle) * push;
   }
   lastResultsBox = box;
   applyLOD();
