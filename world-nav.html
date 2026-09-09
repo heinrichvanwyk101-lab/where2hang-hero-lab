@@ -816,7 +816,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v232', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v233', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -5558,10 +5558,21 @@ function whenRoads(id, ms = 30000){
 
 async function footprintsFrom(d){
   const idx = window.__basemapIndex;
-  if (!idx || !BMAP.loadIsland || !BMAP.buildingsUnits) return null;
+  if (!idx || !BMAP.buildingsUnits) return null;
   const entry = (idx.islands || []).find(i => i.id === d.id);
   if (!entry) return null;
-  const data = await BMAP.loadIsland(idx, d.id);
+  /* THE SIDECAR, NOT THE ISLAND FILE (nav v233). This used to pull the whole of
+     isle-<id>.json — 3.2 MB on Corniche — and hand buildingsUnits the one array it wanted. That
+     fetch sat in front of the island's own build, which needs the SAME file for its water and
+     parks, so the city could not appear until every building had been downloaded and parsed for a
+     pass that runs later anyway.
+
+     loadFootprints falls back to the island file when there is no sidecar, so an older payload and
+     a deploy window both still work; see its note in w2h-basemap. */
+  const data = BMAP.loadFootprints
+    ? await BMAP.loadFootprints(idx, d.id)
+    : await BMAP.loadIsland(idx, d.id);
+  if (!data) return null;
   const origin = BMAP.islandOrigin(entry);
   const units = BMAP.buildingsUnits(data, origin);
   return (units && units.length) ? units : null;

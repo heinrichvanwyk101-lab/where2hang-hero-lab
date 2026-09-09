@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v26';
+export const BUILD = 'basemap v27';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -134,6 +134,44 @@ export function loadIsland(idx, id){
     .then(r => { if (!r.ok) throw new Error(`basemap: ${entry.file} -> HTTP ${r.status}`); return r.json(); })
     .then(d => { entry._data = d; PENDING.delete(id); return d; });
   PENDING.set(id, p);
+  return p;
+}
+
+/* THE FOOTPRINTS, ON THEIR OWN SCHEDULE (basemap v27).
+
+   isle-<id>.json is on the critical path for the island BUILD — paintGround needs its water, parks
+   and beaches before the first frame — and it used to carry the buildings too, which the build
+   never touches. buildingsUnits is the only consumer of that array in the whole renderer, and it
+   is called from footprintsFrom, which runs on an idle callback AFTER the island exists.
+
+   So Corniche's payload was fetched and parsed in front of the island for the sake of twenty
+   thousand buildings nobody was looking at yet. The bake now writes them to fp-<id>.json and this
+   fetches that instead: the island appears on its shell, and the stock fills in behind it.
+
+   THE FALLBACK IS NOT OPTIONAL. A client can hold a NEW island file and reach for an OLD sidecar,
+   or the reverse, in any deploy window — and this repository learned this morning what happens
+   when a missing payload is allowed to become an exception rather than an absence. A 404 here
+   means "no sidecar yet", so it falls back to the island file's own buildings array, which older
+   payloads still carry. Either shape works; neither throws. */
+const FP_PENDING = new Map();
+export function loadFootprints(idx, id){
+  const entry = (idx.islands || []).find(i => i.id === id);
+  if (!entry) return Promise.resolve(null);
+  if (entry._fp) return Promise.resolve(entry._fp);
+  if (FP_PENDING.has(id)) return FP_PENDING.get(id);
+  const p = fetch((idx._base || 'data/') + 'fp-' + id + '.json')
+    .then(r => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then(d => {
+      if (d && Array.isArray(d.buildings)){ entry._fp = d; FP_PENDING.delete(id); return d; }
+      /* No sidecar. Take the island file's own array, whatever it holds — an older payload has the
+         real stock there, a newer one has an empty array, and both are answers rather than faults. */
+      return loadIsland(idx, id).then(isle => {
+        const fb = { id, buildings: (isle && isle.buildings) || [] };
+        entry._fp = fb; FP_PENDING.delete(id); return fb;
+      });
+    });
+  FP_PENDING.set(id, p);
   return p;
 }
 

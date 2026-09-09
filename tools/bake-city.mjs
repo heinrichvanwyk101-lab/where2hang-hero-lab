@@ -2461,8 +2461,31 @@ async function main(){
     /* inBox is bookkeeping for the index and the guard. It does not go in the artefact the hero
        downloads — a field with no consumer is a question for whoever reads this next. */
     const { inBox, coastWhy, coastRings, ...file } = baked;
-    file.buildings = slimBuildings(file.buildings);
+
+    /* THE FOOTPRINTS LEAVE THE ISLAND FILE (bake v-split).
+
+       isle-<id>.json is on the critical path for the island BUILD — the ground canvas needs its
+       water, parks and beaches before the first frame — and it was also carrying the buildings,
+       which the build does not use at all. The only consumer of `buildings` in the whole renderer
+       is buildingsUnits, called from footprintsFrom, which runs AFTER the island exists and adds
+       the real stock on an idle callback. So Corniche's 3.2 MB was being fetched and parsed before
+       the island could appear, for the sake of 20,258 buildings nobody was looking at yet.
+
+       The owner's instruction is the design: "island looking built is first priority and buys time
+       for detailed buildings to load." Split, the shell is a fraction of the file and the
+       footprints arrive on their own schedule, behind an island that is already on screen.
+
+       THE ISLAND FILE KEEPS AN EMPTY ARRAY rather than dropping the key. A consumer reading
+       `data.buildings.length` against a mid-deploy mixture of old and new files should get 0, not
+       a throw — the chaikin crash this morning was exactly that class of fault. */
+    const fpPath = `data/fp-${baked.id}.json`;
+    await fs.writeFile(fpPath, JSON.stringify({ id: baked.id, buildings: slimBuildings(file.buildings) }));
+    const fpBytes = (await fs.stat(fpPath)).size;
+    file.buildings = [];
     await fs.writeFile(path, JSON.stringify(file));
+    process.stderr.write(`  ${baked.id}: split — shell ${(await fs.stat(path)).size} B, ` +
+      `footprints ${fpBytes} B in fp-${baked.id}.json
+`);
     const bytes = (await fs.stat(path)).size;
 
     /* A ROADS-ONLY ARTEFACT, and it exists because of where the scene needs this data.
