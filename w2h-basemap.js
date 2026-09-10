@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v27';
+export const BUILD = 'basemap v28';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -114,11 +114,19 @@ const m2u = m => m / M_PER_UNIT;
 
 /* ---------- LOADING ------------------------------------------------------------------------ */
 
-export async function loadIndex(base = 'data/'){
-  const res = await fetch(base + 'index.json');
+/* THE DATA IS VERSIONED THE WAY THE MODULES ARE (basemap v28). Pages serves data/ with
+   max-age 600 and the island files were fetched by bare name, so a bake could be live on Pages
+   and still be ten minutes away on a phone that had looked at the world just before — the same
+   "deploy that never appeared" the modules were cured of with ?v=. The index is small (220 KB)
+   and fetched with the caller's per-load key; every island, footprint and roads file then
+   carries the index's own `generated` stamp, which the bake rewrites on every run. So a phone
+   keeps its island files across reloads, and drops them the moment a bake lands. */
+export async function loadIndex(base = 'data/', bust = ''){
+  const res = await fetch(base + 'index.json' + bust);
   if (!res.ok) throw new Error(`basemap: index.json -> HTTP ${res.status}`);
   const idx = await res.json();
   idx._base = base;
+  idx._v = idx.generated ? '?v=' + encodeURIComponent(idx.generated) : '';
   return idx;
 }
 
@@ -130,7 +138,7 @@ export function loadIsland(idx, id){
   if (!entry) throw new Error(`basemap: no island "${id}" in the index`);
   if (entry._data) return Promise.resolve(entry._data);
   if (PENDING.has(id)) return PENDING.get(id);
-  const p = fetch((idx._base || 'data/') + entry.file)
+  const p = fetch((idx._base || 'data/') + entry.file + (idx._v || ''))
     .then(r => { if (!r.ok) throw new Error(`basemap: ${entry.file} -> HTTP ${r.status}`); return r.json(); })
     .then(d => { entry._data = d; PENDING.delete(id); return d; });
   PENDING.set(id, p);
@@ -159,7 +167,7 @@ export function loadFootprints(idx, id){
   if (!entry) return Promise.resolve(null);
   if (entry._fp) return Promise.resolve(entry._fp);
   if (FP_PENDING.has(id)) return FP_PENDING.get(id);
-  const p = fetch((idx._base || 'data/') + 'fp-' + id + '.json')
+  const p = fetch((idx._base || 'data/') + 'fp-' + id + '.json' + (idx._v || ''))
     .then(r => (r.ok ? r.json() : null))
     .catch(() => null)
     .then(d => {
@@ -309,7 +317,7 @@ export async function loadRoads(idx, id){
   const entry = (idx.islands || []).find(i => i.id === id);
   if (!entry) return null;
   if (entry._roads) return entry._roads;
-  const res = await fetch((idx._base || 'data/') + 'roads-' + id + '.json');
+  const res = await fetch((idx._base || 'data/') + 'roads-' + id + '.json' + (idx._v || ''));
   if (!res.ok) throw new Error(`basemap: roads-${id}.json -> HTTP ${res.status}`);
   const d = await res.json();
   entry._roads = d.roads || [];

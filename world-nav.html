@@ -760,7 +760,7 @@ phase('import');
 let basemap = null;
 if (!location.search.includes('drawn')){
   try {
-    const idx = await BMAP.loadIndex('data/');
+    const idx = await BMAP.loadIndex('data/', V);   // the index with this load's key; islands with the bake's
 
     /* CORNICHE'S ROADS BEFORE THE BUILD, the other four after.
 
@@ -820,7 +820,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v244', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v245', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
