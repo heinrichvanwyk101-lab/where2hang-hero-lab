@@ -1366,6 +1366,17 @@ function mendBrokenEnds(kept, dropped, ptsOf, onLand){
   return out;
 }
 
+/* A vertex every `step` metres along a polygon's edges, corners kept. */
+function densify(ring, step){
+  const out = [];
+  for (let i = 0; i < ring.length; i++){
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(L / step));
+    for (let k = 0; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+  }
+  return out;
+}
+
 function clipWaysToOutline(items, outline, margin, pointsOf){
   if (!outline || outline.length < 1 || !items || !items.length) return items;
   const rings = Array.isArray(outline[0][0]) ? outline : [outline];
@@ -2189,7 +2200,12 @@ async function bakeIsland(isle, proj){
       const l2 = landFromCoast(fr, chains, m => process.stderr.write(`  ${isle.id}: island frame — ${m}\n`));
       const r2 = l2.rings.map(r => simplify(r, SIMPLIFY_M * 3).map(rd1)).filter(r => r.length >= 4 && area(r) >= MIN_LAND_M2);
       if (r2.length && !l2.wrong){ primary.push(...r2); for (const lg of l2.water) water.push(simplify(lg, SIMPLIFY_M).map(rd1)); }
-      else { const ring = fr.map(rd1); primary.push(ring); drawnRings.push(ring); }
+      else {
+        /* DENSIFIED, because the renderer runs every coast through a closed spline: four corners
+           come out as a rounded blob and the buildings the frame kept at its corners stand in
+           the sea. A vertex every 40 m along each ruled edge keeps the spline on the line. */
+        const ring = densify(fr, 40).map(rd1); primary.push(ring); drawnRings.push(ring);
+      }
       pickedWhy += `; island frame: ${r2.length && !l2.wrong ? r2.length + ' landmass(es) from the coastline' : 'as drawn'} (${l2.why})`;
     }
     if (extraFrames.length) clipPoly = clipPoly.concat(...extraFrames);   // the extent spans every frame
