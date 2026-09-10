@@ -81,6 +81,50 @@ diff. `tools/bench/districtshot.mjs <id>` takes the shot; the data swap is
 `git checkout <sha> -- data/`. That before/after is the measurement that was never made, and
 skipping it is how this shipped broken.
 
+## Two more reports, unresolved, recorded as given
+
+These came in after the revert and were **not** diagnosed. They are written down verbatim because
+guessing at them is how the earlier mistakes happened, and because the second one refers to work
+somebody previously did that may have been undone.
+
+1. **"You have several islands where we're now building buildings where there's roads."** More than
+   one district. Not reproduced in a render; not attributed. The `urbanFabric` filler is the
+   obvious suspect and the parks/parking hypothesis above is the obvious mechanism, but neither has
+   been tested. NOTE the state this was seen in: it was the CLIPPED data, which is now reverted, so
+   check whether it still happens on `9d9e8df` before assuming the clip caused it.
+
+2. **"The red piece of land should not be built. Also the blue piece was meant to be reinstated."**
+   Sent as an annotated screenshot of the world overview ("Abu Dhabi · 9 areas", Corniche card
+   showing 1,636 venues). A red outline around an elongated, largely bare landmass running roughly
+   north–south with sparse rectangular blocks on it, sitting west of a dense suburban district that
+   has a large rectangular green park; a blue mark on the strip between that district and the one
+   south of it. **I could not identify either shape with confidence from the perspective view and
+   did not want to guess a third time** — ask the owner to name them, or use
+   `tools/bench/diorama-map.mjs` (added for exactly this) to hold the layout against the
+   screenshot. "Meant to be reinstated" suggests earlier restoration work, which is task #62,
+   "Restore the missing land on Al Reem and Al Maryah".
+
+## Where things stand
+
+- `main` is at the reverted data and is safe to look at. `errcheck3`: 9 islands, no holes, no bad
+  materials, no errors. Al Raha is back to 1,153 road ways, 40 parks, 45 car parks, 584 buildings.
+- The bake is **not** safe to re-run until the open question is answered — it will reproduce the
+  broken state exactly.
+- Everything else in `tools/` and `.github/workflows/` is good and independent of this: the frame
+  tracer's two fixes, the Overture window exporter, `plan.mjs`, `diorama-map.mjs`.
+
+## What I would tell the next person to do first
+
+Not more statistics. Three separate statistical tests earlier in this work each produced a
+confident answer that was an artefact of the measure, and the thing that actually settled every
+question was drawing our own data flat and putting it beside ground truth. So:
+
+1. `node tools/bench/diorama-map.mjs`, and get the owner to name the red and blue shapes.
+2. Shoot the same district before and after a re-bake with `tools/bench/districtshot.mjs` and diff
+   the images. That is the measurement that was skipped, and skipping it is why this shipped.
+3. Only then decide whether the clip needs the area-layer overlap fix, an `urbanFabric` change, or
+   something else entirely.
+
 ## Standing constraints
 
 `errcheck3` must pass before every world push. One bench render at a time; kill bench processes by

@@ -1,5 +1,11 @@
 # Next session — opening line
 
+> **10 September 2026 — READ `CLIP-HANDOVER.md` FIRST.** A day's work on clipping off-island
+> geometry was built, shipped, and then reverted out of the data because the world looked worse on
+> the owner's phone. The tools all still carry the change, so **a re-bake reproduces the broken
+> state**; do not run one until that file's open question is answered. Two owner reports in it are
+> undiagnosed, one of them an annotated screenshot nobody has identified yet.
+
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
