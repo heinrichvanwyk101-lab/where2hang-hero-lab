@@ -8,7 +8,15 @@
 
    Three wrong identifications in one session came from doing this in the head.
 
-   Usage: node tools/bench/overview-labelled.mjs [out.png] */
+   Usage: node tools/bench/overview-labelled.mjs [out.png]
+          then python3 tools/bench/overview-label.py out.raw.png out.labels.json out.png
+   The shot and the projected centres come out of the browser; the labels are drawn on afterwards
+   with PIL, because a text overlay inside the WebGL page would need a DOM layer the embed hides.
+
+   NOTE: the default overview camera frames Abu Dhabi Island and cuts the eastern cluster off the
+   right edge — Al Raha, Zayed City, Masdar and the airport project off-screen. To name a shape in
+   a screenshot the owner took after dragging east, pan the goal target first (W2H.goal.target)
+   or use diorama-map.mjs, which has no camera. */
 import http from 'http'; import fs from 'fs'; import path from 'path';
 import { chromium } from 'playwright-core';
 const __dir = new URL('.', import.meta.url).pathname;
