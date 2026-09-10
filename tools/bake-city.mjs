@@ -256,17 +256,24 @@ const ISLANDS = [
        rectangle, 384 inside the first trace, 410 inside this one. A third pass moves 1.
        The west edge is still hard at 54.4900: the built area runs on past Corniche's fetch box and
        the trace followed it, which would hand the Grand Mosque precinct to two districts at once. */
-    /* THE HALF-EXTENSION IS OUT AGAIN, AND THE ORIGINAL FRAME IS BACK — deliberately, and only
-       for now. A third iteration pushed the north edge to 24.444 from an unclipped trace; it was
-       right that the old edge cut through Rabdan's fabric, and wrong about where to stop. The
-       owner's satellite check names the ground north of Rabdan: it is Sas Al Nakhl Island, whose
-       real north coast is at about 24.456, and a frame that stops halfway across it bakes a bare
-       slab with a ruled edge — "the red piece of land should not be built". That slab is what got
-       reverted. The right frame takes the WHOLE island to its coast, so the coastline clip gives
-       it a shore on every side; that change is made separately, on a preview branch, so it can be
-       looked at before it is live. Until then this is the frame the shipped data was baked from.
+    /* THE NORTH EDGE STOPS HERE ON PURPOSE, AND THE OWNER'S RULE IS WHY.
 
-       Note kept from the second iteration: the trace converges because it is traced from stock
+       The ground north of this line is Sas Al Nakhl Island — Overture carries it by name, its
+       coast is at about 24.456, and the land runs unbroken from Rabdan up to it. Twice the frame
+       was pushed toward that coast on the strength of the geometry: once to 24.444, which baked
+       a bare slab with a ruled edge that the owner circled as "should not be built", and once
+       drafted all the way to the coast with the fabric filler turned off so the sand would stay
+       sand. The owner's answer to the second was the rule that governs every frame in this file:
+
+           "Sas Al Nakhl is empty and must not be built. We're only building islands and areas
+            that serve as venues to home."
+
+       The island carries no venues. So the frame ends at Rabdan, whose ring the channel split
+       already separates from Zayed City proper, and the straight edge across the island is the
+       correct shape for a district that ends where the venues do — not a coastline to be found.
+       Khalifa City is deferred on the same rule, in the DEFERRED block below.
+
+       Note kept from the earlier iterations: the trace converges because it is traced from stock
        the previous clip already ate — see frame-from-stock.mjs and W2H_STOCK. */
     outlineLL: [
       [54.4992,24.3919], [54.5155,24.3929], [54.5262,24.3962],

@@ -23,10 +23,12 @@
 > against `main` (pixel-diffed: all change is sea shimmer plus the intended road traces on Al Raha),
 > `errcheck3` clean, and cherry-picked onto `main` (ec86cd8). The preview branch is deleted after
 > each merge so the next preview bake cannot collide with a stale one. The bake workflow now takes a `branch` input for exactly this.
-> The Sas Al Nakhl frame is drafted and tested against Overture water (north edge in water along
-> its full length; west edge in Khor Al Baghal 200 m off Corniche's outline) and staged as a patch
-> together with dropping `fillAll` on Zayed City so the island's sand is not filled with generated
-> city. Awaiting the owner's go. Tools added today: `tools/bench/diorama-map.mjs`,
+> **Sas Al Nakhl: DECIDED, NOT BUILT.** The owner's rule, verbatim: "Sas Al Nakhl is empty and must
+> not be built. We're only building islands and areas that serve as venues to home." The island
+> carries no venues, so the frame stays at Rabdan; the drafted extension and the `fillAll` change
+> were discarded, not parked. The rule is recorded at the frame in `tools/bake-city.mjs` and is
+> the same one that defers Khalifa City. It should decide any future "missing land" question
+> before geometry does. Tools added today: `tools/bench/diorama-map.mjs`,
 > `tools/bench/overview-labelled.mjs`.
 
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
