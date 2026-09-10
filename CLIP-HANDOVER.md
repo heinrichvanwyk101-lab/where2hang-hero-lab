@@ -16,10 +16,11 @@
 >   has 22 carriageways in 1.25 km, oneway pairs 6–27 m apart. Painter task, separate.
 > - **"Buildings and roads encroaching on multiple islands"** is the live, *un*-clipped world.
 >
-> State: the tool's Zayed frame is back to the original 20 points (9ee0078); a full bake of clip +
-> mend + original frames is on branch **`bake-preview`** (ec86cd8) — every extent and landmass
-> identical to `main`, roads clipped — and is being rendered island by island against `main`
-> before it is fast-forwarded. The bake workflow now takes a `branch` input for exactly this.
+> State: **SHIPPED.** The tool's Zayed frame is back to the original 20 points (9ee0078); a full
+> bake of clip + mend + original frames was baked to `bake-preview`, rendered on all nine islands
+> against `main` (pixel-diffed: all change is sea shimmer plus the intended road traces on Al Raha),
+> `errcheck3` clean, and cherry-picked onto `main` (ec86cd8). The preview branch is deleted after
+> each merge so the next preview bake cannot collide with a stale one. The bake workflow now takes a `branch` input for exactly this.
 > The Sas Al Nakhl frame is drafted and tested against Overture water (north edge in water along
 > its full length; west edge in Khor Al Baghal 200 m off Corniche's outline) and staged as a patch
 > together with dropping `fillAll` on Zayed City so the island's sand is not filled with generated
