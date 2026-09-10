@@ -12,8 +12,10 @@
 >   exactly where the blue line was drawn. Our Rabdan ring is its southern tip; the rest is absent.
 > - **Red = the same island half-drawn** by yesterday's frame stopping at 24.444.
 > - **"Raha roads a mess"** predates the clip (screenshot 19:19 on the 9th, bake landed 16:20 UTC):
->   the painter gives every way a full verge/cycle/footway section per side, and the E10 corridor
->   has 22 carriageways in 1.25 km, oneway pairs 6–27 m apart. Painter task, separate.
+>   the painter gave every way a full verge/cycle/footway section per side, and the E10 corridor
+>   has 22 carriageways in 1.25 km. **Shipped as world v343**: a side with another carriageway
+>   within reach gets a strip, and a one-way minor is sectioned on its outer side only. Verified
+>   with `tools/bench/closeup.mjs raha 1792 345 28 95 0.3` before/after; modest, not dramatic.
 > - **"Buildings and roads encroaching on multiple islands"** is the live, *un*-clipped world.
 >
 > State: **SHIPPED.** The tool's Zayed frame is back to the original 20 points (9ee0078); a full

@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v342';
+export const BUILD = 'world v343';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -3584,8 +3584,7 @@ function paintGround(d, plan, qual){
     g.lineCap = 'butt'; g.lineJoin = 'round';
     if (sea) seafrontBands(pts, W, m, sea);
     // canvas y is flipped, so +1 here is the right-hand side of travel on screen
-    sectionBands(pts, W, m, oneway ? { sides: [1], cycle: true, stripOnly: [-1] }
-                                   : { sides: [1, -1], cycle: true });
+    sectionBands(pts, W, m, sectionOpts(pts, oneway, true));
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     if (dual){
       const med = W * 0.16, car = (W - med) / 2, halfC = (med + car) / 2;
@@ -3613,7 +3612,10 @@ function paintGround(d, plan, qual){
     const m = carriageM(pts, 'minor');
     const W = corridor(m, MIN_PX.minor);
     g.lineCap = 'butt'; g.lineJoin = 'round';
-    sectionBands(pts, W, m, { sides: [1, -1], cycle: false });
+    /* A one-way minor is one carriageway of a divided road exactly as a one-way major is, and
+       painted both its sides in full until world v343 — the frontage roads either side of the
+       E10 each put a verge and a walkway into the E10's own median. */
+    sectionBands(pts, W, m, sectionOpts(pts, oneway, false));
     strokePx(offsetPath(pts, 0), SURF.kerb, W * ROAD_KERB);
     strokeAsphalt(offsetPath(pts, 0), SURF.road, W);
     laneMarkings(pts, W, lanes, oneway);
@@ -3737,6 +3739,81 @@ function paintGround(d, plan, qual){
 
      So cls is read first and the boolean is the fallback. The generated skeleton has no cls and
      keeps working untouched; the real network has one and gets three widths instead of two. */
+  /* WHICH SIDES OF EACH CARRIAGEWAY ARE ALREADY TAKEN (world v343).
+
+     The owner's phrase was "Raha roads a mess", against a satellite frame of the E10. Measured on
+     the sidecar rather than guessed: 22 carriageways cross one line in 1.25 km of that corridor,
+     and of its 122 arterial ways 90 have another carriageway within 10 m of their midpoint —
+     an interchange is dozens of short slip roads touching at junctions. Every one was painted
+     with the full cross-section on both sides: 4 m verge, 2.5 m cycle track, 3 m walkway, per
+     side, per way. Two carriageways 12 m apart therefore painted four verges and four walkways
+     into a gap that holds one hard shoulder, and the strokes landed on each other and on the
+     neighbouring tarmac. That is the mess; it is not the data (no duplicated ways, nothing
+     running within 8 m of a same-class way for most of its length).
+
+     So each side of each way is tested for a neighbour before it is painted: sample a handful of
+     points 14 m out to that side — through offsetPath, the same function that places the bands,
+     so the test and the paint agree by construction — and if most of them fall within 7 m of
+     ANOTHER way's centreline, that side is crowded and gets the landscaped strip alone, which is
+     what the median side of a one-way already got. The far side of a divided road keeps its
+     section; the near side yields. Locals count as neighbours but are not themselves tested —
+     roadLocal paints no section to withhold. */
+  const crowdOf = (() => {
+    const arts = plan.arterials.filter(a => a && a.length > 1);
+    const CELL = Math.max(8, U * roadW(d, 40));
+    const key  = (i, j) => i * 73856093 ^ j * 19349663;
+    const bins = new Map(), segs = [];
+    arts.forEach((a, wi) => {
+      for (let i = 1; i < a.length; i++){
+        const s = [PX(a[i-1][0]), PY(a[i-1][1]), PX(a[i][0]), PY(a[i][1]), wi];
+        const id = segs.push(s) - 1;
+        const x0 = Math.min(s[0], s[2]), x1 = Math.max(s[0], s[2]);
+        const y0 = Math.min(s[1], s[3]), y1 = Math.max(s[1], s[3]);
+        for (let ci = Math.floor(x0 / CELL); ci <= Math.floor(x1 / CELL); ci++)
+          for (let cj = Math.floor(y0 / CELL); cj <= Math.floor(y1 / CELL); cj++){
+            const k = key(ci, cj); let b = bins.get(k); if (!b) bins.set(k, b = []); b.push(id);
+          }
+      }
+    });
+    const REACH = U * roadW(d, 14), NEAR = U * roadW(d, 7), NEAR2 = NEAR * NEAR;
+    const nearOther = (x, y, wi) => {
+      const ci = Math.floor(x / CELL), cj = Math.floor(y / CELL);
+      for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++){
+        const b = bins.get(key(i, j)); if (!b) continue;
+        for (let n = 0; n < b.length; n++){
+          const s = segs[b[n]]; if (s[4] === wi) continue;
+          const dx = s[2] - s[0], dy = s[3] - s[1], L2 = dx*dx + dy*dy;
+          let t = L2 > 0 ? ((x - s[0]) * dx + (y - s[1]) * dy) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const px = s[0] + t*dx - x, py = s[1] + t*dy - y;
+          if (px*px + py*py < NEAR2) return true;
+        }
+      }
+      return false;
+    };
+    const map = new Map();
+    arts.forEach((a, wi) => {
+      if (a.cls === 'local') return;
+      const out = {};
+      for (const sgn of [-1, 1]){
+        const off = offsetPath(a, sgn * REACH);
+        const step = Math.max(1, Math.floor(off.length / 6));
+        let hit = 0, n = 0;
+        for (let i = 0; i < off.length; i += step){ n++; if (nearOther(off[i][0], off[i][1], wi)) hit++; }
+        out[sgn] = n > 0 && hit / n >= 0.5;
+      }
+      map.set(a, out);
+    });
+    return a => map.get(a) || {};
+  })();
+  /* The section a way gets, once its crowded sides are known. A one-way keeps the rule it had —
+     full section on the right of travel, strip on the median side — and a crowded outer side
+     drops to a strip too. A two-way loses whichever side has a neighbour. */
+  function sectionOpts(pts, oneway, cycle){
+    const c = crowdOf(pts), full = [], strip = [];
+    for (const sgn of (oneway ? [1] : [1, -1])) (c[sgn] ? strip : full).push(sgn);
+    if (oneway && !strip.includes(-1)) strip.push(-1);
+    return { sides: full, cycle, stripOnly: strip };
+  }
   const strokeFor = a => a.cls === 'major' ? roadMajor
                        : a.cls === 'minor' ? roadSecondary
                        : a.cls === 'local' ? roadLocal
