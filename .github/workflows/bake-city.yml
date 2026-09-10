@@ -41,6 +41,10 @@ on:
         description: 'Overture release, e.g. 2026-07-22.0. Blank resolves the latest from STAC.'
         required: false
         default: ''
+      branch:
+        description: 'Branch to commit the bake to. main is live to the public; use a preview branch to inspect a bake before it ships.'
+        required: false
+        default: 'main'
 
 permissions:
   contents: write
@@ -222,14 +226,19 @@ jobs:
             exit 0
           fi
           git commit -m "Bake city data (${{ inputs.source }})${{ inputs.island && format(' — {0}', inputs.island) || '' }}"
+          # A PREVIEW BRANCH IS HOW A BAKE GETS LOOKED AT BEFORE IT IS LIVE. main deploys to the
+          # public in about a minute, and a bake that reproduces a broken world has already been
+          # shipped once because there was nowhere else for it to go. With branch set to anything
+          # but main the same commit lands there instead; fetch it, render it, and fast-forward
+          # main only when it looks right.
+          BR='${{ inputs.branch }}'; BR="${BR:-main}"
           for attempt in 1 2 3; do
-            if git push; then
-              echo "pushed on attempt $attempt"
+            if git push origin "HEAD:refs/heads/$BR"; then
+              echo "pushed to $BR on attempt $attempt"
               exit 0
             fi
-            echo "push rejected on attempt $attempt — rebasing onto origin/main and trying again"
-            git fetch origin main
-            git rebase origin/main
+            echo "push rejected on attempt $attempt — rebasing onto origin/$BR and trying again"
+            git fetch origin "$BR" && git rebase "origin/$BR" || true
             sleep $((attempt * 5))
           done
           echo 'Could not push the bake after three attempts.'
