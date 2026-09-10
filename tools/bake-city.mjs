@@ -190,18 +190,21 @@ const ISLANDS = [
       [54.5811347,24.4475377], [54.5750014,24.4461074], [54.5748943,24.4461175],
       [54.5667020,24.4433125], [54.5666481,24.4433784], [54.5649171,24.4428256],
       [54.5648651,24.4428712], [54.5680941,24.4391831], [54.5679853,24.4392190],
-      [54.5678800,24.4359913], [54.5677624,24.4359725],
-      /* SOUTH OF THE E10 (task #72). The owner: "there's many nice restaurants here and we haven't
-         built this area. Iconic as well due to recognised Etihad buildings, especially at night."
-         The frame drops from the E10 to Dafrah Street and takes the Etihad Airways HQ block and
-         the restaurant row on Al Masarat Street (Fat Cow, Swaikhat, Pho 7) — Overture has 2,584
-         footprints there — then rejoins the E10 diagonal at 54.594. The villa sectors south of
-         Dafrah Street stay out. This is mainland, so all four new edges are ruled, like the E10
-         edge always was. */
-      [54.5677,24.4245], [54.5940,24.4245], [54.5940,24.4434], [54.6111797,24.4483072],
+      [54.5678800,24.4359913], [54.5677624,24.4359725], [54.6111797,24.4483072],
       [54.6111108,24.4483492], [54.6089666,24.4542213], [54.6089935,24.4542328],
       [54.6081634,24.4553932], [54.5887981,24.4502185], [54.5880841,24.4500382],
-    ] },
+    ],
+    /* THE ETIHAD PLAZA ISLAND (task #72). South of the E10, opposite Al Raha Mall: the Etihad
+       Airways headquarters block, the Khalifa City police station, and the restaurant row along
+       the E10 service road (SALT, Flat Burger, Eleven Green, the food trucks, Raha Park) down to
+       the retail at Starbucks. The owner: "we don't want the whole land mass, just an island of
+       this small area." So it is its own frame, an island, with the E10 corridor left as the
+       channel between it and the strip: the north edge runs parallel to the E10 165 m south of
+       the main frame's line. Mainland, so all four edges are ruled. Overture: 513 footprints. The
+       villa sectors of SE45 beyond Al Masarat Street stay out. */
+    islandsLL: [[
+      [54.5755,24.4300], [54.5860,24.4300], [54.5860,24.4400], [54.5755,24.4370],
+    ]] },
 
   /* ------------------------------------------------------------------------------------------
      THE MAINLAND DISTRICTS. Four additions, none of them islands, all using Al Raha's mechanism:
@@ -2160,17 +2163,36 @@ async function bakeIsland(isle, proj){
       .map(r => simplify(r, SIMPLIFY_M * 3).map(rd1))
       .filter(r => r.length >= 4 && area(r) >= MIN_LAND_M2)
       .sort((a, b) => area(b) - area(a));
+    let primary;
     if (rings.length && !land.wrong){
-      outline = rings.length > 1 ? rings : rings[0];
+      primary = rings;
       coastClipped = true;
       for (const lg of land.water) water.push(simplify(lg, SIMPLIFY_M).map(rd1));
       pickedWhy = `${chains.length} coast chains, ${land.why}: ${rings.length} landmass(es) inside the traced boundary ` +
         `(${land.rings.length - rings.length} sliver(s) under ${MIN_LAND_M2} m² dropped, ${land.water.length} lagoon(s) to water)`;
     } else {
-      outline = clipPoly.map(rd1);
-      pickedWhy = `traced shape as drawn (${outline.length} pts) — ${land.why}` +
+      primary = [clipPoly.map(rd1)];
+      pickedWhy = `traced shape as drawn (${primary[0].length} pts) — ${land.why}` +
         (land.wrong ? `; ${land.wrong} land ring(s) came out clockwise, clip result discarded` : '');
     }
+    /* MORE THAN ONE FRAME (task #72). `islandsLL` is a list of further traced frames, each the
+       boundary of a separate piece of the same district — Al Raha's Etihad Plaza block south of
+       the E10, which the owner wants "just as an island of this small area", not the whole
+       mainland between. Each is cut by the coastline exactly as the main frame is and falls back
+       to the trace as drawn where no coastline crosses it (mainland: all its edges are ruled).
+       They join the outline as further landmasses, largest first, so everything downstream — the
+       pre-clip, the extent, the renderer's second ring — sees them the way it sees Rabdan. */
+    const extraFrames = (isle.islandsLL || []).map(r => r.map(([lo, la]) => proj.fwd(la, lo)));
+    for (const fr of extraFrames){
+      const l2 = landFromCoast(fr, chains, m => process.stderr.write(`  ${isle.id}: island frame — ${m}\n`));
+      const r2 = l2.rings.map(r => simplify(r, SIMPLIFY_M * 3).map(rd1)).filter(r => r.length >= 4 && area(r) >= MIN_LAND_M2);
+      if (r2.length && !l2.wrong){ primary.push(...r2); for (const lg of l2.water) water.push(simplify(lg, SIMPLIFY_M).map(rd1)); }
+      else primary.push(fr.map(rd1));
+      pickedWhy += `; island frame: ${r2.length && !l2.wrong ? r2.length + ' landmass(es) from the coastline' : 'as drawn'} (${l2.why})`;
+    }
+    if (extraFrames.length) clipPoly = clipPoly.concat(...extraFrames);   // the extent spans every frame
+    primary.sort((a, b) => area(b) - area(a));
+    outline = primary.length > 1 ? primary : primary[0];
   } else {
     const chains = stitch(coastWays);
     const [s0, w0, n0, e0] = isle.bbox;
