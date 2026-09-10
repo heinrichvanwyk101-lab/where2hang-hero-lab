@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v344';
+export const BUILD = 'world v345';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -2876,6 +2876,37 @@ function paintGround(d, plan, qual){
   const outline = plan.outline;
   const N = outline.length;
 
+  /* EVERY LANDMASS, NOT JUST THE MAINLAND (world v345). plan.outline is isleOutline, the first
+     coast alone, and the clip below it confines every later pass — roads, paths, plazas, car
+     parks, the sand blotches, the beach line — to that one ring. So Al Raha's built islands
+     (300-odd surveyed footprints and 200-odd road ways across Al Bandar, Al Muneera, Al Zeina and
+     the rest) and Rabdan on Zayed City drew as bare sand under their buildings while their roads
+     sat in the data, painted and thrown away. The owner: "where there's buildings on the islands
+     there's roads mate but not built". The full closed path now adds the other coasts as
+     subpaths. Each is scaled about its OWN centre, so the 0.972 inner sand line drawn from the
+     same path does not drift on a ring that sits far from the island origin. The partial
+     (from, to) path stays the mainland's: it is one stretch of one coast and means nothing
+     across rings. isleGridOf made the same correction for insideIsle, for the same reason.
+
+     EXCEPT A LANDMASS THAT IS SAND. Al Raha's two crescents carry a surveyed track and a car
+     park pad and nothing else; painted, that is a black line across a sand bar the owner asked
+     to be "left as desert sand as it forms a pretty picture". The test is fillRoadless's own —
+     under 400 m of surveyed road with its midpoint on the landmass — so the rings this leaves
+     unpainted are exactly the ones that fill used to build on. Al Raha's built islands carry
+     kilometres each and are painted. */
+  const extraCoasts = (() => {
+    if (!(BASE && BASE[d.id] && BASE[d.id].shapes && BASE[d.id].shapes.length > 1)) return [];
+    const perM = 1 / (d.r * M_PER_UNIT), arts = plan.arterials || [];
+    return isleCoasts(d.id).slice(1).filter(r => {
+      let len = 0;
+      for (const rd of arts){
+        const m = rd[rd.length >> 1];
+        if (!pointInRing(r, m[0], m[1])) continue;
+        for (let i = 1; i < rd.length; i++) len += Math.hypot(rd[i][0] - rd[i-1][0], rd[i][1] - rd[i-1][1]);
+      }
+      return len / perM > 400;
+    });
+  })();
   function pathOutline(s, from, to){
     const a = from === undefined ? 0 : Math.round(from * (N - 1));
     const b = to   === undefined ? N - 1 : Math.round(to * (N - 1));
@@ -2884,7 +2915,20 @@ function paintGround(d, plan, qual){
       const X = PX(outline[i].x * s), Y = PY(outline[i].y * s);
       i === a ? g.moveTo(X, Y) : g.lineTo(X, Y);
     }
-    if (from === undefined) g.closePath();
+    if (from !== undefined) return;
+    g.closePath();
+    for (const r of extraCoasts){
+      const n = r.length - 1;                       // the last point repeats the first
+      if (n < 3) continue;
+      let cx = 0, cy = 0;
+      for (let i = 0; i < n; i++){ cx += r[i][0]; cy += r[i][1]; }
+      cx /= n; cy /= n;
+      for (let i = 0; i < n; i++){
+        const X = PX(cx + (r[i][0] - cx) * s), Y = PY(cy + (r[i][1] - cy) * s);
+        i === 0 ? g.moveTo(X, Y) : g.lineTo(X, Y);
+      }
+      g.closePath();
+    }
   }
   function pathPoly(pts){
     g.beginPath();

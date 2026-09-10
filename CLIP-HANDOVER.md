@@ -49,6 +49,29 @@
 > (**shipped as world v344**; verified with `tools/bench/closeup.mjs raha 1799 279 40 110 0.3`
 > before/after — eight invented blocks gone, nothing else in frame moved, `errcheck3` clean).
 > Tools added today: `tools/bench/diorama-map.mjs`, `tools/bench/overview-labelled.mjs`.
+>
+> **10 September, 07:20 — the owner's three questions from the phone, answered from the data.**
+> 1. *"That island between Rabdan and Al Raha still there?"* Between Rabdan and Al Raha lies Sas
+>    Al Nakhl, and it is NOT built — never was beyond Rabdan's tip, and the half-frame that drew
+>    part of it is gone. What the phone shows between Rabdan and the rest of Al Raha is Al Raha's
+>    own western end (its mainland strip, Al Raha Mall and the Al Raha Beach Hotel), not an extra
+>    island; the labelled overview at `tools/bench/out/overview-labelled.png` and the ring table
+>    from `rings.mjs` (scratchpad) are how that was checked.
+> 2. *"On Al Raha where there's buildings on the islands there's roads but not built?"* Correct,
+>    and it was the painter, not the data: `paintGround` clipped every pass after the sand to
+>    `plan.outline`, the FIRST coast only, so Al Raha's built islands (Al Bandar, Al Muneera, Al
+>    Zeina and the rest: 300-odd footprints, 200-odd road ways) and Rabdan drew as bare sand under
+>    their buildings. **World v345**: `pathOutline` adds every coast as a subpath, except a
+>    landmass with under 400 m of surveyed road (fillRoadless's own test), which stays sand — that
+>    keeps the owner's two crescents as desert. The middle bar between them carries a surveyed
+>    track and a car park (1.2 km of way) and is painted as surveyed; say if it should be sand too.
+> 3. *"This land mass where Fairmont Bab Al Bahr is located still cut?"* It was: Zayed City's west
+>    frame edge at 54.4900 ran a ruled line down the east bank of Khor Al Maqta from 24.425 to the
+>    Musaffah bridge, cutting 100-250 m off the Fairmont / Shangri-La shore and 500 m off Al Qana's.
+>    The edge is now traced mid-channel (ed86808), baked to `bake-preview` (fd8041f): ring 0
+>    20.42 → 21.48 km², 114 new shore vertices on that bank of which 7 lie on the frame line,
+>    +128 footprints, +25 road ways, two more venues on the ground; extent unchanged, so no
+>    threshold shift this time.
 
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
 > the tools; **none of it is in the shipped data**, which was reverted to `9d9e8df` after the owner
