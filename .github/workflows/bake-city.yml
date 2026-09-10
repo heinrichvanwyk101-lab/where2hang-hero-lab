@@ -232,6 +232,13 @@ jobs:
           # but main the same commit lands there instead; fetch it, render it, and fast-forward
           # main only when it looks right.
           BR='${{ inputs.branch }}'; BR="${BR:-main}"
+          # A preview branch is disposable and is REPLACED, never rebased onto: two bakes of the
+          # same island files can only conflict, and a stale preview left behind by an earlier run
+          # must not be able to block the next one. main is never force-pushed.
+          if [ "$BR" != "main" ]; then
+            git push --force origin "HEAD:refs/heads/$BR" && { echo "replaced preview branch $BR"; exit 0; }
+            echo "Could not push the preview branch $BR."; exit 1
+          fi
           for attempt in 1 2 3; do
             if git push origin "HEAD:refs/heads/$BR"; then
               echo "pushed to $BR on attempt $attempt"
