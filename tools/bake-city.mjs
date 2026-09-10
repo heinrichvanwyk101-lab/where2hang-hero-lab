@@ -202,8 +202,12 @@ const ISLANDS = [
        channel between it and the strip: the north edge runs parallel to the E10 165 m south of
        the main frame's line. Mainland, so all four edges are ruled. Overture: 513 footprints. The
        villa sectors of SE45 beyond Al Masarat Street stay out. */
+    /* WIDENED WEST FOR ETIHAD PLAZA (the owner's photos: the row of cream towers with terracotta
+       hipped roofs and arcaded shops, lit warm at night). The Plaza's blocks sit at 54.572–54.5745
+       between 24.4285 and 24.4315, west of Al Masarat Street; the HQ campus and the training
+       academy are at the east end. One island holds both. Overture: 1,025 footprints. */
     islandsLL: [[
-      [54.5755,24.4300], [54.5860,24.4300], [54.5860,24.4400], [54.5755,24.4370],
+      [54.5715,24.4280], [54.5860,24.4280], [54.5860,24.4400], [54.5715,24.4360],
     ]] },
 
   /* ------------------------------------------------------------------------------------------
