@@ -43,7 +43,7 @@
    head, and nothing upstream had to.
    ============================================================================================= */
 
-export const BUILD = 'basemap v28';
+export const BUILD = 'basemap v29';
 
 /* The scene's one scale constant, and it must agree with w2h-world.js. Not imported, because that
    file takes its dependencies through opts and importing it here would create the cycle. */
@@ -261,8 +261,8 @@ export const DIORAMA = {
   maryah:   [  -42,  -476 ],
   reem:     [  190,  -256 ],
   saadiyat: [  535, -1102 ],
-  yas:      [ 1981,  -263 ],
-  raha:     [ 1786,   319 ],
+  yas:      [ 2351,  -263 ],
+  raha:     [ 2156,   319 ],
   /* ZAYED CITY IS NOT PULLED, AND IT CANNOT BE. It is 14 km out — far enough to look like part of
      the eastern cluster — but pulling it runs it into Abu Dhabi Island: Corniche's own outline
      reaches x = 1220 and a Zayed City at 72 per cent lands inside it. That is not a rounding
@@ -273,8 +273,18 @@ export const DIORAMA = {
      mutual geometry perfect and cost Zayed City 16 degrees of bearing from Corniche. Bearings from
      Corniche are what a viewer reads; Zayed City to Masdar is a pair nobody compares. */
   zayed:    [ 1584,   761 ],
-  masdar:   [ 2174,   542 ],
-  airport:  [ 2526,   272 ],
+  /* THE EASTERN FOUR MOVED 370 EAST (basemap v29). Yas, Al Raha, Masdar and the airport sat 733
+     units (5.7 km) west of their true position relative to Zayed City, as one rigid group, to keep
+     the diorama compact. That put Al Raha's strip 13 units north of Rabdan with nothing between,
+     and the ground south of the E10 — the Etihad Plaza block with its restaurant row, which the
+     owner asked for "just as an island of this small area" — had nowhere to go: in Al Raha's frame
+     it lands on Zayed City's north-east quarter. 370 is the MINIMUM, measured against the
+     outlines: the island clears Zayed City by 73 units and Al Raha's own strip clears Rabdan by
+     38 (it overlapped Rabdan between 200 and 300, and was 13 clear at 0). The owner chose the
+     minimum over true position: "keep the diorama as compact as possible". The four keep their
+     mutual geometry exactly; they are still 363 units west of true. */
+  masdar:   [ 2544,   542 ],
+  airport:  [ 2896,   272 ],
 };
 
 
