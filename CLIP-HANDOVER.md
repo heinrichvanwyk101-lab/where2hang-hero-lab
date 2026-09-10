@@ -1,0 +1,88 @@
+# The off-island clip — where it got to, and where it broke
+
+> Written on 10 September 2026, at the point of handing this over. Everything described here is in
+> the tools; **none of it is in the shipped data**, which was reverted to `9d9e8df` after the owner
+> reported the world looked worse on the phone. Re-running the bake reproduces the broken state, so
+> do not re-bake until the open question below is answered.
+
+## The original defect, which was real
+
+The owner reported "on raha roads and buildings not aligning". Drawn flat by `tools/bench/plan.mjs`
+beside a satellite view, the cause was not an alignment error at all: **the whole mainland street
+grid south of the E11 was inside `isle-raha.json`, drawn over open sea.** Buildings had been
+clipped to the island since the pre-clip was written; roads never had been. The two layers
+disagreed about where Al Raha ends.
+
+Nothing but buildings and water was ever clipped. Roads, paths, plazas, parks, parking, beaches,
+golf, raceway and hard edges all shipped exactly as the fetch box returned them, and every fetch
+box is far bigger than its island — Al Maryah's file carried 150 surface car parks of which 2 are
+on Al Maryah, and 24 parks of which none are.
+
+That diagnosis still stands. It was checked against ground truth, not inferred.
+
+## What was built (all still in `tools/`, none of it shipped)
+
+1. **`clipWaysToOutline` in `tools/bake-city.mjs`** — way-level clip at the buildings' existing
+   `CLIP_MARGIN_M` of 150 m, applied to every unclipped layer. Way-level so bridges survive: the
+   middle of a bridge is over water by definition, so cutting at the shore would delete every
+   causeway in the city. Margin swept 40 m to 250 m first; the kept-way count moves 1–3 % on every
+   island, so the threshold is not load-bearing.
+2. **`mendBrokenEnds` in `tools/bake-city.mjs`** — the clip cut slip roads mid-span, because OSM
+   splits a road at every junction and the middle of an interchange loop touches no land. The
+   owner saw roads running out over the water and stopping, and confirmed from satellite that they
+   "cross, turn and join again". Mends each kept way whose own end stops over open water, by the
+   shortest route back to the network.
+3. **`tools/frame-from-stock.mjs`** — two real bugs fixed. It read `isle.buildings`, empty since
+   footprints moved to `fp-<id>.json`, so it rasterised nothing and reported "no buildings to
+   trace". And its Moore boundary walk returned a two-vertex, 0.0 km² boundary on a complex blob
+   *without erroring* — replaced with exact cell-edge chaining.
+4. **`.github/workflows/overture-window.yml`** — exports Overture land/water for a window, and with
+   `stock=true` the unclipped building centroids, committed to `data/probe/` because this sandbox
+   has no outbound network. This is what made ground-truth comparison possible at all.
+5. **Zayed City's landward edge** re-traced from that unclipped stock. The old edge was a ruled
+   line through the densest part of Rabdan's own fabric, because the tracer read the *baked* island
+   — already clipped to 150 m of the frame it was replacing — so each pass could only push the
+   boundary out by the clip margin. "Converged after three passes" was the loop throttling itself.
+
+## Three rules that were tried for the mend, and why two failed
+
+Worth recording so nobody re-treads it. Restoring every dropped way lying on a bounded **cycle**
+through the kept network put Al Maryah from 120 road ways to 271 — the mainland and Al Reem drawn
+as grids over the water, because *a city block is a compact cycle*. Bounding the chord between the
+cycle's attachment points still admitted 113 of the 152. Requiring the way to hug a kept
+carriageway still admitted 33 and cost Al Raha 11 real slip roads. Restricting anchors to
+on-island endpoints restored nothing anywhere, because a dropped way is separated from the island
+by the kept way it hangs off.
+
+The question "which dropped ways look like they belong?" has no answer that separates a slip road
+from a city block. Sizing the repair to the **visible break** does.
+
+## THE OPEN QUESTION — read this before re-baking
+
+The owner's phone shows ground reading bare and brown where it was not, and **buildings standing
+where roads are**, on several islands. The clip's own numbers do not yet account for that:
+
+- The diorama layout is **not** it. Only Zayed City's radius moved, 423 → 438 scene units (3.5 %).
+  Every other island's extent is byte-identical.
+- The vertex-only area test is **not** it on Al Raha, at least. A large park polygon can overlap an
+  island without any of its vertices coming near — the same flaw `clipWaterToOutline` was written
+  to avoid — but measured on Al Raha, **zero** dropped parks cover island ground.
+- `errcheck3` passes clean on the broken data: 9 islands, no holes, no bad materials, no errors.
+  Whatever is wrong is not an error, it is an appearance.
+
+**The first thread to pull.** Al Raha lost 40 parks → 19 (139 ha of park area → 21 ha) and 45
+surface car parks → 9. Those are exactly the layers the ground painter and the `urbanFabric` filler
+both read. If the filler treats parks and parking as keep-out and they are gone, it will fill that
+ground with invented buildings — which would explain both "bare and brown" and "buildings where
+there's roads" from one cause. **That is a hypothesis, not a finding.** It has not been tested.
+
+The test to run: render the same district from `9d9e8df` data and from a re-bake, same camera, and
+diff. `tools/bench/districtshot.mjs <id>` takes the shot; the data swap is
+`git checkout <sha> -- data/`. That before/after is the measurement that was never made, and
+skipping it is how this shipped broken.
+
+## Standing constraints
+
+`errcheck3` must pass before every world push. One bench render at a time; kill bench processes by
+PID, never `pkill -f`. The world repo `main` is live to the public. No model identifier in commits,
+PR text or any pushed artefact.
