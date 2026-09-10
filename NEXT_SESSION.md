@@ -12,6 +12,17 @@
 > island south of the E10 is live (Al Raha's second frame, basemap v29 shift of 370, city v175 /
 > world v346 Etihad HQ kit) — see the SHIPPED note in that file.
 
+> **PICK UP HERE (10 September, paused on the owner's usage limit — "continue when limit
+> resets"):** branch `wip-etihad-plaza` holds the next step, unverified: Al Raha's island widened
+> west for Etihad Plaza (bake 2143439 cherry-picked there), a `plaza` style zone in `footprintsFor`
+> (cream render, tile roofs on every block, heights by footprint: towers / eight-storey / four-storey
+> — from the owner's photos), the diorama shift moved from 370 to 400 (basemap v30), and a
+> `W2H_VIEW` env for `closeup.mjs`. To finish: read `tools/bench/out/plaza-day.png` and
+> `island-wide-v347.png` (already rendered), fix the night render (view=night came out blank —
+> check the page's view names), run errcheck3, then fast-forward main. Then the Wasta tasks (#74
+> boundary + conversation, #75) — the owner said "don't use credits": no Google Places or
+> Anthropic test calls. The Home "Ask Wasta" nudge is pushed on the app branch (0965920).
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
