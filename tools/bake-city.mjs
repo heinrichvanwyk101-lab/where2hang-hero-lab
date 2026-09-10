@@ -283,7 +283,20 @@ const ISLANDS = [
       [54.5472,24.4078], [54.5486,24.4181], [54.5464,24.4247],
       [54.5390,24.4312], [54.5368,24.4365], [54.5287,24.4376],
       [54.5099,24.4357], [54.5020,24.4342], [54.4770,24.4376],
-      [54.4770,24.4300], [54.4900,24.4261], [54.4903,24.4196],
+      /* THE WEST EDGE BELOW RABDAN FOLLOWS THE CHANNEL TOO. From 24.425 down to the Musaffah
+         bridge the ruled line at 54.4900 ran a straight cut down the east bank of Khor Al Maqta:
+         the Fairmont Bab Al Bahr and Shangri-La shore lost 100-250 m of ground and Al Qana's
+         waterfront 500 m, ending in a ruled edge 200 m from the Corniche land opposite. The owner
+         asked whether "this land mass where Fairmont Bab Al Bahr is located" was still cut. These
+         points sit in Overture water, mid-channel, checked at 50 m; the channel is 150-250 m wide
+         here, so it is a traced line, not a straight one. Overture puts 58 footprints on the hotel
+         strip that was cut and 250 on the Al Qana end. Westmost 54.4785, inside the 54.4771 the
+         extent already has from Rabdan, so the display-scale threshold does not move. */
+      [54.4770,24.4300], [54.4870,24.4252], [54.4860,24.4220], [54.4863,24.4200],
+      [54.4868,24.4180], [54.4876,24.4160], [54.4883,24.4140], [54.4888,24.4120],
+      [54.4890,24.4100], [54.4888,24.4080], [54.4878,24.4060], [54.4866,24.4048],
+      [54.4855,24.4030], [54.4835,24.4010], [54.4815,24.3995], [54.4800,24.3975],
+      [54.4785,24.3950], [54.4790,24.3935], [54.4870,24.3928],
       [54.4900,24.3924], [54.4946,24.3920],
     ] },
 
