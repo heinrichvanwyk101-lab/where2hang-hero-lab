@@ -24,11 +24,17 @@
 > `errcheck3` clean, and cherry-picked onto `main` (ec86cd8). The preview branch is deleted after
 > each merge so the next preview bake cannot collide with a stale one. The bake workflow now takes a `branch` input for exactly this.
 > **Sas Al Nakhl: DECIDED, NOT BUILT.** The owner's rule, verbatim: "Sas Al Nakhl is empty and must
-> not be built. We're only building islands and areas that serve as venues to home." The island
-> carries no venues, so the frame stays at Rabdan; the drafted extension and the `fillAll` change
-> were discarded, not parked. The rule is recorded at the frame in `tools/bake-city.mjs` and is
-> the same one that defers Khalifa City. It should decide any future "missing land" question
-> before geometry does. Tools added today: `tools/bench/diorama-map.mjs`,
+> not be built. We're only building islands and areas that serve as venues to home." The drafted
+> northward extension and the `fillAll` change were discarded, not parked. The rule is recorded at
+> the frame in `tools/bake-city.mjs` and is the same one that defers Khalifa City.
+>
+> **CORRECTION — the blue patch was Rabdan's WEST edge, not the island to the north.** The owner:
+> "Rabdan was the blue patch that was built wrong and should come up to the channel bordering Al
+> Rawda." Rabdan's ground runs west past the ruled edge at 54.4900 to Khor Al Maqta at ~54.478;
+> the frame now follows that channel at 54.4770 between 24.4376 and 24.4300 (7ee60c9), 280 m clear
+> of Corniche's outline, +243 surveyed footprints, no venues. Baked to `bake-preview` for a render
+> before it ships. **Al Raha's two crescents** stay as land and, per the owner, are "left as desert
+> sand": the roadless-landmass fill that invented mid-rise plots on them comes off (world v344). Tools added today: `tools/bench/diorama-map.mjs`,
 > `tools/bench/overview-labelled.mjs`.
 
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
