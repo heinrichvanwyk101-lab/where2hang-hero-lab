@@ -33,7 +33,7 @@ const browser = await chromium.launch({executablePath:'/opt/pw-browsers/chromium
   args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage']});
 const page = await browser.newPage({viewport:{width:1280,height:854}});
 page.on('pageerror',e=>console.log('PAGEERROR', String(e.message).slice(0,160)));
-await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=day&nowarm=1`,{waitUntil:'load',timeout:180000});
+await page.goto(`http://127.0.0.1:${port}/world-nav.html?embed=1&rail=0&fp&view=${process.env.W2H_VIEW||'day'}&nowarm=1`,{waitUntil:'load',timeout:180000});
 await page.waitForFunction(()=>window.W2H&&window.W2H.DISTRICTS,null,{timeout:120000});
 await page.waitForFunction(()=>window.W2H.DISTRICTS.filter(d=>d.built).length>=6,null,{timeout:240000}).catch(()=>console.log('not all eager districts built'));
 await page.evaluate(i=>window.W2H.go(i), id);

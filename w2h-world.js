@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v346';
+export const BUILD = 'world v347';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -8458,6 +8458,11 @@ if (!NO_KIT && kit.rahaMall){
   raha.detail.add(mall);
   if (kit.rahaBeachHotel){ const h = kit.rahaBeachHotel(); h.position.y = GROUND; raha.detail.add(h); }   // world v289
   if (kit.etihadHQ){ const h = kit.etihadHQ(); h.position.y = GROUND; raha.detail.add(h); }   // world v346, on the Etihad Plaza island
+/* ETIHAD PLAZA (world v347): the estate west of Al Masarat Street on the island — 180-odd surveyed
+   footprints of towers and podium blocks in one grid, no surveyed heights. The zone gives them
+   the look in the owner's photos: cream render, terracotta hipped roofs on every block, heights
+   by footprint size (towers, eight-storey blocks, four-storey arcades). Read by footprintsFor. */
+raha.styleZones = [{ x0:-220, x1:-160, z0:190, z1:256, style:'plaza' }];
   if (kit.alSeefVillage){ const v = kit.alSeefVillage(216.6, -92.3, 0.26); v.position.y = GROUND; raha.detail.add(v); }   // world v295, on the 208 x 88 m record
 }
 
@@ -9842,6 +9847,15 @@ function footprintsFor(d, list){
            is towers. The zone says six storeys and the survey has nothing to say against it. */
         for (const zn of (d.styleZones || [])){
           if ((zn.style === 'low' || zn.style === 'villa') && b.x >= zn.x0 && b.x <= zn.x1 && b.z >= zn.z0 && b.z <= zn.z1){ h = Math.min(h, (zn.style === 'villa' ? 8 : 22) / M_PER_UNIT); break; }
+          /* A 'plaza' ZONE SETS THE HEIGHT FROM THE FOOTPRINT (world v347): Etihad Plaza is one
+             estate of cream towers over podium blocks, and the survey carries none of its
+             heights. Its bigger footprints are the towers (the owner's photos: twelve to
+             fourteen storeys under a hipped roof), the middling ones the eight-storey blocks,
+             the small ones the four-storey arcaded blocks along the road. */
+          if (zn.style === 'plaza' && b.x >= zn.x0 && b.x <= zn.x1 && b.z >= zn.z0 && b.z <= zn.z1){
+            const a = areaOf(b);
+            h = (a >= 700 ? 42 : a >= 450 ? 27 : 15) / M_PER_UNIT; break;
+          }
         }
       } else {
         /* THE OLD MODEL, KEPT FOR THE ISLAND THAT HAS NO SURVEYED STOCK TO RESAMPLE. Wrong in the
@@ -9932,6 +9946,7 @@ function footprintsFor(d, list){
   const styleAtF = (x, z) => { for (const zn of (d.styleZones || [])) if (x >= zn.x0 && x <= zn.x1 && z >= zn.z0 && z <= zn.z1) return zn.style; return null; };
   const matOf  = sp => styleAtF(sp.x, sp.z) === 'white'
                      ? (sp.h > tallest * 0.62 ? 'clad' : 'white')
+                     : styleAtF(sp.x, sp.z) === 'plaza' ? 'rend'          // cream render, whatever the height (world v347)
                      : ((vkOf(sp) && VK_MAT[vkOf(sp)]) || typeOf(sp.h));
   /* THE VILLA FLOOR BEATS BOTH BRANCHES. A house gets class 0 windows whether or not a restaurant
      is joined to it — the dine bump exists to light a ground-floor unit under offices, and there
@@ -10022,9 +10037,10 @@ function footprintsFor(d, list){
 
      THE TONE IS DETERMINISTIC IN POSITION, not drawn from a stream, so it does not depend on the
      order the specs happen to arrive in and a reload rebuilds the identical estate. */
-  const villas = boxed.filter(sp => !sp.vk && styleAtF(sp.x, sp.z) !== 'white' &&
+  const villas = boxed.filter(sp => styleAtF(sp.x, sp.z) === 'plaza' ||   // every Plaza block wears the tile roof (world v347)
+    (!sp.vk && styleAtF(sp.x, sp.z) !== 'white' &&
     sp.h * M_PER_UNIT <= VILLA_H &&
-    sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT <= VILLA_AREA);
+    sp.w * sp.dp * M_PER_UNIT * M_PER_UNIT <= VILLA_AREA));
   if (villas.length){
     const tone = sp => {
       let q = Math.imul(Math.round(sp.x * 733) ^ Math.imul(Math.round(sp.z * 733), 0x9E3779B1), 0x85EBCA6B);
