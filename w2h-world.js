@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v345';
+export const BUILD = 'world v346';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -769,6 +769,7 @@ const LM_RAHA = {
   rahaMall:     { x: -181.73, z:  94.19 },   // w:182.7 d:86.8  rot: 0.2950
   rahaResortA:  { x: -203.27, z: 101.76 },   // w:197.7 d:95.1  rot: 0.3210
   rahaResortB:  { x: -218.53, z:  95.47 },   // w:120.8 d:34.8  rot:-1.2640
+  etihadHQ:     { x:  -51.96, z: 187.27 },   // w:141.3 d:138.6 rot:-1.2640 — the Etihad Plaza island (task #72)
 };
 
 /* THE ANCHORS COME FROM THE MAP WHEN THERE IS ONE, and v79 showed why they must.
@@ -5548,6 +5549,7 @@ const DISTRICTS = [
       { label:'Al Raha Mall', x:LM_RAHA.rahaMall.x, z:LM_RAHA.rahaMall.z, h:6, r:24 },
       { label:'Al Seef Village', x:216.6, z:-92.3, h:4, r:26 },   // on the kit (world v295)
       { label:'Al Raha Beach Resort', x:LM_RAHA.rahaResortA.x, z:LM_RAHA.rahaResortA.z, h:5, r:26 },
+      { label:'Etihad Airways HQ', x:LM_RAHA.etihadHQ.x, z:LM_RAHA.etihadHQ.z, h:8, r:22 },   // on the island (world v346)
     ] },
 
   /* ---------------------------------------------------------------------------------------------
@@ -8428,6 +8430,7 @@ KIT_ZONES[raha.id] = [
   { x0:-219.2, x1:-187.3, z0: 90.0, z1:113.5 },   // Beach Resort, A  — 197.7 x 95.1 m, rot  18.4°
   { x0:-225.0, x1:-212.1, z0: 85.4, z1:105.5 },   // Beach Resort, B  — 120.8 x 34.8 m, rot -72.4°
   { x0:200, x1:233, z0:-102, z1:-82 },             // Al Seef Village — 208 x 88 m, rot 0.26 (world v295)
+  { x0:-63.2, x1:-40.7, z0:176.1, z1:198.5 },      // Etihad Airways HQ — 141 x 139 m, rot -72.4°, on the island (world v346)
 ];
 
 /* ALDAR HQ, BUILT AND ADDED. The first of Al Raha's four landmarks with actual geometry rather
@@ -8454,6 +8457,7 @@ if (!NO_KIT && kit.rahaMall){
   mall.position.y = GROUND;
   raha.detail.add(mall);
   if (kit.rahaBeachHotel){ const h = kit.rahaBeachHotel(); h.position.y = GROUND; raha.detail.add(h); }   // world v289
+  if (kit.etihadHQ){ const h = kit.etihadHQ(); h.position.y = GROUND; raha.detail.add(h); }   // world v346, on the Etihad Plaza island
   if (kit.alSeefVillage){ const v = kit.alSeefVillage(216.6, -92.3, 0.26); v.position.y = GROUND; raha.detail.add(v); }   // world v295, on the 208 x 88 m record
 }
 

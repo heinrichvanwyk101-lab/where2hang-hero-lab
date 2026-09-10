@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_CORE, TERM_STANDS } from './w2h-termina
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v174';
+export const BUILD = 'city v175';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5739,6 +5739,40 @@ function rahaBeachHotel(){
   block(-192.5, 97.98, 36, 14, 4, 0.31, pale).position.y += 12 / M;   // its roof pavilion
   return g;
 }
+/* ETIHAD AIRWAYS HEADQUARTERS — Khalifa City, on the Etihad Plaza island south of the E10 (city
+   v175, task #72). The owner: "iconic as well due to recognised Etihad buildings, especially at
+   night". On the survey's 141 x 139 m record: a campus of low glass wings around a taller curved
+   centre block, white-and-glass by day, and at night the glass lifts warm and the gold band and
+   the roof sign burn — the gold is Etihad's own. Wings 20 m, centre 34 m, sign 4 m. */
+function etihadHQ(){
+  const g = new THREE.Group(), M = M_PER_U;
+  const at = _placeRot(-51.96, 187.27, -1.264);
+  const white = saadKitMat(0xE8E6E0, 0xF4F2EC, 0.6, 0.05, 0xFFF1D6, 0.10, 1.2);
+  const glass = saadKitMat(0x3A4E5C, 0x6E8797, 0.25, 0.4, 0xFFD9A0, 0.35, 1.0);
+  const gold  = saadKitMat(0xC9A24E, 0xE0BC66, 0.35, 0.6, 0xE8B547, 0.9, 1.0);
+  const box = (u, v, w, d, h, mat, y0 = 0) => { const [x, z] = at(u / M, v / M); const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, (y0 + h / 2) / M, z); m.rotation.y = -1.264; g.add(m); return m; };
+  // four wings in the corners of the square, glass bands on white
+  for (const [su, sv] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]){
+    box(su * 40, sv * 42, 52, 24, 20, white);
+    box(su * 40, sv * 42, 53, 25, 5, glass, 7);
+    box(su * 40, sv * 42, 53, 25, 5, glass, 14);
+  }
+  // the centre block: a curved glass drum with a gold band, the campus's tall piece
+  { const [cx, cz] = at(0, 0);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(24 / M, 26 / M, 34 / M, 32), glass); drum.position.set(cx, 17 / M, cz); g.add(drum);
+    drum.userData.hero = drum.userData.kitName = 'etihadHQ';
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(25 / M, 25 / M, 3 / M, 32), gold); band.position.set(cx, 22 / M, cz); g.add(band);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(26.5 / M, 24 / M, 2.5 / M, 32), white); cap.position.set(cx, 35 / M, cz); g.add(cap);
+    // the roof sign: a thin gold slab that reads as the lit wordmark from any distance
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(22 / M, 4 / M, 1.2 / M), gold); sign.position.set(cx, 38.5 / M, cz); sign.rotation.y = -1.264; g.add(sign);
+  }
+  // the links between the wings and the centre, low and white
+  for (const [su, sv] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) box(su * 30, sv * 32, su ? 24 : 14, su ? 14 : 24, 8, white);
+  // the forecourt: a pale apron with a gold-lit strip at the entrance
+  box(0, -60, 90, 12, 0.4, white); box(0, -66, 60, 2, 0.6, gold);
+  return g;
+}
+
 /* MANARAT AL SAADIYAT AND BERKLEE ABU DHABI — the low white gallery with its deep overhanging
    roof, and the small cube with the glass drum next door, on their surveyed footprints. */
 function manaratSaadiyat(){
@@ -6914,7 +6948,7 @@ return { TEX_TOWER, TEX_BLOCK, cityMaterial, curvedTower, roundedSlab,
          louvreAbuDhabi, zayedNationalMuseum, guggenheimAbuDhabi, naturalHistoryMuseum, teamLabPhenomena,
          capitalGate, wAbuDhabi, gateTowers, shamsBoutik, seaWorldYas, qasrAlHosn, yasCircuit, nationTowers, warnerBrosWorld,
          wtcAbuDhabi, landmarkTower, adnecHalls, foundersMemorial, skyTower, reemMall, adgmSquare, clevelandClinic,
-         yasWaterworld, rahaBeachHotel, manaratSaadiyat, babAlQasr, saadiyatResorts,
+         yasWaterworld, rahaBeachHotel, etihadHQ, manaratSaadiyat, babAlQasr, saadiyatResorts,
          zayedTerminal, maryahHotels, stRegisSaadiyat, nyuCampus, mamshaSaadiyat, yasBayWaterfront, cafeDelMar, alSeefVillage, alSeefVillageMall, saadiyatGrove, wbHotel, saadiyatPark, yasBayCarPark, yasBaySouthBeach, yasMarina, clymb, shopfront, galleriaEast };
 }
 

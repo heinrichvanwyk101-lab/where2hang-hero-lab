@@ -86,20 +86,35 @@
 > 120.8 × 34.8 wing unchanged, the mall link shortened; cameras `closeup.mjs raha 1583 421 55 90
 > 0.3` and `… 3.4`.
 >
-> **OPEN — the Etihad Airways HQ restaurant strip (task #72).** Owner: "many nice restaurants here
-> and we haven't built this area. Iconic as well due to recognised Etihad buildings, especially at
-> night." It is south of the E10 opposite Al Raha Mall (Khalifa City SE45: Fat Cow, Swaikhat,
-> Pho 7). Overture window `data/probe/overture-raha-south.geojson` + `stock-raha-south.json`:
-> 2,584 footprints in the strip (54.570–54.590 × 24.423–24.436) and 3,012 more in SE45 south of
-> Dafrah St; the venue file has 142 venues in the box. **Why it is not simply a frame extension:**
-> the four eastern districts (Yas, Al Raha, Masdar, airport) sit in the diorama pulled 733 units
-> (5.7 km) WEST of their true position relative to Zayed City, which is at its true position
-> (measured from the index extents against `DIORAMA`). Al Raha therefore sits directly north of
-> Zayed City's ring with a 35-unit gap, and anything built south of the E10 in Al Raha's frame
-> lands on top of Zayed City's north-east quarter. Building the strip means moving the eastern
-> four east by at least ~470 units (or the full 733 to true position), then extending Al Raha's
-> frame south to Al Masarat / Dafrah St and re-baking. That widens the overview composition; it
-> is the owner's call and was put to them.
+> **SHIPPED — the Etihad Plaza island (task #72).** Owner: "many nice restaurants here and we
+> haven't built this area. Iconic as well due to recognised Etihad buildings, especially at night";
+> then "we don't want the whole land mass, just an island of this small area" and "minimum shift,
+> keep the diorama as compact as possible". What shipped:
+> - `tools/bake-city.mjs`: a noCoastline district may carry `islandsLL`, further traced frames that
+>   join the outline as more landmasses (cut by the coastline where one crosses, as drawn where
+>   none does; a ruled ring gets a vertex every 40 m so the renderer's spline stays on the line —
+>   a four-point ring came out as a blob with the corner buildings in the sea). Buildings outside
+>   every ring survive only by their distance to a ring that came from the coastline: past a ruled
+>   edge the 150 m margin kept 310 villas from the streets around the island.
+> - Al Raha's second frame: 54.5755–54.5860 × 24.4300–24.437/24.440 (north edge parallel to the
+>   E10, 165 m south of the main frame, so the E10 stays the channel and bridge decks cross it).
+>   Overture 513 footprints; the bake keeps 486 on it. Al Raha 584 → 1070 buildings, 439 → 585
+>   road ways, 9 → 15 venue-bearing buildings, 9 → 10 landmasses; extent d 2.16 → 3.49 km, still
+>   under w, so the threshold did not move.
+> - `w2h-basemap.js` v29: Yas, Al Raha, Masdar and the airport moved 370 units east, the minimum
+>   measured against the outlines (island 73 units clear of Zayed City, Al Raha's strip 38 clear of
+>   Rabdan; they overlapped Rabdan between 200 and 300). They had sat 733 west of true; they are
+>   still 363 west of true, by the owner's choice.
+> - Etihad Airways HQ (city v175 / world v346): on the survey's 141 × 139 m record at
+>   54.58402, 24.43256 (unnamed in Overture; identified as the largest footprint on the island,
+>   beside the Abu Dhabi Aviation Training Center) — four glass-banded white wings round a
+>   curved glass drum with a gold band and a gold roof sign that burn at night; a place anchor
+>   and a KIT_ZONES reservation. `data/probe/named-etihad.geojson` (the workflow's new `named`
+>   export) and `stock-raha-south.json` are the evidence.
+> - Cameras: `closeup.mjs raha 2060 470 150 220 0.3` (island), `… 2000 380 420 520 0.3` (Al Raha
+>   with the island). `tools/bench/probe-pixel.mjs` raycasts a pixel and names what is there.
+> Fat Cow, Swaikhat, Pho 7 and Windmill Cellar are not in the venue table yet; the row the table
+> does hold there (SALT, Flat Burger, Eleven Green, Dip'd, Claro, the food trucks) is on the island.
 
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
 > the tools; **none of it is in the shipped data**, which was reverted to `9d9e8df` after the owner
