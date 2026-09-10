@@ -2149,6 +2149,7 @@ async function bakeIsland(isle, proj){
      — or when the sewing comes out with a clockwise land ring, which means a chain arrived
      against the land-on-the-left convention and the result cannot be trusted. Both are logged. */
   let clipPoly = null, coastClipped = false;
+  const drawnRings = [];   // frame rings used as drawn: every edge ruled, nothing beyond them is shore
   if (isle.noCoastline){
     if (isle.outlineLL && isle.outlineLL.length){
       clipPoly = isle.outlineLL.map(([lo, la]) => proj.fwd(la, lo));
@@ -2172,6 +2173,7 @@ async function bakeIsland(isle, proj){
         `(${land.rings.length - rings.length} sliver(s) under ${MIN_LAND_M2} m² dropped, ${land.water.length} lagoon(s) to water)`;
     } else {
       primary = [clipPoly.map(rd1)];
+      drawnRings.push(primary[0]);
       pickedWhy = `traced shape as drawn (${primary[0].length} pts) — ${land.why}` +
         (land.wrong ? `; ${land.wrong} land ring(s) came out clockwise, clip result discarded` : '');
     }
@@ -2187,7 +2189,7 @@ async function bakeIsland(isle, proj){
       const l2 = landFromCoast(fr, chains, m => process.stderr.write(`  ${isle.id}: island frame — ${m}\n`));
       const r2 = l2.rings.map(r => simplify(r, SIMPLIFY_M * 3).map(rd1)).filter(r => r.length >= 4 && area(r) >= MIN_LAND_M2);
       if (r2.length && !l2.wrong){ primary.push(...r2); for (const lg of l2.water) water.push(simplify(lg, SIMPLIFY_M).map(rd1)); }
-      else primary.push(fr.map(rd1));
+      else { const ring = fr.map(rd1); primary.push(ring); drawnRings.push(ring); }
       pickedWhy += `; island frame: ${r2.length && !l2.wrong ? r2.length + ' landmass(es) from the coastline' : 'as drawn'} (${l2.why})`;
     }
     if (extraFrames.length) clipPoly = clipPoly.concat(...extraFrames);   // the extent spans every frame
@@ -2235,6 +2237,21 @@ async function bakeIsland(isle, proj){
        quantity is what makes them checkable against each other. */
     isle._inBox = before;
     buildings = clipToOutline(buildings, outline, CLIP_MARGIN_M);
+    /* NO MARGIN PAST A RULED EDGE. The 150 m margin exists for a coastline: a pier shed, a beach
+       club on its pontoon, a footprint whose centroid sits a few metres past a simplified shore.
+       A frame edge drawn across the mainland has no such case — everything past it is the next
+       street, and on the Etihad Plaza island that margin kept 310 villas and blocks from the
+       streets around it, to be drawn standing in the channel. So a building outside every ring
+       survives only by its distance to a ring that came from the coastline. */
+    if (drawnRings.length){
+      const rings = Array.isArray(outline[0][0]) ? outline : [outline];
+      const coastRings = rings.filter(r => !drawnRings.includes(r));
+      const before = buildings.length;
+      buildings = buildings.filter(b => rings.some(r => contains(r, [b.x, b.y])) ||
+                                        coastRings.some(r => nearRing(r, b.x, b.y, CLIP_MARGIN_M)));
+      if (before !== buildings.length)
+        process.stderr.write(`  ${isle.id}: ${before - buildings.length} building(s) dropped past a ruled frame edge\n`);
+    }
     process.stderr.write(`  ${isle.id}: coast pre-clip ${before} -> ${buildings.length} ` +
       `(dropped ${before - buildings.length} beyond ${CLIP_MARGIN_M} m of the shore)\n`);
     const waterBefore = water.length;
