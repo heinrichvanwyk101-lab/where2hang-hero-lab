@@ -41,6 +41,10 @@ on:
         description: "Also export every building centroid in the window (for tracing a district frame)"
         type: boolean
         default: false
+      named:
+        description: "Also export every NAMED building polygon in the window with its name and area (for placing a kit)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -185,6 +189,50 @@ jobs:
                         north: +process.env.N, east: +process.env.E },
               release: process.env.REL, n: pts.length, pts }));
             console.log(`${path}  ${pts.length} centroids  ${(fs.statSync(path).size/1024).toFixed(0)} KB`);
+          '
+
+      - name: Export the named building polygons
+        if: inputs.named
+        env:
+          REL: ${{ steps.rel.outputs.release }}
+          S: ${{ inputs.south }}
+          W: ${{ inputs.west }}
+          N: ${{ inputs.north }}
+          E: ${{ inputs.east }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          set -e
+          mkdir -p data/probe
+          # THE NAMED STOCK, AS POLYGONS. The centroid export above says where the buildings are;
+          # this says which of them is the Etihad Airways headquarters. Names are sparse in
+          # Overture (a few per cent of footprints) and that is the point: the ones that carry a
+          # name are the ones a kit is built for, and the polygon is the outline the kit follows.
+          duckdb -c "
+            INSTALL httpfs; LOAD httpfs;
+            INSTALL spatial; LOAD spatial;
+            SET s3_region='us-west-2';
+            COPY (
+              SELECT names.primary AS name,
+                     COALESCE(subtype,'') AS subtype, COALESCE(class,'') AS class,
+                     ROUND(height, 1) AS height, num_floors AS floors,
+                     ROUND(ST_Area_Spheroid(geometry), 0) AS area_m2,
+                     ST_AsGeoJSON(geometry) AS g
+              FROM read_parquet('s3://overturemaps-us-west-2/release/$REL/theme=buildings/type=building/*',
+                                hive_partitioning=1)
+              WHERE bbox.xmin BETWEEN $W AND $E AND bbox.ymin BETWEEN $S AND $N
+                AND names.primary IS NOT NULL
+            ) TO '/tmp/named.ndjson' (FORMAT JSON, ARRAY false);
+          "
+          node -e '
+            const fs = require("fs");
+            const feats = fs.readFileSync("/tmp/named.ndjson", "utf8").split("\n").filter(Boolean).map(l => {
+              const r = JSON.parse(l); const g = typeof r.g === "string" ? JSON.parse(r.g) : r.g;
+              return { type: "Feature", properties: { name: r.name, subtype: r.subtype, class: r.class, height: r.height, floors: r.floors, area_m2: r.area_m2 }, geometry: g };
+            });
+            const path = `data/probe/named-${process.env.LABEL}.geojson`;
+            fs.writeFileSync(path, JSON.stringify({ type: "FeatureCollection", release: process.env.REL, features: feats }));
+            console.log(`${path}  ${feats.length} named buildings`);
+            feats.slice(0, 60).forEach(f => console.log("  " + f.properties.name + "  " + f.properties.area_m2 + " m2"));
           '
 
       - name: Commit
