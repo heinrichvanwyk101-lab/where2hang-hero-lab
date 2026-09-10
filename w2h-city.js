@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_CORE, TERM_STANDS } from './w2h-termina
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v173';
+export const BUILD = 'city v174';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -5684,32 +5684,59 @@ function yasWaterworld(x0, z0, scale, rot){
   return g;
 }
 /* AL RAHA BEACH HOTEL — a low arcaded hotel in warm sandstone with a domed pavilion, on its
-   two surveyed footprints, which were reserved in the Raha kit zones for it. */
+   two surveyed footprints, which were reserved in the Raha kit zones for it.
+
+   THE CRESCENT (city v174). The 197.7 x 95.1 record was built as one flat slab with a dome on it,
+   and the owner, holding the satellite, said "fix all raha beach resort shape and building". The
+   resort is a crescent: its two ends reach north to the lagoon beach, its belly sits on the road,
+   and the pool lies in the court between. So the A record is now eleven segments on an arc that
+   fits inside that record's box — chord 190 m between the ends, 75 m deep, a 98 m radius — with
+   the arcade and its glowing arch panels on the court face where they are seen, the domed
+   pavilion at the belly, a round tower at the west end where the wing leaves for the beach, and a
+   lagoon-blue pool with a pale deck in the court. The B record stays the west wing it was; the
+   link to the mall stays but shorter, because the satellite shows the access road between them. */
 function rahaBeachHotel(){
   const g = new THREE.Group(), M = M_PER_U;
-  /* ONE COMPLEX WITH THE MALL (city v125). The hotel wore its own sand stone and teal glass
-     arches next to the mall's pink body and cream sails, and the two read as strangers. It now
-     carries the mall's own palette: pink stone body, cream piers, cream arch panels that glow
-     warm at night, and a two-storey link block closes the gap between the two records so the
-     pair is one building along the beach, which is what it is. */
-  const stone = saadKitMat(0xC9A79C, 0xE0BDB2, 0.9, 0, undefined, undefined, 1.5), pale = saadKitMat(0xE4D3C8, 0xF0E2D6, 0.85, 0, undefined, undefined, 1.6);
+  const stone = saadKitMat(0xC9A79C, 0xE0BDB2, 0.9, 0, undefined, undefined, 1.5), pale = saadKitMat(0xE4D3C8, 0xF0E2D6, 0.85, 0, undefined, undefined, 1.5);
   const glass = saadKitMat(0xE4D8C4, 0xEFE6D8, 0.7, 0.05, 0xFFE8C8, 0.28, 1.0);
+  const water = saadKitMat(0x3FA7C4, 0x6CC8DE, 0.2, 0.1);
   const block = (x, z, w, d, h, rot, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w / M, h / M, d / M), mat); m.position.set(x, h / M / 2, z); m.rotation.y = rot; g.add(m); return m; };
-  const A = block(-203.27, 101.76, 197.7, 95.1, 18, 0.321, stone); A.userData.hero = A.userData.kitName = 'rahaBeachHotel';
-  block(-218.53, 95.47, 120.8, 34.8, 14, -1.264, stone);
-  // arcade: pale piers along both long faces of A
-  const at = _placeRot(-203.27, 101.76, 0.321);
-  for (let i = -8; i <= 8; i++) for (const s of [-1, 1]){
-    const [px, pz] = at(i * 11 / M, s * 48 / M);
-    const pier = new THREE.Mesh(new THREE.BoxGeometry(2.2 / M, 12 / M, 2.2 / M), pale); pier.position.set(px, 6 / M, pz); pier.rotation.y = 0.321; g.add(pier);
-    if (i < 8){ const [ax, az] = at((i + 0.5) * 11 / M, s * 47.4 / M);
-      const arch = new THREE.Mesh(new THREE.BoxGeometry(7 / M, 9 / M, 0.3 / M), glass); arch.position.set(ax, 6 / M, az); arch.rotation.y = 0.321; g.add(arch); }
+  /* The A record's own frame: u along the record (ENE, along the road), v across it, +v toward the
+     road and -v toward the lagoon. Everything below is placed through it. */
+  const ROT = 0.321, at = _placeRot(-203.27, 101.76, ROT);
+  const R = 97.7, CV = -57.7, PHI = 76.6 * Math.PI / 180, N = 11, H = 18, DEPTH = 28;
+  const arcPt = (phi, r) => [r * Math.sin(phi), CV + r * Math.cos(phi)];   // (u, v) in metres
+  for (let i = 0; i < N; i++){
+    const phi = -PHI + (i + 0.5) * (2 * PHI / N);
+    const [u, v] = arcPt(phi, R - DEPTH / 2);
+    const [x, z] = at(u / M, v / M);
+    const segL = 2 * R * Math.sin(PHI / N) + 1.5;
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(segL / M, H / M, DEPTH / M), stone);
+    /* Tangent of the arc at phi is the u-axis rotated by phi; the box's own yaw is ROT less that. */
+    seg.position.set(x, H / M / 2, z); seg.rotation.y = ROT - phi; g.add(seg);
+    if (i === Math.floor(N / 2)) seg.userData.hero = seg.userData.kitName = 'rahaBeachHotel';
+    // arcade: a pale pier at each segment joint and an arch panel between, on the court face
+    const [pu, pv] = arcPt(phi - PHI / N, R - DEPTH - 1.2), [px, pz] = at(pu / M, pv / M);
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(2.2 / M, 12 / M, 2.2 / M), pale); pier.position.set(px, 6 / M, pz); pier.rotation.y = ROT - phi; g.add(pier);
+    const [au, av] = arcPt(phi, R - DEPTH - 0.6), [ax, az] = at(au / M, av / M);
+    const arch = new THREE.Mesh(new THREE.BoxGeometry(9 / M, 9 / M, 0.3 / M), glass); arch.position.set(ax, 6 / M, az); arch.rotation.y = ROT - phi; g.add(arch);
   }
-  const pav = block(-203.27, 101.76, 34, 34, 26, 0.321, pale);
-  block(-192.5, 97.98, 72, 46, 12, 0.31, stone);   // the link to the mall, on the shared axis
-  block(-192.5, 97.98, 60, 20, 4, 0.31, pale).position.y += 12 / M;   // its roof pavilion
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(11 / M, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xC9A96A, 0xD9BC7A, 0.5, 0.3, 0xE8B547, 0.2));
-  dome.position.set(-203.27, 26 / M, 101.76); g.add(dome);
+  // the domed pavilion at the belly of the crescent, on the road
+  { const [bu, bv] = arcPt(0, R - DEPTH / 2), [bx, bz] = at(bu / M, bv / M);
+    block(bx, bz, 34, 34, 26, ROT, pale);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(11 / M, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xC9A96A, 0xD9BC7A, 0.5, 0.3, 0xE8B547, 0.2));
+    dome.position.set(bx, 26 / M, bz); g.add(dome); }
+  // the round tower at the west end, where the wing leaves for the beach
+  { const [tu, tv] = arcPt(-PHI, R - DEPTH / 2), [tx, tz] = at(tu / M, tv / M);
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(15 / M, 15 / M, 30 / M, 24), pale); tower.position.set(tx, 15 / M, tz); g.add(tower);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(9 / M, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), saadKitMat(0xC9A96A, 0xD9BC7A, 0.5, 0.3, 0xE8B547, 0.2)); cap.position.set(tx, 30 / M, tz); g.add(cap); }
+  // the pool and its deck in the court, between the arcade and the beach
+  { const [cu, cv] = [0, CV + 22], [cx, cz] = at(cu / M, cv / M);
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(34 / M, 34 / M, 0.5 / M, 32), pale); deck.position.set(cx, 0.25 / M, cz); deck.scale.z = 0.62; deck.rotation.y = ROT; g.add(deck);
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(26 / M, 26 / M, 0.6 / M, 32), water); pool.position.set(cx, 0.45 / M, cz); pool.scale.z = 0.6; pool.rotation.y = ROT; g.add(pool); }
+  block(-218.53, 95.47, 120.8, 34.8, 14, -1.264, stone);   // the west wing, on its own record
+  block(-192.5, 97.98, 44, 30, 12, 0.31, stone);           // the link toward the mall, short of the road
+  block(-192.5, 97.98, 36, 14, 4, 0.31, pale).position.y += 12 / M;   // its roof pavilion
   return g;
 }
 /* MANARAT AL SAADIYAT AND BERKLEE ABU DHABI — the low white gallery with its deep overhanging

@@ -72,6 +72,34 @@
 >    20.42 → 21.48 km², 114 new shore vertices on that bank of which 7 lie on the frame line,
 >    +128 footprints, +25 road ways, two more venues on the ground; extent unchanged, so no
 >    threshold shift this time.
+>
+> **Later the same morning.** Owner: "Ok came through now" — the ten-minute Pages cache on the
+> phone; basemap v28 / nav v245 fetch the index with the per-load key and the island files with
+> the bake's `generated` stamp, so a bake shows the moment Pages serves it. **Tap wiring** (nav
+> v246): a tap on Al Reem went to Corniche because every island's pick disc is 1.2 × its radius
+> and Corniche's covers Reem and Maryah; the tap now takes the island whose coastline contains
+> the point, else the smallest disc crossed. `tools/bench/tapcheck.mjs` proves it per island
+> (note: at phone width the tilt button sits over Al Raha's west end in the overview, a separate
+> layout nit). **Al Raha Beach Resort** (city v174): the flat slab became the crescent the
+> satellite shows — eleven arc segments inside the 197.7 × 95.1 record, arcade on the court face,
+> domed pavilion at the belly on the road, round tower at the west end, pool in the court, the
+> 120.8 × 34.8 wing unchanged, the mall link shortened; cameras `closeup.mjs raha 1583 421 55 90
+> 0.3` and `… 3.4`.
+>
+> **OPEN — the Etihad Airways HQ restaurant strip (task #72).** Owner: "many nice restaurants here
+> and we haven't built this area. Iconic as well due to recognised Etihad buildings, especially at
+> night." It is south of the E10 opposite Al Raha Mall (Khalifa City SE45: Fat Cow, Swaikhat,
+> Pho 7). Overture window `data/probe/overture-raha-south.geojson` + `stock-raha-south.json`:
+> 2,584 footprints in the strip (54.570–54.590 × 24.423–24.436) and 3,012 more in SE45 south of
+> Dafrah St; the venue file has 142 venues in the box. **Why it is not simply a frame extension:**
+> the four eastern districts (Yas, Al Raha, Masdar, airport) sit in the diorama pulled 733 units
+> (5.7 km) WEST of their true position relative to Zayed City, which is at its true position
+> (measured from the index extents against `DIORAMA`). Al Raha therefore sits directly north of
+> Zayed City's ring with a 35-unit gap, and anything built south of the E10 in Al Raha's frame
+> lands on top of Zayed City's north-east quarter. Building the strip means moving the eastern
+> four east by at least ~470 units (or the full 733 to true position), then extending Al Raha's
+> frame south to Al Masarat / Dafrah St and re-baking. That widens the overview composition; it
+> is the owner's call and was put to them.
 
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
 > the tools; **none of it is in the shipped data**, which was reverted to `9d9e8df` after the owner

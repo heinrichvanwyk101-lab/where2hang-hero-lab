@@ -7,7 +7,9 @@
 > the E10 corridor's road sections are thinned where carriageways crowd (world v343). The workflow's
 > `branch` input is how a bake gets looked at before it is live: bake to `bake-preview`, render
 > against `main` from a fixed camera, cherry-pick. The owner items and their state are at the top
-> of that file.
+> of that file. Since then, also live: basemap v28 / nav v246 (data cache-bust by bake stamp, tap
+> wiring), city v174 (Al Raha Beach Resort as a crescent). Open: the Etihad HQ strip south of the
+> E10 needs the eastern four districts moved east first — see the OPEN note in that file.
 
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
