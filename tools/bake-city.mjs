@@ -256,22 +256,24 @@ const ISLANDS = [
        rectangle, 384 inside the first trace, 410 inside this one. A third pass moves 1.
        The west edge is still hard at 54.4900: the built area runs on past Corniche's fetch box and
        the trace followed it, which would hand the Grand Mosque precinct to two districts at once. */
-    /* THE NORTH EDGE STOPS HERE ON PURPOSE, AND THE OWNER'S RULE IS WHY.
+    /* TWO EDGES, TWO DIFFERENT ANSWERS, BOTH THE OWNER'S.
 
-       The ground north of this line is Sas Al Nakhl Island — Overture carries it by name, its
-       coast is at about 24.456, and the land runs unbroken from Rabdan up to it. Twice the frame
-       was pushed toward that coast on the strength of the geometry: once to 24.444, which baked
-       a bare slab with a ruled edge that the owner circled as "should not be built", and once
-       drafted all the way to the coast with the fabric filler turned off so the sand would stay
-       sand. The owner's answer to the second was the rule that governs every frame in this file:
+       NORTH stops at 24.4376 on purpose. The ground beyond is Sas Al Nakhl Island — Overture
+       carries it by name, its coast is at about 24.456, and the land runs unbroken to it, which
+       is why this frame was twice pushed toward that coast on the strength of the geometry. The
+       owner's rule, verbatim: "Sas Al Nakhl is empty and must not be built. We're only building
+       islands and areas that serve as venues to home." It carries none, so the straight edge
+       across the island is the right shape and not a coastline to be found. Khalifa City is
+       deferred on the same rule, in the DEFERRED block below.
 
-           "Sas Al Nakhl is empty and must not be built. We're only building islands and areas
-            that serve as venues to home."
-
-       The island carries no venues. So the frame ends at Rabdan, whose ring the channel split
-       already separates from Zayed City proper, and the straight edge across the island is the
-       correct shape for a district that ends where the venues do — not a coastline to be found.
-       Khalifa City is deferred on the same rule, in the DEFERRED block below.
+       WEST goes to the channel. Rabdan's ground runs west past the old ruled edge at 54.4900 to
+       Khor Al Maqta at about 54.478, with Al Rawdah and the Grand Mosque on the far bank — the
+       owner: "Rabdan was the blue patch that was built wrong and should come up to the channel
+       bordering Al Rawda." The frame now runs down the channel at 54.4770 between 24.4376 and
+       24.4300, tested against Overture water along its whole length, 280 m clear of Corniche's
+       outline at its closest; below 24.4300 Rabdan's own shore is back at 54.4965 and the edge
+       returns to 54.4900 so the Mosque precinct stays Corniche's. It adds 243 surveyed footprints
+       and no venues: a shape correction, not a reach for ground.
 
        Note kept from the earlier iterations: the trace converges because it is traced from stock
        the previous clip already ate — see frame-from-stock.mjs and W2H_STOCK. */
@@ -280,8 +282,8 @@ const ISLANDS = [
       [54.5387,24.3965], [54.5412,24.3979], [54.5417,24.4007],
       [54.5472,24.4078], [54.5486,24.4181], [54.5464,24.4247],
       [54.5390,24.4312], [54.5368,24.4365], [54.5287,24.4376],
-      [54.5099,24.4357], [54.5020,24.4342], [54.4944,24.4311],
-      [54.4947,24.4281], [54.4920,24.4261], [54.4903,24.4196],
+      [54.5099,24.4357], [54.5020,24.4342], [54.4770,24.4376],
+      [54.4770,24.4300], [54.4900,24.4261], [54.4903,24.4196],
       [54.4900,24.3924], [54.4946,24.3920],
     ] },
 
