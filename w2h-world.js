@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v343';
+export const BUILD = 'world v344';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -10457,9 +10457,14 @@ function buildGroundFor(d){
      four hundred of them per island at exactly the moment five islands are on screen would be
      paying for invisible geometry. The LOD swap already exists and this is what it is for. */
   if (props){
-    /* ROADLESS LANDMASSES AND THE BRIDGES BETWEEN THEM (world v275), before the props so the
-       cull sees the fill like any other generated stock. */
-    fillRoadless(d);
+    /* THE BRIDGES BETWEEN LANDMASSES (world v275). The roadless-landmass fill that used to run
+       here with them is gone (world v344): it invented rows of mid-rise plots on any landmass
+       with under 400 m of surveyed road — written for Al Raha's two small crescents, which carry
+       no roads and a handful of footprints — and the owner's instruction on exactly those two is
+       that they be built as land and "left as desert sand as it forms a pretty picture". Nothing
+       else called it: it needs fillAll and more than one landmass, which on this diorama is Al
+       Raha and Zayed City, and Zayed City's two rings both carry kilometres of road. The function
+       stays for a district that ever wants it back; it is simply not called. */
     bridgesFor(d);
     console.info('props: ' + d.id + ' realRoads=' + ((d.roads && d.roads.drawArterials) || []).length +
       ' arterials=' + (plan.arterials || []).length + ' mainLen=' + (plan.mainRoadLen || 0).toFixed(3) +

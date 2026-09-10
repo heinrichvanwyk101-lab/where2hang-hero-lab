@@ -34,8 +34,10 @@
 > the frame now follows that channel at 54.4770 between 24.4376 and 24.4300 (7ee60c9), 280 m clear
 > of Corniche's outline, +243 surveyed footprints, no venues. Baked to `bake-preview` for a render
 > before it ships. **Al Raha's two crescents** stay as land and, per the owner, are "left as desert
-> sand": the roadless-landmass fill that invented mid-rise plots on them comes off (world v344). Tools added today: `tools/bench/diorama-map.mjs`,
-> `tools/bench/overview-labelled.mjs`.
+> sand": the roadless-landmass fill that invented mid-rise plots on them is no longer called
+> (**shipped as world v344**; verified with `tools/bench/closeup.mjs raha 1799 279 40 110 0.3`
+> before/after — eight invented blocks gone, nothing else in frame moved, `errcheck3` clean).
+> Tools added today: `tools/bench/diorama-map.mjs`, `tools/bench/overview-labelled.mjs`.
 
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
 > the tools; **none of it is in the shipped data**, which was reverted to `9d9e8df` after the owner
