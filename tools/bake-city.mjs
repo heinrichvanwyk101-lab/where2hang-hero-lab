@@ -256,43 +256,26 @@ const ISLANDS = [
        rectangle, 384 inside the first trace, 410 inside this one. A third pass moves 1.
        The west edge is still hard at 54.4900: the built area runs on past Corniche's fetch box and
        the trace followed it, which would hand the Grand Mosque precinct to two districts at once. */
-    /* THIRD ITERATION, AND THE FIRST ONE TRACED FROM STOCK THE CLIP HAD NOT ALREADY EATEN.
+    /* THE HALF-EXTENSION IS OUT AGAIN, AND THE ORIGINAL FRAME IS BACK — deliberately, and only
+       for now. A third iteration pushed the north edge to 24.444 from an unclipped trace; it was
+       right that the old edge cut through Rabdan's fabric, and wrong about where to stop. The
+       owner's satellite check names the ground north of Rabdan: it is Sas Al Nakhl Island, whose
+       real north coast is at about 24.456, and a frame that stops halfway across it bakes a bare
+       slab with a ruled edge — "the red piece of land should not be built". That slab is what got
+       reverted. The right frame takes the WHOLE island to its coast, so the coastline clip gives
+       it a shore on every side; that change is made separately, on a preview branch, so it can be
+       looked at before it is live. Until then this is the frame the shipped data was baked from.
 
-       The owner reported Rabdan's shape as wrong on the landward side, and it was: the north edge
-       ran as a ruled line straight through the densest part of that fabric, with streets and
-       footprints on the far side of it. The cause was a feedback loop rather than a bad trace.
-       frame-from-stock.mjs read the BAKED island, whose footprints are already clipped to within
-       150 m of the frame being replaced, so each pass could only push the boundary out by the clip
-       margin — and the run recorded above as converging, "a third pass moves 1", was the loop
-       throttling itself. Traced now from an unclipped export of the fetch box (data/probe/, from
-       the window workflow with stock=true), the northern edge lands 700 m further out and follows
-       the built edge instead of a ruler.
-
-       THE CHANNEL IS KEPT, AND IT IS THE ONE PART OF THIS DISTRICT THAT IS SURVEY. Eight OSM
-       coastline runs sew to this boundary and split the district in two — Zayed City proper south
-       of the khor, Rabdan north of it. The frame contains the whole channel, so that split
-       survives this change untouched. An earlier version of this edit dropped Rabdan altogether on
-       the grounds that it carries one venue of the district's 419; the owner's answer was that the
-       channel split is right and belongs there.
-
-       WHERE THE NORTH EDGE STOPS IS STILL A CHOICE, and pretending otherwise would be the same
-       mistake in a new place. There is no coast to reach: Overture's land polygons are continuous
-       for at least 1.6 km beyond this line, and a trace with the close tightened to bridge only
-       300 m still runs to 24.4545, so the fabric really is unbroken. 24.4440 is chosen to clear
-       the density peak at 24.438 while holding the island's drawn depth to 6.84 km — the pinned
-       origin sits south of centre, so a northward extension costs about 545 m of extra depth
-       beyond the land it adds. 8,346 in-box footprints against 7,676, and 428 venues against
-       423. */
+       Note kept from the second iteration: the trace converges because it is traced from stock
+       the previous clip already ate — see frame-from-stock.mjs and W2H_STOCK. */
     outlineLL: [
       [54.4992,24.3919], [54.5155,24.3929], [54.5262,24.3962],
       [54.5387,24.3965], [54.5412,24.3979], [54.5417,24.4007],
       [54.5472,24.4078], [54.5486,24.4181], [54.5464,24.4247],
-      [54.5409,24.4357], [54.5381,24.4419], [54.5347,24.4429],
-      [54.5328,24.4456], [54.5118,24.4462], [54.5056,24.4443],
-      [54.4970,24.4446], [54.4921,24.4422], [54.4909,24.4395],
-      [54.4906,24.4330], [54.4917,24.4302], [54.4942,24.4295],
-      [54.4944,24.4277], [54.4936,24.4265], [54.4917,24.4262],
-      [54.4903,24.4196], [54.4900,24.3924], [54.4946,24.3920],
+      [54.5390,24.4312], [54.5368,24.4365], [54.5287,24.4376],
+      [54.5099,24.4357], [54.5020,24.4342], [54.4944,24.4311],
+      [54.4947,24.4281], [54.4920,24.4261], [54.4903,24.4196],
+      [54.4900,24.3924], [54.4946,24.3920],
     ] },
 
   /* ZAYED INTERNATIONAL AIRPORT — THE TERMINAL, WITH THE RUNWAYS CUT SHORT ON PURPOSE.
