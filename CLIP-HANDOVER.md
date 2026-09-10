@@ -1,5 +1,31 @@
 # The off-island clip — where it got to, and where it broke
 
+> **10 September, later — RESOLVED IN PRINCIPLE, VERIFYING.** The before/after renders this file
+> asked for were made: Al Raha and Zayed City, same camera, `main` against the reverted clipped
+> bake. They are near-identical. **The clip and the road mend were sound.** The only regression was
+> the half-extension of Rabdan's frame — a bare slab with a ruled edge beside Al Raha — and that is
+> the "red piece of land" in the owner's annotated screenshot. The open question below is
+> answered; the "first thread" hypothesis (parks and parking as fabric keep-out) was wrong.
+>
+> The owner then sent four satellite comparisons. Read against Overture's land polygons:
+> - **Blue = Sas Al Nakhl Island** (Overture names it), between Zayed City and the Grand Mosque
+>   exactly where the blue line was drawn. Our Rabdan ring is its southern tip; the rest is absent.
+> - **Red = the same island half-drawn** by yesterday's frame stopping at 24.444.
+> - **"Raha roads a mess"** predates the clip (screenshot 19:19 on the 9th, bake landed 16:20 UTC):
+>   the painter gives every way a full verge/cycle/footway section per side, and the E10 corridor
+>   has 22 carriageways in 1.25 km, oneway pairs 6–27 m apart. Painter task, separate.
+> - **"Buildings and roads encroaching on multiple islands"** is the live, *un*-clipped world.
+>
+> State: the tool's Zayed frame is back to the original 20 points (9ee0078); a full bake of clip +
+> mend + original frames is on branch **`bake-preview`** (ec86cd8) — every extent and landmass
+> identical to `main`, roads clipped — and is being rendered island by island against `main`
+> before it is fast-forwarded. The bake workflow now takes a `branch` input for exactly this.
+> The Sas Al Nakhl frame is drafted and tested against Overture water (north edge in water along
+> its full length; west edge in Khor Al Baghal 200 m off Corniche's outline) and staged as a patch
+> together with dropping `fillAll` on Zayed City so the island's sand is not filled with generated
+> city. Awaiting the owner's go. Tools added today: `tools/bench/diorama-map.mjs`,
+> `tools/bench/overview-labelled.mjs`.
+
 > Written on 10 September 2026, at the point of handing this over. Everything described here is in
 > the tools; **none of it is in the shipped data**, which was reverted to `9d9e8df` after the owner
 > reported the world looked worse on the phone. Re-running the bake reproduces the broken state, so

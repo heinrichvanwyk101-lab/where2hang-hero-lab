@@ -1,10 +1,10 @@
 # Next session — opening line
 
-> **10 September 2026 — READ `CLIP-HANDOVER.md` FIRST.** A day's work on clipping off-island
-> geometry was built, shipped, and then reverted out of the data because the world looked worse on
-> the owner's phone. The tools all still carry the change, so **a re-bake reproduces the broken
-> state**; do not run one until that file's open question is answered. Two owner reports in it are
-> undiagnosed, one of them an annotated screenshot nobody has identified yet.
+> **10 September 2026 — READ `CLIP-HANDOVER.md` FIRST.** The off-island clip was reverted from the
+> data after the world looked worse on the owner's phone; the before/after renders since made show
+> the clip itself was sound and the regression was one half-drawn island (Sas Al Nakhl). A verified
+> re-bake sits on branch `bake-preview`; the workflow's new `branch` input is how a bake gets looked
+> at before it is live. The remaining owner items and their state are at the top of that file.
 
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
