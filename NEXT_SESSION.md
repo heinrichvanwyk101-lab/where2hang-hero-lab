@@ -1,10 +1,13 @@
 # Next session — opening line
 
-> **10 September 2026 — READ `CLIP-HANDOVER.md` FIRST.** The off-island clip was reverted from the
-> data after the world looked worse on the owner's phone; the before/after renders since made show
-> the clip itself was sound and the regression was one half-drawn island (Sas Al Nakhl). A verified
-> re-bake sits on branch `bake-preview`; the workflow's new `branch` input is how a bake gets looked
-> at before it is live. The remaining owner items and their state are at the top of that file.
+> **10 September 2026 — READ `CLIP-HANDOVER.md` FIRST.** The off-island clip and road mend are
+> LIVE and verified on all nine islands. Rabdan's west edge runs to Khor Al Maqta (live), Sas Al
+> Nakhl to the north is deliberately NOT built (owner's rule, at the frame in `tools/bake-city.mjs`),
+> Al Raha's two crescents are land left as desert sand (world v344, the roadless fill is off), and
+> the E10 corridor's road sections are thinned where carriageways crowd (world v343). The workflow's
+> `branch` input is how a bake gets looked at before it is live: bake to `bake-preview`, render
+> against `main` from a fixed camera, cherry-pick. The owner items and their state are at the top
+> of that file.
 
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.

@@ -32,8 +32,19 @@
 > "Rabdan was the blue patch that was built wrong and should come up to the channel bordering Al
 > Rawda." Rabdan's ground runs west past the ruled edge at 54.4900 to Khor Al Maqta at ~54.478;
 > the frame now follows that channel at 54.4770 between 24.4376 and 24.4300 (7ee60c9), 280 m clear
-> of Corniche's outline, +243 surveyed footprints, no venues. Baked to `bake-preview` for a render
-> before it ships. **Al Raha's two crescents** stay as land and, per the owner, are "left as desert
+> of Corniche's outline, +243 surveyed footprints, no venues. Baked to `bake-preview` (dfee7ee),
+> rendered against `main` from a fixed camera (`closeup.mjs zayed 1330 540 260 300 0.3`, and the
+> tip at `1085 497 70 130 0.3`): Rabdan now tapers west to the channel with its surveyed stock on it,
+> clear water between it and the Corniche land, nothing else in frame moved. **SHIPPED** —
+> cherry-picked onto `main`, `errcheck3` clean. One side effect to know about, not a loss of
+> surveyed stock: the bake's footprint-area threshold divides by a display scale computed from the
+> island's extent, the extent is measured from a pinned origin, so a one-sided extension widened
+> Zayed City's extent from 6.61 to 7.90 km and the threshold rose from ~29 to ~37 m². 461 footprints
+> under 37 m² (sheds; under 6 m a side, sub-unit at diorama scale) dropped out; the strip added 159.
+> Bake count 7190 → 6882. The fetch box was unchanged (roadsInBox 1710, inBox 10675 in both bakes),
+> so the strip's sparse roads are what OSM has there. The bake's `DAMP_P` is still 1/3 while the
+> renderer's is 1, so that threshold no longer matches the drawn size on any island; a separate
+> matter, noted, not touched. **Al Raha's two crescents** stay as land and, per the owner, are "left as desert
 > sand": the roadless-landmass fill that invented mid-rise plots on them is no longer called
 > (**shipped as world v344**; verified with `tools/bench/closeup.mjs raha 1799 279 40 110 0.3`
 > before/after — eight invented blocks gone, nothing else in frame moved, `errcheck3` clean).
