@@ -820,7 +820,7 @@ phase('basemap');
 const { C, createCityKit, rnd } = CITY;
 const { buildWorld, GROUND }    = WORLD;
 const { createPropKit }         = PROPS;
-const B_NAV = 'nav v245', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
+const B_NAV = 'nav v246', B_CITY = CITY.BUILD, B_WORLD = WORLD.BUILD, B_PROPS = PROPS.BUILD;
 
 const DEBUG = location.hash.indexOf('debug') >= 0;
 
@@ -4866,8 +4866,23 @@ canvas.addEventListener('pointerup', e => {
       if (ray.ray.intersectPlane(plane, p)) pickRecord({ x:0, z:0, rot:0 }, 1, p);
       return;
     }
-    const hit = ray.intersectObjects(pickTargets, false)[0];
-    if (hit) setDistrict(hit.object.userData.district);
+    /* EVERY DISC THE RAY CROSSES, NOT THE FIRST (nav v246). Each island's disc is 1.2 times its
+       radius, and Corniche's covers Al Reem and Al Maryah whole — so a tap on Al Reem met
+       Corniche's disc at the same height, took the first hit, and went to Corniche. The owner:
+       "if I tap on Reem island it jumps to Corniche". The island whose own coastline contains the
+       tapped point wins; failing that (a tap in the water beside an island) the SMALLEST island
+       whose disc was crossed, because the big disc covers the small island's water too. */
+    const hits = ray.intersectObjects(pickTargets, false);
+    if (!hits.length) return;
+    const local = new THREE.Vector3();
+    let chosen = null;
+    for (const h of hits){
+      const d = h.object.userData.district;
+      h.object.parent.worldToLocal(local.copy(h.point));
+      if (insideIsle(d.id, local.x / d.r, -local.z / d.r)){ chosen = d; break; }
+    }
+    if (!chosen) chosen = hits.map(h => h.object.userData.district).reduce((a, b) => (b.r < a.r ? b : a));
+    setDistrict(chosen);
     return;
   }
   /* DISTRICT OR PLACE — PICKING NEEDS BOTH. activeDistrict stays set once you drill into a place
@@ -7685,6 +7700,10 @@ window.W2H = {
   view: applyView,
   build: [B_NAV, B_CITY, B_WORLD, B_PROPS].join(' / '),
   go: id => { const d = DISTRICTS.find(x => x.id === id); if (d) setDistrict(d); },
+  /* WHERE A TAP LANDED, for the bench that checks tap wiring (nav v246): the active district's id
+     in district or place view, null in world view. */
+  district: () => (activeDistrict ? activeDistrict.id : null),
+  state: () => state,
   tilt: v => tiltPass.uniforms.amount.value = v,
   DISTRICTS, goal, cur,
   /* The scene and camera, for a bench to ray-cast into: what is that thing at that pixel. */
