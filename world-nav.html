@@ -745,7 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v251';
+const NAV_STAMP = 'nav v252';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -2797,7 +2797,7 @@ function descend(steps){
 let WORLD_IDLE = false;
 /* Hoisted beside WORLD_IDLE for the same reason it was: the message handler below runs before
    the module reaches the painted code, and a `let` further down would be in its dead zone. */
-let _glReadyAt = 0, _idleAt = 0, _wakeAt = 0;   // page ms, carried on the painted message
+let _glReadyAt = 0, _idleAt = 0, _wakeAt = 0, _paintTicks = 0, _paintSrc = 'world';   // carried on the painted message
 const attract = { on:false, i:0, until:0, lastInput:performance.now() };
 const gfState = new Map();
 const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
@@ -6704,7 +6704,16 @@ const PAINT_CEILING_MS = 2500; // from the first drawn frame, after which show w
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
-  if (g && !g.classList.contains('ready')) return;
+  /* THE CANVAS IS MADE VISIBLE FROM HERE IF NOTHING ELSE HAS (nav v252). The opening interval
+     waits for isleReady(corniche), which advances on frames, and its four-second fallback timer
+     did not fire on the phone while the world was idled: the phone's own numbers on nav v251
+     put the 'ready' class at 16.2 s with the first frame at 4.1 s, on two loads out of three.
+     A drawn frame 2.5 s old on an invisible canvas is the thing this message exists to end, so
+     the class is added here and the reveal goes out; `src` says which path did it. */
+  if (g && !g.classList.contains('ready')){
+    if (performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
+    g.classList.add('ready'); _paintSrc = 'forced';
+  }
   if (!_glReadyAt) _glReadyAt = performance.now();
   const eager = DISTRICTS.filter(d => !d.onDemand);
   const up = eager.filter(d => d.built).length;
@@ -6716,8 +6725,30 @@ function maybePostPainted(){
      swallowed by the catch and 'painted' was never sent, on any build since it was written. The
      app fell back to its twelve-second timer after 'ready' on every open — the screen recording
      of 11 Sep: Corniche drawn at three seconds, spinner down at seventeen. */
-  try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV,
+  try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV, src: _paintSrc, ticks: _paintTicks,
     at: Math.round(performance.now()), gl: Math.round(_glReadyAt), idle: Math.round(_idleAt), wake: Math.round(_wakeAt), first: Math.round(_paintedFrom) }, '*'); } catch (e){}
+  scheduleOpeningFill(600);
+}
+
+/* WHAT THE OPENING SHOT SHOWS IS BUILT FIRST (nav v252). The flight builds each island a leg
+   ahead of the camera, so the order was the tour's order — Al Maryah, then Raha, Reem — and the
+   owner watched Raha (off screen in the opening) fill in before Saadiyat and Reem (on screen).
+   Once the shot is revealed, the three islands in it are built one per idle slice, nearest
+   first; the flight's own prefetch finds them built and moves on to Raha and Yas, and Zayed
+   City, Masdar and the airport keep their place behind the ground refines. */
+const OPENING_FILL = ['maryah', 'reem', 'saadiyat'];
+function scheduleOpeningFill(delay){
+  const run = () => {
+    const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
+    if (!id) return;
+    const d = DISTRICTS.find(y => y.id === id);
+    if (roadsIn(id)){ try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(500); }
+    else whenRoads(id).then(() => scheduleOpeningFill(0));
+  };
+  setTimeout(() => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 2500 });
+    else run();
+  }, delay === undefined ? 600 : delay);
 }
 
 /* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
@@ -6805,7 +6836,7 @@ function frame(){
      11 Sep, ready at 3.5 s, painted at 15.5 s. Two changes: the first frame is drawn even when
      idle, so there is always something painted to report, and the check runs before the idle
      return. The timings the message carries say which of gl / idle / wake gated it. */
-  if (_paintedPending && !_paintedSent) maybePostPainted();
+  if (_paintedPending && !_paintedSent){ _paintTicks++; maybePostPainted(); }
   if (WORLD_IDLE && !_frame0) return;
   if (!_frame0 && pointers.size === 0 && _camStill >= 2 && performance.now() - _lastDrawT < 31) return;
   _lastDrawT = performance.now();
