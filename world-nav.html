@@ -745,8 +745,33 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v255';
+const NAV_STAMP = 'nav v256';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
+
+/* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
+   out what it built for the island the app opens on — every surviving generated instance, every
+   footprint, roof and ring, and the painted ground as a picture. Fetched here, before the modules
+   are even imported, so the bytes are in hand by the time buildWorld wants them; checked against
+   the build stamps below, because a bake from an older generator is a different city. ?nobake
+   builds live, which is what the bake tool itself runs with. Only with ?fp, since the bake carries
+   the footprints and the cull that a load without them never does. */
+const BAKE_ON = location.search.includes('fp') && !/[?&]nobake\b/.test(location.search);
+const BAKE_T0 = performance.now();
+const bakeStockP = !BAKE_ON ? Promise.resolve(null) : (async () => {
+  const [hr, br] = await Promise.all([fetch('data/stock-corniche.json' + V), fetch('data/stock-corniche.bin' + V)]);
+  if (!hr.ok || !br.ok) throw new Error('stock-corniche ' + hr.status + '/' + br.status);
+  const head = await hr.json(); const bin = await br.arrayBuffer();
+  if (!head || !head.buckets || bin.byteLength !== head.floats * 4) throw new Error('stock-corniche: header and binary disagree');
+  return { head, bin };
+})().catch(e => { console.warn('baked stock unavailable, building live:', e.message); return null; });
+const bakeGroundP = !BAKE_ON ? Promise.resolve(null) : (async () => {
+  const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches;
+  const img = new Image();
+  img.src = 'data/ground-corniche-' + (phone ? 'p' : 'd') + '.webp' + V;
+  await img.decode();
+  return img;
+})().catch(e => { console.warn('baked ground unavailable, painting live:', e.message); return null; });
+
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
 const PROPS = await import('./w2h-props.js' + V);
@@ -1408,11 +1433,28 @@ const propKit = createPropKit();
 phase('propKit');
 // The ground textures are viewed at a grazing angle by design, so they want anisotropic
 // filtering — and only the renderer knows how much is available.
+/* THE BAKE IS USED ONLY WHEN IT WAS MADE FROM THIS EXACT WORLD: the generator, the city kit, the
+   basemap and the data bake all shape what stands on Corniche, so any one of them moving makes the
+   file a picture of a different island. Mismatch is a warning and a live build, never a mix. */
+const bakeStock = await (async () => {
+  const b = await bakeStockP;
+  if (!b) return null;
+  const st = b.head.stamps || {};
+  const want = { world: WORLD.BUILD, city: CITY.BUILD, basemap: BMAP.BUILD,
+                 data: (window.__basemapIndex && window.__basemapIndex.generated) || null };
+  const off = Object.keys(want).filter(k => st[k] !== want[k]);
+  if (off.length){ console.warn('baked stock is from another build (' + off.map(k => k + ' ' + st[k] + ' vs ' + want[k]).join(', ') + '); building live'); return null; }
+  return b;
+})();
+const bakeGround = bakeStock ? await bakeGroundP : null;
+PH.bake = performance.now() - BAKE_T0;
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor, refineGroundStep,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas } =
   buildWorld(scene, kit, {
+    bake: bakeStock ? { corniche: bakeStock } : null,
+    groundImages: bakeGround ? { corniche: bakeGround } : null,
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -1429,6 +1471,9 @@ const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickT
     deferCornicheMass: PROG,
   });
 phase('buildWorld');
+/* Baked, the footprints and the cull are already in the scene: the island is ready the moment it
+   exists, which is what lets the first frame be the reveal. */
+if (corniche.fpBaked) fpState.set(corniche.id, 'on');
 
 /* DRAIN THE DRIVER'S BACKLOG IN PIECES, INSTEAD OF ALL AT ONCE IN THE FRAME THE USER IS WAITING ON.
 
@@ -2804,6 +2849,7 @@ function descend(steps){
    moves its idle-drift grace period earlier by the same handful of milliseconds this whole
    block of module evaluation takes — not a meaningful behaviour change. */
 let WORLD_IDLE = false;
+let _fillAt = 0;                       // when fillCorniche ran (nav v256), for the painted message
 /* Hoisted beside WORLD_IDLE for the same reason it was: the message handler below runs before
    the module reaches the painted code, and a `let` further down would be in its dead zone. */
 let _paintedPending = false, _paintedSent = false, _paintedFrom = 0, _paintedAt = 0;   // attractPrefetch reads _paintedSent at startup
@@ -5357,8 +5403,19 @@ const NO_WARM = location.search.includes('nowarm');
    first draws on the next render, whatever they cost. */
 const WARM_ONE = location.search.includes('warm1');
 const WARM_N = WARM_ONE ? 1 : 8;
+/* TWO HUNDRED A FRAME WHILE THE OPENING SHOT IS STILL ARRIVING (nav v256). With the Corniche baked
+   the reveal waits for the island's own meshes to come out of this queue, and there are about
+   2,100 of them — the kit landmarks are built from hundreds of parts each. Eight a frame is the
+   right pace AFTER the reveal, when a long frame is a visible hitch; before it the spinner is up,
+   nobody sees a frame's length, and every frame spent pacing is a frame the owner waits. The
+   total upload work is the same either way. */
+const warmN = () => WARM_ONE ? 1 : (corniche.fpBaked && _warmCorniche > 0 ? 200 : WARM_N);
 const WARM_COST = [];
 let warmQueue = null, _warmLast = null;
+/* How many of the Corniche's own meshes are still hidden by the warm-up (nav v256): the reveal
+   waits for this to reach zero, not for the whole queue — the far islands' props can keep
+   arriving a batch a frame behind an opening shot that is already complete. */
+let _warmCorniche = 0;
 
 function warmHideAll(){
   if (NO_WARM) return;
@@ -5373,16 +5430,30 @@ function warmHideAll(){
      buildings than on twenty lamp posts, and the heavy ones are what would otherwise stall a frame
      late in the sequence when the camera is already moving. */
   warmQueue.sort((a, b) => (b.count || 1) - (a.count || 1));
+  /* THE CORNICHE AHEAD OF EVERYTHING (nav v256). The queue pops from its end, so the island the
+     shot opens on goes last in the array: its meshes are revealed first, biggest first among
+     them, and the opening shot is whole before a single far-island lamp is drawn. */
+  const mine = new Set();
+  if (corniche && corniche.group) corniche.group.traverse(o => { if (o.isMesh) mine.add(o); });
+  const rest = warmQueue.filter(o => !mine.has(o)), own = warmQueue.filter(o => mine.has(o));
+  warmQueue = rest.concat(own);
+  _warmCorniche = own.length;
 }
 
 function warmStep(){
   if (!warmQueue) return;
-  for (let i = 0; i < WARM_N; i++){
+  for (let i = 0, n = warmN(); i < n; i++){
     const o = warmQueue.pop();
     if (!o) break;
     o.userData.warmHidden = false;
     o.visible = true;
     if (WARM_ONE) _warmLast = o;
+  }
+  if (_warmCorniche > 0){
+    /* Recount only while the island is still arriving; a handful of traversals at most. */
+    let left = 0;
+    corniche.group.traverse(o => { if (o.isMesh && o.userData.warmHidden) left++; });
+    _warmCorniche = left;
   }
   if (!warmQueue.length){
     warmQueue = null;
@@ -5478,8 +5549,24 @@ function fillCorniche(){
      Called first, before buildCornicheRest, so the fetch has the longest possible run before the
      tour or a visitor next needs Corniche — not because order matters for correctness, the
      comments below establish that it doesn't. */
-  addFootprints(corniche);
-  if (!buildCornicheRest || !buildCornicheRest()) return;
+  _fillAt = performance.now();
+  if (corniche.fpBaked){
+    /* BAKED (nav v256): the stock, the footprints and the cull all arrived with buildWorld and
+       there is no rest pass. Only the shopfronts still want the raw list, to find the wall each
+       sign hangs on — fetched once the reveal has settled, off the opening path entirely. */
+    const later = () => {
+      if (!revealSettled()){ setTimeout(later, 700); return; }
+      footprintsFrom(corniche).then(list => {
+        if (!list) return;
+        corniche.fpRaw = list.length; corniche.fpList = list;
+        return addShopfronts(corniche, list);
+      }).catch(e => noteError('shopfronts corniche', e));
+    };
+    setTimeout(later, 1500);
+  } else {
+    addFootprints(corniche);
+    if (!buildCornicheRest || !buildCornicheRest()) return;
+  }
   /* AND HIDE WHAT IT JUST ADDED, WHICH IS THE WHOLE POINT OF THIS LINE.
 
      hideFabric runs inside addFootprints, which happens when the island is built. This runs up to
@@ -5515,7 +5602,7 @@ function fillCorniche(){
      that it is, called just above, this guard does real work: it hides whatever generated stock
      buildCornicheRest added a moment ago that the earlier, now-resolved addFootprints call had
      no way to know about yet. */
-  if (fpState.get(corniche.id) === 'on' && corniche.fpList) cullFabric(corniche, corniche.fpList);
+  if (!corniche.fpBaked && fpState.get(corniche.id) === 'on' && corniche.fpList) cullFabric(corniche, corniche.fpList);
   snapshotMats(corniche.group);
   registerLift(corniche.group);
   /* CORNICHE IS BUILT HERE, NOT THROUGH setDistrict, so it never reached addGroundFeatures and
@@ -6268,7 +6355,9 @@ async function addFootprints(d){
        returned little or because the clip discarded most of what it returned, and those are
        opposite faults in opposite files. */
     d.fpRaw = list.length;
+    const tB = performance.now();
     const g = footprintsFor(d, list);
+    d.fpBuildMs = Math.round(performance.now() - tB);
     if (!g){ fpState.set(d.id, 'none'); return; }
 
     /* WHAT THE GENERATOR WAS DRAWING HERE, RECORDED AND THEN REPLACED REGARDLESS.
@@ -6286,13 +6375,16 @@ async function addFootprints(d){
     /* GAP-FILL, NOT REPLACE. Was hideFabric(d) — every generated mesh off. Now only the instances
        a real building actually stands on are zeroed, so the generated stock survives wherever the
        payload does not reach. See cullFabric for why the two islands failed in opposite ways. */
+    const tC = performance.now();
     cullFabric(d, list);
+    d.fpCullMs = Math.round(performance.now() - tC);
     d.detail.add(g);
     /* Same order the deferred islands taught us: snapshot and register BEFORE any view touches
        the new meshes, or applyView sets a material to undefined and the render loop dies inside
        projectObject naming neither the mesh nor the island. */
     snapshotMats(g); registerLift(g); applyView(view);
     fpState.set(d.id, 'on');
+    d.fpAt = performance.now();
     /* THE SHOPFRONTS RIDE ON THE FOOTPRINTS (nav v224): they need the same list, in the same units,
        to find the building face they hang on, so they are placed here and nowhere else. */
     addShopfronts(d, list).catch(e => noteError('shopfronts ' + d.id, e));
@@ -6302,7 +6394,7 @@ async function addFootprints(d){
        leave the island dark until the next unrelated state change happened to fix it. */
     applyLOD();
     console.info('footprints ' + d.id + ': ' + d.fpCount + ' (' + d.fpReal + ' real heights, ' +
-                 (d.fpZoned || 0) + ' under hand-built landmarks)');
+                 (d.fpZoned || 0) + ' under hand-built landmarks; build ' + d.fpBuildMs + ' ms, cull ' + d.fpCullMs + ' ms)');
   } catch (e){ noteError('footprints ' + d.id, e); fpState.set(d.id, 'none'); }
 }
 
@@ -6745,7 +6837,11 @@ function maybePostPainted(){
      put the 'ready' class at 16.2 s with the first frame at 4.1 s, on two loads out of three.
      A drawn frame 2.5 s old on an invisible canvas is the thing this message exists to end, so
      the class is added here and the reveal goes out; `src` says which path did it. */
-  const complete = isleReady(corniche);
+  /* AND THE WARM-UP QUEUE DRAINED (nav v256): with the Corniche baked the island is 'on' from
+     the first frame, but its meshes are revealed a batch a frame by warmStep, and a reveal with
+     half of them still hidden is an empty island with a spinner gone — the thing this message
+     exists to prevent. The ceiling still applies. */
+  const complete = isleReady(corniche) && !(warmQueue && _warmCorniche > 0);
   if (!complete && performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
   if (g && !g.classList.contains('ready')){ g.classList.add('ready'); _paintSrc = complete ? 'complete' : 'forced'; }
   else _paintSrc = complete ? 'complete' : 'forced';
@@ -6761,7 +6857,11 @@ function maybePostPainted(){
      app fell back to its twelve-second timer after 'ready' on every open — the screen recording
      of 11 Sep: Corniche drawn at three seconds, spinner down at seventeen. */
   try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV, src: _paintSrc, ticks: _paintTicks,
-    at: Math.round(performance.now()), gl: Math.round(_glReadyAt), idle: Math.round(_idleAt), wake: Math.round(_wakeAt), first: Math.round(_paintedFrom) }, '*'); } catch (e){}
+    at: Math.round(performance.now()), gl: Math.round(_glReadyAt), idle: Math.round(_idleAt), wake: Math.round(_wakeAt), first: Math.round(_paintedFrom),
+    /* Where the Corniche's time went (nav v256): baked or built, when the fill pass started and
+       when its footprints landed, and how long the bake files took to arrive. */
+    baked: corniche.fpBaked ? 1 : 0, fill: Math.round(_fillAt || 0), fp: Math.round(corniche.fpAt || 0),
+    bw: Math.round(PH.buildWorld || 0), bake: Math.round(PH.bake || 0) }, '*'); } catch (e){}
   scheduleOpeningFill(AFTER_REVEAL_MS);
 }
 
@@ -7825,6 +7925,11 @@ window.W2H = {
   /* WHERE A TAP LANDED, for the bench that checks tap wiring (nav v246): the active district's id
      in district or place view, null in world view. */
   district: () => (activeDistrict ? activeDistrict.id : null),
+  /* The footprint state of an island, for the bake tool and the benches (nav v256). */
+  fp: id => fpState.get(id),
+  /* The warm-up queue, live: how many meshes are still hidden, and how many of the Corniche's. */
+  warm: () => ({ queue: warmQueue ? warmQueue.length : -1, corniche: _warmCorniche }),
+  groundCanvas,                          // the full-resolution ground paint, for tools/bake-stock.mjs
   state: () => state,
   tilt: v => tiltPass.uniforms.amount.value = v,
   DISTRICTS, goal, cur,

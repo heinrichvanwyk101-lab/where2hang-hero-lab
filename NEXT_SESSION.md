@@ -18,6 +18,19 @@
 > came out blank on the bench; unresolved). App branch: the Home "Ask Wasta" nudge (0965920) and
 > the leisure-only Google Places fallback. Wasta's freer voice and `chat` kind are in progress.
 >
+> **11 September — THE CORNICHE IS BAKED (nav v256 / world v348).** `tools/bake-stock.mjs` runs
+> the world once on the bench and writes `data/stock-corniche.{json,bin}` (every surviving
+> generated instance, every footprint, roof and ring, the cull already applied, the surveyed
+> height bands, the overlay stats) and `data/ground-corniche-{p,d}.webp` (the full-resolution
+> ground paint, phone and desktop sizes). `world-nav.html` fetches them before the module imports,
+> checks the stamps (world, city, basemap, data `generated`) and hands them to `buildWorld`, which
+> then skips urbanFabric's meshes, buildCornicheMass/Rest, footprintsFor, cullFabric and paintGround
+> for Corniche; `fpState` is 'on' at build, so the first frame is the reveal (bench: painted at
+> 3.2 s complete, was 11–13 s). **Any change to w2h-world.js, w2h-city.js, w2h-districts.js,
+> w2h-basemap.js or a data bake needs `node tools/bake-stock.mjs` re-run and the four data files
+> committed**, or the page logs "baked stock is from another build" and builds live (slow, not
+> wrong). `?nobake` forces the live path.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -26,7 +39,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v255 / city v175 / world v347 / props v41` (11 Sep 2026; basemap unchanged). Verify with
+Stamps at hand-over: `nav v256 / city v175 / world v348 / props v41` (11 Sep 2026; basemap v30). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)

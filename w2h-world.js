@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v347';
+export const BUILD = 'world v348';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -183,6 +183,15 @@ if (!C || !rnd) throw new Error('buildWorld: pass C and rnd from w2h-city.js via
    to put a change this large in front of a renderer and be able to tell, in one toggle, whether a
    fault came from the data or from everything else. */
 const BASE = opts.basemap || null;
+/* THE BAKED STOCK AND GROUND (world v348). tools/bake-stock.mjs runs this same code once, on the
+   bench, and writes out what it built for Corniche: every generated instance that survived the
+   cull, every footprint, roof and ring, and the painted ground as an image. A phone then loads
+   finished data instead of generating a city — urbanFabric, footprintsFor, cullFabric and
+   paintGround all skipped for the island the app opens on. Both are optional and both are checked
+   against the build stamps by world-nav before they get here; absent, everything below runs
+   exactly as it did. */
+const BAKE = opts.bake || {};
+const GROUND_IMG = opts.groundImages || {};
 /* Read here rather than passed through opts: it governs one line in one function and threading it
    through the module boundary would be more surface than the flag is worth. */
 const NO_CLIP = typeof location !== 'undefined' && location.search.includes('noclip');
@@ -7805,6 +7814,7 @@ function urbanFabric(d, layer, opts){
     /* Without this the switcher falls back to its own single dayMat and the whole city goes one
        colour in Day. Set per mesh, so it costs nothing beyond the material objects themselves. */
     m.userData.dayMats = c === 'r' ? MATS[t].dayRaw : MATS[t].day[+c];
+    m.userData.bake = { t, c, g };                    // what tools/bake-stock.mjs needs to rebuild this bucket
     m.castShadow = true; m.receiveShadow = true;
     meshes.set(k, m);
   });
@@ -7860,6 +7870,7 @@ function urbanFabric(d, layer, opts){
       if (!split[t].length) return;
       const rm = new THREE.InstancedMesh(ROOF_GEO, MATS[fam].raw, split[t].length);
       rm.userData.dayMats = MATS[fam].dayRaw;
+      rm.userData.bake = { t: fam, c: 'r', g: 'roof' };
       rm.castShadow = true; rm.receiveShadow = true;
       rm.name = 'roofs';
       const R = new THREE.Object3D();
@@ -9615,6 +9626,9 @@ function footprintsFor(d, list){
   HB.slice(0, -1).forEach((_, i) => { if (!GLOBAL_BANDS[i]) GLOBAL_BANDS[i] = []; });
   bands.forEach((v, i) => { for (const h of v) GLOBAL_BANDS[i].push(h); });
   GLOBAL_BANDS.forEach(v => v.sort((p, q) => p - q));
+  /* Kept on the district for the bake: an island loaded from baked stock never runs this pass,
+     and the outer islands still need its surveyed heights in GLOBAL_BANDS (see stockFromBake). */
+  d.fpBands = bands.map(v => v.slice());
 
   const poolFor = a => { const i = bandOf(a);
                          const b = bands[i];
@@ -9976,6 +9990,7 @@ function footprintsFor(d, list){
     const [t, c] = k.split('#');
     const m = new THREE.InstancedMesh(PROFILES.box, MATS[t][+c], n);
     m.userData.dayMats = MATS[t].day[+c];
+    m.userData.bake = { t, c, g: 'box' };
     m.castShadow = true; m.receiveShadow = true;
     meshes.set(k, m);
   });
@@ -10053,6 +10068,7 @@ function footprintsFor(d, list){
       if (!split[t].length) return;
       const rm = new THREE.InstancedMesh(ROOF_GEO, MATS[fam].raw, split[t].length);
       rm.userData.dayMats = MATS[fam].dayRaw;
+      rm.userData.bake = { t: fam, c: 'r', g: 'roof' };
       rm.castShadow = true; rm.receiveShadow = true;
       rm.name = 'roofs';
       const R = new THREE.Object3D();
@@ -10096,6 +10112,7 @@ function footprintsFor(d, list){
     const t = matOf(sp), c = winOf(sp);
     const rm = new THREE.Mesh(geo, MATS[t][+c]);
     rm.userData.dayMats = MATS[t].day[+c];
+    rm.userData.bake = { ring: { t, c, x: sp.x, z: sp.z, h: sp.h, p: sp.p } };
     rm.castShadow = true; rm.receiveShadow = true;
     rm.position.set(sp.x, GROUND, sp.z);
     g.add(rm);
@@ -10243,7 +10260,10 @@ const cornicheFabric = urbanFabric(corniche, corniche.detail,
      standing clear of it. The cap now bites only at fall > 0.64 of a much taller curve, so it
      trims the tallest few rather than levelling the lot. */
   { density:1.85, coreX:corniche.coreN[0], coreZ:corniche.coreN[1], tallest:34, avoid:true, cap:26,
-    region:CORNICHE_REGION });
+    region:CORNICHE_REGION,
+    /* Baked: the cells and blocks still come out of this call — groundPlan and the props need
+       them — and the meshes come from the bake instead. */
+    meshes: BAKE[corniche.id] ? false : undefined });
 corniche.fabric = cornicheFabric;
 
 /* THE WORLD-VIEW BUILDING LAYER, SEPARABLE FROM THE REST OF THE BUILD.
@@ -10258,7 +10278,7 @@ corniche.fabric = cornicheFabric;
    Not a behaviour change unless the caller asks: with deferCornicheMass unset this runs exactly
    where it always did, in the same order, with the same arguments. */
 function buildCornicheMass(){
-  if (cornicheMassDone) return false;
+  if (cornicheMassDone || BAKE[corniche.id]) return false;
   cornicheMassDone = true;
   urbanFabric(corniche, corniche.mass,
     /* Same density and the same seed as the detail call above, so this is the SAME CITY. The two
@@ -10457,6 +10477,96 @@ function bridgesFor(d){
   console.info('bridges ' + d.id + ': ' + decks.length + ' deck(s)');
   return decks.length;
 }
+/* A decoded picture as the ground texture, with the same sampling the painted canvas gets. */
+const groundTexFromImage = timed('bakedGround', function(img){
+  const t = new THREE.Texture(img);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = MAX_ANISO;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+});
+function canvasOfImage(img){
+  const cv = document.createElement('canvas');
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+  cv.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0);
+  return cv;
+}
+
+/* ---------- THE BAKED STOCK (world v348) ----------
+
+   What tools/bake-stock.mjs wrote, put back: one InstancedMesh per bucket with the same geometry
+   and the same material the live build would have picked (userData.bake names them), every
+   instance composed from seven floats — position, yaw, scale — which is exact because nothing in
+   this city rotates about any axis but Y. The footprint rings are re-extruded from their outlines,
+   which is 109 small extrusions. The instances a live cull would have zeroed are simply not in the
+   file. The stats the overlay reads and the surveyed height bands the outer islands borrow come
+   with it, so the rest of the archipelago builds identically either way. */
+function stockFromBake(d, bake){
+  const t0 = performance.now();
+  const head = bake.head, F = new Float32Array(bake.bin);
+  const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
+  const MATS = fabricMats(cool);
+  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(),
+        S = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+  const fp = new THREE.Group(); fp.name = 'footprints';
+  let inst = 0, meshes = 0;
+  for (const b of head.buckets){
+    const geo = b.g === 'roof' ? ROOF_GEO : PROFILES[b.g];
+    const fam = MATS[b.t];
+    if (!geo || !fam){ console.warn('bake ' + d.id + ': unknown bucket', b.t, b.c, b.g); continue; }
+    const raw = b.c === 'r';
+    const m = new THREE.InstancedMesh(geo, raw ? fam.raw : fam[+b.c], b.n);
+    m.userData.dayMats = raw ? fam.dayRaw : fam.day[+b.c];
+    m.userData.bake = { t: b.t, c: b.c, g: b.g };
+    m.castShadow = true; m.receiveShadow = true;
+    if (b.name) m.name = b.name;
+    let o = b.off;
+    for (let i = 0; i < b.n; i++, o += 7){
+      P.set(F[o], F[o + 1], F[o + 2]);
+      Q.setFromAxisAngle(Y, F[o + 3]);
+      S.set(F[o + 4], F[o + 5], F[o + 6]);
+      M.compose(P, Q, S);
+      m.setMatrixAt(i, M);
+    }
+    if (b.coff != null){
+      let c = b.coff;
+      for (let i = 0; i < b.n; i++, c += 3){ col.setRGB(F[c], F[c + 1], F[c + 2]); m.setColorAt(i, col); }
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    m.instanceMatrix.needsUpdate = true;
+    (b.layer === 'fp' ? fp : b.layer === 'mass' ? d.mass : d.detail).add(m);
+    inst += b.n; meshes++;
+  }
+  for (const r of (head.rings || [])){
+    const fam = MATS[r.t];
+    if (!fam || !r.p || r.p.length < 3) continue;
+    const sh = new THREE.Shape();
+    sh.moveTo(r.p[0][0], -r.p[0][1]);
+    for (let i = 1; i < r.p.length; i++) sh.lineTo(r.p[i][0], -r.p[i][1]);
+    sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: r.h, bevelEnabled: false, curveSegments: 1 });
+    geo.rotateX(-Math.PI / 2);
+    const rm = new THREE.Mesh(geo, fam[+r.c]);
+    rm.userData.dayMats = fam.day[+r.c];
+    rm.userData.bake = { ring: { t: r.t, c: r.c, x: r.x, z: r.z, h: r.h, p: r.p } };
+    rm.castShadow = true; rm.receiveShadow = true;
+    rm.position.set(r.x, GROUND, r.z);
+    fp.add(rm);
+  }
+  d.detail.add(fp);
+  Object.assign(d, head.stats || {});
+  (head.bands || []).forEach((v, i) => { if (!GLOBAL_BANDS[i]) GLOBAL_BANDS[i] = []; for (const h of v) GLOBAL_BANDS[i].push(h); });
+  GLOBAL_BANDS.forEach(v => v.sort((p, q) => p - q));
+  d.fpBaked = true;
+  PERF.bakedStock = (PERF.bakedStock || 0) + (performance.now() - t0); PERF['#bakedStock'] = 1;
+  console.info('baked stock ' + d.id + ': ' + inst + ' instances in ' + meshes + ' meshes, ' +
+    (head.rings || []).length + ' rings, ' + Math.round(performance.now() - t0) + ' ms');
+}
+
 function buildGroundFor(d){
   const f = d.fabric;
   if (!f) return;
@@ -10516,7 +10626,13 @@ function buildGroundFor(d){
      change. The dial is here because this one IS visible, unlike the canvas-size work: on a slow
      device the sharpen can land late enough to notice. */
   const gq = GROUND_PROGRESSIVE ? 0.5 : 1;
-  const tex = paintGround(d, plan, gq);
+  /* THE BAKED GROUND (world v348). The same painter, run once on the bench at full resolution and
+     saved as an image; here it is one texture from a decoded picture, no canvas work at all and
+     no second paint to schedule. The plan above is still computed live because the props stand on
+     it — the picture is a picture of that same plan. */
+  const gimg = GROUND_IMG[d.id] || null;
+  const tex = gimg ? groundTexFromImage(gimg) : paintGround(d, plan, gq);
+  if (gimg) console.info('ground ' + d.id + ': baked image ' + gimg.naturalWidth + 'x' + gimg.naturalHeight);
   /* Props into the DETAIL layer only. At world scale a palm is a third of a pixel; paying for
      four hundred of them per island at exactly the moment five islands are on screen would be
      paying for invisible geometry. The LOD swap already exists and this is what it is for. */
@@ -10555,7 +10671,7 @@ function buildGroundFor(d){
   /* The road glow rides on the same emissive: map at full value on asphalt, a quarter elsewhere,
      intensity x4, so sand lands back on the floor above and roads sit four times over it. */
   {
-    const glow = roadGlowMap(tex.image);
+    const glow = roadGlowMap(gimg ? canvasOfImage(gimg) : tex.image);
     if (glow && night.emissive){ night.emissiveMap = glow; night.emissiveIntensity = GROUND_NIGHT_EMI * 4; }
   }
   const day  = dayGround.clone();  day.map  = tex;
@@ -10593,7 +10709,7 @@ function buildGroundFor(d){
      Every material above shares the one canvas, so the swap is five map assignments and a
      regenerated emissive glow. The old texture is disposed after the new one is attached, never
      before: dropping a texture that is still the active map is a black island for one frame. */
-  if (gq < 1){
+  if (gq < 1 && !gimg){
     d.refineGround = () => {
       d.refineGround = null;
       const full = paintGround(d, plan, 1);
@@ -10650,6 +10766,7 @@ function flatGroundMats(d){
   });
 }
 DISTRICTS.forEach(d => { if (!d.pending) buildGroundFor(d); else flatGroundMats(d); });
+DISTRICTS.forEach(d => { if (BAKE[d.id] && !d.pending) stockFromBake(d, BAKE[d.id]); });
 
 /* AN UNBUILT ISLAND IS A BARE SAND SLAB, AND THREE OF THEM ARE IN THE OPENING SHOT.
 
@@ -10715,7 +10832,7 @@ try {
    arithmetic is deterministic; the memory is not free. */
 let cornicheRestDone = !CORNICHE_REGION;
 function buildCornicheRest(){
-  if (cornicheRestDone) return false;
+  if (cornicheRestDone || BAKE[corniche.id]) return false;
   cornicheRestDone = true;
   const outside = sp => !CORNICHE_REGION(sp);
   const t = performance.now();
@@ -10814,6 +10931,10 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
             the ring loop already trusts, and it is what a sampled point needs — not a coarser
             copy of the ring-level check repeated in a second file. */
          insideIsle,
+         /* FOR tools/bake-stock.mjs: the full-resolution ground canvas of a built island, painted
+            fresh from its plan. Not called by the page. */
+         groundCanvas: id => { const d = DISTRICTS.find(x => x.id === id);
+                               return d && d.plan ? paintGround(d, d.plan, 1).image : null; },
          /* THE SHORE DISTANCE, FOR THE SAME CALLER (world v276). A venue on a marina pontoon or a
             beach club sits a few metres past the surveyed outline; insideIsle alone would drop
             it. Normalised units, like insideIsle: multiply by the island's half-extent for
