@@ -745,7 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v254';
+const NAV_STAMP = 'nav v255';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -2605,7 +2605,7 @@ window.__w2hSetResults = setResults;
   const pump = () => {
     /* NOT BEFORE THE REVEAL (nav v254): this pump is the embed's island builder, and started at
        once it put every other island's build ahead of the Corniche's footprints. */
-    if (!_paintedSent){ setTimeout(pump, 400); return; }
+    if (!revealSettled()){ setTimeout(pump, 400); return; }
     if (qi >= queue.length) return;
     const d = queue[qi++];
     try {
@@ -2806,7 +2806,13 @@ function descend(steps){
 let WORLD_IDLE = false;
 /* Hoisted beside WORLD_IDLE for the same reason it was: the message handler below runs before
    the module reaches the painted code, and a `let` further down would be in its dead zone. */
-let _paintedPending = false, _paintedSent = false, _paintedFrom = 0;   // attractPrefetch reads _paintedSent at startup
+let _paintedPending = false, _paintedSent = false, _paintedFrom = 0, _paintedAt = 0;   // attractPrefetch reads _paintedSent at startup
+/* THE PARENT SHARES THIS THREAD (nav v255). A same-origin iframe runs on the host page's main
+   thread, so the moment 'painted' is posted the host still has to receive it and start the fade —
+   and the bench showed the next island builds starting within the same second, holding that
+   message for six. Nothing heavy starts until this long after the reveal. */
+const AFTER_REVEAL_MS = 1500;
+const revealSettled = () => _paintedSent && performance.now() - _paintedAt >= AFTER_REVEAL_MS;
 let _glReadyAt = 0, _idleAt = 0, _wakeAt = 0, _paintTicks = 0, _paintSrc = 'world';   // carried on the painted message
 const attract = { on:false, i:0, until:0, lastInput:performance.now() };
 const gfState = new Map();
@@ -5881,6 +5887,9 @@ async function addWaterGeometry(d){
        leaves d.pending set, so something has to come back — and this is the one place that knows
        the payload has just landed. Without it the island would sit unbuilt until the next visit,
        trading an intermittent wrong grid for an intermittent missing city. */
+    /* NOT BEFORE THE REVEAL HAS SETTLED (nav v255): roads arrive from the cache in milliseconds,
+       so this path built Reem and Raha before the Corniche's own footprints. */
+    while (!revealSettled()) await new Promise(r => setTimeout(r, 400));
     if (buildIsland && d.pending && buildIsland(d.id)){
       /* THE SAME FOUR CALLS setDistrict MAKES, because a late build is still a build. They sit
          inside setDistrict's `if (buildIsland(...))` block, which already returned false for this
@@ -6416,7 +6425,7 @@ function attractPrefetch(n){
   /* Not before the reveal (nav v253): the startup prefetch built Al Maryah in the seconds between
      the first frame and the person seeing it. The opening fill builds the shot's islands after
      the reveal; by the time the flight moves the prefetch finds them done. */
-  if (!_paintedSent){ setTimeout(() => attractPrefetch(n), 400); return; }
+  if (!revealSettled()){ setTimeout(() => attractPrefetch(n), 400); return; }
   const leg = ATTRACT[n % ATTRACT.length];
   if (!leg || !leg.id || !buildIsland) return;
   const d = DISTRICTS.find(x => x.id === leg.id);
@@ -6745,7 +6754,7 @@ function maybePostPainted(){
   const up = eager.filter(d => d.built).length;
   if (up < Math.min(PAINT_MIN_ISLES, eager.length) &&
       performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
-  _paintedSent = true;
+  _paintedSent = true; _paintedAt = performance.now();
   /* parent.postMessage DIRECTLY (nav v250). This used to call post(), which is declared inside
      the embed block at the top of the module and is not in scope here; the ReferenceError was
      swallowed by the catch and 'painted' was never sent, on any build since it was written. The
@@ -6753,7 +6762,7 @@ function maybePostPainted(){
      of 11 Sep: Corniche drawn at three seconds, spinner down at seventeen. */
   try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV, src: _paintSrc, ticks: _paintTicks,
     at: Math.round(performance.now()), gl: Math.round(_glReadyAt), idle: Math.round(_idleAt), wake: Math.round(_wakeAt), first: Math.round(_paintedFrom) }, '*'); } catch (e){}
-  scheduleOpeningFill(600);
+  scheduleOpeningFill(AFTER_REVEAL_MS);
 }
 
 /* WHAT THE OPENING SHOT SHOWS IS BUILT FIRST (nav v252). The flight builds each island a leg
