@@ -745,7 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v252';
+const NAV_STAMP = 'nav v253';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -2797,6 +2797,7 @@ function descend(steps){
 let WORLD_IDLE = false;
 /* Hoisted beside WORLD_IDLE for the same reason it was: the message handler below runs before
    the module reaches the painted code, and a `let` further down would be in its dead zone. */
+let _paintedPending = false, _paintedSent = false, _paintedFrom = 0;   // attractPrefetch reads _paintedSent at startup
 let _glReadyAt = 0, _idleAt = 0, _wakeAt = 0, _paintTicks = 0, _paintSrc = 'world';   // carried on the painted message
 const attract = { on:false, i:0, until:0, lastInput:performance.now() };
 const gfState = new Map();
@@ -6403,6 +6404,10 @@ function buildAndRegister(d){
 
 
 function attractPrefetch(n){
+  /* Not before the reveal (nav v253): the startup prefetch built Al Maryah in the seconds between
+     the first frame and the person seeing it. The opening fill builds the shot's islands after
+     the reveal; by the time the flight moves the prefetch finds them done. */
+  if (!_paintedSent){ setTimeout(() => attractPrefetch(n), 400); return; }
   const leg = ATTRACT[n % ATTRACT.length];
   if (!leg || !leg.id || !buildIsland) return;
   const d = DISTRICTS.find(x => x.id === leg.id);
@@ -6679,7 +6684,6 @@ let _frame0 = true, _tick0Done = false;
 /* Set on the frame that draws, posted once the canvas is actually visible. #gl starts at opacity 0
    in embed mode and only the 'ready' class reveals it, so a drawn frame on a transparent canvas is
    still a black screen to the viewer — both have to have happened before this claims anything. */
-let _paintedPending = false, _paintedSent = false, _paintedFrom = 0;
 /* WHAT THE APP IS ACTUALLY WAITING FOR IS A WORLD THAT LOOKS BUILT, NOT A FRAME.
 
    The phone's own numbers settled this. Six runs through events_log: the page reaches its first
@@ -6699,8 +6703,15 @@ let _paintedPending = false, _paintedSent = false, _paintedFrom = 0;
    down at twelve. Every island carries its coastline, platform and beach from the first frame,
    so the world reads as the world with the Corniche built and the others filling in over the
    next seconds — the reveal the owner asked for, and the one the progressive build exists for. */
+/* REVEAL ON THE FIRST FRAME (nav v253). The phone on nav v252: first frame at 5.6 s, painted at
+   8.6 s, `forced` every time, and six frames in those three seconds — the main thread was busy
+   with the mass, the next leg's island, the ground repaint and the footprint swap, all queued
+   behind the first frame and all ahead of the person seeing anything. The frame that is drawn
+   is the frame that is shown; the rest is done after the reveal, in this order: the islands in
+   the shot, the ground repaint, the far islands, with the flight's own prefetch waiting for the
+   reveal too. */
 const PAINT_MIN_ISLES = 1;     // the Corniche carries the shot; the rest fill in behind it
-const PAINT_CEILING_MS = 2500; // from the first drawn frame, after which show what there is
+const PAINT_CEILING_MS = 0;    // from the first drawn frame: show it
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
@@ -6740,7 +6751,7 @@ const OPENING_FILL = ['maryah', 'reem', 'saadiyat'];
 function scheduleOpeningFill(delay){
   const run = () => {
     const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
-    if (!id) return;
+    if (!id){ scheduleGroundRefine(300); return; }   // the shot is complete: sharpen the ground, then the far islands
     const d = DISTRICTS.find(y => y.id === id);
     if (roadsIn(id)){ try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(500); }
     else whenRoads(id).then(() => scheduleOpeningFill(0));
@@ -7450,12 +7461,11 @@ function frame(){
        then; an older cached world never sends it, which is why the app also keeps a fallback. */
     _paintedPending = true;
     _paintedFrom = performance.now();
-    /* THE SECOND GROUND PAINT STARTS HERE, and here is the whole point of it. The ground is built
-       at half resolution so that this frame happens sooner; repainting it at full resolution is
-       the other half of that bargain and it must not begin until the frame it paid for is on
-       screen. One island per idle callback, never two in a frame, so the sharpen costs a slice of
-       idle time rather than a stall in the middle of the opening move. */
-    scheduleGroundRefine();
+    /* The reveal goes out from this frame, not the next: with the mass built synchronously right
+       after it, "the next frame" was 1.5 s away. The second ground paint follows the opening
+       fill now (scheduleOpeningFill → scheduleGroundRefine), so the sharpen never sits between
+       the drawn frame and the person seeing it. */
+    maybePostPainted();
   }
   if (_paintedPending && !_paintedSent) maybePostPainted();
   const _fms = performance.now() - t0;
