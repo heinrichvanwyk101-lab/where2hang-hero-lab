@@ -1,0 +1,19 @@
+{
+ "version": "0.169.0",
+ "files": [
+  "build/three.module.js",
+  "examples/jsm/postprocessing/EffectComposer.js",
+  "examples/jsm/postprocessing/MaskPass.js",
+  "examples/jsm/postprocessing/OutputPass.js",
+  "examples/jsm/postprocessing/Pass.js",
+  "examples/jsm/postprocessing/RenderPass.js",
+  "examples/jsm/postprocessing/SMAAPass.js",
+  "examples/jsm/postprocessing/ShaderPass.js",
+  "examples/jsm/postprocessing/UnrealBloomPass.js",
+  "examples/jsm/shaders/CopyShader.js",
+  "examples/jsm/shaders/LuminosityHighPassShader.js",
+  "examples/jsm/shaders/OutputShader.js",
+  "examples/jsm/shaders/SMAAShader.js",
+  "examples/jsm/utils/BufferGeometryUtils.js"
+ ]
+}

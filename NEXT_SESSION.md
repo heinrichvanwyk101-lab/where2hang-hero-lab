@@ -31,7 +31,11 @@ Stamps at hand-over: `nav v227 / city v156 / world v330 / props v31 / basemap v2
 
 ### How work flows (both repos)
 
-- **hero-lab** (this repo): edit, bump the stamps (`city vNNN` in w2h-city.js, `world vNNN` in
+- **hero-lab** (this repo): edit, bump the stamps — and since nav v248 the nav stamp is also the
+  cache key for every module in the embed (`?v=navvNNN`), so a change to ANY module needs a nav
+  bump or installed phones keep the old one; three is vendored (`vendor/three/`, regenerate with
+  `node tools/vendor-three.mjs three-0.169.0.tgz` from `npm pack three@0.169.0`); `sw.js` holds
+  the whole world per build — edit, bump the stamps (`city vNNN` in w2h-city.js, `world vNNN` in
   w2h-world.js, `nav vNNN` in world-nav.html), run `node tools/bench/errcheck3.mjs` (3 to 6 min,
   needs `errors: 0` and no bad materials), push straight to `main`. GitHub Pages deploys in about a
   minute. Renders: `tools/bench/README.md`; frames land in `tools/bench/out/`. One render at a time.
