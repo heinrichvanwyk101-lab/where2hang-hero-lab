@@ -710,7 +710,13 @@ try {
 
    So the sequence becomes sky, then the island with its ground and roads and its close-in
    buildings, then the world-zoom stock filling in behind. Three steps instead of one wait. */
-const PROG = typeof location !== 'undefined' && location.search.includes('prog');
+/* THE PROGRESSIVE REVEAL IS THE EMBED'S DEFAULT (nav v249). Measured on the bench at a phone's
+   viewport: buildWorld 5.5 s → 4.1 s and the page's work before the first frame 8.3 s → 5.9 s,
+   the same total afterwards — the world-zoom stock skyline lands a beat after the sky, the
+   island, its ground and its close-in buildings, instead of holding all of them back. ?noprog
+   restores the single block for a side-by-side; the development shell keeps ?prog opt-in. */
+const EMBED = typeof location !== 'undefined' && /[?&]embed=1/.test(location.search);
+const PROG = typeof location !== 'undefined' && (EMBED ? !location.search.includes('noprog') : location.search.includes('prog'));
 const VAC_ON = location.search.includes('vac');
 
 const PH = {}; let _phT = performance.now();
@@ -739,8 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const EMBED = /[?&]embed=1/.test(location.search);
-const NAV_STAMP = 'nav v248';
+const NAV_STAMP = 'nav v249';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -5101,7 +5106,11 @@ function updateLabels(){
    ?dpr= still overrides, so any other value is one URL away — ?dpr=2 restores the old behaviour
    for a side-by-side. Applied here rather than at the renderer's own construction so it lands
    BEFORE the composer is built below and the whole chain inherits it. */
-const DPR_DEFAULT = 1.5;
+/* 1.25 ON A NARROW PHONE (nav v249). The bloom, tilt-shift and SMAA passes are fill bound, so
+   pixels are the bill: 1.25 against 1.5 is 31 per cent fewer, on every pass, every frame, and
+   through the tilt-shift blur the difference is not visible on a 411 px wide screen. Labels are
+   DOM and untouched. ?dpr= still overrides either way. */
+const DPR_DEFAULT = Math.min(window.innerWidth, window.innerHeight) <= 420 ? 1.25 : 1.5;
 const DPR_CAP = (() => {
   const m = location.search.match(/[?&]dpr=(\d+(?:\.\d+)?)/);
   const v = m ? parseFloat(m[1]) : 0;
