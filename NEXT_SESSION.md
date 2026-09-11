@@ -26,7 +26,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v253 / city v175 / world v347 / props v41` (11 Sep 2026; basemap unchanged). Verify with
+Stamps at hand-over: `nav v254 / city v175 / world v347 / props v41` (11 Sep 2026; basemap unchanged). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)

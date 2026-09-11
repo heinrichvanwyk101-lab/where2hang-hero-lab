@@ -745,7 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v253';
+const NAV_STAMP = 'nav v254';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -2575,7 +2575,13 @@ window.__w2hSetResults = setResults;
      airport to it took the world from five builds to eight and from zero to 31,726 footprints,
      which pinned the frame's main thread long enough that the model never appeared at all. They
      build on the first rail tap instead, through setDistrict, which handles a pending island. */
-  const queue = DISTRICTS.filter(d => d !== corniche && !d.onDemand);
+  /* IN THE ORDER THE OPENING SHOT NEEDS THEM (nav v254): the three islands in the shot first,
+     nearest first, then the two off screen. DISTRICTS' own order built Reem, Saadiyat, Yas and
+     Raha before Al Maryah — and, since this pump started at once, before the Corniche's own
+     footprints, which is what "the Corniche is built last" was. */
+  const ORDER = ['maryah', 'reem', 'saadiyat', 'raha', 'yas'];
+  const queue = DISTRICTS.filter(d => d !== corniche && !d.onDemand)
+    .sort((a, b) => (ORDER.indexOf(a.id) + 1 || 99) - (ORDER.indexOf(b.id) + 1 || 99));
   let qi = 0;
   /* RETRY, NOT JUST ONE ATTEMPT AND MOVE ON. buildIsland's own comment on the road-wait gate is
      explicit: "pending stays set: the next visit or attract leg retries". Attract normally
@@ -2597,6 +2603,9 @@ window.__w2hSetResults = setResults;
      the real roads payload has landed, or buildIsland's own 8-second bound has elapsed and it
      builds anyway. Either way it stops being permanently stuck. */
   const pump = () => {
+    /* NOT BEFORE THE REVEAL (nav v254): this pump is the embed's island builder, and started at
+       once it put every other island's build ahead of the Corniche's footprints. */
+    if (!_paintedSent){ setTimeout(pump, 400); return; }
     if (qi >= queue.length) return;
     const d = queue[qi++];
     try {
@@ -6710,8 +6719,14 @@ let _frame0 = true, _tick0Done = false;
    is the frame that is shown; the rest is done after the reveal, in this order: the islands in
    the shot, the ground repaint, the far islands, with the flight's own prefetch waiting for the
    reveal too. */
+/* THE CORNICHE COMPLETE, THEN THE REVEAL (nav v254). Revealing on the first frame showed the
+   island's generated stand-in and then its real buildings swapping in — the owner's screenshots
+   of 11 Sep, "the Corniche is built last" — because the opening fill, the flight and the ground
+   repaint had all been let go ahead of the Corniche's own 19,000 footprints. The reveal waits
+   for isleReady(corniche) now, with a ceiling; everything else still waits for the reveal, so
+   the footprints run alone right after the first frame. */
 const PAINT_MIN_ISLES = 1;     // the Corniche carries the shot; the rest fill in behind it
-const PAINT_CEILING_MS = 0;    // from the first drawn frame: show it
+const PAINT_CEILING_MS = 8000; // from the first drawn frame: past this, show what there is
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
@@ -6721,10 +6736,10 @@ function maybePostPainted(){
      put the 'ready' class at 16.2 s with the first frame at 4.1 s, on two loads out of three.
      A drawn frame 2.5 s old on an invisible canvas is the thing this message exists to end, so
      the class is added here and the reveal goes out; `src` says which path did it. */
-  if (g && !g.classList.contains('ready')){
-    if (performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
-    g.classList.add('ready'); _paintSrc = 'forced';
-  }
+  const complete = isleReady(corniche);
+  if (!complete && performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
+  if (g && !g.classList.contains('ready')){ g.classList.add('ready'); _paintSrc = complete ? 'complete' : 'forced'; }
+  else _paintSrc = complete ? 'complete' : 'forced';
   if (!_glReadyAt) _glReadyAt = performance.now();
   const eager = DISTRICTS.filter(d => !d.onDemand);
   const up = eager.filter(d => d.built).length;
