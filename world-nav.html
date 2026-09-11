@@ -745,7 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v249';
+const NAV_STAMP = 'nav v250';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -6689,8 +6689,15 @@ let _paintedPending = false, _paintedSent = false, _paintedFrom = 0;
    So posting on frame one would take the spinner down over almost nothing. This waits for most of
    the eager islands as well, with a ceiling so a slow or failed island can never hold the reveal
    for ever — past the ceiling, whatever is up is what gets shown. */
-const PAINT_MIN_ISLES = 4;     // of the six eager districts; Corniche and its neighbours carry the shot
-const PAINT_CEILING_MS = 9000; // from the first drawn frame, after which show what there is
+/* THE SHOT IS SHOWN AS SOON AS THE CORNICHE IS UP (nav v250). The four-island gate above was
+   written when the outer islands took ten seconds to lay in and an unbuilt island was a bare
+   plate; it meant the app's spinner stayed up for nine seconds after the first frame, which is
+   what a screen recording on 11 Sep showed: the Corniche drawn at three seconds, the spinner
+   down at twelve. Every island carries its coastline, platform and beach from the first frame,
+   so the world reads as the world with the Corniche built and the others filling in over the
+   next seconds — the reveal the owner asked for, and the one the progressive build exists for. */
+const PAINT_MIN_ISLES = 1;     // the Corniche carries the shot; the rest fill in behind it
+const PAINT_CEILING_MS = 2500; // from the first drawn frame, after which show what there is
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
@@ -6700,7 +6707,12 @@ function maybePostPainted(){
   if (up < Math.min(PAINT_MIN_ISLES, eager.length) &&
       performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
   _paintedSent = true;
-  try { post('painted', { ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV }); } catch (e){}
+  /* parent.postMessage DIRECTLY (nav v250). This used to call post(), which is declared inside
+     the embed block at the top of the module and is not in scope here; the ReferenceError was
+     swallowed by the catch and 'painted' was never sent, on any build since it was written. The
+     app fell back to its twelve-second timer after 'ready' on every open — the screen recording
+     of 11 Sep: Corniche drawn at three seconds, spinner down at seventeen. */
+  try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV }, '*'); } catch (e){}
 }
 
 /* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
