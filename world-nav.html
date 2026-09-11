@@ -745,7 +745,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v250';
+const NAV_STAMP = 'nav v251';
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 const CITY  = await import('./w2h-city.js'  + V);
 const WORLD = await import('./w2h-world.js' + V);
@@ -2795,6 +2795,9 @@ function descend(steps){
    moves its idle-drift grace period earlier by the same handful of milliseconds this whole
    block of module evaluation takes — not a meaningful behaviour change. */
 let WORLD_IDLE = false;
+/* Hoisted beside WORLD_IDLE for the same reason it was: the message handler below runs before
+   the module reaches the painted code, and a `let` further down would be in its dead zone. */
+let _glReadyAt = 0, _idleAt = 0, _wakeAt = 0;   // page ms, carried on the painted message
 const attract = { on:false, i:0, until:0, lastInput:performance.now() };
 const gfState = new Map();
 const CULL_R = 14 / 7.8;                 // island units; M_PER_UNIT is 7.8
@@ -3104,8 +3107,8 @@ if (/[?&]embed=1/.test(location.search)){
          a fixed full-screen frame, and #gl declares touch-action:none — so a swipe over the Events
          list was swallowed unless the finger started on the bottom bar. On idle the canvas gives
          the axis back; on wake it takes it again. */
-      else if (m.type === 'idle'){ WORLD_IDLE = true; const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = 'auto'; gl.style.pointerEvents = 'none'; } document.body.style.touchAction = 'auto'; }
-      else if (m.type === 'wake'){ WORLD_IDLE = false; const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = ''; gl.style.pointerEvents = ''; } document.body.style.touchAction = ''; }
+      else if (m.type === 'idle'){ WORLD_IDLE = true; if (!_idleAt) _idleAt = performance.now(); const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = 'auto'; gl.style.pointerEvents = 'none'; } document.body.style.touchAction = 'auto'; }
+      else if (m.type === 'wake'){ WORLD_IDLE = false; if (!_wakeAt) _wakeAt = performance.now(); const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = ''; gl.style.pointerEvents = ''; } document.body.style.touchAction = ''; }
       /* SETCHROMEINSET — the allBtn/tiltBtn fix. Both sit at bottom:18px of THIS document,
          which is the real device viewport (the iframe is position:fixed, inset:0 on the host
          side). Search's own "FIND A SPOT" composer panel is in-flow host content painted at a
@@ -6702,6 +6705,7 @@ function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
   if (g && !g.classList.contains('ready')) return;
+  if (!_glReadyAt) _glReadyAt = performance.now();
   const eager = DISTRICTS.filter(d => !d.onDemand);
   const up = eager.filter(d => d.built).length;
   if (up < Math.min(PAINT_MIN_ISLES, eager.length) &&
@@ -6712,7 +6716,8 @@ function maybePostPainted(){
      swallowed by the catch and 'painted' was never sent, on any build since it was written. The
      app fell back to its twelve-second timer after 'ready' on every open — the screen recording
      of 11 Sep: Corniche drawn at three seconds, spinner down at seventeen. */
-  try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV }, '*'); } catch (e){}
+  try { parent.postMessage({ w2h: true, type: 'painted', ms: Math.round(PH['#page'] || 0), isles: up, build: B_NAV,
+    at: Math.round(performance.now()), gl: Math.round(_glReadyAt), idle: Math.round(_idleAt), wake: Math.round(_wakeAt), first: Math.round(_paintedFrom) }, '*'); } catch (e){}
 }
 
 /* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
@@ -6793,7 +6798,15 @@ let _lastDrawT = 0, _camStill = 0;
 const _camPrev = new THREE.Vector3(), _camPrevQ = new THREE.Quaternion(); let _camPrevFov = 0;
 function frame(){
   requestAnimationFrame(frame);
-  if (WORLD_IDLE) return;
+  /* PAINTED DOES NOT WAIT FOR A WAKE (nav v251). The app idles the world whenever its stage is
+     off screen or being scrolled, and on the phone that arrived while the spinner was still up:
+     the loop returned here before the painted check below it, so 'painted' went out only once the
+     app's own twelve-second fallback had revealed the world and woken it — the third refresh on
+     11 Sep, ready at 3.5 s, painted at 15.5 s. Two changes: the first frame is drawn even when
+     idle, so there is always something painted to report, and the check runs before the idle
+     return. The timings the message carries say which of gl / idle / wake gated it. */
+  if (_paintedPending && !_paintedSent) maybePostPainted();
+  if (WORLD_IDLE && !_frame0) return;
   if (!_frame0 && pointers.size === 0 && _camStill >= 2 && performance.now() - _lastDrawT < 31) return;
   _lastDrawT = performance.now();
   const _t0tick = _frame0 ? performance.now() : 0;
