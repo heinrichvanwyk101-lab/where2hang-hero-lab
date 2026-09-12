@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Where2Hang — Abu Dhabi World</title>
+<!-- THE IMPORT MAP COMES BEFORE ANY MODULE IS FETCHED, and the preload script below fetches
+     modules. It used to sit further down; a modulepreload appended ahead of it made the phone's
+     Chrome reject the map ("Failed to resolve module specifier 'three'", 12 Sep, the owner's
+     Android), while the bench's newer Chrome tolerated the order. -->
+<script type="importmap">{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }</script>
 <!-- THE NAV STAMP LIVES HERE (nav v257). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
 <meta name="w2h-nav" content="nav v257">
@@ -600,10 +608,6 @@
 <!-- THREE IS FIRST-PARTY NOW (nav v248). vendor/three/ holds the exact 0.169.0 closure the world
      imports (tools/vendor-three.mjs), so a cold load connects to one origin and sw.js can hold
      the whole world on the phone. -->
-<script type="importmap">{ "imports": {
-  "three": "./vendor/three/build/three.module.js",
-  "three/addons/": "./vendor/three/examples/jsm/"
-} }</script>
 
 <script type="module">
 const errEl = document.getElementById('err');
