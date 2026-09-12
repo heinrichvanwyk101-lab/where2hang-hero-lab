@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_CORE, TERM_STANDS } from './w2h-termina
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v176';
+export const BUILD = 'city v177';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -811,7 +811,11 @@ function etihadTowers(x0, z0){
        assigned it as the material, which day view survived (the swap reads dayMats off whatever
        is there) and night view did not: three's program cache asks the material for
        customProgramCacheKey and a Mesh has none. Visible on the phone as the red error panel. */
-    const em = m.material.clone(); em.userData = { ...m.material.userData, dayMats: day, duskColor: 0xB8C7D1, glassOverride:false };
+    /* Cloned with the userData lifted off (city v177): it holds the day material and its texture,
+       which Material.clone's JSON round trip would serialise to a data URL — the last such site
+       the profile found (see gateTowers). */
+    const em = (() => { const ud = m.material.userData; m.material.userData = {}; const c = m.material.clone(); m.material.userData = ud; return c; })();
+    em.userData = { ...m.material.userData, dayMats: day, duskColor: 0xB8C7D1, glassOverride:false };
     m.material = em;
     m.position.set(x0 + s.dx, shaft/2, z0 + s.dz);
     /* A FAN, NOT A ROW. Each lens turns a little further than the last so the five faces catch

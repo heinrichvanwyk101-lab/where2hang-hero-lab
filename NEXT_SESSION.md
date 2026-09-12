@@ -83,7 +83,7 @@
 > nav fetches it with the ground, `glowImages` opt / addBake 4th arg, GLOW_IMG in the world) and
 > the page uploads the picture; (2) w2h-city gateTowers cloned a material whose userData holds a
 > material with a texture, and Material.clone's JSON round trip serialised that texture to a data
-> URL on every load — cloned with userData lifted off; (3) PERF now names realRoads, groundTex,
+> URL on every load — cloned with userData lifted off (and the same in etihadTowers, city v177); (3) PERF now names realRoads, groundTex,
 > props, bakedGlow/groundGlow, bakedBeach so the phone's perf row (b.*) says where buildWorld goes.
 > Offline: verified on the bench — after one online visit the world reloads with the network cut,
 > zero server requests, all nine islands built (SW cache w2h-world-<stamps>, 97 entries).
@@ -100,7 +100,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v261 / city v176 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v261 / city v177 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
