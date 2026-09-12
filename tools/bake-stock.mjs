@@ -146,15 +146,22 @@ const ground = async (id, tag, width, height) => {
   if (!vp || vp.width !== width){ await page.setViewportSize({ width, height }); await page.waitForTimeout(300); }
   const b64 = await page.evaluate(async id => {
     const cv = window.W2H.groundCanvas(id);
-    const blob = await new Promise(r => cv.toBlob(r, 'image/webp', 0.9));
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-    return { b64: btoa(s), w: cv.width, h: cv.height };
+    const enc = async (c, type, q) => { const blob = await new Promise(r => c.toBlob(r, type, q)); const buf = new Uint8Array(await blob.arrayBuffer());
+      let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); };
+    /* The road-glow mask of the same paint (world v351), half size, two values: PNG keeps it
+       exact and small. */
+    const gc = window.W2H.roadGlowCanvas(cv);
+    return { b64: await enc(cv, 'image/webp', 0.9), w: cv.width, h: cv.height, glow: gc ? await enc(gc, 'image/png') : null, gw: gc ? gc.width : 0, gh: gc ? gc.height : 0 };
   }, id);
   const buf = Buffer.from(b64.b64, 'base64');
   fs.writeFileSync(path.join(ROOT, 'data', `ground-${id}-${tag}.webp`), buf);
   console.log(`ground-${id}-${tag}.webp ${b64.w}x${b64.h} ${Math.round(buf.length / 1024)} KB`);
-  return { w: b64.w, h: b64.h, kb: Math.round(buf.length / 1024) };
+  if (b64.glow){
+    const gb = Buffer.from(b64.glow, 'base64');
+    fs.writeFileSync(path.join(ROOT, 'data', `glow-${id}-${tag}.png`), gb);
+    console.log(`glow-${id}-${tag}.png ${b64.gw}x${b64.gh} ${Math.round(gb.length / 1024)} KB`);
+  }
+  return { w: b64.w, h: b64.h, kb: Math.round(buf.length / 1024), glow: !!b64.glow };
 };
 const [nav, city, world, props] = stamps.split(' / ');
 const idx = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/index.json'), 'utf8'));

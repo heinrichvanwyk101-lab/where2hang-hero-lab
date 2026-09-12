@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v350';
+export const BUILD = 'world v351';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -192,6 +192,7 @@ const BASE = opts.basemap || null;
    exactly as it did. */
 const BAKE = opts.bake || {};
 const GROUND_IMG = opts.groundImages || {};
+const GLOW_IMG = opts.glowImages || {};      // the baked road-glow masks (world v351), by island
 /* Read here rather than passed through opts: it governs one line in one function and threading it
    through the module boundary would be more surface than the flag is worth. */
 const NO_CLIP = typeof location !== 'undefined' && location.search.includes('noclip');
@@ -4656,7 +4657,26 @@ const GROUND_EMI_HEX = 0x5A4632;                 // warm sand, not moonlight
    or more saturated). Written at half resolution into an emissive map — roads at full value, the
    rest at a quarter — with the emissive intensity raised four-fold so the sand's own floor stays
    exactly where groundNightFloor put it and only the roads rise above it. */
+/* THE GLOW MASK AS AN IMAGE (world v351): tools/bake-stock.mjs writes roadGlowCanvas of each
+   ground paint as data/glow-<id>-{p,d}.png, and the page uploads that picture straight into a
+   texture. The live path below drew the 5-megapixel ground into a second canvas, read it back
+   and walked every pixel, on the phone, on every open. */
+function glowTexFromImage(img){
+  const t = new THREE.Texture(img);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.needsUpdate = true;
+  return t;
+}
 function roadGlowMap(cv){
+  const out = roadGlowCanvas(cv);
+  if (!out) return null;
+  const t = new THREE.CanvasTexture(out);
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
+function roadGlowCanvas(cv){
   if (!cv || !cv.getContext) return null;
   const W = cv.width, H = cv.height;
   const src = cv.getContext('2d', { willReadFrequently: true });
@@ -4676,10 +4696,7 @@ function roadGlowMap(cv){
     }
   }
   og.putImageData(o, 0, 0);
-  const t = new THREE.CanvasTexture(out);
-  t.colorSpace = THREE.NoColorSpace;
-  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  return t;
+  return out;
 }
 function groundNightFloor(m){
   if (!m || !GROUND_NIGHT_EMI) return m;
@@ -6708,6 +6725,7 @@ DISTRICTS.forEach(d => {
     removeBeach(d);
     emitBeach(d, { W, NX: B.NX, NY: B.NY, vIdx, vCls: cls, pos, col, cellW: B.cellW, coastBeachPct: B.coastBeachPct || 0 });
     d.beachBuilt = true; d.beachBaked = true;
+    PERF.bakedBeach = (PERF.bakedBeach || 0) + (performance.now() - t0);
     console.info('baked beach ' + d.id + ': ' + B.n + ' vertices, ' + Math.round(performance.now() - t0) + ' ms');
     return true;
   }
@@ -10697,7 +10715,9 @@ function buildGroundFor(d){
      by now the deferred islands have had a leg of the attract loop to finish their fetch.
      If it has still not landed the island paints generated roads, which is the documented
      degradation, not a failure. */
+  const _tr = performance.now();
   d.roadsReal = attachRealRoads(d);
+  PERF.realRoads = (PERF.realRoads || 0) + (performance.now() - _tr);
   console.info('roads ' + d.id + ': ' + (d.roadsReal
     ? (d.roads.drawArterials.length + ' real centrelines') : 'generated skeleton'));
   const plan = groundPlan(d, f.cells, f.blocks);
@@ -10752,7 +10772,9 @@ function buildGroundFor(d){
      no second paint to schedule. The plan above is still computed live because the props stand on
      it — the picture is a picture of that same plan. */
   const gimg = GROUND_IMG[d.id] || null;
+  const _tt = performance.now();
   const tex = gimg ? groundTexFromImage(gimg) : paintGround(d, plan, gq);
+  if (gimg) PERF.groundTex = (PERF.groundTex || 0) + (performance.now() - _tt);
   if (gimg) console.info('ground ' + d.id + ': baked image ' + gimg.naturalWidth + 'x' + gimg.naturalHeight);
   /* Props into the DETAIL layer only. At world scale a palm is a third of a pixel; paying for
      four hundred of them per island at exactly the moment five islands are on screen would be
@@ -10771,7 +10793,9 @@ function buildGroundFor(d){
       ' arterials=' + (plan.arterials || []).length + ' mainLen=' + (plan.mainRoadLen || 0).toFixed(3) +
       ' minorLen=' + (plan.minorRoadLen || 0).toFixed(3) + ' localLen=' + (plan.localRoadLen || 0).toFixed(3) +
       ' crossings=' + (plan.crossings || []).length);
+    const _tp = performance.now();
     const n = props.addProps(d, d.detail, plan);
+    PERF.props = (PERF.props || 0) + (performance.now() - _tp);
     /* tickSignals is a FUNCTION, not a count, so the blind key sum would turn propCount.signals
        into NaN the moment it tried to add it. Collected separately and called from the frame
        loop. Guarded because an older props module has neither. */
@@ -10792,8 +10816,11 @@ function buildGroundFor(d){
   /* The road glow rides on the same emissive: map at full value on asphalt, a quarter elsewhere,
      intensity x4, so sand lands back on the floor above and roads sit four times over it. */
   {
-    const glow = roadGlowMap(gimg ? canvasOfImage(gimg) : tex.image);
+    const _tg = performance.now();
+    const glowImg = GLOW_IMG[d.id] || null;
+    const glow = glowImg ? glowTexFromImage(glowImg) : roadGlowMap(gimg ? canvasOfImage(gimg) : tex.image);
     if (glow && night.emissive){ night.emissiveMap = glow; night.emissiveIntensity = GROUND_NIGHT_EMI * 4; }
+    PERF[glowImg ? 'bakedGlow' : 'groundGlow'] = (PERF[glowImg ? 'bakedGlow' : 'groundGlow'] || 0) + (performance.now() - _tg);
   }
   const day  = dayGround.clone();  day.map  = tex;
   const dusk = duskGround.clone(); dusk.map = tex;
@@ -11057,9 +11084,11 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
             fresh from its plan. Not called by the page. */
          groundCanvas: id => { const d = DISTRICTS.find(x => x.id === id);
                                return d && d.plan ? paintGround(d, d.plan, 1).image : null; },
+         /* FOR THE SAME TOOL (world v351): the road-glow mask of a ground canvas, half its size. */
+         roadGlowCanvas,
          /* A BAKE THAT ARRIVES AFTER buildWorld (world v349): the outer islands fetch theirs on
             demand, and buildIsland reads these tables at the moment it runs. */
-         addBake: (id, stock, img) => { if (stock) BAKE[id] = stock; if (img) GROUND_IMG[id] = img;
+         addBake: (id, stock, img, glow) => { if (stock) BAKE[id] = stock; if (img) GROUND_IMG[id] = img; if (glow) GLOW_IMG[id] = glow;
                                         const d = DISTRICTS.find(x => x.id === id); if (d && stock) ensureBakedBeach(d); },
          /* FOR tools/bake-stock.mjs: the beach lattice of a built island, computed live. */
          beachLattice: id => { const d = DISTRICTS.find(x => x.id === id); return d ? buildBeachFor(d, true) : null; },

@@ -29,7 +29,8 @@ const ISLANDS = ['corniche', 'maryah', 'reem', 'saadiyat', 'yas', 'raha', 'zayed
 const DATA = ['data/index.json', 'data/venues.ndjson', 'data/shopfronts.json', 'data/terminal-a.json',
   /* The bakes (nav v256, every island since v257): what each island is built from, so they are
      the first things a warm cache should hold. */
-  ...ISLANDS.flatMap(i => [`data/stock-${i}.json`, `data/stock-${i}.bin`, `data/ground-${i}-p.webp`, `data/ground-${i}-d.webp`]),
+  ...ISLANDS.flatMap(i => [`data/stock-${i}.json`, `data/stock-${i}.bin`, `data/ground-${i}-p.webp`, `data/ground-${i}-d.webp`,
+                           `data/glow-${i}-p.png`, `data/glow-${i}-d.png`]),
   ...ISLANDS.flatMap(i => [`data/isle-${i}.json`, `data/roads-${i}.json`, `data/fp-${i}.json`])];
 const SHEETS = ['Hero-morning.webp', 'Hero-afternoon.webp', 'Hero-night.webp', 'Hero-pano-day.webp', 'Hero-pano-night.webp', 'Hero-pano-sunset.webp', 'Hero-skyline.webp'];
 const PAGE = 'world-nav.html';

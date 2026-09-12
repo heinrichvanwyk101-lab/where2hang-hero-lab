@@ -12,9 +12,9 @@
   "three": "./vendor/three/build/three.module.js",
   "three/addons/": "./vendor/three/examples/jsm/"
 } }</script>
-<!-- THE NAV STAMP LIVES HERE (nav v260). The module below reads it, and so does the preload
+<!-- THE NAV STAMP LIVES HERE (nav v261). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v260">
+<meta name="w2h-nav" content="nav v261">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -40,6 +40,7 @@
     add('preload', 'data/stock-corniche.bin' + v, 'fetch', true);
     var phone = window.matchMedia && matchMedia('(max-width: 700px)').matches;
     add('preload', 'data/ground-corniche-' + (phone ? 'p' : 'd') + '.webp' + v, 'image', false);
+    add('preload', 'data/glow-corniche-' + (phone ? 'p' : 'd') + '.png' + v, 'image', false);
   }
 })();
 </script>
@@ -780,7 +781,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v260').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v261').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -819,6 +820,17 @@ const bakeStockP = !BAKE_ON ? Promise.resolve(null) : fetchStock('corniche')
   .catch(e => { console.warn('baked stock unavailable, building live:', e.message); return null; });
 const bakeGroundP = !BAKE_ON ? Promise.resolve(null) : fetchGround('corniche')
   .catch(e => { console.warn('baked ground unavailable, painting live:', e.message); return null; });
+/* THE ROAD-GLOW MASK (nav v261), a small PNG next to the ground image; missing, the page
+   computes it from the ground as before. */
+const fetchGlow = async id => {
+  const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches;
+  const img = new Image();
+  if (id !== 'corniche') img.fetchPriority = 'low';
+  img.src = 'data/glow-' + id + '-' + (phone ? 'p' : 'd') + '.png' + V;
+  await img.decode();
+  return img;
+};
+const bakeGlowP = !BAKE_ON ? Promise.resolve(null) : fetchGlow('corniche').catch(() => null);
 
 /* SIX MODULES IN ONE ROUND TRIP (nav v257). Awaited one after another, each import waited for
    the previous file to arrive before its own request left the phone: six round trips, 3.3 s on
@@ -1496,14 +1508,16 @@ const bakeValid = (id, b) => {
 };
 const bakeStock = bakeValid('corniche', await bakeStockP);
 const bakeGround = bakeStock ? await bakeGroundP : null;
+const bakeGlow = bakeGround ? await bakeGlowP : null;
 PH.bake = performance.now() - BAKE_T0;
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor, refineGroundStep,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas, beachLattice, addBake } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas, beachLattice, roadGlowCanvas, addBake } =
   buildWorld(scene, kit, {
     bake: bakeStock ? { corniche: bakeStock } : null,
     groundImages: bakeGround ? { corniche: bakeGround } : null,
+    glowImages: bakeGlow ? { corniche: bakeGlow } : null,
     districts: DIST,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     props: propKit,
@@ -1548,9 +1562,9 @@ async function warmBakes(){
   await Promise.all(BAKE_ORDER.filter(id => DISTRICTS.some(d => d.id === id)).map(async id => {
     bakeState.set(id, 'pending');
     try {
-      const [stock, img] = await Promise.all([fetchStock(id), fetchGround(id).catch(() => null)]);
+      const [stock, img, glow] = await Promise.all([fetchStock(id), fetchGround(id).catch(() => null), fetchGlow(id).catch(() => null)]);
       const ok = bakeValid(id, stock);
-      if (ok){ addBake(id, ok, img); bakeState.set(id, 'on'); }
+      if (ok){ addBake(id, ok, img, img ? glow : null); bakeState.set(id, 'on'); }
       else bakeState.set(id, 'none');
       /* A bake that failed leaves the beach to the live pass the flush above skipped (nav v260). */
       if (bakeState.get(id) === 'none'){ const d = DISTRICTS.find(x => x.id === id); if (d && !d.beachBuilt && refreshBeach) try { refreshBeach(d); } catch (e){} }
@@ -8104,6 +8118,7 @@ window.W2H = {
   warm: () => ({ queue: warmQueue ? warmQueue.length : -1, corniche: _warmCorniche }),
   groundCanvas,                          // the full-resolution ground paint, for tools/bake-stock.mjs
   beachLattice,                          // the beach band's lattice, for the same tool (world v350)
+  roadGlowCanvas,                        // the road-glow mask of a ground canvas, for the same tool (world v351)
   state: () => state,
   tilt: v => tiltPass.uniforms.amount.value = v,
   DISTRICTS, goal, cur,

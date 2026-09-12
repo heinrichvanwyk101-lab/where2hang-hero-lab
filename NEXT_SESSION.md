@@ -76,6 +76,22 @@
 > OPENING_WAIT_MS 2.5 s, so the archipelago appears whole; painted's `isles` field says how many were
 > up at the reveal — 6 is whole, less means the cap hit.)
 >
+> **nav v261 / city v176 / world v351 — GLOW BAKED, CLONE FIX, STAGE TIMERS.** The bench profile
+> after the beach bake showed three JS costs left in buildWorld worth taking: (1) roadGlowMap drew
+> the 5-megapixel ground into a second canvas, read it back and walked every pixel — now
+> `data/glow-<id>-{p,d}.png` (roadGlowCanvas, exported by the tool next to each ground image;
+> nav fetches it with the ground, `glowImages` opt / addBake 4th arg, GLOW_IMG in the world) and
+> the page uploads the picture; (2) w2h-city gateTowers cloned a material whose userData holds a
+> material with a texture, and Material.clone's JSON round trip serialised that texture to a data
+> URL on every load — cloned with userData lifted off; (3) PERF now names realRoads, groundTex,
+> props, bakedGlow/groundGlow, bakedBeach so the phone's perf row (b.*) says where buildWorld goes.
+> Offline: verified on the bench — after one online visit the world reloads with the network cut,
+> zero server requests, all nine islands built (SW cache w2h-world-<stamps>, 97 entries).
+> Still live on the phone after this: attachRealRoads/realCrossings, urbanFabric + roadSkeleton +
+> groundPlan (the plan the props stand on), props.addProps, the landmark kits (ExtrudeGeometry),
+> islandGeometry — read the next perf rows before choosing which to bake next; and the GPU's first
+> use of each shader program, which the bench profile puts above all of them.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -84,7 +100,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v260 / city v175 / world v350 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v261 / city v176 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

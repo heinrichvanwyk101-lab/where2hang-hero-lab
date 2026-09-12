@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_CORE, TERM_STANDS } from './w2h-termina
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v175';
+export const BUILD = 'city v176';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -4719,7 +4719,14 @@ function gateTowers(x0, z0, rot, arc){
      blue glass. The bars are separate white boxes on the faces, instanced. */
   const mat = cityMaterial(TEX_TOWER, 3, 1, 0.25, 0x3E5470);
   mat.userData.duskColor = 0x9FB3C4; mat.userData.glassOverride = false;
-  mat.userData.dayMats = mat.userData.dayMats.clone();
+  /* CLONED WITHOUT THE userData ROUND TRIP (city v176). Material.clone copies userData through
+     JSON.parse(JSON.stringify(...)), and this material's userData holds its dusk material, whose
+     map is a texture: the round trip serialised that texture to a data URL on every load (the
+     profile: toJSON -> serializeImage -> getDataURL, ~100 ms on the bench, more on a phone). The
+     userData is lifted off for the clone and put back by reference. */
+  { const src = mat.userData.dayMats, ud = src.userData; src.userData = {};
+    const c = src.clone(); src.userData = ud; c.userData = Object.assign({}, ud);
+    mat.userData.dayMats = c; }
   mat.userData.dayMats.color.set(0x7E98B2); mat.userData.dayMats.roughness = 0.35; mat.userData.dayMats.metalness = 0.3;
   const bar = saadKitMat(0xE8E6E0, 0xF7F5F0, 0.6, 0, 0xFFF4E0, 0.10, 0.9);
   const truss = saadKitMat(0xD9DCE0, 0xFFFFFF, 0.5, 0.3, 0xFFF0D0, 0.15, 0.9);
