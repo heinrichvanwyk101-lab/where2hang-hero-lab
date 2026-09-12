@@ -165,6 +165,11 @@
 > measured with tools/bench/camshot.mjs (finds the roof mesh, derives the hub and the landside
 > bearing, sets d.cam, calls go, snaps cur to goal because the bench's flight crawls, screenshots
 > at phone aspect). Bench: roof and glass wall from the front, crescent in the foreground.
+> THE STAMP WAS NOT BUMPED FOR CITY v178/v179 AND THE PHONE SHOWED THE OLD TERMINAL (20:58
+> screenshots): the modules are fetched under ?v=<nav stamp>, so a changed module with the same
+> nav stamp is served from cache and only the data moves — the bakes then mismatch and the old kit
+> builds live. nav v264 is the bump, nothing else. Every module change needs a nav bump, even
+> when the HTML did not change.
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
@@ -174,7 +179,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v263 / city v179 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v264 / city v179 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
