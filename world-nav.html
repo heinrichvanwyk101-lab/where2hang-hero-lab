@@ -14,7 +14,7 @@
 } }</script>
 <!-- THE NAV STAMP LIVES HERE (nav v261). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v261">
+<meta name="w2h-nav" content="nav v263">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -781,7 +781,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v261').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v263').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -976,7 +976,16 @@ if (DEBUG) document.getElementById('dbg').classList.add('on');
 
 /* ---------- renderer ---------- */
 const canvas = document.getElementById('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
+/* THE DRAWING BUFFER IS KEPT BETWEEN FRAMES (nav v263). The Samsung showed a single black frame
+   every second or three at dusk and night, at rest, with the reel and every other DOM layer
+   intact around it: the canvas alone, presented as a cleared buffer, for one refresh (8 ms at
+   120 Hz, 16 at 60). Nothing in this page clears the canvas outside the draw, and the loop only
+   ever draws a full frame — so the empty buffer reached the screen underneath us, between the
+   swap and the draw. With the buffer preserved there is no cleared buffer to present: the browser
+   copies the finished frame out and the back buffer keeps its last picture. The copy is a full-
+   screen blit per frame, under a millisecond on this class of GPU. */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance',
+                                           preserveDrawingBuffer:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -5306,6 +5315,25 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight), 0.60, 0.55, 0.46);
 composer.addPass(bloom);
+/* THE BLOOM INPUT IS SANITISED (nav v263). Bloom is the one pass that turns a single bad pixel
+   into a whole black frame: a NaN or an infinity anywhere in the scene buffer enters the bright
+   pass, and the five-level blur then spreads it across most of the frame — every pixel it touches
+   is NaN, the additive blend makes the scene buffer NaN there too, and NaN leaves the output pass
+   as black. Day never shows this because nothing in the day chain spreads a value; the same pixel
+   is one invisible black dot. A mobile driver produces NaN from ops a desktop one does not
+   (normalize of a zero vector, pow of a negative base), and the water and the twinkle change
+   every frame, so it arrives as a one-frame flash. Non-finite components are dropped and the
+   rest capped at 16, which is well above anything the scene legitimately emits (the bench reads a
+   maximum of 1.0 at dusk and 0.9 at night). mix with a bvec selects without arithmetic, which is
+   the only way to discard a NaN — NaN times zero is NaN. */
+{
+  const m = bloom.materialHighPassFilter;
+  m.fragmentShader = m.fragmentShader.replace(
+    'vec4 texel = texture2D( tDiffuse, vUv );',
+    'vec4 texel = texture2D( tDiffuse, vUv );\n' +
+    '\t\t\ttexel.rgb = mix( min( texel.rgb, vec3( 16.0 ) ), vec3( 0.0 ), isnan( texel.rgb ) );');
+  m.needsUpdate = true;
+}
 
 /* TILT-SHIFT. The cue that makes a city read as a MODEL rather than a city. Human vision has
    effectively infinite depth of field at this scale, so a frame with a narrow sharp band
@@ -8350,6 +8378,9 @@ window.W2H = {
   PERF,
   /* Frames actually drawn, for a bench to read the settled-frame cap (nav v212). */
   frames: () => renderer.info.render.frame,
+  /* The renderer and the post chain, for tools/bench/blackframe.mjs: it reads the composer's
+     buffers back for non-finite values and renders with and without bloom (nav v263). */
+  renderer, composer, bloom, THREE,
 };
 
 } catch(e){ fail('module top level', e); }

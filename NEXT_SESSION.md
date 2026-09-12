@@ -123,6 +123,23 @@
 > 30 ms. App side (PR #133): only the document's own scroll idles the world — the rail's swipe was
 > idling it on every card change (23 toggles in the row), so flights began 220 ms late.
 >
+> **nav v263 — THE BLACK FRAME AT DUSK AND NIGHT.** The owner's two Samsung recordings (12 Sep
+> 13:18 and 13:21, dusk, at rest) hold single pure-black frames every one to three seconds —
+> (0,0,0), one refresh long (8 ms at 120 Hz, 16 at 60), the rail and every DOM layer intact around
+> them: the canvas alone. Day modes never show it. Two changes. (1) The bloom input is sanitised:
+> a probe of the bench's dusk scene buffer (tools/bench/blackframe.mjs and nanwhere.mjs; W2H now exposes
+> renderer/composer/bloom/THREE for them) found NaN pixels in the scene pass on the water, one in
+> ten frames or so, and bloom is the one pass that spreads a pixel — the five-level blur's top mip
+> is 26 px wide on the phone, so one NaN there is most of the frame, the additive blend makes the
+> scene buffer NaN under it and the output pass writes black. The high-pass shader now drops
+> non-finite components (mix with a bvec — NaN times zero is NaN) and caps at 16; the bench reads
+> a scene maximum of 1.0 at dusk. Day is unaffected because nothing in its chain spreads: the same
+> pixel is one black dot. (2) preserveDrawingBuffer:true, the unproven half: it removes the
+> "cleared buffer presented under us" class outright at the cost of a per-frame blit. If the
+> owner's next recording is clean, (1) is the likely cause and (2) can be tried without; if not,
+> the flash is drawn, not presented, and the water shader's NaN source is next (the water plane's
+> normals or the normal-map tangent frame at world zoom — hide `water` and count with nanwhere).
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -131,7 +148,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v261 / city v177 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v263 / city v177 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
