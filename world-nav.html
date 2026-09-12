@@ -12,9 +12,9 @@
   "three": "./vendor/three/build/three.module.js",
   "three/addons/": "./vendor/three/examples/jsm/"
 } }</script>
-<!-- THE NAV STAMP LIVES HERE (nav v258). The module below reads it, and so does the preload
+<!-- THE NAV STAMP LIVES HERE (nav v259). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v258">
+<meta name="w2h-nav" content="nav v259">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -780,7 +780,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v258').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v259').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -796,7 +796,11 @@ const BAKE_T0 = performance.now();
    others are fetched after the reveal, in the order the opening shot needs them, and an island
    waits for its bake the way it already waits for its roads. */
 const fetchStock = async id => {
-  const [hr, br] = await Promise.all([fetch('data/stock-' + id + '.json' + V), fetch('data/stock-' + id + '.bin' + V)]);
+  /* The Corniche's bake is the opening; the other eight are asked for the moment the world is
+     built (nav v259) and must not slow the first frame's own downloads, so they go at low
+     priority where the browser honours it (Chrome; others ignore the option). */
+  const pr = { priority: id === 'corniche' ? 'high' : 'low' };
+  const [hr, br] = await Promise.all([fetch('data/stock-' + id + '.json' + V, pr), fetch('data/stock-' + id + '.bin' + V, pr)]);
   if (!hr.ok || !br.ok) throw new Error('stock-' + id + ' ' + hr.status + '/' + br.status);
   const head = await hr.json(); const bin = await br.arrayBuffer();
   const want = head && head.format === 'q16' ? head.bytes : head && head.floats * 4;
@@ -806,6 +810,7 @@ const fetchStock = async id => {
 const fetchGround = async id => {
   const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches;
   const img = new Image();
+  if (id !== 'corniche') img.fetchPriority = 'low';
   img.src = 'data/ground-' + id + '-' + (phone ? 'p' : 'd') + '.webp' + V;
   await img.decode();
   return img;
@@ -1552,7 +1557,13 @@ async function warmBakes(){
   }));
 }
 if (BAKE_ON) for (const id of BAKE_ORDER) bakeState.set(id, 'pending');
-setTimeout(warmBakes, 6000);      // the fallback; the reveal starts it earlier
+/* STARTED HERE, THE MOMENT THE WORLD IS BUILT (nav v259), not at the reveal. The owner's phone
+   on nav v258: painted at 4.8-5.6 s, and only then did the eight bakes leave the phone, so the
+   islands could not build before roughly ten seconds and a tap at eight found bare sand. From
+   here the network is idle (the Corniche's bytes are in, the GPU is digesting the first frame)
+   and the fetches are low priority, so by the reveal the bakes are on the phone and the idle
+   chain builds every island in the first seconds after it. */
+warmBakes();
 
 /* DRAIN THE DRIVER'S BACKLOG IN PIECES, INSTEAD OF ALL AT ONCE IN THE FRAME THE USER IS WAITING ON.
 
@@ -2936,7 +2947,7 @@ let _paintedPending = false, _paintedSent = false, _paintedFrom = 0, _paintedAt 
    thread, so the moment 'painted' is posted the host still has to receive it and start the fade —
    and the bench showed the next island builds starting within the same second, holding that
    message for six. Nothing heavy starts until this long after the reveal. */
-const AFTER_REVEAL_MS = 1500;
+const AFTER_REVEAL_MS = 800;
 const revealSettled = () => _paintedSent && performance.now() - _paintedAt >= AFTER_REVEAL_MS;
 let _glReadyAt = 0, _idleAt = 0, _wakeAt = 0, _paintTicks = 0, _paintSrc = 'world';   // carried on the painted message
 const attract = { on:false, i:0, until:0, lastInput:performance.now() };
@@ -3487,6 +3498,7 @@ function setDistrict(d){
   } else {
     if (d && d.pending) console.info('build ' + d.id + ' via visit (bake ' + bakeState.get(d.id) + ')');
     if (buildIsland && d && buildIsland(d.id, true)){
+      d._builtAt = Math.round(performance.now());
       snapshotMats(d.group);
       registerLift(d.group);
       fitClip();
@@ -6590,6 +6602,7 @@ function buildAndRegister(d){
      (fpState.has(d.id)) already safely no-ops if it was genuinely already called, so calling it
      unconditionally here costs nothing on the common case and fixes the stuck one. */
   if (buildIsland(d.id, true)){
+    d._builtAt = Math.round(performance.now());
     snapshotMats(d.group); registerLift(d.group); fitClip(); applyView(view);
   }
   addFootprints(d);
@@ -6924,6 +6937,17 @@ let _frame0 = true, _tick0Done = false;
    the footprints run alone right after the first frame. */
 const PAINT_MIN_ISLES = 1;     // the Corniche carries the shot; the rest fill in behind it
 const PAINT_CEILING_MS = 8000; // from the first drawn frame: past this, show what there is
+/* WHEN EACH ISLAND WAS BUILT, FROM THE PHONE (nav v259). Sent once, when the five islands of the
+   opening chain are all up: the time of each build since the page started, and the count. This
+   is the row that says whether "a tap only flies" is true on the device, not on the bench. */
+let _islesSent = false;
+function postIsles(){
+  if (_islesSent) return;
+  _islesSent = true;
+  const out = { w2h: true, type: 'isles', at: Math.round(performance.now()), built: DISTRICTS.filter(d => d.built).length };
+  for (const d of DISTRICTS) if (d._builtAt) out[d.id] = d._builtAt;
+  try { parent.postMessage(out, '*'); } catch (e){}
+}
 function bakeXfer(){
   try {
     const e = performance.getEntriesByType('resource').find(r => /stock-corniche\.bin/.test(r.name));
@@ -6990,15 +7014,17 @@ const OPENING_FILL = ['maryah', 'reem', 'saadiyat', 'raha', 'yas'];
 function scheduleOpeningFill(delay){
   const run = () => {
     const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
-    if (!id){ scheduleGroundRefine(300); return; }   // the shot is complete: sharpen the ground, then the far islands
+    if (!id){ postIsles(); scheduleGroundRefine(200); return; }   // the shot is complete: sharpen the ground, then the far islands
     const d = DISTRICTS.find(y => y.id === id);
-    if (roadsIn(id) && bakeSettled(id)){ console.info('build ' + id + ' via opening fill (bake ' + bakeState.get(id) + ')'); try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(500); }
+    if (roadsIn(id) && bakeSettled(id)){ console.info('build ' + id + ' via opening fill (bake ' + bakeState.get(id) + ')'); try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(120); }
     else Promise.all([whenRoads(id), whenBake(id)]).then(() => scheduleOpeningFill(0));
   };
+  /* Short gaps and a short idle deadline (nav v259): a baked build is 50-600 ms, and the five
+     of them back to back are what makes a tap only fly. */
   setTimeout(() => {
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 2500 });
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 700 });
     else run();
-  }, delay === undefined ? 600 : delay);
+  }, delay === undefined ? 300 : delay);
 }
 
 /* ONE ISLAND PER IDLE SLICE. requestIdleCallback where it exists, a timeout everywhere else
@@ -7026,13 +7052,13 @@ function scheduleDeferredIsland(delay){
        how Zayed City came out as a dark plate in the first render of this change. */
     try { buildAndRegister(d); }
     catch (e){ console.warn('deferred island build failed', e); return; }
-    if (DISTRICTS.some(x => x.onDemand && x.pending)) scheduleDeferredIsland(900);
+    if (DISTRICTS.some(x => x.onDemand && x.pending)) scheduleDeferredIsland(300);
     else scheduleDeferredIsland(2500);   // one last pass for anything whose roads arrived late
   };
   setTimeout(() => {
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4000 });
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1200 });
     else run();
-  }, delay === undefined ? 900 : delay);
+  }, delay === undefined ? 300 : delay);
 }
 
 function scheduleGroundRefine(delay){
@@ -7042,9 +7068,9 @@ function scheduleGroundRefine(delay){
     try { more = refineGroundStep(); }
     catch (e){ console.warn('ground refine failed, leaving the half-resolution paint', e); more = false; }
     if (more) scheduleGroundRefine(120);
-    else scheduleDeferredIsland(600);
+    else scheduleDeferredIsland(200);
   };
-  const ms = delay === undefined ? 1200 : delay;
+  const ms = delay === undefined ? 400 : delay;
   setTimeout(() => {
     if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 2000 });
     else run();

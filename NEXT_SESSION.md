@@ -49,6 +49,13 @@
 > cache). App side: WorldFrame sets the iframe src at once (the HEAD round trip cost the phone a
 > second) and reveals on a second `worldError` after one retry.
 >
+> **nav v259.** The eight outer bakes are fetched (low priority) the moment buildWorld returns,
+> not at the reveal; the idle chain runs with 120-300 ms gaps and 0.7-1.2 s idle deadlines; the
+> world posts `isles` (page time of each island's build) once the five chain islands are up,
+> logged as world_diag phase `isles`. Phone on v258: painted 4.6-5.6 s, src 0-1 ms, sw 1, xb 0;
+> buildWorld 1.3-2.0 s of which `b.other` (unnamed work inside buildWorld) is 1.0-1.5 s — the
+> next lever, profile it before baking anything else.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -57,7 +64,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v258 / city v175 / world v349 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v259 / city v175 / world v349 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
