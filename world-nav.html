@@ -3279,8 +3279,8 @@ if (/[?&]embed=1/.test(location.search)){
          a fixed full-screen frame, and #gl declares touch-action:none — so a swipe over the Events
          list was swallowed unless the finger started on the bottom bar. On idle the canvas gives
          the axis back; on wake it takes it again. */
-      else if (m.type === 'idle'){ WORLD_IDLE = true; if (!_idleAt) _idleAt = performance.now(); const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = 'auto'; gl.style.pointerEvents = 'none'; } document.body.style.touchAction = 'auto'; }
-      else if (m.type === 'wake'){ WORLD_IDLE = false; if (!_wakeAt) _wakeAt = performance.now(); const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = ''; gl.style.pointerEvents = ''; } document.body.style.touchAction = ''; }
+      else if (m.type === 'idle'){ WORLD_IDLE = true; FS.toggles++; if (!_idleAt) _idleAt = performance.now(); const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = 'auto'; gl.style.pointerEvents = 'none'; } document.body.style.touchAction = 'auto'; }
+      else if (m.type === 'wake'){ WORLD_IDLE = false; FS.toggles++; if (!_wakeAt) _wakeAt = performance.now(); const gl = document.getElementById('gl'); if (gl){ gl.style.touchAction = ''; gl.style.pointerEvents = ''; } document.body.style.touchAction = ''; }
       /* SETCHROMEINSET — the allBtn/tiltBtn fix. Both sit at bottom:18px of THIS document,
          which is the real device viewport (the iframe is position:fixed, inset:0 on the host
          side). Search's own "FIND A SPOT" composer panel is in-flow host content painted at a
@@ -4288,8 +4288,10 @@ function applyLift(on, night){
   });
 }
 
+const viewLog = [];   // every applyView, timestamped (nav v261 probe): the phone's order of view switches
 function applyView(next){
   view = next;
+  if (viewLog.length < 24) viewLog.push(Math.round(performance.now()) + ':' + next);
   /* The stamp's mirror is written HERE, at the one chokepoint every mode change already passes
      through, rather than at each of the three call sites that set `view`. A readout maintained
      in parallel with the thing it reports is a readout that eventually disagrees with it, and
@@ -6979,6 +6981,16 @@ function postIsles(){
   for (const d of DISTRICTS) if (d._builtAt) out[d.id] = d._builtAt;
   try { parent.postMessage(out, '*'); } catch (e){}
 }
+function stockWear(all){
+  try {
+    let day = 0, orig = 0, other = 0, hid = 0;
+    const see = o => { if (!o.isInstancedMesh || !o.userData.bake) return; if (!o.visible){ hid++; return; }
+      const dm = o.userData.dayMats, m = o.material;
+      if (dm && (m === dm || (Array.isArray(dm) && dm.includes(m)))) day++; else if (m === o.userData.origMat) orig++; else other++; };
+    if (all) DISTRICTS.forEach(d => d.group.traverse(see)); else corniche.detail.traverse(see);
+    return 'd' + day + '/o' + orig + '/x' + other + '/h' + hid;
+  } catch (e){ return '?'; }
+}
 function bakeXfer(){
   try {
     const e = performance.getEntriesByType('resource').find(r => /stock-corniche\.bin/.test(r.name));
@@ -7047,7 +7059,11 @@ function maybePostPainted(){
     /* Whether the worker was serving this load and whether the Corniche bake came from its cache
        (nav v258): `sw` is the controller, `xb` the transfer size of stock-corniche.bin, 0 when
        a cache answered, -1 when the entry is not there to read. Read once, sent once. */
-    sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 1 : 0, xb: bakeXfer() }, '*'); } catch (e){}
+    sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 1 : 0, xb: bakeXfer(),
+    /* THE BLACK-BUILDINGS PROBE (nav v261): the view at the reveal, every view switch so far, and
+       what the Corniche's baked stock is wearing — day materials, its build-time (night) ones,
+       or something else — counted over its visible instanced meshes. */
+    view: view, vlog: viewLog.join(' '), mat: stockWear() }, '*'); } catch (e){}
   scheduleOpeningFill(AFTER_REVEAL_MS);
   warmBakes();
 }
@@ -7163,6 +7179,31 @@ function scheduleGroundRefine(delay){
    work on the Home stage whenever the city is simply being looked at. */
 let _lastDrawT = 0, _camStill = 0;
 const _camPrev = new THREE.Vector3(), _camPrevQ = new THREE.Quaternion(); let _camPrevFov = 0;
+/* FRAME PACING, MEASURED ON THE DEVICE (nav v261). "Move, stop, move, stop" on the owner's phone
+   is a description a recording cannot quantify. For forty seconds after the reveal every frame's
+   interval is kept: the count, the mean, p50/p95, the longest, how many passed 50 and 100 ms,
+   how many programs the renderer compiled and textures it uploaded in the window, how often the
+   app idled and woke the world, and the eight worst frames with what the renderer did in them.
+   Posted once as 'frames'; the app logs it. */
+const FS = { n: 0, sum: 0, max: 0, n50: 0, n100: 0, dts: [], worst: [], toggles: 0, prog0: 0, tex0: 0, last: 0, sent: false };
+function frameStat(){
+  if (!_paintedSent || FS.sent) return;
+  const now = performance.now();
+  if (!FS.last){ FS.last = now; FS.prog0 = renderer.info.programs.length; FS.tex0 = renderer.info.memory.textures; return; }
+  const dt = now - FS.last; FS.last = now;
+  FS.n++; FS.sum += dt; if (dt > FS.max) FS.max = dt; if (dt > 50) FS.n50++; if (dt > 100) FS.n100++;
+  if (FS.dts.length < 4000) FS.dts.push(dt);
+  if (!FS.mat5 && now - _paintedAt > 5000) FS.mat5 = stockWear(true) + ' ' + view;
+  if (dt > 80 && FS.worst.length < 8) FS.worst.push(Math.round(now) + '/' + Math.round(dt) + '/p' + (renderer.info.programs.length - FS.prog0) + '/t' + (renderer.info.memory.textures - FS.tex0) + (WORLD_IDLE ? '/idle' : ''));
+  if (now - _paintedAt > 40000){
+    FS.sent = true;
+    const a = FS.dts.slice().sort((x, y) => x - y), q = f => a.length ? Math.round(a[Math.min(a.length - 1, Math.floor(a.length * f))]) : 0;
+    try { parent.postMessage({ w2h: true, type: 'frames', n: FS.n, avg: Math.round(FS.sum / Math.max(1, FS.n)), p50: q(0.5), p95: q(0.95), max: Math.round(FS.max),
+      n50: FS.n50, n100: FS.n100, toggles: FS.toggles, prog: renderer.info.programs.length - FS.prog0, tex: renderer.info.memory.textures - FS.tex0,
+      dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100, worst: FS.worst.join(';'),
+      mat5: FS.mat5 || '', mat40: stockWear(true) + ' ' + view, vlog: viewLog.join(' ') }, '*'); } catch (e){}
+  }
+}
 function frame(){
   requestAnimationFrame(frame);
   /* PAINTED DOES NOT WAIT FOR A WAKE (nav v251). The app idles the world whenever its stage is
@@ -7173,6 +7214,7 @@ function frame(){
      idle, so there is always something painted to report, and the check runs before the idle
      return. The timings the message carries say which of gl / idle / wake gated it. */
   if (_paintedPending && !_paintedSent){ _paintTicks++; maybePostPainted(); }
+  frameStat();
   if (WORLD_IDLE && !_frame0) return;
   if (!_frame0 && pointers.size === 0 && _camStill >= 2 && performance.now() - _lastDrawT < 31) return;
   _lastDrawT = performance.now();
