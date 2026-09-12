@@ -103,6 +103,20 @@
 > (Zayed City is in the shot's frame; baked, its build is ~300 ms), OPENING_WAIT_MS 3 s;
 > scheduleDeferredIsland stays as the fallback for a failed bake.
 >
+> **nav v262 (HTML only, stamp kept) — THE PER-FRAME BUDGET.** Bench at the opening shot with all
+> nine built: 5,400 visible meshes, 5.4 M triangles, shadow pass over most again. Props (palms,
+> lamps, cars) were 2.6 M of the triangles, all casting, all sub-pixel at world zoom: lodProps()
+> (per frame, cheap) moves an island's prop InstancedMeshes to layer 31 unless the camera is within
+> PROP_NEAR (2.6) displayed radii or it is the active district — layers, not `visible`, so
+> applyView is untouched, and the shadow pass drops them too. Kit pieces were 4,500 draw calls for
+> 170 k triangles: mergeStatic(d) (one island per idle slice after postIsles) merges plain kit
+> meshes per (layer, material, day/dusk/orig mats, shadow flags, renderOrder, attribute layout) into
+> one mesh each, vertices baked into the layer frame, userData copied (`merged` = piece count);
+> skips hero/kitName/prop/bake/ground/beach/nightOnly/planOnly/etc and anything under a
+> nightOnly/planOnly/helper/glow ancestor. Bench: 4,381 pieces -> 307 meshes (Corniche 482 ms,
+> the rest under 100 ms). BufferGeometryUtils is imported with the six modules (in FILES.json, so
+> the worker holds it). The 'frames' row carries merged/mergedTo/mergeMs.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 

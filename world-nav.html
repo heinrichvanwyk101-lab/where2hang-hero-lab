@@ -838,9 +838,12 @@ const bakeGlowP = !BAKE_ON ? Promise.resolve(null) : fetchGlow('corniche').catch
    height ceilings and the vacancy mask ride in w2h-districts.js; the beach trim polygons in
    w2h-beach-masks.js. All carry V because w2h-world.js deliberately imports nothing local — a
    static specifier cannot carry ?v= and would be served from cache forever.) */
-const [CITY, WORLD, PROPS, BMAP, DIST, MASKS] = await Promise.all([
+const [CITY, WORLD, PROPS, BMAP, DIST, MASKS, BGU] = await Promise.all([
   import('./w2h-city.js' + V), import('./w2h-world.js' + V), import('./w2h-props.js' + V),
   import('./w2h-basemap.js' + V), import('./w2h-districts.js' + V), import('./w2h-beach-masks.js' + V),
+  /* three's geometry merger, for mergeStatic below (nav v262): vendored with three, in the
+     worker's list, never fatal — a miss leaves the kits unmerged. */
+  import('./vendor/three/examples/jsm/utils/BufferGeometryUtils.js').catch(() => null),
 ]);
 phase('import');
 
@@ -6974,7 +6977,120 @@ const PAINT_CEILING_MS = 8000; // from the first drawn frame: past this, show wh
    opening chain are all up: the time of each build since the page started, and the count. This
    is the row that says whether "a tap only flies" is true on the device, not on the bench. */
 let _islesSent = false;
+/* ---------- THE PER-FRAME BUDGET, CUT TO WHAT A PHONE CAN DRAW (nav v262) ----------
+
+   Measured at the opening shot with every island built: 5,400 visible meshes and 5.4 million
+   triangles, then the shadow pass over most of them again. The owner's phones (an Android and
+   an iPhone, 12 Sep recordings) move the camera in a stutter and the app's own card carousel
+   stalls with it, because the world's frame runs on the page's main thread. Two costs dominate
+   and neither is the city itself:
+
+   PROPS: 2.6 million triangles of palms, lamps and cars, every one casting a shadow, and at
+   world zoom every one under a pixel. Each island's props are drawn only when the camera is
+   near that island (or it is the active district). Done with layers, not `visible`, so
+   applyView's own visibility rules are untouched: layer 31 is one no camera looks at, and the
+   shadow pass tests the same layers, so far props leave both passes at once.
+
+   KIT PIECES: 4,500 hand-built meshes for 170 thousand triangles — the Louvre lattice, window
+   bars, trusses, columns — each one a draw call, each one drawn again for the shadow. Merged
+   per island into one mesh per material set (material, day and dusk materials, shadow flags,
+   render order, attribute layout), vertices baked into the layer's frame; the merged mesh
+   carries the same userData so day, dusk and night keep switching it. Landmarks that are tapped
+   or named (hero, kitName on the mesh), props, the bake's own meshes, ground, beach, night-only
+   and plan-only pieces stay as they are. Run one island per idle slice once the opening chain
+   is up; a geometry is disposed only when its last user is gone. */
+const PROP_NEAR = 2.6;             // props draw within this many displayed radii of an island
+const FAR_LAYER = 31;
+function lodProps(){
+  for (const d of DISTRICTS){
+    if (!d.built) continue;
+    if (!d._props || d._propsAt !== d._builtAt){
+      d._props = []; d._propsAt = d._builtAt;
+      d.group.traverse(o => { if (o.isInstancedMesh && o.userData.prop) d._props.push(o); });
+      d._propsNear = undefined;
+    }
+    if (!d._props.length) continue;
+    const R = d.r * (d.dispScale || 1);
+    const near = activeDistrict === d ||
+      Math.hypot(camera.position.x - d.x, camera.position.z - d.z, camera.position.y - GROUND) < R * PROP_NEAR;
+    if (near !== d._propsNear){
+      d._propsNear = near;
+      for (const o of d._props) o.layers.set(near ? 0 : FAR_LAYER);
+    }
+  }
+}
+const MERGE_SKIP = ['hero', 'kitName', 'prop', 'bake', 'ground', 'beachField', 'quayField', 'nightOnly', 'planOnly', 'district', 'helper', 'litMat', 'ring', 'fpHidden', 'warmHidden', 'merged'];
+function mergeStatic(d){
+  if (!BGU || !BGU.mergeGeometries || d._merged || !d.built) return null;
+  d._merged = true;
+  const t0 = performance.now();
+  d.group.updateMatrixWorld(true);
+  const layerOf = o => { let p = o.parent; while (p && p !== d.group){ if (p === d.mass || p === d.detail) return p; p = p.parent; } return d.group; };
+  const underSkipped = o => { let p = o.parent; while (p && p !== d.group){ const u = p.userData || {}; if (u.nightOnly || u.planOnly || u.helper || u.glow) return true; p = p.parent; } return false; };
+  const groups = new Map(), uses = new Map();
+  d.group.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || !o.visible || o.children.length || !o.geometry || !o.geometry.attributes.position) return;
+    const u = o.userData || {};
+    for (const k of MERGE_SKIP) if (u[k]) return;
+    if (Array.isArray(o.material) || !o.material || o.morphTargetInfluences || o.isSkinnedMesh || o.isSprite || o.isLine || o.isPoints) return;
+    if (underSkipped(o)) return;
+    const g = o.geometry, L = layerOf(o);
+    const key = [L.uuid, o.material.uuid, u.dayMats ? u.dayMats.uuid : '-', u.duskMats ? u.duskMats.uuid : '-', u.origMat ? u.origMat.uuid : '-',
+                 o.castShadow, o.receiveShadow, o.renderOrder, o.frustumCulled,
+                 g.attributes.normal ? g.attributes.normal.itemSize : 0, g.attributes.uv ? g.attributes.uv.itemSize : 0,
+                 g.attributes.color ? g.attributes.color.itemSize : 0, !!g.index].join('/');
+    if (!groups.has(key)) groups.set(key, { L, list: [] });
+    groups.get(key).list.push(o);
+    uses.set(g, (uses.get(g) || 0) + 1);
+  });
+  const inv = new THREE.Matrix4(), M = new THREE.Matrix4();
+  let merged = 0, removed = 0;
+  for (const { L, list } of groups.values()){
+    if (list.length < 2) continue;
+    inv.copy(L.matrixWorld).invert();
+    const geos = [];
+    for (const o of list){
+      const g = o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
+      g.morphAttributes = {}; g.clearGroups();
+      g.applyMatrix4(M.multiplyMatrices(inv, o.matrixWorld));
+      geos.push(g);
+    }
+    let mg = null;
+    try { mg = BGU.mergeGeometries(geos, false); } catch (e){ mg = null; }
+    geos.forEach(g => g.dispose());
+    if (!mg) continue;
+    const first = list[0];
+    const m = new THREE.Mesh(mg, first.material);
+    m.castShadow = first.castShadow; m.receiveShadow = first.receiveShadow;
+    m.renderOrder = first.renderOrder; m.frustumCulled = first.frustumCulled;
+    m.userData = Object.assign({}, first.userData, { merged: list.length });
+    L.add(m);
+    for (const o of list){
+      if (o.parent) o.parent.remove(o);
+      const n = (uses.get(o.geometry) || 1) - 1; uses.set(o.geometry, n);
+      if (n === 0) o.geometry.dispose();
+      removed++;
+    }
+    merged++;
+  }
+  const r = { merged, removed, ms: Math.round(performance.now() - t0) };
+  console.info('merge ' + d.id + ': ' + removed + ' pieces into ' + merged + ' meshes, ' + r.ms + ' ms');
+  MERGED.removed += removed; MERGED.meshes += merged; MERGED.ms += r.ms;
+  return r;
+}
+const MERGED = { removed: 0, meshes: 0, ms: 0 };
+function scheduleMerge(delay){
+  const run = () => {
+    const d = DISTRICTS.find(x => x.built && !x._merged);
+    if (!d) return;
+    try { mergeStatic(d); } catch (e){ console.warn('merge', d.id, e && e.message); d._merged = true; }
+    scheduleMerge(150);
+  };
+  setTimeout(() => { if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 }); else run(); }, delay === undefined ? 400 : delay);
+}
 function postIsles(){
+  scheduleMerge(400);
   if (_islesSent) return;
   _islesSent = true;
   const out = { w2h: true, type: 'isles', at: Math.round(performance.now()), built: DISTRICTS.filter(d => d.built).length };
@@ -7201,7 +7317,8 @@ function frameStat(){
     try { parent.postMessage({ w2h: true, type: 'frames', n: FS.n, avg: Math.round(FS.sum / Math.max(1, FS.n)), p50: q(0.5), p95: q(0.95), max: Math.round(FS.max),
       n50: FS.n50, n100: FS.n100, toggles: FS.toggles, prog: renderer.info.programs.length - FS.prog0, tex: renderer.info.memory.textures - FS.tex0,
       dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100, worst: FS.worst.join(';'),
-      mat5: FS.mat5 || '', mat40: stockWear(true) + ' ' + view, vlog: viewLog.join(' ') }, '*'); } catch (e){}
+      mat5: FS.mat5 || '', mat40: stockWear(true) + ' ' + view, vlog: viewLog.join(' '),
+      merged: MERGED.removed, mergedTo: MERGED.meshes, mergeMs: MERGED.ms }, '*'); } catch (e){}
   }
 }
 function frame(){
@@ -7215,6 +7332,7 @@ function frame(){
      return. The timings the message carries say which of gl / idle / wake gated it. */
   if (_paintedPending && !_paintedSent){ _paintTicks++; maybePostPainted(); }
   frameStat();
+  lodProps();
   if (WORLD_IDLE && !_frame0) return;
   if (!_frame0 && pointers.size === 0 && _camStill >= 2 && performance.now() - _lastDrawT < 31) return;
   _lastDrawT = performance.now();
