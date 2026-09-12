@@ -257,7 +257,7 @@ for (let i = 0; i < notch.length; i++){
    because that distance is the vault: zero at the eave, greatest down the spine of a pier and at
    the centre of the hub. The kit turns it into height; nothing about the shape of the roof is
    decided here. */
-const ROOF_EDGE = 11, ROOF_CELL = 13;
+const ROOF_EDGE = 11, ROOF_CELL = 11;
 function resample(ring, step){
   const out = [];
   for (let i = 0; i < ring.length; i++){

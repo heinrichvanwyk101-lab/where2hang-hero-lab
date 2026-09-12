@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_STANDS, TERM_ROOF, TERM_HUB } from './w
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v178';
+export const BUILD = 'city v179';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6744,12 +6744,22 @@ function zayedTerminal(x0, z0){
      footprint it was measured from. */
   const at = (ax, az) => [x0 + ax / M, z0 + az / M];
 
-  const shell = saadKitMat(0xBFC0BC, 0xF2F1EC, 0.42, 0.18, 0xFFF4E2, 0.07, 0.50);
-  const shellU= saadKitMat(0x8E8F8B, 0xCFCEC8, 0.60, 0.05, 0xFFE9C8, 0.04, 0.45);
-  const glass = kitGlass(0x2C4150, 0xBFD6E4, 0.22, 0.42);
-  const deck  = saadKitMat(0x6E6E69, 0xA9A9A2, 0.85, 0.02);
-  const conc  = saadKitMat(0x77746C, 0xB4B0A6, 0.92, 0);   // apron
-  const tar   = saadKitMat(0x3A3A38, 0x5C5B57, 0.95, 0);   // runway
+  /* WHITE ON DARK (city v179). The first pass put a pale roof on a pale apron and from the app's
+     camera the two were one shape: the owner's 18:02 screenshot, a flat grey X. The photographs
+     are the opposite — a white shell that catches the light over an apron that is nearly black —
+     and the contrast is most of what makes the building read at a kilometre. */
+  const shell = saadKitMat(0xDADBD8, 0xFFFFFF, 0.30, 0.05, 0xFFF4E2, 0.05, 0.62);
+  const shellU= saadKitMat(0x7E7F7B, 0xB9B8B2, 0.60, 0.05, 0xFFE9C8, 0.04, 0.45);
+  const glass = kitGlass(0x22343F, 0x9FBACB, 0.18, 0.5);
+  /* LIT FROM INSIDE AFTER DARK (city v179). kitGlass carries the window sheet as its dusk map
+     but no emissive, so at dusk the terminal's front was a dark band under a white lip. The
+     dusk photograph is the reverse: the glass is the brightest thing in it, warm from the halls
+     behind. The sheet doubles as the emissive map, so what glows is the windows, not the wall;
+     the view switcher scales the intensity for dusk and night and Day swaps the material out. */
+  glass.emissive = new THREE.Color(0xFFD9A8); glass.emissiveMap = TEX_TOWER; glass.emissiveIntensity = 1.4;
+  const deck  = saadKitMat(0x55544F, 0x8C8B85, 0.85, 0.02);
+  const conc  = saadKitMat(0x47453F, 0x6E6C66, 0.92, 0);   // apron: dark, so the white roof stands off it
+  const tar   = saadKitMat(0x2A2A28, 0x454543, 0.95, 0);   // runway
   const paint = saadKitMat(0xBDBDB4, 0xF4F3EC, 0.8, 0, 0xFFFFFF, 0.10, 0.7);
   const body  = saadKitMat(0xC6C7C4, 0xF6F6F4, 0.4, 0.10, 0xFFF2DC, 0.05, 0.55);
   const livery= saadKitMat(0x7A5B32, 0xC69A54, 0.5, 0.15);
@@ -6794,12 +6804,13 @@ function zayedTerminal(x0, z0){
                                        and the weight that lifts the hub above the piers
        x,z position                 -> the long directional wave the hub is famous for
 
-     Pier crests sit at 29-33 m, the hub between 30 and 65, against the 53 m the survey tags. */
+     Pier crests sit at 27-34 m, the hub between 28 and 66, against the 53 m the survey tags (the
+     second pass, city v179, deepened every term: at 4.5 m of ripple the piers shaded as a dune). */
   const [HX, HZ, HR] = TERM_HUB;
   /* Amplitudes were first set at 6 / 2.6 / 11 and the bench rendered a sand dune: at the district
      camera 2.6 m of ripple is under a pixel of shading. 8 / 4.5 / 14 over a 150 m period puts the
      crests where the eye finds them, and is still inside the 53 m the survey tags. */
-  const PIER_Y = 21, VAULT = 8, RIPPLE = 4.5, RIP_PER = 84, HUB_LIFT = 22, WAVE_A = 14, PER = 150,
+  const PIER_Y = 18, VAULT = 9, RIPPLE = 6.5, RIP_PER = 84, HUB_LIFT = 18, WAVE_A = 14, PER = 150,
         EAVE = 14, DROOP = 3.5;
   const sm = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
   const roofY = (px, pz, d) => {
@@ -6826,6 +6837,7 @@ function zayedTerminal(x0, z0){
   }
   const shellMesh = new THREE.Mesh(roofGeo, shell);
   shellMesh.userData.hero = shellMesh.userData.kitName = 'zayedTerminal';
+  shellMesh.castShadow = true;                     // the hub's edge is 40-60 m up: its shadow on the apron is the depth cue
   g.add(shellMesh);
   /* The soffit, 1.5 m under the same surface and darker. Without it the roof is a single sheet:
      every view from under the eave — which at the place camera is most of them — sees the lit top
@@ -6860,7 +6872,11 @@ function zayedTerminal(x0, z0){
     let nx = -dz / L, nz = dx / L;
     if (!nSign) nSign = inRing(p[0] + nx * 4, p[1] + nz * 4) ? 1 : -1;
     nx *= nSign; nz *= nSign;
-    const [bx, bz] = at(p[0] + nx * 7, p[1] + nz * 7);
+    /* 7 m back on the piers; 3 m at the hub, where the wall is the tall glazed front the
+       district camera is aimed at (city v179) and an overhang that wide would hide most of it. */
+    const hw = 1 - sm((Math.hypot(p[0] - HX, p[1] - HZ) - HR * 0.9) / (HR * 1.4));
+    const ins = 7 - 4 * hw;
+    const [bx, bz] = at(p[0] + nx * ins, p[1] + nz * ins);
     gp.push(bx, 0.15 / M, bz);
     gp.push(bx, (roofY(p[0], p[1], 0) - 1.2) / M, bz);
   }
@@ -6872,7 +6888,28 @@ function zayedTerminal(x0, z0){
   gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
   gg.setIndex(gi); gg.computeVertexNormals();
   const gm = new THREE.Mesh(gg, glass); gm.material.side = THREE.DoubleSide; g.add(gm);
-  const ccx = HX, ccz = HZ;                         // the landside loop below is centred on the hub
+
+  /* ---- THE EAVE, LIT AFTER DARK (city v179) ------------------------------------------------- */
+  /* The night aerial is a white line of light drawn round the whole roof edge, every pier, every
+     tooth of the hub. One ribbon along the eave points, a metre tall on the eave face, emissive
+     well above the bloom threshold so the pass turns it into a glow. nightOnly, so day never sees
+     it; origMat is what the view switcher hands back when it shows a nightOnly mesh. */
+  const eaveMat = new THREE.MeshStandardMaterial({ color:0x000000, emissive:0xFFD6A0, emissiveIntensity:3.2, roughness:1 });
+  const ep = [], ei = [];
+  for (let i = 0; i < NE; i++){
+    const p = RP[i]; const [wx, wz] = at(p[0], p[1]); const ry = roofY(p[0], p[1], 0);
+    ep.push(wx, (ry - 1.7) / M, wz); ep.push(wx, (ry - 0.5) / M, wz);
+  }
+  for (let i = 0; i < NE; i++){
+    const a = i * 2, b = i * 2 + 1, c = ((i + 1) % NE) * 2, d = ((i + 1) % NE) * 2 + 1;
+    ei.push(a, b, c, c, b, d);
+  }
+  const eg = new THREE.BufferGeometry();
+  eg.setAttribute('position', new THREE.Float32BufferAttribute(ep, 3));
+  eg.setIndex(ei); eg.computeVertexNormals();
+  const em = new THREE.Mesh(eg, eaveMat); em.material.side = THREE.DoubleSide;
+  em.userData.nightOnly = true; em.userData.origMat = eaveMat; em.userData.noShadow = true;
+  g.add(em);
 
   /* ---- AIRCRAFT, ONE PER SURVEYED STAND ----------------------------------------------------- */
   /* Four InstancedMeshes rather than 54 groups of four: the parts are identical, and 216 draw
@@ -6940,24 +6977,31 @@ function zayedTerminal(x0, z0){
      it. Straight: at this scale a fillet is three more boxes nobody will resolve. */
   box(RS_X + 205, RS_Z + 40, 300, 26, 0.4, tar, 0.7, -RW_A - 0.9);
 
-  /* ---- LANDSIDE: THE DECK AND THE LOOP ------------------------------------------------------ */
-  /* The car park is where the bake says it is — OSM 1233647932, a 280 x 175 m parking polygon 455 m
-     west and 287 m north of the terminal centre — but it comes through the payload as a 6.4 m slab,
-     and the reference is a five-level deck with the approach road curling round it. Five slabs on
-     columns is that, for eleven boxes. */
+  /* ---- LANDSIDE: THE CRESCENT AND THE LOOP (city v179) ------------------------------------- */
+  /* The reference aerials show one thing in front of the hub: a crescent car park, concave to the
+     terminal, with the approach road curling between the two. The survey's parking polygon (OSM
+     1233647932, 280 x 175 m) sits on that bearing from the hub, so the crescent is laid on the
+     same bearing: an annular sector 290-400 m from the hub centre, 70 degrees wide, four levels
+     of deck in the deck's own grey with a pale top slab. The loop road runs inside it at 235 m,
+     sixteen chords on piers, the arc the photographs show in front of the doors. */
   const CPX = -455, CPZ = -287;
-  /* Four levels, and the top slab in the deck's own grey (city v178): the white-painted top at 17.5 m
-     rendered as a pale block the size of the hub, a second building beside the first. */
-  for (let l = 0; l < 4; l++) box(CPX, CPZ, 280, 175, 0.9, deck, 3.4 * l + 0.4);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1])
-    box(CPX + sx * 132, CPZ + sz * 80, 12, 12, 14, deck, 0);
-  box(CPX, CPZ, 280, 175, 0.5, deck, 14);
-  /* The elevated loop in front of the doors. An arc of chords rather than a curve: sixteen boxes
-     round a 330 m radius centred on the processor, sweeping the landside quadrant the deck sits
-     in, on piers. */
+  const bear = Math.atan2(CPZ - HZ, CPX - HX);
+  const arc = (r0, r1, a0, a1, n) => {
+    const ring = [];
+    for (let i = 0; i <= n; i++){ const th = a0 + (a1 - a0) * i / n; ring.push([HX + Math.cos(th) * r1, HZ + Math.sin(th) * r1]); }
+    for (let i = n; i >= 0; i--){ const th = a0 + (a1 - a0) * i / n; ring.push([HX + Math.cos(th) * r0, HZ + Math.sin(th) * r0]); }
+    return ring;
+  };
+  const CR0 = 290, CR1 = 400, CSPAN = 0.61;
+  for (let l = 0; l < 4; l++) pad(arc(CR0, CR1, bear - CSPAN, bear + CSPAN, 22), 1.0, 3.4 * l + 0.4, deck);
+  pad(arc(CR0 + 4, CR1 - 4, bear - CSPAN, bear + CSPAN, 22), 0.5, 14.0, saadKitMat(0x9C9B95, 0xD2D1CB, 0.8, 0));
+  for (let i = 0; i <= 8; i++){                     // the columns between the slabs, one bay in 3
+    const th = bear - CSPAN + 2 * CSPAN * i / 8;
+    for (const r of [CR0 + 12, (CR0 + CR1) / 2, CR1 - 12]) box(HX + Math.cos(th) * r, HZ + Math.sin(th) * r, 5, 5, 14, deck, 0);
+  }
   for (let i = 0; i < 16; i++){
-    const th = -2.55 + i * 0.085;
-    const rx = ccx + Math.cos(th) * 330, rz = ccz + Math.sin(th) * 330;
+    const th = bear - 0.64 + i * 0.085;
+    const rx = HX + Math.cos(th) * 235, rz = HZ + Math.sin(th) * 235;
     box(rx, rz, 46, 16, 1.2, deck, 9.5, -th + Math.PI / 2);
     if (i % 3 === 0) box(rx, rz, 4, 4, 9.5, deck, 0);
   }

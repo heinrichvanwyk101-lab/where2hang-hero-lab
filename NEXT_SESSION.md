@@ -152,6 +152,19 @@
 > same eave points, inset 7 m. The car park is four grey levels, not a white-topped five. The
 > trace reads the ring from data/fp-airport.json now (it moved there with the bakes). Re-run the
 > trace after any airport bake; re-bake after this (stamps).
+> Second pass the same evening (city v179 / world v352), after the owner's 18:02 screenshot
+> ("surely not the finished glamorous airport building?") and "no glass facade? camera angle
+> should change to show glass facade": the roof is white (0xFFFFFF day) on an apron that is nearly
+> black — the two had been the same pale grey and read as one flat X; relief deepened (vault 9,
+> ripple 6.5, hub 18 + 14); the glass inset 7 m on the piers and 3 m at the hub; the glass carries
+> the window sheet as an emissive map so the front glows at dusk and night; a metre-tall emissive
+> ribbon along the eave (nightOnly, origMat set) becomes the line of light in the night aerial;
+> the OSM-rectangle deck is replaced by a crescent car park (annular sector 290-400 m from the hub,
+> four levels, pale top) with the loop road inside it at 235 m. The district camera is pinned low
+> and close from the landside — cam { angle:-116.5, dist:290, elev:88, tx:-50.6, tz:-42.1 },
+> measured with tools/bench/camshot.mjs (finds the roof mesh, derives the hub and the landside
+> bearing, sets d.cam, calls go, snaps cur to goal because the bench's flight crawls, screenshots
+> at phone aspect). Bench: roof and glass wall from the front, crescent in the foreground.
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
@@ -161,7 +174,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v263 / city v178 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v263 / city v179 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

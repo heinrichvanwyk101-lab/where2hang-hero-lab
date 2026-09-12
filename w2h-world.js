@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v351';
+export const BUILD = 'world v352';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5698,7 +5698,13 @@ const DISTRICTS = [
        through setDistrict, which builds a pending island itself — so the ground is there the
        moment it is asked for, and the opening load goes back to what it was before they existed. */
     onDemand:true,
-    cam: { angle:210, dist:1500, elev:680, tx:0, tz:0 },
+    /* FROM THE LANDSIDE, LOW AND CLOSE (world v352). The island shot from 1500 up at 680 looked
+       straight down on the terminal's roof and the owner asked where the glass facade was. The
+       glass is under the eave; the camera has to be in front of it, not above it. Bearing is the
+       hub-to-car-park line measured in the bench (tools/bench, camshot), the target the hub
+       itself, and the pitch a third of the distance — the roof's waves above, the lit glass wall
+       under the lip, the crescent car park in the foreground, which is the reference aerial. */
+    cam: { angle:-116.5, dist:290, elev:88, tx:-50.6, tz:-42.1 },
     seaAngle: Math.PI,
     lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:4.0 } ],   // 31 m — a terminal is wide, not tall
     noLawn:true,                                         // an apron is not a lawn — see groundPlanFor
