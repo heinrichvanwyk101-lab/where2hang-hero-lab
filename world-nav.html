@@ -10,11 +10,21 @@
      Android), while the bench's newer Chrome tolerated the order. -->
 <script type="importmap">{ "imports": {
   "three": "./vendor/three/build/three.module.js",
-  "three/addons/": "./vendor/three/examples/jsm/"
+  "three/addons/": "./vendor/three/examples/jsm/",
+  "./w2h-terminal-a.js": "./w2h-terminal-a.js?v=navv265",
+  "./area-rail.js": "./area-rail.js?v=navv265"
 } }</script>
+<!-- THE TWO MODULES IMPORTED BY NAME CARRY THE STAMP THROUGH THE MAP (nav v265). w2h-city.js
+     imports w2h-terminal-a.js with a fixed specifier and the nav imports area-rail.js the same
+     way, so neither could carry ?v= like the six modules the page fetches itself. On 12 Sep the
+     phone loaded city v179 fresh under the new stamp and the terminal data from cache under the
+     old one, and the world died on "does not provide an export named TERM_ROOF". The map rewrites
+     both specifiers to the stamped URL, so they refresh with everything else. THE STAMP IS NOW
+     IN THREE PLACES: the meta below, its fallback in the module, and these two entries — the
+     preload script checks they agree and the bench fails if they do not. -->
 <!-- THE NAV STAMP LIVES HERE (nav v261). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v264">
+<meta name="w2h-nav" content="nav v265">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -26,6 +36,14 @@
   if (!/[?&]embed=1/.test(location.search)) return;
   var meta = document.querySelector('meta[name="w2h-nav"]');
   var v = '?v=' + (meta ? meta.content : '').replace(/\s+/g, '');
+  /* The import map's stamped entries must carry the same stamp as the meta, or the two modules
+     imported by name come from another build than the six fetched here. */
+  try {
+    var im = document.querySelector('script[type="importmap"]');
+    var ok = im && im.textContent.split('"./w2h-terminal-a.js' + v + '"').length === 2
+                && im.textContent.split('"./area-rail.js' + v + '"').length === 2;
+    if (!ok){ window.__w2hStampMismatch = true; console.error('nav stamp mismatch: importmap vs meta ' + v); }
+  } catch (e) {}
   var add = function(rel, href, as, cors){
     var l = document.createElement('link'); l.rel = rel; l.href = href;
     if (as) l.as = as; if (cors) l.crossOrigin = 'anonymous';
@@ -781,7 +799,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v264').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v265').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote

@@ -170,6 +170,12 @@
 > nav stamp is served from cache and only the data moves — the bakes then mismatch and the old kit
 > builds live. nav v264 is the bump, nothing else. Every module change needs a nav bump, even
 > when the HTML did not change.
+> AND THEN THE WORLD DIED (21:07): city v179 arrived fresh under the new stamp but its static
+> import of w2h-terminal-a.js has no ?v=, so the phone served the old data module from cache —
+> "does not provide an export named TERM_ROOF". nav v265: the import map rewrites
+> ./w2h-terminal-a.js and ./area-rail.js to ?v=<stamp>, sw.js precaches them under that URL, the
+> preload script sets window.__w2hStampMismatch if the map's stamp differs from the meta, and
+> errcheck3 fails on it. THE STAMP IS IN THREE PLACES NOW: meta, NAV_STAMP fallback, import map.
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
@@ -179,7 +185,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v264 / city v179 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v265 / city v179 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

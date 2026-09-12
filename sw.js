@@ -24,7 +24,9 @@ const MODV = P.get('m') || '';                    // the ?v= value the page used
 const CACHE = 'w2h-world-' + VERSION;
 
 const MODULES = ['w2h-city.js', 'w2h-world.js', 'w2h-props.js', 'w2h-basemap.js', 'w2h-districts.js', 'w2h-beach-masks.js'];
-const STATIC_MODULES = ['w2h-terminal-a.js', 'area-rail.js'];   // imported without a version; keyed by exact URL, refetched with every new build
+/* Imported by name, but the page's import map rewrites both to ?v=<stamp> (nav v265), so they are
+   cached under the stamped URL like the six modules above and never outlive a build. */
+const STATIC_MODULES = ['w2h-terminal-a.js', 'area-rail.js'];
 const ISLANDS = ['corniche', 'maryah', 'reem', 'saadiyat', 'yas', 'raha', 'zayed', 'masdar', 'airport'];
 const DATA = ['data/index.json', 'data/venues.ndjson', 'data/shopfronts.json', 'data/terminal-a.json',
   /* The bakes (nav v256, every island since v257): what each island is built from, so they are
@@ -54,7 +56,7 @@ async function addMissing(cache, urls) {
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    await addMissing(c, [PAGE, ...MODULES.map(modUrl), ...STATIC_MODULES]);
+    await addMissing(c, [PAGE, ...MODULES.map(modUrl), ...STATIC_MODULES.map(modUrl)]);
     await self.skipWaiting();
   })());
 });

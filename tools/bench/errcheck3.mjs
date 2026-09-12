@@ -43,6 +43,9 @@ console.log('holes:', JSON.stringify(holes));
 // customProgramCacheKey on others, so the render loop alone is not a reliable gate for it.
 const bad = await page.evaluate(()=>{ const out=[]; window.W2H.scene.traverse(o=>{ if(!o.isMesh) return; const ms=Array.isArray(o.material)?o.material:[o.material]; for (const m of ms){ if(!m||!m.isMaterial){ out.push((o.userData&&o.userData.kitName)||o.name||o.type); break; } } const sets=o.userData||{}; for (const k of ['dayMats','duskMats','planMats','origMat']){ const v=sets[k]; if(v!=null){ const vs=Array.isArray(v)?v:[v]; for (const m of vs) if(!m||!m.isMaterial){ out.push(k+':'+((o.userData&&o.userData.kitName)||o.name||o.type)); break; } } } }); return out; });
 console.log('badMaterials:', bad.length, JSON.stringify(bad.slice(0,8)));
+const stampMismatch = await page.evaluate(()=>!!window.__w2hStampMismatch);
+if (stampMismatch){ errs.push('nav stamp mismatch: the import map entries do not carry the meta stamp'); }
+console.log('stampMismatch:', stampMismatch);
 console.log('errors:', errs.length); for (const e of errs.slice(0,3)) console.log(e);
 console.log('err box:', await page.evaluate(()=>(document.getElementById('err')||{}).textContent||'').then(t=>t.slice(0,300)));
 await browser.close(); server.close();
