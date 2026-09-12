@@ -11,8 +11,8 @@
 <script type="importmap">{ "imports": {
   "three": "./vendor/three/build/three.module.js",
   "three/addons/": "./vendor/three/examples/jsm/",
-  "./w2h-terminal-a.js": "./w2h-terminal-a.js?v=navv266",
-  "./area-rail.js": "./area-rail.js?v=navv266"
+  "./w2h-terminal-a.js": "./w2h-terminal-a.js?v=navv267",
+  "./area-rail.js": "./area-rail.js?v=navv267"
 } }</script>
 <!-- THE TWO MODULES IMPORTED BY NAME CARRY THE STAMP THROUGH THE MAP (nav v265). w2h-city.js
      imports w2h-terminal-a.js with a fixed specifier and the nav imports area-rail.js the same
@@ -24,7 +24,7 @@
      preload script checks they agree and the bench fails if they do not. -->
 <!-- THE NAV STAMP LIVES HERE (nav v261). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v266">
+<meta name="w2h-nav" content="nav v267">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -799,7 +799,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v266').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v267').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -2680,6 +2680,16 @@ function frameAllResults(label){
     goal.target.set(W.cx, 0, W.cz);
     goal.dist = fitDist(W.r * 0.52, 52); goal.elev = goal.dist * PITCH_WORLD;
     goal.angle = sunSafe(goal.angle || 0);
+  } else if (host.cam && host.cam.wins){
+    /* THE PINNED SHOT WINS OVER THE PINS (nav v267). Every rail tap ends here, not in setDistrict,
+       and for the airport every one of its 31 venues sits inside the terminal: a tight set, so the
+       composition below took the cluster pitch and looked straight down on the roof — the owner's
+       23:55 screenshot, the hall as a white starfish with two cluster badges on it. The island
+       declares that its hand-pinned camera is the shot even with results up, and the pins are
+       drawn into it; they are inside the terminal, so they are in frame by construction. */
+    goal.fov = 42;
+    goal.target.set(host.x + host.cam.tx, GROUND + 8, host.z + host.cam.tz);
+    goal.dist = host.cam.dist; goal.elev = host.cam.elev; goal.angle = host.cam.angle * Math.PI / 180;
   } else {
     const r = Math.max(RESULTS_MIN_R, halfDiag * 1.25);
     const islandR = host.r * (host.dispScale || 1);

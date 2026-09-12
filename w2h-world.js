@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v352';
+export const BUILD = 'world v353';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -5704,7 +5704,9 @@ const DISTRICTS = [
        hub-to-car-park line measured in the bench (tools/bench, camshot), the target the hub
        itself, and the pitch a third of the distance — the roof's waves above, the lit glass wall
        under the lip, the crescent car park in the foreground, which is the reference aerial. */
-    cam: { angle:-116.5, dist:290, elev:88, tx:-50.6, tz:-42.1 },
+    /* wins: the shot holds even with the island's venues up as results — every one of them is
+       inside the terminal, and framing the pins looked straight down on the roof (nav v267). */
+    cam: { angle:-116.5, dist:290, elev:88, tx:-50.6, tz:-42.1, wins:true },
     seaAngle: Math.PI,
     lowRise:[ { x:0, z:0, r0:9999, r1:10000, h:4.0 } ],   // 31 m — a terminal is wide, not tall
     noLawn:true,                                         // an apron is not a lawn — see groundPlanFor
