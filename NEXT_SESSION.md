@@ -40,6 +40,15 @@
 > while the page parses (embed only). Any generator, kit, basemap or data change → re-run the bake
 > and commit all 36 data files.
 >
+> **12 September, later — nav v258.** The import map sits at the top of the head, before the
+> preload script: a modulepreload appended ahead of it made the owner's Android Chrome reject the
+> map ("Failed to resolve module specifier 'three'", spinner forever; the bench's newer Chrome
+> tolerated it). Keep it first. The idle chain after the reveal now builds every island (Al
+> Maryah, Reem, Saadiyat, Raha, Yas, then the deferred three), so a tap only flies. The painted
+> message carries `sw` (worker controlling) and `xb` (transfer size of stock-corniche.bin, 0 =
+> cache). App side: WorldFrame sets the iframe src at once (the HEAD round trip cost the phone a
+> second) and reveals on a second `worldError` after one retry.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -48,7 +57,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v257 / city v175 / world v349 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v258 / city v175 / world v349 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

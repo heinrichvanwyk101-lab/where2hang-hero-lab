@@ -12,9 +12,9 @@
   "three": "./vendor/three/build/three.module.js",
   "three/addons/": "./vendor/three/examples/jsm/"
 } }</script>
-<!-- THE NAV STAMP LIVES HERE (nav v257). The module below reads it, and so does the preload
+<!-- THE NAV STAMP LIVES HERE (nav v258). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v257">
+<meta name="w2h-nav" content="nav v258">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -780,7 +780,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v257').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v258').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -6924,6 +6924,12 @@ let _frame0 = true, _tick0Done = false;
    the footprints run alone right after the first frame. */
 const PAINT_MIN_ISLES = 1;     // the Corniche carries the shot; the rest fill in behind it
 const PAINT_CEILING_MS = 8000; // from the first drawn frame: past this, show what there is
+function bakeXfer(){
+  try {
+    const e = performance.getEntriesByType('resource').find(r => /stock-corniche\.bin/.test(r.name));
+    return e ? Math.round(e.transferSize) : -1;
+  } catch (e){ return -1; }
+}
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
@@ -6957,7 +6963,11 @@ function maybePostPainted(){
     /* Where the Corniche's time went (nav v256): baked or built, when the fill pass started and
        when its footprints landed, and how long the bake files took to arrive. */
     baked: corniche.fpBaked ? 1 : 0, fill: Math.round(_fillAt || 0), fp: Math.round(corniche.fpAt || 0),
-    bw: Math.round(PH.buildWorld || 0), bake: Math.round(PH.bake || 0) }, '*'); } catch (e){}
+    bw: Math.round(PH.buildWorld || 0), bake: Math.round(PH.bake || 0),
+    /* Whether the worker was serving this load and whether the Corniche bake came from its cache
+       (nav v258): `sw` is the controller, `xb` the transfer size of stock-corniche.bin, 0 when
+       a cache answered, -1 when the entry is not there to read. Read once, sent once. */
+    sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 1 : 0, xb: bakeXfer() }, '*'); } catch (e){}
   scheduleOpeningFill(AFTER_REVEAL_MS);
   warmBakes();
 }
@@ -6967,8 +6977,16 @@ function maybePostPainted(){
    owner watched Raha (off screen in the opening) fill in before Saadiyat and Reem (on screen).
    Once the shot is revealed, the three islands in it are built one per idle slice, nearest
    first; the flight's own prefetch finds them built and moves on to Raha and Yas, and Zayed
-   City, Masdar and the airport keep their place behind the ground refines. */
-const OPENING_FILL = ['maryah', 'reem', 'saadiyat'];
+   City, Masdar and the airport keep their place behind the ground refines.
+
+   THEN EVERY OTHER ISLAND, IN THE SAME IDLE CHAIN (nav v258). Raha and Yas were the two with no
+   place in it: they built on the flight's prefetch if the attract loop got there, and otherwise
+   at the moment of a tap, which on the friend's iPhone (11 Sep video) was the pause between the
+   tap and the island. With every island baked a build is a few hundred milliseconds of plan and
+   props, and the seconds after the reveal are the idlest the page ever is, so they are all
+   spent here: after this list the ground refines run (a no-op when the ground is baked) and
+   the deferred three follow. A tap then only ever flies. */
+const OPENING_FILL = ['maryah', 'reem', 'saadiyat', 'raha', 'yas'];
 function scheduleOpeningFill(delay){
   const run = () => {
     const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
