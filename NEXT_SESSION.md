@@ -56,6 +56,21 @@
 > buildWorld 1.3-2.0 s of which `b.other` (unnamed work inside buildWorld) is 1.0-1.5 s — the
 > next lever, profile it before baking anything else.
 >
+> **nav v260 / world v350 — THE BEACH IS BAKED.** A CPU profile of the bench load put
+> `buildBeachFor` at 4.5 s of 11 s: the band's lattice tested every vertex of an up-to-440x440
+> grid against the coast (`distToOutlineFast` + `insideIsle`), including the far-inland and
+> far-out-at-sea ones the band test then dropped, and it ran twice for the Corniche (buildWorld,
+> then again from addWaterGeometry). Now: (1) the live pass stamps a band mask from the coast
+> samples first and tests only vertices near a coast (identical mesh); (2) a pass with unchanged
+> inputs (shore/water ring counts, coast sample count) is skipped; (3) the bake carries the
+> lattice — `head.beach` {bx0,by0,csx,csy,NX,NY,cellW,n,clsOff,yOff,shOff}: one class byte per
+> lattice vertex after the colours, then int16 height (1/256) and uint8 shade (1/128) per kept
+> vertex — and `beachFromBake` rebuilds the mesh from it in milliseconds; `addBake` builds the
+> band the moment a bake lands, the beachPending flush and the water-arrival refresh skip islands
+> whose bake is pending, and a failed bake falls back to the live pass. `W2H.beachLattice(id)`
+> gives the tool the lattice from a live page. buildBeachFor(d, forExport) returns the lattice
+> without emitting. Re-bake after ANY change here.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -64,7 +79,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v259 / city v175 / world v349 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v260 / city v175 / world v350 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

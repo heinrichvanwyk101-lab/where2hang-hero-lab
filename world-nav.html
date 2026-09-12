@@ -12,9 +12,9 @@
   "three": "./vendor/three/build/three.module.js",
   "three/addons/": "./vendor/three/examples/jsm/"
 } }</script>
-<!-- THE NAV STAMP LIVES HERE (nav v259). The module below reads it, and so does the preload
+<!-- THE NAV STAMP LIVES HERE (nav v260). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v259">
+<meta name="w2h-nav" content="nav v260">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -780,7 +780,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v259').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v260').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -1500,7 +1500,7 @@ PH.bake = performance.now() - BAKE_T0;
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor, refineGroundStep,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas, addBake } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas, beachLattice, addBake } =
   buildWorld(scene, kit, {
     bake: bakeStock ? { corniche: bakeStock } : null,
     groundImages: bakeGround ? { corniche: bakeGround } : null,
@@ -1552,8 +1552,11 @@ async function warmBakes(){
       const ok = bakeValid(id, stock);
       if (ok){ addBake(id, ok, img); bakeState.set(id, 'on'); }
       else bakeState.set(id, 'none');
+      /* A bake that failed leaves the beach to the live pass the flush above skipped (nav v260). */
+      if (bakeState.get(id) === 'none'){ const d = DISTRICTS.find(x => x.id === id); if (d && !d.beachBuilt && refreshBeach) try { refreshBeach(d); } catch (e){} }
       console.info('bake ' + id + ': ' + bakeState.get(id) + (img ? '' : ' (no ground image)') + ' at ' + Math.round(performance.now()) + ' ms');
-    } catch (e){ console.warn('bake ' + id + ':', e && e.message); bakeState.set(id, 'none'); }
+    } catch (e){ console.warn('bake ' + id + ':', e && e.message); bakeState.set(id, 'none');
+      const d = DISTRICTS.find(x => x.id === id); if (d && !d.beachBuilt && refreshBeach) try { refreshBeach(d); } catch (e2){} }
   }));
 }
 if (BAKE_ON) for (const id of BAKE_ORDER) bakeState.set(id, 'pending');
@@ -1637,6 +1640,9 @@ if (beachPending && beachPending.length){
   (async () => {
     for (const d of beachPending){
       await nextPaint();
+      /* NOT WHILE ITS BAKE IS ON THE WAY (nav v260): the band is in the bake and lands with it
+         (addBake builds it at once). Only an island whose bake failed builds its band live. */
+      if (BAKE_ON && bakeState.get(d.id) === 'pending') continue;
       if (!d.beachBuilt) try { refreshBeach(d); } catch (e) { console.warn('beach', d.id, e && e.message); }
     }
   })();
@@ -6043,7 +6049,7 @@ async function addWaterGeometry(d){
     await BMAP.loadIsland(idx, d.id);
     /* The shore polygons are in the payload that just landed. Rebuild the beach against them —
        one lattice pass, and only ever once per island because addWaterGeometry itself runs once. */
-    try { if (refreshBeach) refreshBeach(d); } catch (e) { console.warn('refreshBeach', d.id, e && e.message); }
+    try { if (refreshBeach && !(BAKE_ON && bakeState.get(d.id) === 'pending')) refreshBeach(d); } catch (e) { console.warn('refreshBeach', d.id, e && e.message); }
     /* THE ROADS ARE A DIFFERENT FILE, AND THAT IS WHY THE v198 WAIT NEVER ENDED WELL. buildIsland
        holds an island with genFabric:false until BASE[id].roads exists — but that getter reads
        entry._roads, and only loadRoads populates it, from data/roads-<id>.json. loadIsland fetches
@@ -8071,6 +8077,7 @@ window.W2H = {
   /* The warm-up queue, live: how many meshes are still hidden, and how many of the Corniche's. */
   warm: () => ({ queue: warmQueue ? warmQueue.length : -1, corniche: _warmCorniche }),
   groundCanvas,                          // the full-resolution ground paint, for tools/bake-stock.mjs
+  beachLattice,                          // the beach band's lattice, for the same tool (world v350)
   state: () => state,
   tilt: v => tiltPass.uniforms.amount.value = v,
   DISTRICTS, goal, cur,

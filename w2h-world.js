@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v349';
+export const BUILD = 'world v350';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -6029,6 +6029,7 @@ const pickTargets = [];
      now runs before any push. */
   let buildBeachFor = null;
   const beachPending = [];   // islands whose first beach pass waits for the first paint (world v318)
+  let ensureBakedBeach = () => false;   // set below, once the beach section has defined the bake reader
 DISTRICTS.forEach(d => {
   const g = new THREE.Group();
   g.name = d.id;
@@ -6179,11 +6180,26 @@ DISTRICTS.forEach(d => {
      and hard-edge polygons are not known. addWaterGeometry in world-nav calls refreshBeach once
      the payload is in, which removes the first beach and builds it again with the real shore
      data. Deferred islands build after their payload and get it right first time. */
-  buildBeachFor = function(d){
-    d.beachBuilt = true;
-    const g = d.group;
-    for (const old of g.children.filter(c => c.userData && (c.userData.beachField || c.userData.quayField))){
-      g.remove(old); old.geometry.dispose();
+  buildBeachFor = function(d, forExport){
+    /* BAKED (world v350): the band came with the island's stock and is already in the scene;
+       nothing here can improve on it. tools/bake-stock.mjs asks for the lattice itself
+       (forExport) from a live page, where nothing is baked. */
+    if (d.beachBaked && !forExport) return;
+    /* THE SAME INPUTS GIVE THE SAME BEACH (world v350). This ran twice for the Corniche on every
+       load — once in buildWorld and again from addWaterGeometry when its payload "landed", though
+       the payload had been in since before buildWorld — and each pass was the single largest
+       piece of JavaScript in the load (a second on the owner's phone). The inputs are the shore
+       and water rings and the coast samples; when none of them changed, the band already in the
+       scene is the band this call would build. */
+    const _B = BASE && BASE[d.id];
+    const _key = [ ((_B && _B.beaches) || []).length, ((_B && _B.hardEdge) || []).length,
+                   ((_B && _B.water) || []).length, ((_B && _B.waterIslands) || []).length,
+                   isleGridOf(d.id).pts.length ].join('/');
+    if (!forExport && d.beachBuilt && d.beachKey === _key){ console.info('beach ' + d.id + ': inputs unchanged, kept'); return; }
+    if (!forExport){
+      d.beachKey = _key;
+      d.beachBuilt = true;
+      removeBeach(d);
     }
     /* THE FIRST PROFILE WAS INVISIBLE, FOR TWO REASONS WORTH RECORDING.
 
@@ -6541,9 +6557,35 @@ DISTRICTS.forEach(d => {
       const vIdx = new Int32Array(W * (NY + 1)).fill(-1);
       const vCls = new Uint8Array(W * (NY + 1));           // 1 beach vertex, 2 quay vertex
       const pos = [], col = [];
+      /* ONLY THE VERTICES NEAR A COAST ARE TESTED (world v350). The lattice covers the island's
+         whole bounding box, and every vertex paid one distToOutline and one insideIsle — the
+         ring search widening cell by cell for a point far inland or far out at sea, which is
+         most of the box, only to be dropped by the band test below. Profiled at 4.5 s of an
+         11 s bench load, three quarters of it in distToOutlineFast. So the band is stamped
+         first: every coast sample marks the cells within the band's reach (plus half a sample
+         spacing, so the run between two samples is covered), and a vertex outside the stamp is
+         skipped without a test. The vertices that survive are exactly the ones the band test
+         would have kept, so the mesh is identical. */
+      const near = new Uint8Array(W * (NY + 1));
+      {
+        let segMax = 0;
+        for (let k = 0; k + 1 < CP.length; k++){
+          const L = Math.hypot(CP[k + 1][0] - CP[k][0], CP[k + 1][1] - CP[k][1]);
+          if (L > segMax) segMax = L;
+        }
+        const reachS = Math.max(D_IN + LIP_W, D_MAX) / d.r + segMax * 0.5;
+        const rx = Math.ceil(reachS / csx) + 1, ry = Math.ceil(reachS / csy) + 1;
+        for (let k = 0; k < CP.length; k++){
+          const ci = Math.round((CP[k][0] - bx0) / csx), cj = Math.round((CP[k][1] - by0) / csy);
+          const j0 = Math.max(0, cj - ry), j1 = Math.min(NY, cj + ry);
+          const i0 = Math.max(0, ci - rx), i1 = Math.min(NX, ci + rx);
+          for (let j = j0; j <= j1; j++) near.fill(1, j * W + i0, j * W + i1 + 1);
+        }
+      }
       for (let j = 0; j <= NY; j++){
         const sy = by0 + j * csy;
         for (let i = 0; i <= NX; i++){
+          if (!near[j * W + i]) continue;
           const sx = bx0 + i * csx;
           const dW = distToOutline(d.id, sx, sy) * d.r;
           const seg = nearestSegIdx, segT = nearestSegT;
@@ -6574,6 +6616,24 @@ DISTRICTS.forEach(d => {
           col.push(sh, sh, sh);
         }
       }
+      const L = { W, NX, NY, bx0, by0, csx, csy, vIdx, vCls, pos, col, cellW, coastBeachPct: +(100 * nBeach / CP.length).toFixed(1) };
+      if (forExport) return L;
+      emitBeach(d, L);
+    }
+  };
+  /* THE MESHES FROM A LATTICE (world v350), shared by the live pass above and the baked one
+     below: L is the lattice's kept vertices (vIdx/vCls over W x (NY+1)), their positions and
+     shades, whether computed here or read back from data/stock-<id>.bin. */
+  function removeBeach(d){
+    const g = d.group;
+    for (const old of g.children.filter(c => c.userData && (c.userData.beachField || c.userData.quayField))){
+      g.remove(old); old.geometry.dispose();
+    }
+  }
+  function emitBeach(d, L){
+    const { W, NX, NY, vIdx, vCls, pos, col, cellW } = L;
+    const g = d.group;
+    {
       const idxB = [], idxQ = [];
       for (let j = 0; j < NY; j++){
         for (let i = 0; i < NX; i++){
@@ -6610,20 +6670,56 @@ DISTRICTS.forEach(d => {
         m.userData.duskMats = mats.dusk;
         m.userData.noShadow = true;
         m.userData[tag] = { cells: NX * NY, verts: p2.length / 3, tris: i2.length / 3, cellW,
-          coastBeachPct: +(100 * nBeach / CP.length).toFixed(1) };
+          coastBeachPct: L.coastBeachPct };
         g.add(m);
       };
       emit(idxB, beachSand, 'beachField');
       emit(idxQ, quayGrey,  'quayField');
     }
-  };
+  }
+  /* THE BAKED BEACH (world v350). The band is a regular lattice, so the bake carries one class
+     byte per lattice vertex (0 none, 1 beach, 2 quay) and, for the kept ones in lattice order,
+     a height in 1/256 of a local unit and a shade in 1/128. Positions come back from the lattice
+     origin and pitch; the mesh is then emitted exactly as the live pass would. Milliseconds,
+     against the second the lattice's coast-distance field costs on a phone. */
+  function beachFromBake(d, bake){
+    const B = bake.head && bake.head.beach;
+    if (!B || d.beachBaked) return false;
+    const t0 = performance.now();
+    const W = B.NX + 1, NV = W * (B.NY + 1);
+    const cls = new Uint8Array(bake.bin, B.clsOff, NV);
+    const Y = new Int16Array(bake.bin, B.yOff, B.n);
+    const SH = new Uint8Array(bake.bin, B.shOff, B.n);
+    const vIdx = new Int32Array(NV).fill(-1);
+    const pos = new Float32Array(B.n * 3), col = new Float32Array(B.n * 3);
+    let k = 0;
+    for (let j = 0; j <= B.NY; j++){
+      const z = -(B.by0 + j * B.csy) * d.r;
+      for (let i = 0; i <= B.NX; i++){
+        const L = j * W + i;
+        if (!cls[L]) continue;
+        vIdx[L] = k;
+        pos[k * 3] = (B.bx0 + i * B.csx) * d.r; pos[k * 3 + 1] = Y[k] / 256; pos[k * 3 + 2] = z;
+        const sh = SH[k] / 128; col[k * 3] = sh; col[k * 3 + 1] = sh; col[k * 3 + 2] = sh;
+        k++;
+      }
+    }
+    if (k !== B.n){ console.warn('baked beach ' + d.id + ': ' + k + ' vertices in the classes, ' + B.n + ' in the head; building live'); return false; }
+    removeBeach(d);
+    emitBeach(d, { W, NX: B.NX, NY: B.NY, vIdx, vCls: cls, pos, col, cellW: B.cellW, coastBeachPct: B.coastBeachPct || 0 });
+    d.beachBuilt = true; d.beachBaked = true;
+    console.info('baked beach ' + d.id + ': ' + B.n + ' vertices, ' + Math.round(performance.now() - t0) + ' ms');
+    return true;
+  }
+  ensureBakedBeach = d => { const b = BAKE[d.id]; return !!(b && b.head && b.head.beach && beachFromBake(d, b)); };
   /* THE FIRST PASS IS DEFERRED FOR THE ISLANDS THAT ARE (world v318). Five beach lattices ran
      here at module load, before a single frame, against payloads that had not arrived — every
      one of them with zero shore polygons, and every one rebuilt by refreshBeach later once the
      data was in. Three seconds of the opening blank screen. Corniche, the opening shot, still
      builds its band here; the others are listed in beachPending and world-nav runs them one per
      frame right after the first paint, so they are on screen within a second of it. */
-  if (d.built || opts.deferBeach === false) buildBeachFor(d);
+  if (ensureBakedBeach(d)) { /* the band came with the stock (world v350) */ }
+  else if (d.built || opts.deferBeach === false) buildBeachFor(d);
   else beachPending.push(d);
 
   /* ---- shoreline modules -------------------------------------------------------------------
@@ -10921,7 +11017,7 @@ function buildIsland(id, force){
   const t = performance.now();
   buildFabricFor(d);
   buildGroundFor(d);
-  if (BAKE[d.id]) stockFromBake(d, BAKE[d.id]);      // every island can be baked now (world v349)
+  if (BAKE[d.id]){ stockFromBake(d, BAKE[d.id]); ensureBakedBeach(d); }   // every island can be baked now (world v349)
   /* NO LONGER A PLACEHOLDER. `built` is what the breadcrumb reads to decide between "Tap a place"
      and "Placeholder island", and it was a static property of the table describing whether an
      island had hand-authored content. Deferred building made it a lifecycle fact instead: these
@@ -10963,7 +11059,10 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
                                return d && d.plan ? paintGround(d, d.plan, 1).image : null; },
          /* A BAKE THAT ARRIVES AFTER buildWorld (world v349): the outer islands fetch theirs on
             demand, and buildIsland reads these tables at the moment it runs. */
-         addBake: (id, stock, img) => { if (stock) BAKE[id] = stock; if (img) GROUND_IMG[id] = img; },
+         addBake: (id, stock, img) => { if (stock) BAKE[id] = stock; if (img) GROUND_IMG[id] = img;
+                                        const d = DISTRICTS.find(x => x.id === id); if (d && stock) ensureBakedBeach(d); },
+         /* FOR tools/bake-stock.mjs: the beach lattice of a built island, computed live. */
+         beachLattice: id => { const d = DISTRICTS.find(x => x.id === id); return d ? buildBeachFor(d, true) : null; },
          /* THE SHORE DISTANCE, FOR THE SAME CALLER (world v276). A venue on a marina pontoon or a
             beach club sits a few metres past the surveyed outline; insideIsle alone would drop
             it. Normalised units, like insideIsle: multiply by the island's half-extent for

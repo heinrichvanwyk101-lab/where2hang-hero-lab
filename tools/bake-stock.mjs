@@ -107,12 +107,38 @@ const exportStock = async id => await page.evaluate(id => {
      the int16 slots; the loader reads them back with & 0xffff). */
   const records = recs.length / 7;
   const colorOff = records * 7 * 2;
-  const buf = new ArrayBuffer(colorOff + cols.length);
+  /* THE BEACH LATTICE (world v350), after the colours: one class byte per lattice vertex (0 none,
+     1 beach, 2 quay), then for the kept vertices in lattice order a height (int16, 1/256 of a
+     local unit) and a shade (uint8, 1/128). The head carries the lattice origin and pitch, so
+     the phone rebuilds the band's mesh without one coast-distance test. */
+  const L = W.beachLattice(id);
+  let beach = null, clsOff = 0, yOff = 0, shOff = 0, total = colorOff + cols.length, nB = 0, NV = 0;
+  if (L){
+    NV = L.W * (L.NY + 1);
+    for (let k = 0; k < NV; k++) if (L.vIdx[k] >= 0) nB++;
+    clsOff = total; yOff = clsOff + NV; if (yOff & 1) yOff++; shOff = yOff + nB * 2; total = shOff + nB;
+    beach = { bx0: L.bx0, by0: L.by0, csx: L.csx, csy: L.csy, NX: L.NX, NY: L.NY, cellW: L.cellW,
+              n: nB, clsOff, yOff, shOff, coastBeachPct: L.coastBeachPct };
+  }
+  const buf = new ArrayBuffer(total);
   const R = new Int16Array(buf, 0, records * 7);
   for (let i = 0; i < recs.length; i++) R[i] = recs[i] > 32767 ? recs[i] - 65536 : recs[i];
   new Uint8Array(buf, colorOff).set(cols);
+  let yClip = 0;
+  if (L){
+    const C = new Uint8Array(buf, clsOff, NV), Yv = new Int16Array(buf, yOff, nB), S = new Uint8Array(buf, shOff, nB);
+    let k = 0;
+    for (let v = 0; v < NV; v++){
+      const at = L.vIdx[v]; if (at < 0) continue;
+      C[v] = L.vCls[v];
+      const yy = Math.round(L.pos[at * 3 + 1] * 256); if (yy < -32768 || yy > 32767) yClip++;
+      Yv[k] = Math.max(-32768, Math.min(32767, yy));
+      S[k] = Math.max(0, Math.min(255, Math.round(L.col[at * 3] * 128)));
+      k++;
+    }
+  }
   let bin = ''; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-  return { buckets, rings, bands: d.fpBands || [], stats, dropped, tilted, clipped, records, colorOff, bytes: buf.byteLength, bin: btoa(bin) };
+  return { buckets, rings, bands: d.fpBands || [], stats, dropped, tilted, clipped: clipped + yClip, records, colorOff, bytes: buf.byteLength, beach, bin: btoa(bin) };
 }, id);
 
 const ground = async (id, tag, width, height) => {
@@ -141,7 +167,7 @@ for (const id of ISLANDS){
   if (out.tilted) throw new Error('bake ' + id + ': ' + out.tilted + ' instances are not Y-only rotations');
   if (out.clipped) console.log('  ' + id + ': ' + out.clipped + ' values clipped to the int16 range');
   stock[id] = out;
-  console.log(id + ': buckets', out.buckets.length, 'instances', out.buckets.reduce((s, b) => s + b.n, 0), 'rings', out.rings.length, 'culled left out', out.dropped, 'bytes', out.bytes);
+  console.log(id + ': buckets', out.buckets.length, 'instances', out.buckets.reduce((s, b) => s + b.n, 0), 'rings', out.rings.length, 'culled left out', out.dropped, 'beach verts', out.beach ? out.beach.n : 0, 'bytes', out.bytes);
 }
 /* The grounds at both sizes: every island at the phone width, then every island at the desktop
    width, so the viewport changes twice rather than twice per island. */
@@ -153,7 +179,7 @@ for (const id of ISLANDS){
   const out = stock[id];
   const head = { island: id, baked: new Date().toISOString(), format: 'q16', stamps: stampsHead,
     records: out.records, colorOff: out.colorOff, bytes: out.bytes,
-    buckets: out.buckets, rings: out.rings, bands: out.bands, stats: out.stats, ground: grounds[id] };
+    buckets: out.buckets, rings: out.rings, bands: out.bands, stats: out.stats, ground: grounds[id], beach: out.beach };
   fs.writeFileSync(path.join(ROOT, `data/stock-${id}.json`), JSON.stringify(head));
   fs.writeFileSync(path.join(ROOT, `data/stock-${id}.bin`), Buffer.from(out.bin, 'base64'));
   console.log(`stock-${id}.json`, Math.round(fs.statSync(path.join(ROOT, `data/stock-${id}.json`)).size / 1024), 'KB;',
