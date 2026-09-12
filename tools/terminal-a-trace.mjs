@@ -29,7 +29,9 @@ const CELL = 8;         // raster cell, metres
 const DIL  = 5;         // close radius in cells — 40 m, wide enough to bridge a stand notch
 const CORE_THR = 0.52;  // share of the maximum half-width that counts as processor, not pier
 
-const j = JSON.parse(await readFile(new URL('../data/isle-airport.json', import.meta.url), 'utf8'));
+/* The footprints moved out of isle-airport.json into fp-airport.json when the islands were baked
+   (world v348); the ring is read from wherever it is. */
+const j = await (async () => { for (const f of ['../data/fp-airport.json', '../data/isle-airport.json']){ const d = JSON.parse(await readFile(new URL(f, import.meta.url), 'utf8')); if ((d.buildings || []).some(x => x.osm === -20328079)) return d; } return {}; })();
 const b = (j.buildings || []).find(x => x.osm === -20328079);
 if (!b || !b.p) throw new Error('terminal-a-trace: relation -20328079 has no ring in the bake');
 const P = b.p;
@@ -238,6 +240,104 @@ for (let i = 0; i < notch.length; i++){
   stands.push({ x:+px.toFixed(1), y:+py.toFixed(1), a:+ang.toFixed(3), m:+span.toFixed(0) });
 }
 
+/* ---- THE ROOF, AS A MESH OVER THE WHOLE ENVELOPE (city v178) ----------------------------------
+
+   The first kit put the wave roof on TERM_CORE alone — a 240 m blob at the junction — and flat
+   metal over the piers. From the app's camera that rendered as a pale flat X with a bump in the
+   middle: the one thing every photograph of this terminal is about was missing from most of the
+   building. In the photographs the roof is continuous. It vaults across each pier, ripples along
+   its length, and swells over the hub where the glass runs full height beneath it.
+
+   A height field needs vertices inside the outline, and every path three.js offers for a shape
+   triangulates its boundary only. So the roof is triangulated here: the envelope resampled at
+   ROOF_EDGE metres, a grid of interior points ROOF_CELL apart, a Delaunay triangulation of the lot
+   (Bowyer-Watson; two thousand points is nothing offline) and the triangles whose centroid falls
+   outside the envelope dropped — that is what cuts the convex hull back to the X. Every vertex
+   carries its distance to the edge in metres, read off the distance field the trace already has,
+   because that distance is the vault: zero at the eave, greatest down the spine of a pier and at
+   the centre of the hub. The kit turns it into height; nothing about the shape of the roof is
+   decided here. */
+const ROOF_EDGE = 11, ROOF_CELL = 13;
+function resample(ring, step){
+  const out = [];
+  for (let i = 0; i < ring.length; i++){
+    const a = ring[i], b = ring[(i+1) % ring.length];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1]), n = Math.max(1, Math.round(L / step));
+    for (let k = 0; k < n; k++) out.push([a[0] + (b[0]-a[0]) * k / n, a[1] + (b[1]-a[1]) * k / n]);
+  }
+  return out;
+}
+const distAt = (px, py) => {
+  const c = Math.floor((px - x0) / CELL), r = Math.floor((py - y0) / CELL);
+  if (c < 0 || r < 0 || c >= NX || r >= NY) return 0;
+  const d = dist[r*NX+c]; return d < 1e9 ? d * CELL : 0;
+};
+const segDist = (ring, px, py) => {
+  let best = 1e9;
+  for (let i = 0, k = ring.length - 1; i < ring.length; k = i++){
+    const a = ring[k], b = ring[i], vx = b[0]-a[0], vy = b[1]-a[1];
+    const t = Math.max(0, Math.min(1, ((px-a[0])*vx + (py-a[1])*vy) / (vx*vx + vy*vy || 1)));
+    best = Math.min(best, Math.hypot(px - a[0] - vx*t, py - a[1] - vy*t));
+  }
+  return best;
+};
+const roofPts = resample(envelope, ROOF_EDGE).map(p => [p[0], p[1], 0]);
+{
+  const ex = envelope.map(p => p[0]), ey = envelope.map(p => p[1]);
+  const gx0 = Math.min(...ex), gx1 = Math.max(...ex), gy0 = Math.min(...ey), gy1 = Math.max(...ey);
+  for (let gy = gy0 + ROOF_CELL/2; gy < gy1; gy += ROOF_CELL)
+    for (let gx = gx0 + ROOF_CELL/2; gx < gx1; gx += ROOF_CELL){
+      // a half-cell stagger on alternate rows, so the triangles are closer to equilateral
+      const sx = gx + ((Math.round((gy - gy0) / ROOF_CELL) % 2) ? ROOF_CELL/2 : 0);
+      if (!inRing(envelope, sx, gy)) continue;
+      if (segDist(envelope, sx, gy) < ROOF_EDGE * 0.8) continue;   // too close to a boundary vertex
+      roofPts.push([sx, gy, distAt(sx, gy)]);
+    }
+}
+function delaunay(pts){
+  const n = pts.length;
+  let mnx = 1e9, mny = 1e9, mxx = -1e9, mxy = -1e9;
+  for (const p of pts){ mnx = Math.min(mnx, p[0]); mny = Math.min(mny, p[1]); mxx = Math.max(mxx, p[0]); mxy = Math.max(mxy, p[1]); }
+  const dx = mxx - mnx, dy = mxy - mny, dm = Math.max(dx, dy), mx = (mnx + mxx) / 2, my = (mny + mxy) / 2;
+  const P = pts.map(p => [p[0], p[1]]);
+  P.push([mx - 20*dm, my - dm], [mx, my + 20*dm], [mx + 20*dm, my - dm]);
+  const circ = (a, b, c) => {
+    const [ax, ay] = P[a], [bx, by] = P[b], [cx, cy] = P[c];
+    const d = 2 * (ax*(by-cy) + bx*(cy-ay) + cx*(ay-by));
+    if (Math.abs(d) < 1e-12) return null;
+    const ux = ((ax*ax+ay*ay)*(by-cy) + (bx*bx+by*by)*(cy-ay) + (cx*cx+cy*cy)*(ay-by)) / d;
+    const uy = ((ax*ax+ay*ay)*(cx-bx) + (bx*bx+by*by)*(ax-cx) + (cx*cx+cy*cy)*(bx-ax)) / d;
+    return [ux, uy, (ax-ux)**2 + (ay-uy)**2];
+  };
+  let tris = [[n, n+1, n+2, circ(n, n+1, n+2)]];
+  for (let i = 0; i < n; i++){
+    const [px, py] = P[i], bad = [], keep = [];
+    for (const t of tris) ((px - t[3][0])**2 + (py - t[3][1])**2 < t[3][2] ? bad : keep).push(t);
+    const edges = new Map();
+    for (const t of bad) for (const [a, b] of [[t[0],t[1]],[t[1],t[2]],[t[2],t[0]]]){
+      const k = a < b ? a + ':' + b : b + ':' + a;
+      edges.set(k, edges.has(k) ? null : [a, b]);
+    }
+    tris = keep;
+    for (const e of edges.values()){ if (!e) continue; const cc = circ(e[0], e[1], i); if (cc) tris.push([e[0], e[1], i, cc]); }
+  }
+  return tris.filter(t => t[0] < n && t[1] < n && t[2] < n).map(t => [t[0], t[1], t[2]]);
+}
+const roofTri = delaunay(roofPts).filter(([a, b, c]) => {
+  const cx = (roofPts[a][0] + roofPts[b][0] + roofPts[c][0]) / 3, cy = (roofPts[a][1] + roofPts[b][1] + roofPts[c][1]) / 3;
+  return inRing(envelope, cx, cy);
+});
+/* Wound counter-clockwise in raster (x, y). The kit maps y to -z, and in three's right-handed
+   frame that order gives (b-a) x (c-a) a positive y: the face points up. The kit checks the sum
+   of its normals anyway, so a slip here would show as a flipped roof rather than a black one. */
+for (const t of roofTri){
+  const a = roofPts[t[0]], b = roofPts[t[1]], c = roofPts[t[2]];
+  if ((b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]) < 0){ const k = t[1]; t[1] = t[2]; t[2] = k; }
+}
+const roofEdge = resample(envelope, ROOF_EDGE).length;   // the first roofEdge points are the eave, in ring order
+let hubC = 0; for (let i = 0; i < dist.length; i++) if (closed[i] && dist[i] < 1e9 && dist[i] > dist[hubC]) hubC = i;
+const hub = at(hubC % NX, Math.floor(hubC / NX));
+
 const flip = r => r.map(([x, y]) => [+x.toFixed(1), +(-y).toFixed(1)]);
 const out = {
   note: 'generated by tools/terminal-a-trace.mjs — kit-local metres, +z south. Do not hand-edit.',
@@ -246,6 +346,8 @@ const out = {
   apron: flip(apron),
   core: flip(coreRing),
   stands: stands.map(s => ({ x:s.x, z:+(-s.y).toFixed(1), a:+(-s.a).toFixed(3), m:s.m })),
+  roof: { edge: roofEdge, pts: roofPts.map(p => [+p[0].toFixed(1), +(-p[1]).toFixed(1), +p[2].toFixed(1)]), tri: roofTri.flat() },
+  hub: [+hub[0].toFixed(1), +(-hub[1]).toFixed(1), +(maxd*CELL).toFixed(1)],
 };
 await writeFile(new URL('../data/terminal-a.json', import.meta.url), JSON.stringify(out) + '\n');
 
@@ -258,7 +360,7 @@ await writeFile(new URL('../data/terminal-a.json', import.meta.url), JSON.string
    in their own generated file, w2h-city.js imports three names from it, and re-running this
    script after a re-bake updates the kit without anyone opening the kit. */
 const fmt = r => r.map(p => '[' + p[0] + ',' + p[1] + ']').join(',');
-const js = `/* GENERATED by tools/terminal-a-trace.mjs from data/isle-airport.json — DO NOT HAND-EDIT.
+const js = `/* GENERATED by tools/terminal-a-trace.mjs from data/fp-airport.json — DO NOT HAND-EDIT.
    Zayed International Terminal A, traced from OSM relation ${out.osm}. Kit-local metres, +x east,
    +z south, origin at the surveyed footprint's centre. Re-run the script after any airport bake.
 
@@ -267,13 +369,20 @@ const js = `/* GENERATED by tools/terminal-a-trace.mjs from data/isle-airport.js
    TERM_CORE      the processor, found as the part of that envelope more than ${(CORE_THR*100)|0}% of the way
                   to its widest half-width (${(maxd*CELL).toFixed(0)} m) from any edge — this is what carries the wave roof
    TERM_STANDS    one entry per closed notch: an aircraft parked nose-in on the apron, { x, z, a } with
-                  a the outward bearing of the stand, so the nose points back along it */
+                  a the outward bearing of the stand, so the nose points back along it
+   TERM_ROOF      the envelope triangulated: pts as [x, z, d] with d the distance to the edge in
+                  metres (the vault), the first "edge" of them the eave in ring order, tri as index
+                  triples wound to face up — the kit lifts each vertex by a height field of (x, z, d)
+   TERM_HUB       [x, z, r]: the point of the envelope furthest from any edge and that distance —
+                  the centre of the processor, where the roof swells */
 export const TERM_ENVELOPE = [${fmt(out.envelope)}];
 export const TERM_APRON = [${fmt(out.apron)}];
 export const TERM_CORE = [${fmt(out.core)}];
 export const TERM_STANDS = [${out.stands.map(s => `{x:${s.x},z:${s.z},a:${s.a}}`).join(',')}];
+export const TERM_ROOF = { edge: ${out.roof.edge}, pts: [${out.roof.pts.map(p => '[' + p.join(',') + ']').join(',')}], tri: [${out.roof.tri.join(',')}] };
+export const TERM_HUB = [${out.hub.join(',')}];
 `;
 await writeFile(new URL('../w2h-terminal-a.js', import.meta.url), js);
 console.log('envelope', out.envelope.length, 'apron', out.apron.length, 'core', out.core.length,
             'stands', out.stands.length, '(' + dropped + ' blobs dropped)',
-            '| core half-width', (maxd*CELL).toFixed(0) + 'm');
+            '| core half-width', (maxd*CELL).toFixed(0) + 'm', '| roof', out.roof.pts.length, 'pts', roofTri.length, 'tris, hub', out.hub.join(','));

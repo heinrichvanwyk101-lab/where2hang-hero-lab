@@ -140,6 +140,19 @@
 > the flash is drawn, not presented, and the water shader's NaN source is next (the water plane's
 > normals or the normal-map tangent frame at world zoom — hide `water` and count with nanwhere).
 >
+> **city v178 — TERMINAL A REBUILT ON ONE ROOF.** The owner's 15:45 screenshot showed the airport
+> as a flat grey X; the bench agreed (a pale slab with a bump at the junction: the wave roof
+> covered TERM_CORE alone, 240 m, and the piers had flat metal). tools/terminal-a-trace.mjs now
+> also emits TERM_ROOF — the envelope resampled at 11 m plus a 13 m interior grid, Delaunay
+> (Bowyer-Watson, offline), triangles outside the envelope dropped, every vertex carrying its
+> distance to the eave — and TERM_HUB (the point furthest from any edge, 163 m). zayedTerminal
+> lifts that mesh by a height field: vault across each pier from the eave distance (8 m), a
+> concentric ripple from the hub every 84 m (4.5 m), the hub lifted 22 m with a 14 m directional
+> wave over 150 m, a 3.5 m droop at the eave; the curtain wall hangs from the same field at the
+> same eave points, inset 7 m. The car park is four grey levels, not a white-topped five. The
+> trace reads the ring from data/fp-airport.json now (it moved there with the bakes). Re-run the
+> trace after any airport bake; re-bake after this (stamps).
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -148,7 +161,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v263 / city v177 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v263 / city v178 / world v351 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

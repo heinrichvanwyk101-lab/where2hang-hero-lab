@@ -14,13 +14,13 @@
    ============================================================================================= */
 import * as THREE from 'three';
 /* Generated from the airport bake by tools/terminal-a-trace.mjs — see zayedTerminal below. */
-import { TERM_ENVELOPE, TERM_APRON, TERM_CORE, TERM_STANDS } from './w2h-terminal-a.js';
+import { TERM_ENVELOPE, TERM_APRON, TERM_STANDS, TERM_ROOF, TERM_HUB } from './w2h-terminal-a.js';
 
 /* BUILD STAMP. Shown in the #debug overlay alongside the stamps from the other three files.
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v177';
+export const BUILD = 'city v178';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6777,93 +6777,102 @@ function zayedTerminal(x0, z0){
     const m = new THREE.Mesh(geo, mat); g.add(m); return m;
   };
 
-  /* ---- APRON AND PIERS ---------------------------------------------------------------------- */
+  /* ---- APRON ------------------------------------------------------------------------------- */
   pad(TERM_APRON, 0.9, 0.15, conc);
-  const piers = pad(TERM_ENVELOPE, 20, 0, glass);
-  pad(TERM_ENVELOPE, 2.4, 20, shell);              // the pier roof: flat, so the shell reads as the only curve
 
-  /* ---- THE SHELL ---------------------------------------------------------------------------- */
-  const CN = TERM_CORE.length;
-  let ccx = 0, ccz = 0; for (const p of TERM_CORE){ ccx += p[0]; ccz += p[1]; }
-  ccx /= CN; ccz /= CN;
-  const ROOF_Y = 45, WAVE_A = 14, SAG = 12, PER = 165, PH = 0.5, OVER = 1.13;
-  /* The height field. One directional wave across the plan, plus a quadratic droop toward the rim
-     so the shell settles onto its supports instead of ending in mid-air. s is the vertex's radial
-     fraction, which the fan below already knows, so nothing has to be measured back out of the
-     geometry. Centre runs 31-59 m and the rim 19-47, against the 53 m the survey tags — the high
-     points of the shell are about the building's stated height and the dips are the dips.
+  /* ---- THE ROOF: ONE SURFACE OVER THE WHOLE X (city v178) ---------------------------------- */
+  /* The first kit vaulted a 240 m core and laid flat metal over the piers; from the app's camera
+     that was a pale flat X with a bump at the junction (bench, 12 Sep). The reference aerials show
+     one continuous roof: it vaults across each pier, ripples along the pier's length, and swells
+     over the hub, where the glass runs full height beneath its edge. So the roof is a single mesh
+     over the whole envelope — triangulated by the trace tool, every vertex carrying its distance
+     to the eave — and every metre of height is a function of three things the survey gives:
 
-     THE FIRST PASS WAS TOO TIMID TO SEE. At a 9 m amplitude over a 220 m period the shell rendered
-     as a smooth white blob from the district camera — technically a wave, visually a dome, and the
-     one thing every photograph of this terminal is about was the thing you could not make out. 14
-     over 165 puts two full humps across the 326 m processor instead of one and a half, which is
-     what the references show, and the overhang goes to 13 per cent so the rim throws a shadow line
-     the eye can find the roof's edge by. */
-  const roofY = (px, pz, s) =>
-    ROOF_Y + WAVE_A * Math.sin((px * 0.94 - pz * 0.34) / PER * Math.PI * 2 + PH) - SAG * s * s;
+       d   distance to the eave     -> the vault across a pier (zero at the eave, full on the spine)
+                                       and the droop where the roof settles onto the glass
+       r   distance from the hub    -> the concentric ripple that crosses each pier every RIP_PER m,
+                                       and the weight that lifts the hub above the piers
+       x,z position                 -> the long directional wave the hub is famous for
 
-  /* A fan from the centroid: NR rings of the core outline scaled 0 to OVER. The boundary is
-     therefore EXACT at the rim — a square grid clipped to the ring would stair-step the one edge
-     on this island anybody will look at — and the interior gets enough subdivision for the wave to
-     be a curve rather than a crease. The core is the fat middle of the plan by construction, so it
-     is star-shaped about its own centroid and the fan cannot fold over itself. */
-  const NR = 9, RES = 4;                            // RES: extra points per outline segment
-  const ring = [];
-  for (let i = 0; i < CN; i++){
-    const a = TERM_CORE[i], b = TERM_CORE[(i + 1) % CN];
-    for (let k = 0; k < RES; k++)
-      ring.push([a[0] + (b[0] - a[0]) * k / RES, a[1] + (b[1] - a[1]) * k / RES]);
+     Pier crests sit at 29-33 m, the hub between 30 and 65, against the 53 m the survey tags. */
+  const [HX, HZ, HR] = TERM_HUB;
+  /* Amplitudes were first set at 6 / 2.6 / 11 and the bench rendered a sand dune: at the district
+     camera 2.6 m of ripple is under a pixel of shading. 8 / 4.5 / 14 over a 150 m period puts the
+     crests where the eye finds them, and is still inside the 53 m the survey tags. */
+  const PIER_Y = 21, VAULT = 8, RIPPLE = 4.5, RIP_PER = 84, HUB_LIFT = 22, WAVE_A = 14, PER = 150,
+        EAVE = 14, DROOP = 3.5;
+  const sm = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+  const roofY = (px, pz, d) => {
+    const r = Math.hypot(px - HX, pz - HZ);
+    const w = 1 - sm((r - HR * 0.9) / (HR * 1.4));           // 1 over the hub, 0 by 2.3 radii out
+    const vault = VAULT * Math.sqrt(Math.min(1, d / 36));
+    const ripple = RIPPLE * (1 - 0.6 * w) * Math.sin(r / RIP_PER * Math.PI * 2);
+    const hub = w * (HUB_LIFT + WAVE_A * Math.sin((px * 0.94 - pz * 0.34) / PER * Math.PI * 2 + 0.5));
+    return PIER_Y + vault + ripple + hub - DROOP * (1 - sm(d / EAVE));
+  };
+  const RP = TERM_ROOF.pts, rpos = new Float32Array(RP.length * 3);
+  RP.forEach(([px, pz, d], i) => {
+    const [wx, wz] = at(px, pz);
+    rpos[i * 3] = wx; rpos[i * 3 + 1] = roofY(px, pz, d) / M; rpos[i * 3 + 2] = wz;
+  });
+  const roofGeo = new THREE.BufferGeometry();
+  roofGeo.setAttribute('position', new THREE.BufferAttribute(rpos, 3));
+  roofGeo.setIndex(TERM_ROOF.tri);
+  roofGeo.computeVertexNormals();
+  {  // face up, whichever way the generator wound it
+    const nr = roofGeo.attributes.normal; let sy = 0;
+    for (let v = 0; v < nr.count; v++) sy += nr.getY(v);
+    if (sy < 0){ const ix = roofGeo.index.array; for (let t = 0; t < ix.length; t += 3){ const k = ix[t + 1]; ix[t + 1] = ix[t + 2]; ix[t + 2] = k; } roofGeo.computeVertexNormals(); }
   }
-  const RN = ring.length;
-  const pos = [], idx = [];
-  for (let j = 0; j <= NR; j++){
-    const s = j / NR, k = s * OVER;
-    for (let i = 0; i < RN; i++){
-      const px = ccx + (ring[i][0] - ccx) * k, pz = ccz + (ring[i][1] - ccz) * k;
-      const [wx, wz] = at(px, pz);
-      pos.push(wx, roofY(px, pz, s) / M, wz);
-    }
-  }
-  for (let j = 0; j < NR; j++) for (let i = 0; i < RN; i++){
-    const a = j * RN + i, b = j * RN + (i + 1) % RN, c = (j + 1) * RN + i, d = (j + 1) * RN + (i + 1) % RN;
-    idx.push(a, c, b, b, c, d);
-  }
-  const shellGeo = new THREE.BufferGeometry();
-  shellGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  shellGeo.setIndex(idx); shellGeo.computeVertexNormals();
-  const shellMesh = new THREE.Mesh(shellGeo, shell);
+  const shellMesh = new THREE.Mesh(roofGeo, shell);
   shellMesh.userData.hero = shellMesh.userData.kitName = 'zayedTerminal';
   g.add(shellMesh);
-  /* The soffit, 1.6 m under the same field and darker. Without it the shell is a single surface
-     and every view from below the rim — which at this camera is most of them — sees the lit top
-     face through it and the roof reads as paper. */
-  const under = shellGeo.clone();
+  /* The soffit, 1.5 m under the same surface and darker. Without it the roof is a single sheet:
+     every view from under the eave — which at the place camera is most of them — sees the lit top
+     through it and the roof reads as paper. */
+  const under = roofGeo.clone();
   const up = under.attributes.position;
-  for (let v = 0; v < up.count; v++) up.setY(v, up.getY(v) - 1.6 / M);
+  for (let v = 0; v < up.count; v++) up.setY(v, up.getY(v) - 1.5 / M);
   under.computeVertexNormals();
   const um = new THREE.Mesh(under, shellU); um.material.side = THREE.BackSide; g.add(um);
 
-  /* ---- THE CURTAIN WALL, HUNG FROM THE SHELL ------------------------------------------------ */
-  /* Top edge sampled from the same height field at the same bearings, 3 m under the rim, and the
-     plan pulled in 3 per cent so the glass leans back under the overhang the way the photographs
-     show. Sampled, not re-derived: the two surfaces cannot drift apart. */
+  /* ---- THE CURTAIN WALL, HUNG FROM THE ROOF -------------------------------------------------- */
+  /* The eave points are the first TERM_ROOF.edge vertices, in ring order, so the glass top edge is
+     the roof's own height at the roof's own points, 1.2 m under it, and the two cannot drift apart.
+     Inset 7 m along the inward normal, so the overhang throws a shadow line the district camera
+     can see — at 2.5 m the eave read as a pencil line and the roof as a sheet laid on sand. Full height at
+     the hub, where the roof edge is 35-55 m up, is the photograph: the terminal's front is one
+     tall glazed wall under a white lip. */
+  const NE = TERM_ROOF.edge;
+  const inRing = (px, pz) => {
+    let n = false;
+    for (let i = 0, k = NE - 1; i < NE; k = i++){
+      const a = RP[i], d = RP[k];
+      if ((a[1] > pz) !== (d[1] > pz) && px < (d[0] - a[0]) * (pz - a[1]) / (d[1] - a[1]) + a[0]) n = !n;
+    }
+    return n;
+  };
+  let nSign = 0;
   const gp = [], gi = [];
-  for (let i = 0; i < RN; i++){
-    const [bx, bz] = ring[i];
-    const [wx, wz] = at(bx, bz);
-    const tx = ccx + (bx - ccx) * 0.97, tz = ccz + (bz - ccz) * 0.97;
-    const [ux, uz] = at(tx, tz);
-    gp.push(wx, 0.15 / M, wz);
-    gp.push(ux, (roofY(tx, tz, 0.97) - 3) / M, uz);
+  for (let i = 0; i < NE; i++){
+    const p = RP[i], q = RP[(i + 1) % NE], o = RP[(i + NE - 1) % NE];
+    const dx = q[0] - o[0], dz = q[1] - o[1], L = Math.hypot(dx, dz) || 1;
+    let nx = -dz / L, nz = dx / L;
+    if (!nSign) nSign = inRing(p[0] + nx * 4, p[1] + nz * 4) ? 1 : -1;
+    nx *= nSign; nz *= nSign;
+    const [bx, bz] = at(p[0] + nx * 7, p[1] + nz * 7);
+    gp.push(bx, 0.15 / M, bz);
+    gp.push(bx, (roofY(p[0], p[1], 0) - 1.2) / M, bz);
   }
-  for (let i = 0; i < RN; i++){
-    const a = i * 2, b = i * 2 + 1, c = ((i + 1) % RN) * 2, d = ((i + 1) % RN) * 2 + 1;
+  for (let i = 0; i < NE; i++){
+    const a = i * 2, b = i * 2 + 1, c = ((i + 1) % NE) * 2, d = ((i + 1) % NE) * 2 + 1;
     gi.push(a, b, c, c, b, d);
   }
   const gg = new THREE.BufferGeometry();
   gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
   gg.setIndex(gi); gg.computeVertexNormals();
   const gm = new THREE.Mesh(gg, glass); gm.material.side = THREE.DoubleSide; g.add(gm);
+  const ccx = HX, ccz = HZ;                         // the landside loop below is centred on the hub
 
   /* ---- AIRCRAFT, ONE PER SURVEYED STAND ----------------------------------------------------- */
   /* Four InstancedMeshes rather than 54 groups of four: the parts are identical, and 216 draw
@@ -6937,10 +6946,12 @@ function zayedTerminal(x0, z0){
      and the reference is a five-level deck with the approach road curling round it. Five slabs on
      columns is that, for eleven boxes. */
   const CPX = -455, CPZ = -287;
-  for (let l = 0; l < 5; l++) box(CPX, CPZ, 280, 175, 0.9, deck, 3.4 * l + 0.4);
+  /* Four levels, and the top slab in the deck's own grey (city v178): the white-painted top at 17.5 m
+     rendered as a pale block the size of the hub, a second building beside the first. */
+  for (let l = 0; l < 4; l++) box(CPX, CPZ, 280, 175, 0.9, deck, 3.4 * l + 0.4);
   for (const sx of [-1, 1]) for (const sz of [-1, 1])
-    box(CPX + sx * 132, CPZ + sz * 80, 12, 12, 17.5, deck, 0);
-  box(CPX, CPZ, 280, 175, 0.5, paint, 17.5);
+    box(CPX + sx * 132, CPZ + sz * 80, 12, 12, 14, deck, 0);
+  box(CPX, CPZ, 280, 175, 0.5, deck, 14);
   /* The elevated loop in front of the doors. An arc of chords rather than a curve: sixteen boxes
      round a 330 m radius centred on the processor, sweeping the landside quadrant the deck sits
      in, on piers. */
