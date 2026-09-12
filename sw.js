@@ -27,9 +27,9 @@ const MODULES = ['w2h-city.js', 'w2h-world.js', 'w2h-props.js', 'w2h-basemap.js'
 const STATIC_MODULES = ['w2h-terminal-a.js', 'area-rail.js'];   // imported without a version; keyed by exact URL, refetched with every new build
 const ISLANDS = ['corniche', 'maryah', 'reem', 'saadiyat', 'yas', 'raha', 'zayed', 'masdar', 'airport'];
 const DATA = ['data/index.json', 'data/venues.ndjson', 'data/shopfronts.json', 'data/terminal-a.json',
-  /* The baked Corniche (nav v256): what the opening shot is built from, so it is the first thing
-     a warm cache should hold. */
-  'data/stock-corniche.json', 'data/stock-corniche.bin', 'data/ground-corniche-p.webp', 'data/ground-corniche-d.webp',
+  /* The bakes (nav v256, every island since v257): what each island is built from, so they are
+     the first things a warm cache should hold. */
+  ...ISLANDS.flatMap(i => [`data/stock-${i}.json`, `data/stock-${i}.bin`, `data/ground-${i}-p.webp`, `data/ground-${i}-d.webp`]),
   ...ISLANDS.flatMap(i => [`data/isle-${i}.json`, `data/roads-${i}.json`, `data/fp-${i}.json`])];
 const SHEETS = ['Hero-morning.webp', 'Hero-afternoon.webp', 'Hero-night.webp', 'Hero-pano-day.webp', 'Hero-pano-night.webp', 'Hero-pano-sunset.webp', 'Hero-skyline.webp'];
 const PAGE = 'world-nav.html';

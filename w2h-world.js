@@ -69,7 +69,7 @@
    1 = the bevelled sides), so the ground goes on group 0 and the beach edge on group 1.
    ============================================================================================= */
 import * as THREE from 'three';
-export const BUILD = 'world v348';
+export const BUILD = 'world v349';
 
 /* THE DATUM. Derived, never typed twice. */
 export const ISLE_DEPTH   = 2.4;
@@ -10177,7 +10177,7 @@ function buildFabricFor(d){
      noticed because its does. The evidence was never about "has footprints", it was about
      whether the footprints COVER the ground, and that is a property of each island's bake, not
      a rule. So it is declared on the district and nowhere else. */
-  const genMeshes = d.genFabric !== false;
+  const genMeshes = d.genFabric !== false && !BAKE[d.id];   // baked: the cells and blocks only (world v349)
   urbanFabric(d, d.mass,   { density:1.30, coreX:d.coreN[0], coreZ:d.coreN[1], tallest, cool,
                              minH:5.4, meshes:genMeshes });
   const built = urbanFabric(d, d.detail,
@@ -10507,7 +10507,15 @@ function canvasOfImage(img){
    with it, so the rest of the archipelago builds identically either way. */
 function stockFromBake(d, bake){
   const t0 = performance.now();
-  const head = bake.head, F = new Float32Array(bake.bin);
+  const head = bake.head;
+  /* TWO RECORD FORMATS (world v349). 'q16' is seven int16 per instance — x and z in sixteenths
+     of a unit (0.5 m), y in 1/256, yaw as a fraction of pi, the three scales unsigned in 1/256 —
+     and one byte per colour channel: half the bytes of the float form for a rounding no zoom
+     in this world can see. The float form is kept for a bake made before it. */
+  const q = head.format === 'q16';
+  const F = q ? null : new Float32Array(bake.bin);
+  const R = q ? new Int16Array(bake.bin, 0, head.records * 7) : null;
+  const U = q ? new Uint8Array(bake.bin, head.colorOff) : null;
   const cool = d.tint === 0x8FD3E8 || d.tint === 0xBFD3E0;
   const MATS = fabricMats(cool);
   const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(),
@@ -10524,18 +10532,35 @@ function stockFromBake(d, bake){
     m.userData.bake = { t: b.t, c: b.c, g: b.g };
     m.castShadow = true; m.receiveShadow = true;
     if (b.name) m.name = b.name;
-    let o = b.off;
-    for (let i = 0; i < b.n; i++, o += 7){
-      P.set(F[o], F[o + 1], F[o + 2]);
-      Q.setFromAxisAngle(Y, F[o + 3]);
-      S.set(F[o + 4], F[o + 5], F[o + 6]);
-      M.compose(P, Q, S);
-      m.setMatrixAt(i, M);
-    }
-    if (b.coff != null){
-      let c = b.coff;
-      for (let i = 0; i < b.n; i++, c += 3){ col.setRGB(F[c], F[c + 1], F[c + 2]); m.setColorAt(i, col); }
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    if (q){
+      let o = b.off * 7;
+      for (let i = 0; i < b.n; i++, o += 7){
+        P.set(R[o] / 16, R[o + 1] / 256, R[o + 2] / 16);
+        Q.setFromAxisAngle(Y, R[o + 3] / 32767 * Math.PI);
+        S.set((R[o + 4] & 0xffff) / 256, (R[o + 5] & 0xffff) / 256, (R[o + 6] & 0xffff) / 256);
+        M.compose(P, Q, S);
+        m.setMatrixAt(i, M);
+      }
+      if (b.coff != null){
+        let c = b.coff * 3;
+        const cs = (b.cs || 1) / 255;
+        for (let i = 0; i < b.n; i++, c += 3){ col.setRGB(U[c] * cs, U[c + 1] * cs, U[c + 2] * cs); m.setColorAt(i, col); }
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      }
+    } else {
+      let o = b.off;
+      for (let i = 0; i < b.n; i++, o += 7){
+        P.set(F[o], F[o + 1], F[o + 2]);
+        Q.setFromAxisAngle(Y, F[o + 3]);
+        S.set(F[o + 4], F[o + 5], F[o + 6]);
+        M.compose(P, Q, S);
+        m.setMatrixAt(i, M);
+      }
+      if (b.coff != null){
+        let c = b.coff;
+        for (let i = 0; i < b.n; i++, c += 3){ col.setRGB(F[c], F[c + 1], F[c + 2]); m.setColorAt(i, col); }
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      }
     }
     m.instanceMatrix.needsUpdate = true;
     (b.layer === 'fp' ? fp : b.layer === 'mass' ? d.mass : d.detail).add(m);
@@ -10896,6 +10921,7 @@ function buildIsland(id, force){
   const t = performance.now();
   buildFabricFor(d);
   buildGroundFor(d);
+  if (BAKE[d.id]) stockFromBake(d, BAKE[d.id]);      // every island can be baked now (world v349)
   /* NO LONGER A PLACEHOLDER. `built` is what the breadcrumb reads to decide between "Tap a place"
      and "Placeholder island", and it was a static property of the table describing whether an
      island had hand-authored content. Deferred building made it a lifecycle fact instead: these
@@ -10935,6 +10961,9 @@ return { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pick
             fresh from its plan. Not called by the page. */
          groundCanvas: id => { const d = DISTRICTS.find(x => x.id === id);
                                return d && d.plan ? paintGround(d, d.plan, 1).image : null; },
+         /* A BAKE THAT ARRIVES AFTER buildWorld (world v349): the outer islands fetch theirs on
+            demand, and buildIsland reads these tables at the moment it runs. */
+         addBake: (id, stock, img) => { if (stock) BAKE[id] = stock; if (img) GROUND_IMG[id] = img; },
          /* THE SHORE DISTANCE, FOR THE SAME CALLER (world v276). A venue on a marina pontoon or a
             beach club sits a few metres past the surveyed outline; insideIsle alone would drop
             it. Normalised units, like insideIsle: multiply by the island's half-extent for

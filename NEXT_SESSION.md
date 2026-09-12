@@ -31,6 +31,15 @@
 > committed**, or the page logs "baked stock is from another build" and builds live (slow, not
 > wrong). `?nobake` forces the live path.
 >
+> **12 September — EVERY ISLAND IS BAKED (nav v257 / world v349).** `tools/bake-stock.mjs` now writes
+> `data/stock-<id>.{json,bin}` and `data/ground-<id>-{p,d}.webp` for all nine islands, in a compact
+> int16 record (half the bytes). world-nav fetches the Corniche's before the imports, the other
+> eight together once the shot is on screen, and every build path (opening fill, flight prefetch,
+> water arrival, pump) waits up to 8 s for an island's bake before building it live. Also: the six
+> modules import in one round trip, and the head preloads modules, index and the Corniche bake
+> while the page parses (embed only). Any generator, kit, basemap or data change → re-run the bake
+> and commit all 36 data files.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -39,7 +48,8 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v256 / city v175 / world v348 / props v41` (11 Sep 2026; basemap v30). Verify with
+Stamps at hand-over: `nav v257 / city v175 / world v349 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
 ### How work flows (both repos)

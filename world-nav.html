@@ -4,6 +4,37 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Where2Hang — Abu Dhabi World</title>
+<!-- THE NAV STAMP LIVES HERE (nav v257). The module below reads it, and so does the preload
+     script next to it, which has to run while the page is still being parsed. Bump it here. -->
+<meta name="w2h-nav" content="nav v257">
+<script>
+/* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
+   friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
+   the first frame at 7.8 s. The module script cannot start any of that until the whole page has
+   parsed and its first statements run; a preload here starts them now, in parallel, so by the
+   time the module asks for a file the bytes are in the cache. Embed only — the lab shell keys its
+   modules by Date.now() and a preload could never match. */
+(function(){
+  if (!/[?&]embed=1/.test(location.search)) return;
+  var meta = document.querySelector('meta[name="w2h-nav"]');
+  var v = '?v=' + (meta ? meta.content : '').replace(/\s+/g, '');
+  var add = function(rel, href, as, cors){
+    var l = document.createElement('link'); l.rel = rel; l.href = href;
+    if (as) l.as = as; if (cors) l.crossOrigin = 'anonymous';
+    document.head.appendChild(l);
+  };
+  ['w2h-city.js', 'w2h-world.js', 'w2h-props.js', 'w2h-basemap.js', 'w2h-districts.js', 'w2h-beach-masks.js']
+    .forEach(function(m){ add('modulepreload', './' + m + v); });
+  add('modulepreload', './vendor/three/build/three.module.js');
+  add('preload', 'data/index.json' + v, 'fetch', true);
+  if (/[?&]fp\b/.test(location.search) && !/[?&]nobake\b/.test(location.search)){
+    add('preload', 'data/stock-corniche.json' + v, 'fetch', true);
+    add('preload', 'data/stock-corniche.bin' + v, 'fetch', true);
+    var phone = window.matchMedia && matchMedia('(max-width: 700px)').matches;
+    add('preload', 'data/ground-corniche-' + (phone ? 'p' : 'd') + '.webp' + v, 'image', false);
+  }
+})();
+</script>
 
 <!--
   PASTE TARGET: where2hang-hero-lab/world-nav.html
@@ -745,7 +776,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = 'nav v256';
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v257').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote
@@ -757,30 +788,39 @@ const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
    the footprints and the cull that a load without them never does. */
 const BAKE_ON = location.search.includes('fp') && !/[?&]nobake\b/.test(location.search);
 const BAKE_T0 = performance.now();
-const bakeStockP = !BAKE_ON ? Promise.resolve(null) : (async () => {
-  const [hr, br] = await Promise.all([fetch('data/stock-corniche.json' + V), fetch('data/stock-corniche.bin' + V)]);
-  if (!hr.ok || !br.ok) throw new Error('stock-corniche ' + hr.status + '/' + br.status);
+/* EVERY ISLAND HAS A BAKE (nav v257). The Corniche's is fetched here, before the imports; the
+   others are fetched after the reveal, in the order the opening shot needs them, and an island
+   waits for its bake the way it already waits for its roads. */
+const fetchStock = async id => {
+  const [hr, br] = await Promise.all([fetch('data/stock-' + id + '.json' + V), fetch('data/stock-' + id + '.bin' + V)]);
+  if (!hr.ok || !br.ok) throw new Error('stock-' + id + ' ' + hr.status + '/' + br.status);
   const head = await hr.json(); const bin = await br.arrayBuffer();
-  if (!head || !head.buckets || bin.byteLength !== head.floats * 4) throw new Error('stock-corniche: header and binary disagree');
+  const want = head && head.format === 'q16' ? head.bytes : head && head.floats * 4;
+  if (!head || !head.buckets || bin.byteLength !== want) throw new Error('stock-' + id + ': header and binary disagree');
   return { head, bin };
-})().catch(e => { console.warn('baked stock unavailable, building live:', e.message); return null; });
-const bakeGroundP = !BAKE_ON ? Promise.resolve(null) : (async () => {
+};
+const fetchGround = async id => {
   const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches;
   const img = new Image();
-  img.src = 'data/ground-corniche-' + (phone ? 'p' : 'd') + '.webp' + V;
+  img.src = 'data/ground-' + id + '-' + (phone ? 'p' : 'd') + '.webp' + V;
   await img.decode();
   return img;
-})().catch(e => { console.warn('baked ground unavailable, painting live:', e.message); return null; });
+};
+const bakeStockP = !BAKE_ON ? Promise.resolve(null) : fetchStock('corniche')
+  .catch(e => { console.warn('baked stock unavailable, building live:', e.message); return null; });
+const bakeGroundP = !BAKE_ON ? Promise.resolve(null) : fetchGround('corniche')
+  .catch(e => { console.warn('baked ground unavailable, painting live:', e.message); return null; });
 
-const CITY  = await import('./w2h-city.js'  + V);
-const WORLD = await import('./w2h-world.js' + V);
-const PROPS = await import('./w2h-props.js' + V);
-const BMAP  = await import('./w2h-basemap.js' + V);
-/* Per-district block sizes, height ceilings and the vacancy mask. Imported here with the same V
-   as every other module, because w2h-world.js deliberately imports nothing local — a static
-   specifier cannot carry ?v= and would be served from cache forever. */
-const DIST  = await import('./w2h-districts.js' + V);
-const MASKS = await import('./w2h-beach-masks.js' + V);   // beach trim polygons, lon/lat
+/* SIX MODULES IN ONE ROUND TRIP (nav v257). Awaited one after another, each import waited for
+   the previous file to arrive before its own request left the phone: six round trips, 3.3 s on
+   the iPhone that reported it. Requested together they cost one. (Per-district block sizes,
+   height ceilings and the vacancy mask ride in w2h-districts.js; the beach trim polygons in
+   w2h-beach-masks.js. All carry V because w2h-world.js deliberately imports nothing local — a
+   static specifier cannot carry ?v= and would be served from cache forever.) */
+const [CITY, WORLD, PROPS, BMAP, DIST, MASKS] = await Promise.all([
+  import('./w2h-city.js' + V), import('./w2h-world.js' + V), import('./w2h-props.js' + V),
+  import('./w2h-basemap.js' + V), import('./w2h-districts.js' + V), import('./w2h-beach-masks.js' + V),
+]);
 phase('import');
 
 /* THE BASEMAP, FETCHED BEFORE THE WORLD IS BUILT.
@@ -1436,22 +1476,22 @@ phase('propKit');
 /* THE BAKE IS USED ONLY WHEN IT WAS MADE FROM THIS EXACT WORLD: the generator, the city kit, the
    basemap and the data bake all shape what stands on Corniche, so any one of them moving makes the
    file a picture of a different island. Mismatch is a warning and a live build, never a mix. */
-const bakeStock = await (async () => {
-  const b = await bakeStockP;
+const bakeValid = (id, b) => {
   if (!b) return null;
   const st = b.head.stamps || {};
   const want = { world: WORLD.BUILD, city: CITY.BUILD, basemap: BMAP.BUILD,
                  data: (window.__basemapIndex && window.__basemapIndex.generated) || null };
   const off = Object.keys(want).filter(k => st[k] !== want[k]);
-  if (off.length){ console.warn('baked stock is from another build (' + off.map(k => k + ' ' + st[k] + ' vs ' + want[k]).join(', ') + '); building live'); return null; }
+  if (off.length){ console.warn('baked stock ' + id + ' is from another build (' + off.map(k => k + ' ' + st[k] + ' vs ' + want[k]).join(', ') + '); building live'); return null; }
   return b;
-})();
+};
+const bakeStock = bakeValid('corniche', await bakeStockP);
 const bakeGround = bakeStock ? await bakeGroundP : null;
 PH.bake = performance.now() - BAKE_T0;
 const { world, water, farSea, waterPos, waterBase, waterNormal, DISTRICTS, pickTargets, corniche,
         propCount, tickSignals, tickTraffic, PERF, buildIsland, buildCornicheRest, buildCornicheMass,
         footprintsFor, refineGroundStep,
-        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas } =
+        groundFeaturesFor, KIT_ZONES, refreshIslandWater, refreshBeach, beachPending, insideIsle, distToOutline, groundCanvas, addBake } =
   buildWorld(scene, kit, {
     bake: bakeStock ? { corniche: bakeStock } : null,
     groundImages: bakeGround ? { corniche: bakeGround } : null,
@@ -1474,6 +1514,41 @@ phase('buildWorld');
 /* Baked, the footprints and the cull are already in the scene: the island is ready the moment it
    exists, which is what lets the first frame be the reveal. */
 if (corniche.fpBaked) fpState.set(corniche.id, 'on');
+
+/* THE OTHER ISLANDS' BAKES (nav v257), fetched one at a time once the opening shot is on screen,
+   in the order the flight and the opening fill want them. An island's build waits for its bake
+   (whenBake) the way it waits for its roads; a bake that fails or is from another build settles
+   as 'none' and the island builds live, exactly as before. */
+const bakeState = new Map();
+const BAKE_ORDER = ['maryah', 'reem', 'saadiyat', 'raha', 'yas', 'zayed', 'masdar', 'airport'];
+const bakeSettled = id => id === corniche.id || !BAKE_ON || ['on', 'none'].includes(bakeState.get(id));
+function whenBake(id, ms = 8000){
+  if (bakeSettled(id)) return Promise.resolve(true);
+  return new Promise(res => {
+    const t0 = performance.now();
+    const tick = () => { if (bakeSettled(id) || performance.now() - t0 > ms) res(bakeSettled(id)); else setTimeout(tick, 150); };
+    tick();
+  });
+}
+let _bakesStarted = false;
+async function warmBakes(){
+  if (_bakesStarted || !BAKE_ON || typeof addBake !== 'function') return;
+  _bakesStarted = true;
+  /* All eight at once: together they are smaller than the Corniche's alone, and the opening fill
+     is waiting on the first three. Requested in order, so the ones the shot needs lead. */
+  await Promise.all(BAKE_ORDER.filter(id => DISTRICTS.some(d => d.id === id)).map(async id => {
+    bakeState.set(id, 'pending');
+    try {
+      const [stock, img] = await Promise.all([fetchStock(id), fetchGround(id).catch(() => null)]);
+      const ok = bakeValid(id, stock);
+      if (ok){ addBake(id, ok, img); bakeState.set(id, 'on'); }
+      else bakeState.set(id, 'none');
+      console.info('bake ' + id + ': ' + bakeState.get(id) + (img ? '' : ' (no ground image)') + ' at ' + Math.round(performance.now()) + ' ms');
+    } catch (e){ console.warn('bake ' + id + ':', e && e.message); bakeState.set(id, 'none'); }
+  }));
+}
+if (BAKE_ON) for (const id of BAKE_ORDER) bakeState.set(id, 'pending');
+setTimeout(warmBakes, 6000);      // the fallback; the reveal starts it earlier
 
 /* DRAIN THE DRIVER'S BACKLOG IN PIECES, INSTEAD OF ALL AT ONCE IN THE FRAME THE USER IS WAITING ON.
 
@@ -2714,8 +2789,8 @@ window.__w2hSetResults = setResults;
             else console.warn('prefetch gave up on', d.id, 'after', d._pumpRetries, 'attempts');
           }
         };
-        if (roadsIn(d.id)) tryBuild();
-        else whenRoads(d.id).then(() => { if (d.pending) tryBuild(); else reveal(); });
+        if (roadsIn(d.id) && bakeSettled(d.id)){ console.info('build ' + d.id + ' via pump'); tryBuild(); }
+        else Promise.all([whenRoads(d.id), whenBake(d.id)]).then(() => { if (d.pending){ console.info('build ' + d.id + ' via pump (waited; bake ' + bakeState.get(d.id) + ')'); tryBuild(); } else reveal(); });
       }
     } catch (e) { console.warn('prefetch failed:', d && d.id, e && e.message); }
     setTimeout(pump, 1400);
@@ -3406,6 +3481,7 @@ function setDistrict(d){
   if (buildIsland && d && d.pending && typeof roadsIn === 'function' && !roadsIn(d.id)){
     whenRoads(d.id, 2500).then(() => buildAndRegister(d));
   } else {
+    if (d && d.pending) console.info('build ' + d.id + ' via visit (bake ' + bakeState.get(d.id) + ')');
     if (buildIsland && d && buildIsland(d.id, true)){
       snapshotMats(d.group);
       registerLift(d.group);
@@ -5409,7 +5485,7 @@ const WARM_N = WARM_ONE ? 1 : 8;
    right pace AFTER the reveal, when a long frame is a visible hitch; before it the spinner is up,
    nobody sees a frame's length, and every frame spent pacing is a frame the owner waits. The
    total upload work is the same either way. */
-const warmN = () => WARM_ONE ? 1 : (corniche.fpBaked && _warmCorniche > 0 ? 200 : WARM_N);
+const warmN = () => WARM_ONE ? 1 : (corniche.fpBaked && _warmCorniche > 0 ? 400 : WARM_N);
 const WARM_COST = [];
 let warmQueue = null, _warmLast = null;
 /* How many of the Corniche's own meshes are still hidden by the warm-up (nav v256): the reveal
@@ -5977,6 +6053,8 @@ async function addWaterGeometry(d){
     /* NOT BEFORE THE REVEAL HAS SETTLED (nav v255): roads arrive from the cache in milliseconds,
        so this path built Reem and Raha before the Corniche's own footprints. */
     while (!revealSettled()) await new Promise(r => setTimeout(r, 400));
+    await whenBake(d.id);
+    if (d.pending) console.info('build ' + d.id + ' via water arrival (bake ' + bakeState.get(d.id) + ')');
     if (buildIsland && d.pending && buildIsland(d.id)){
       /* THE SAME FOUR CALLS setDistrict MAKES, because a late build is still a build. They sit
          inside setDistrict's `if (buildIsland(...))` block, which already returned false for this
@@ -6346,6 +6424,20 @@ function fabricInstances(d){
 
 async function addFootprints(d){
   if (!FP_ON || !footprintsFor || fpState.has(d.id)) return;
+  if (d.fpBaked){
+    /* BAKED (nav v257): the footprints and the cull came with the island's stock. Only the
+       shopfronts still want the raw list, fetched once the reveal has settled. */
+    fpState.set(d.id, 'on');
+    d.fpAt = performance.now();
+    applyLOD();
+    const later = () => {
+      if (!revealSettled()){ setTimeout(later, 700); return; }
+      footprintsFrom(d).then(list => { if (!list) return; d.fpRaw = list.length; d.fpList = list; return addShopfronts(d, list); })
+        .catch(e => noteError('shopfronts ' + d.id, e));
+    };
+    setTimeout(later, 1200);
+    return;
+  }
   fpState.set(d.id, 'pending');
   try {
     const list = await footprintsFrom(d);
@@ -6553,8 +6645,8 @@ function attractPrefetch(n){
      returns empty until it does), this only improves the odds it does not have to. */
   const idx = window.__basemapIndex;
   if (idx && BMAP.loadIsland) BMAP.loadIsland(idx, leg.id).catch(() => {});
-  if (roadsIn(leg.id)){ buildAndRegister(d); return; }
-  whenRoads(leg.id).then(() => { if (d.pending) buildAndRegister(d); });
+  if (roadsIn(leg.id) && bakeSettled(leg.id)){ console.info('build ' + leg.id + ' via flight (bake ' + bakeState.get(leg.id) + ')'); buildAndRegister(d); return; }
+  Promise.all([whenRoads(leg.id), whenBake(leg.id)]).then(() => { if (d.pending){ console.info('build ' + leg.id + ' via flight (waited; bake ' + bakeState.get(leg.id) + ')'); buildAndRegister(d); } });
 }
 
 /* AN ISLAND IS READY WHEN THERE IS NOTHING LEFT TO WATCH ARRIVE.
@@ -6863,6 +6955,7 @@ function maybePostPainted(){
     baked: corniche.fpBaked ? 1 : 0, fill: Math.round(_fillAt || 0), fp: Math.round(corniche.fpAt || 0),
     bw: Math.round(PH.buildWorld || 0), bake: Math.round(PH.bake || 0) }, '*'); } catch (e){}
   scheduleOpeningFill(AFTER_REVEAL_MS);
+  warmBakes();
 }
 
 /* WHAT THE OPENING SHOT SHOWS IS BUILT FIRST (nav v252). The flight builds each island a leg
@@ -6877,8 +6970,8 @@ function scheduleOpeningFill(delay){
     const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
     if (!id){ scheduleGroundRefine(300); return; }   // the shot is complete: sharpen the ground, then the far islands
     const d = DISTRICTS.find(y => y.id === id);
-    if (roadsIn(id)){ try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(500); }
-    else whenRoads(id).then(() => scheduleOpeningFill(0));
+    if (roadsIn(id) && bakeSettled(id)){ console.info('build ' + id + ' via opening fill (bake ' + bakeState.get(id) + ')'); try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(500); }
+    else Promise.all([whenRoads(id), whenBake(id)]).then(() => scheduleOpeningFill(0));
   };
   setTimeout(() => {
     if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 2500 });
