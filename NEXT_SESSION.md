@@ -99,7 +99,9 @@
 > them back at WARM_N (8) a frame after the Corniche, ground last. Now OPENING_IDS (Corniche +
 > the five chain islands) are the fast set: 400 a frame, grounds first, and maybePostPainted's
 > `_warmCorniche` gate counts all six. Verified on the bench: warm-hidden meshes 0 on every
-> opening island at the reveal.
+> opening island at the reveal. Third revision: OPENING_FILL and OPENING_IDS cover all nine islands
+> (Zayed City is in the shot's frame; baked, its build is ~300 ms), OPENING_WAIT_MS 3 s;
+> scheduleDeferredIsland stays as the fallback for a failed bake.
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.

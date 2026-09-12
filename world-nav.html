@@ -5528,7 +5528,7 @@ let warmQueue = null, _warmLast = null;
    waits for this to reach zero, not for the whole queue — the far islands' props can keep
    arriving a batch a frame behind an opening shot that is already complete. */
 let _warmCorniche = 0;   // meshes of the opening shot's six islands still hidden (the name predates the widening)
-const OPENING_IDS = ['corniche', 'maryah', 'reem', 'saadiyat', 'raha', 'yas'];
+const OPENING_IDS = ['corniche', 'maryah', 'reem', 'saadiyat', 'raha', 'yas', 'zayed', 'masdar', 'airport'];
 
 function warmHideAll(){
   if (NO_WARM) return;
@@ -6985,7 +6985,7 @@ function bakeXfer(){
     return e ? Math.round(e.transferSize) : -1;
   } catch (e){ return -1; }
 }
-const OPENING_WAIT_MS = 2500;   // the most the reveal waits for the opening chain past the Corniche
+const OPENING_WAIT_MS = 3000;   // the most the reveal waits for the opening chain past the Corniche
 let _openFrom = 0;
 const openingWhole = () => OPENING_FILL.every(x => { const d = DISTRICTS.find(y => y.id === x); return !d || (!d.pending && d._shown); });
 function maybePostPainted(){
@@ -7066,7 +7066,11 @@ function maybePostPainted(){
    props, and the seconds after the reveal are the idlest the page ever is, so they are all
    spent here: after this list the ground refines run (a no-op when the ground is baked) and
    the deferred three follow. A tap then only ever flies. */
-const OPENING_FILL = ['maryah', 'reem', 'saadiyat', 'raha', 'yas'];
+/* AND THE DEFERRED THREE (nav v261, third revision): Zayed City is in the opening shot's frame
+   and came up seconds after it ("What about Zayed?", 12 Sep). Baked, its build is a few hundred
+   milliseconds and Masdar's and the airport's a few tens, so they are built here with the rest,
+   behind the spinner; scheduleDeferredIsland is left as the fallback for a bake that fails. */
+const OPENING_FILL = ['maryah', 'reem', 'saadiyat', 'raha', 'yas', 'zayed', 'masdar', 'airport'];
 function scheduleOpeningFill(delay){
   const run = () => {
     const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
