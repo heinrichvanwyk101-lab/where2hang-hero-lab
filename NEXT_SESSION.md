@@ -70,7 +70,11 @@
 > whose bake is pending, and a failed bake falls back to the live pass. `W2H.beachLattice(id)`
 > gives the tool the lattice from a live page. buildBeachFor(d, forExport) returns the lattice
 > without emitting. Re-bake after ANY change here. (A later v260 HTML revision also stamps `_builtAt` on
-> the water-arrival build path, so the `isles` row carries every island; no stamp bump, modules unchanged.)
+> the water-arrival build path, so the `isles` row carries every island; no stamp bump, modules unchanged.
+> A third v260 revision gates the reveal on the opening chain: maybePostPainted builds Al Maryah, Reem,
+> Saadiyat, Raha and Yas one per frame behind the spinner once the Corniche is ready, capped at
+> OPENING_WAIT_MS 2.5 s, so the archipelago appears whole; painted's `isles` field says how many were
+> up at the reveal — 6 is whole, less means the cap hit.)
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.

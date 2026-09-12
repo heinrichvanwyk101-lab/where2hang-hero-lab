@@ -6961,6 +6961,9 @@ function bakeXfer(){
     return e ? Math.round(e.transferSize) : -1;
   } catch (e){ return -1; }
 }
+const OPENING_WAIT_MS = 2500;   // the most the reveal waits for the opening chain past the Corniche
+let _openFrom = 0;
+const openingWhole = () => OPENING_FILL.every(x => { const d = DISTRICTS.find(y => y.id === x); return !d || (!d.pending && d._shown); });
 function maybePostPainted(){
   if (_paintedSent || !_paintedPending) return;
   const g = document.getElementById('gl');
@@ -6976,6 +6979,28 @@ function maybePostPainted(){
      exists to prevent. The ceiling still applies. */
   const complete = isleReady(corniche) && !(warmQueue && _warmCorniche > 0);
   if (!complete && performance.now() - _paintedFrom < PAINT_CEILING_MS) return;
+  /* THE WHOLE OPENING SHOT, NOT THE CORNICHE FIRST (nav v260, third revision). With the reveal
+     gated on the Corniche alone the owner's phone showed the other islands as bare outlines
+     for the two seconds the idle chain took after it ("on opening Corniche is built and there
+     and other islands still have to build", 12 Sep, with the screenshot). Their bakes are on
+     the phone before the Corniche is ready (fetched at buildWorld), and a baked build is
+     100-600 ms, so the five islands of the opening chain are built here, one per frame,
+     behind the spinner, and the reveal shows the archipelago whole. Capped: past
+     OPENING_WAIT_MS from the moment the Corniche was ready the reveal goes out with whatever is
+     built and the idle chain finishes the rest, so a slow bake never holds the screen. */
+  if (complete && !openingWhole()){
+    if (!_openFrom) _openFrom = performance.now();
+    if (performance.now() - _openFrom < OPENING_WAIT_MS){
+      const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
+      const d = id && DISTRICTS.find(y => y.id === id);
+      if (d && roadsIn(id) && bakeSettled(id)){
+        console.info('build ' + id + ' via opening (bake ' + bakeState.get(id) + ')');
+        try { buildAndRegister(d); if (isleReady(d)){ d.group.visible = true; d._shown = true; } }
+        catch (e){ console.warn('opening build', id, e && e.message); }
+      }
+      return;   // one island a frame; the next frame comes back for the rest
+    }
+  }
   if (g && !g.classList.contains('ready')){ g.classList.add('ready'); _paintSrc = complete ? 'complete' : 'forced'; }
   else _paintSrc = complete ? 'complete' : 'forced';
   if (!_glReadyAt) _glReadyAt = performance.now();
