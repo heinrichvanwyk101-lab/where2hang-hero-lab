@@ -7011,11 +7011,21 @@ function lodProps(){
     }
     if (!d._props.length) continue;
     const R = d.r * (d.dispScale || 1);
-    const near = activeDistrict === d ||
-      Math.hypot(camera.position.x - d.x, camera.position.z - d.z, camera.position.y - GROUND) < R * PROP_NEAR;
-    if (near !== d._propsNear){
-      d._propsNear = near;
-      for (const o of d._props) o.layers.set(near ? 0 : FAR_LAYER);
+    const dist = Math.hypot(camera.position.x - d.x, camera.position.z - d.z, camera.position.y - GROUND);
+    /* WITH A MARGIN (nav v262, second revision): one threshold flipped the props every frame
+       while the damped camera settled on it — invisible by day, a flicker of lamp glows and
+       window lights at dusk and night on the owner's phone. Near inside 2.4 radii, far past
+       2.9, and nothing in between changes. THE LIGHTS STAY AT DUSK AND NIGHT: the glow pools,
+       car lights and window sheets are the city seen from above after dark, and they are quads
+       — cheap. Only the day props (palms, lamp posts, cars) leave the far frame. */
+    const lit = view === 'dusk' || view === 'night';
+    let near = d._propsNear;
+    if (activeDistrict === d || dist < R * (PROP_NEAR - 0.2)) near = true;
+    else if (dist > R * (PROP_NEAR + 0.3)) near = false;
+    else if (near === undefined) near = dist < R * PROP_NEAR;
+    if (near !== d._propsNear || lit !== d._propsLit){
+      d._propsNear = near; d._propsLit = lit;
+      for (const o of d._props) o.layers.set(near || (lit && o.userData.nightOnly) ? 0 : FAR_LAYER);
     }
   }
 }
