@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_STANDS, TERM_ROOF, TERM_HUB } from './w
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v180';
+export const BUILD = 'city v181';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6748,8 +6748,14 @@ function zayedTerminal(x0, z0){
      camera the two were one shape: the owner's 18:02 screenshot, a flat grey X. The photographs
      are the opposite — a white shell that catches the light over an apron that is nearly black —
      and the contrast is most of what makes the building read at a kilometre. */
-  const shell = saadKitMat(0xDADBD8, 0xFFFFFF, 0.30, 0.05, 0xFFF4E2, 0.05, 0.62);
-  const shellU= saadKitMat(0x7E7F7B, 0xB9B8B2, 0.60, 0.05, 0xFFE9C8, 0.04, 0.45);
+  /* GRAPHITE, WITH A WHITE EDGE (city v181). The owner's airside aerial at dusk settled the
+     colour: the shell is a dark metallic grey with the ribs catching the light, and what reads
+     white in every front view is the fascia — a thick band along the wavy eave — with the glass
+     glowing under it. So the roof is graphite (pale in full sun, metallic), the fascia is white,
+     and the eave light runs along the fascia's underside. */
+  const shell = saadKitMat(0x555A60, 0xC8CBCE, 0.40, 0.30, 0xFFF4E2, 0.02, 0.55);
+  const shellU= saadKitMat(0x3A3D41, 0x6E7175, 0.60, 0.05, 0xFFE9C8, 0.04, 0.45);
+  const fascia= saadKitMat(0xE6E7E4, 0xFFFFFF, 0.50, 0, 0xFFF4E2, 0.05, 0.70);
   const glass = kitGlass(0x22343F, 0x9FBACB, 0.18, 0.5);
   /* LIT FROM INSIDE AFTER DARK (city v179). kitGlass carries the window sheet as its dusk map
      but no emissive, so at dusk the terminal's front was a dark band under a white lip. The
@@ -6810,7 +6816,9 @@ function zayedTerminal(x0, z0){
   /* Amplitudes were first set at 6 / 2.6 / 11 and the bench rendered a sand dune: at the district
      camera 2.6 m of ripple is under a pixel of shading. 8 / 4.5 / 14 over a 150 m period puts the
      crests where the eye finds them, and is still inside the 53 m the survey tags. */
-  const PIER_Y = 18, VAULT = 9, RIPPLE = 6.5, RIP_PER = 84, HUB_LIFT = 18, WAVE_A = 14, PER = 118,
+  /* Three arches across the front, not five (city v181): the front photographs show three
+     crests over the hall, the eave dipping deep between them. */
+  const PIER_Y = 18, VAULT = 9, RIPPLE = 6.5, RIP_PER = 84, HUB_LIFT = 18, WAVE_A = 17, PER = 140,
         EAVE = 14, DROOP = 3.5;
   const sm = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
   /* THE LANDSIDE BEARING, from the hub to the survey's car park (OSM 1233647932). The hub's
@@ -6834,7 +6842,7 @@ function zayedTerminal(x0, z0){
     const u = -(px - HX) * Math.sin(bear) + (pz - HZ) * Math.cos(bear);   // along the front
     const v =  (px - HX) * Math.cos(bear) + (pz - HZ) * Math.sin(bear);   // toward the road
     const front = sm((v + 120) / 260);                        // 1 at the road edge, 0 well into the airside
-    const arches = WAVE_A * (0.35 + 0.65 * front) * Math.sin(u / PER * Math.PI * 2);
+    const arches = WAVE_A * (0.3 + 0.7 * front) * Math.sin(u / PER * Math.PI * 2);
     const hub = w * (HUB_LIFT * (0.7 + 0.5 * front) + arches);
     return PIER_Y + vault + ripple + hub - DROOP * (1 - sm(d / EAVE));
   };
@@ -6895,7 +6903,7 @@ function zayedTerminal(x0, z0){
     const ins = 7 - 4 * hw;
     const [bx, bz] = at(p[0] + nx * ins, p[1] + nz * ins);
     gp.push(bx, 0.15 / M, bz);
-    gp.push(bx, (roofY(p[0], p[1], 0) - 1.2) / M, bz);
+    gp.push(bx, (roofY(p[0], p[1], 0) - 3.6) / M, bz);   // to the underside of the fascia
   }
   for (let i = 0; i < NE; i++){
     const a = i * 2, b = i * 2 + 1, c = ((i + 1) % NE) * 2, d = ((i + 1) % NE) * 2 + 1;
@@ -6912,21 +6920,26 @@ function zayedTerminal(x0, z0){
      well above the bloom threshold so the pass turns it into a glow. nightOnly, so day never sees
      it; origMat is what the view switcher hands back when it shows a nightOnly mesh. */
   const eaveMat = new THREE.MeshStandardMaterial({ color:0x000000, emissive:0xFFD6A0, emissiveIntensity:3.2, roughness:1 });
-  const ep = [], ei = [];
-  for (let i = 0; i < NE; i++){
-    const p = RP[i]; const [wx, wz] = at(p[0], p[1]); const ry = roofY(p[0], p[1], 0);
-    ep.push(wx, (ry - 1.7) / M, wz); ep.push(wx, (ry - 0.5) / M, wz);
-  }
-  for (let i = 0; i < NE; i++){
-    const a = i * 2, b = i * 2 + 1, c = ((i + 1) % NE) * 2, d = ((i + 1) % NE) * 2 + 1;
-    ei.push(a, b, c, c, b, d);
-  }
-  const eg = new THREE.BufferGeometry();
-  eg.setAttribute('position', new THREE.Float32BufferAttribute(ep, 3));
-  eg.setIndex(ei); eg.computeVertexNormals();
-  const em = new THREE.Mesh(eg, eaveMat); em.material.side = THREE.DoubleSide;
+  /* A band on the eave face between two heights under the roof surface, for the fascia (white,
+     3 m deep, from 0.3 above the roof edge so it caps it) and the light line beneath it. */
+  const band = (y0, y1, mat) => {
+    const bp = [], bi = [];
+    for (let i = 0; i < NE; i++){
+      const p = RP[i]; const [wx, wz] = at(p[0], p[1]); const ry = roofY(p[0], p[1], 0);
+      bp.push(wx, (ry + y0) / M, wz); bp.push(wx, (ry + y1) / M, wz);
+    }
+    for (let i = 0; i < NE; i++){
+      const a = i * 2, b = i * 2 + 1, c = ((i + 1) % NE) * 2, d = ((i + 1) % NE) * 2 + 1;
+      bi.push(a, b, c, c, b, d);
+    }
+    const bg = new THREE.BufferGeometry();
+    bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3));
+    bg.setIndex(bi); bg.computeVertexNormals();
+    const bm = new THREE.Mesh(bg, mat); bm.material.side = THREE.DoubleSide; g.add(bm); return bm;
+  };
+  band(-3.0, 0.3, fascia);
+  const em = band(-3.8, -3.1, eaveMat);
   em.userData.nightOnly = true; em.userData.origMat = eaveMat; em.userData.noShadow = true;
-  g.add(em);
 
   /* ---- AIRCRAFT, ONE PER SURVEYED STAND ----------------------------------------------------- */
   /* Four InstancedMeshes rather than 54 groups of four: the parts are identical, and 216 draw

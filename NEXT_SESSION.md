@@ -190,6 +190,13 @@
 > tight set, cluster pitch, straight down on the roof. nav v267 / world v353: a district camera
 > may declare wins:true and frameAllResults uses it as-is (airport only); re-baked for the stamp.
 >
+> **city v181 / nav v268 — GRAPHITE ROOF, WHITE FASCIA, THREE ARCHES.** The owner's second set of
+> photographs (airside aerial at dusk, two front elevations): the shell is dark metallic grey with
+> the ribs catching light; the white in every front view is a thick fascia along the wavy eave,
+> the glass glowing beneath it; three crests across the front. Kit: shell 0x555A60 dusk /
+> 0xC2C5C8 day, metalness 0.45; a 3.3 m white band on the eave face (band(y0, y1, mat)) with the
+> emissive light line under it; the glass top at the fascia's underside; WAVE_A 17 over 140 m.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -198,7 +205,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v267 / city v180 / world v353 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v268 / city v181 / world v353 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
