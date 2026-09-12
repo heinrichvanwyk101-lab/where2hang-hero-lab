@@ -69,7 +69,8 @@
 > band the moment a bake lands, the beachPending flush and the water-arrival refresh skip islands
 > whose bake is pending, and a failed bake falls back to the live pass. `W2H.beachLattice(id)`
 > gives the tool the lattice from a live page. buildBeachFor(d, forExport) returns the lattice
-> without emitting. Re-bake after ANY change here.
+> without emitting. Re-bake after ANY change here. (A later v260 HTML revision also stamps `_builtAt` on
+> the water-arrival build path, so the `isles` row carries every island; no stamp bump, modules unchanged.)
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.

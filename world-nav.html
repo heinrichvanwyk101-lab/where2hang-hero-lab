@@ -6078,6 +6078,7 @@ async function addWaterGeometry(d){
     await whenBake(d.id);
     if (d.pending) console.info('build ' + d.id + ' via water arrival (bake ' + bakeState.get(d.id) + ')');
     if (buildIsland && d.pending && buildIsland(d.id)){
+      d._builtAt = Math.round(performance.now());   // for the 'isles' row (nav v260): this path builds most islands on the phone
       /* THE SAME FOUR CALLS setDistrict MAKES, because a late build is still a build. They sit
          inside setDistrict's `if (buildIsland(...))` block, which already returned false for this
          island on the visit that deferred it — so without repeating them here the new geometry
