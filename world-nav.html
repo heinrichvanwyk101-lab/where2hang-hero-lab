@@ -5527,7 +5527,8 @@ let warmQueue = null, _warmLast = null;
 /* How many of the Corniche's own meshes are still hidden by the warm-up (nav v256): the reveal
    waits for this to reach zero, not for the whole queue — the far islands' props can keep
    arriving a batch a frame behind an opening shot that is already complete. */
-let _warmCorniche = 0;
+let _warmCorniche = 0;   // meshes of the opening shot's six islands still hidden (the name predates the widening)
+const OPENING_IDS = ['corniche', 'maryah', 'reem', 'saadiyat', 'raha', 'yas'];
 
 function warmHideAll(){
   if (NO_WARM) return;
@@ -5545,10 +5546,19 @@ function warmHideAll(){
   /* THE CORNICHE AHEAD OF EVERYTHING (nav v256). The queue pops from its end, so the island the
      shot opens on goes last in the array: its meshes are revealed first, biggest first among
      them, and the opening shot is whole before a single far-island lamp is drawn. */
+  /* THE WHOLE OPENING SHOT, NOT THE CORNICHE ALONE (nav v261, second revision). The landmark
+     kits of every island exist at boot — over a thousand hand-built meshes on Saadiyat — and so
+     do the islands' ground planes; this queue hid them all and gave them back at WARM_N a frame
+     once the Corniche was done, ground last (a count of one sorts to the very end). On the
+     owner's phone that was Saadiyat as a bare outline at the reveal, filling in over the next
+     seconds, with every island long since built (12 Sep, screenshot + the isles row). The six
+     islands of the opening shot are now the fast set: 400 a frame, their grounds first, and the
+     reveal waits for the last of them. */
   const mine = new Set();
-  if (corniche && corniche.group) corniche.group.traverse(o => { if (o.isMesh) mine.add(o); });
+  for (const d of DISTRICTS) if (OPENING_IDS.includes(d.id) && d.group) d.group.traverse(o => { if (o.isMesh) mine.add(o); });
   const rest = warmQueue.filter(o => !mine.has(o)), own = warmQueue.filter(o => mine.has(o));
-  warmQueue = rest.concat(own);
+  const ownGround = own.filter(o => o.userData.ground), ownOther = own.filter(o => !o.userData.ground);
+  warmQueue = rest.concat(ownOther, ownGround);   // popped from the end: grounds, then the rest of the shot, then the far islands
   _warmCorniche = own.length;
 }
 
@@ -5562,9 +5572,9 @@ function warmStep(){
     if (WARM_ONE) _warmLast = o;
   }
   if (_warmCorniche > 0){
-    /* Recount only while the island is still arriving; a handful of traversals at most. */
+    /* Recount only while the shot is still arriving; a handful of traversals at most. */
     let left = 0;
-    corniche.group.traverse(o => { if (o.isMesh && o.userData.warmHidden) left++; });
+    for (const d of DISTRICTS) if (OPENING_IDS.includes(d.id) && d.group) d.group.traverse(o => { if (o.isMesh && o.userData.warmHidden) left++; });
     _warmCorniche = left;
   }
   if (!warmQueue.length){

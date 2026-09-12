@@ -92,6 +92,15 @@
 > islandGeometry — read the next perf rows before choosing which to bake next; and the GPU's first
 > use of each shader program, which the bench profile puts above all of them.
 >
+> **nav v261, second revision — THE WARM-UP'S FAST SET IS THE OPENING SHOT.** The owner's 09:42
+> screenshot showed Saadiyat as a bare outline with every island built before the reveal
+> (isles 6 in the painted row). Cause: the landmark kits of every island (1,100+ meshes on
+> Saadiyat) and the islands' ground planes exist at boot, warmHideAll hid them, and warmStep gave
+> them back at WARM_N (8) a frame after the Corniche, ground last. Now OPENING_IDS (Corniche +
+> the five chain islands) are the fast set: 400 a frame, grounds first, and maybePostPainted's
+> `_warmCorniche` gate counts all six. Verified on the bench: warm-hidden meshes 0 on every
+> opening island at the reveal.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
