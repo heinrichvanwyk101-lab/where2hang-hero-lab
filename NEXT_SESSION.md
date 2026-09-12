@@ -177,6 +177,15 @@
 > preload script sets window.__w2hStampMismatch if the map's stamp differs from the meta, and
 > errcheck3 fails on it. THE STAMP IS IN THREE PLACES NOW: meta, NAV_STAMP fallback, import map.
 >
+> **city v180 / nav v266 — THE HUB IS A ROW OF ARCHES FACING THE ROAD.** The owner, from the
+> phone on the v179 build: "that main building does not look like the real one". The hub had one
+> directional sine on an arbitrary bearing. Now the wave's phase runs along the landside front
+> (across the hub-to-car-park bearing, period 118 m), its amplitude and the hub's lift are
+> greatest at the road edge and fade toward the airside, so the front eave is wavy and tallest and
+> each crest is a ridge running back over the hall — the photographs' front elevation. Bench from
+> the pinned camera: cam3-tile in the session scratch; the wavy eave reads, the glass under it.
+> Re-baked against city v180.
+>
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
 
@@ -185,7 +194,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v265 / city v179 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v266 / city v180 / world v352 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 

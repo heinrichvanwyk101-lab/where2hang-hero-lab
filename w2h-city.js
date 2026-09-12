@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_STANDS, TERM_ROOF, TERM_HUB } from './w
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v179';
+export const BUILD = 'city v180';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6810,15 +6810,32 @@ function zayedTerminal(x0, z0){
   /* Amplitudes were first set at 6 / 2.6 / 11 and the bench rendered a sand dune: at the district
      camera 2.6 m of ripple is under a pixel of shading. 8 / 4.5 / 14 over a 150 m period puts the
      crests where the eye finds them, and is still inside the 53 m the survey tags. */
-  const PIER_Y = 18, VAULT = 9, RIPPLE = 6.5, RIP_PER = 84, HUB_LIFT = 18, WAVE_A = 14, PER = 150,
+  const PIER_Y = 18, VAULT = 9, RIPPLE = 6.5, RIP_PER = 84, HUB_LIFT = 18, WAVE_A = 14, PER = 118,
         EAVE = 14, DROOP = 3.5;
   const sm = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+  /* THE LANDSIDE BEARING, from the hub to the survey's car park (OSM 1233647932). The hub's
+     roof is built on it here, and so is the crescent further down. */
+  const CPX = -455, CPZ = -287;
+  const bear = Math.atan2(CPZ - HZ, CPX - HX);
+  /* THE HUB IS A ROW OF ARCHES FACING THE ROAD (city v180). The first two passes put one
+     directional sine over the hub on an arbitrary bearing, and the owner's verdict from the phone
+     was that the main building did not look like the real one. In the photographs the hub's
+     identity is its landside front: a wavy eave, four or five crests across the width of the
+     building, each crest the end of a ridge that runs BACK over the hall toward the airside and
+     settles into the piers. The front is the tallest edge of the roof and the whole thing slopes
+     away from the road. So the wave's phase runs ALONG the front (u, across the bearing), its
+     amplitude and the hub's lift are greatest at the front (v, toward the road) and fade toward
+     the airside, and nothing about it depends on where north is. */
   const roofY = (px, pz, d) => {
     const r = Math.hypot(px - HX, pz - HZ);
     const w = 1 - sm((r - HR * 0.9) / (HR * 1.4));           // 1 over the hub, 0 by 2.3 radii out
     const vault = VAULT * Math.sqrt(Math.min(1, d / 36));
-    const ripple = RIPPLE * (1 - 0.6 * w) * Math.sin(r / RIP_PER * Math.PI * 2);
-    const hub = w * (HUB_LIFT + WAVE_A * Math.sin((px * 0.94 - pz * 0.34) / PER * Math.PI * 2 + 0.5));
+    const ripple = RIPPLE * (1 - 0.7 * w) * Math.sin(r / RIP_PER * Math.PI * 2);
+    const u = -(px - HX) * Math.sin(bear) + (pz - HZ) * Math.cos(bear);   // along the front
+    const v =  (px - HX) * Math.cos(bear) + (pz - HZ) * Math.sin(bear);   // toward the road
+    const front = sm((v + 120) / 260);                        // 1 at the road edge, 0 well into the airside
+    const arches = WAVE_A * (0.35 + 0.65 * front) * Math.sin(u / PER * Math.PI * 2);
+    const hub = w * (HUB_LIFT * (0.7 + 0.5 * front) + arches);
     return PIER_Y + vault + ripple + hub - DROOP * (1 - sm(d / EAVE));
   };
   const RP = TERM_ROOF.pts, rpos = new Float32Array(RP.length * 3);
@@ -6984,8 +7001,6 @@ function zayedTerminal(x0, z0){
      same bearing: an annular sector 290-400 m from the hub centre, 70 degrees wide, four levels
      of deck in the deck's own grey with a pale top slab. The loop road runs inside it at 235 m,
      sixteen chords on piers, the arc the photographs show in front of the doors. */
-  const CPX = -455, CPZ = -287;
-  const bear = Math.atan2(CPZ - HZ, CPX - HX);
   const arc = (r0, r1, a0, a1, n) => {
     const ring = [];
     for (let i = 0; i <= n; i++){ const th = a0 + (a1 - a0) * i / n; ring.push([HX + Math.cos(th) * r1, HZ + Math.sin(th) * r1]); }
