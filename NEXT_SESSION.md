@@ -116,6 +116,12 @@
 > nightOnly/planOnly/helper/glow ancestor. Bench: 4,381 pieces -> 307 meshes (Corniche 482 ms,
 > the rest under 100 ms). BufferGeometryUtils is imported with the six modules (in FILES.json, so
 > the worker holds it). The 'frames' row carries merged/mergedTo/mergeMs.
+> Later the same day: the merge runs behind the spinner for the opening islands (one a frame in
+> maybePostPainted, MERGE_WAIT_MS 1.5 s past the last opening build) — the owner's 12:29 row had
+> five frames of 140-364 ms right after the reveal, the Corniche's merge (250 ms on the phone) the
+> largest; idle-time work is wrapped in task(name, fn) and the row's `tasks` names every one over
+> 30 ms. App side (PR #133): only the document's own scroll idles the world — the rail's swipe was
+> idling it on every card change (23 toggles in the row), so flights began 220 ms late.
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.

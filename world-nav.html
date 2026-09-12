@@ -5771,7 +5771,7 @@ function fillCorniche(){
      missing call, one line closes both: the same fix, for the same reason, a third time. */
   applyLOD();
 }
-if (window.requestIdleCallback) requestIdleCallback(fillCorniche, { timeout:2000 });
+if (window.requestIdleCallback) requestIdleCallback(() => task('fillCorniche', fillCorniche), { timeout:2000 });
 else setTimeout(fillCorniche, 800);
 
 cur.target.copy(goal.target);
@@ -7084,7 +7084,7 @@ function scheduleMerge(delay){
   const run = () => {
     const d = DISTRICTS.find(x => x.built && !x._merged);
     if (!d) return;
-    try { mergeStatic(d); } catch (e){ console.warn('merge', d.id, e && e.message); d._merged = true; }
+    try { task('merge:' + d.id, () => mergeStatic(d)); } catch (e){ console.warn('merge', d.id, e && e.message); d._merged = true; }
     scheduleMerge(150);
   };
   setTimeout(() => { if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 }); else run(); }, delay === undefined ? 400 : delay);
@@ -7114,6 +7114,8 @@ function bakeXfer(){
   } catch (e){ return -1; }
 }
 const OPENING_WAIT_MS = 3000;   // the most the reveal waits for the opening chain past the Corniche
+const MERGE_WAIT_MS = 1500;     // and for the kit merge past the last opening build
+let _mergeFrom = 0;
 let _openFrom = 0;
 const openingWhole = () => OPENING_FILL.every(x => { const d = DISTRICTS.find(y => y.id === x); return !d || (!d.pending && d._shown); });
 function maybePostPainted(){
@@ -7147,10 +7149,24 @@ function maybePostPainted(){
       const d = id && DISTRICTS.find(y => y.id === id);
       if (d && roadsIn(id) && bakeSettled(id)){
         console.info('build ' + id + ' via opening (bake ' + bakeState.get(id) + ')');
-        try { buildAndRegister(d); if (isleReady(d)){ d.group.visible = true; d._shown = true; } }
+        try { task('open:' + id, () => buildAndRegister(d)); if (isleReady(d)){ d.group.visible = true; d._shown = true; } }
         catch (e){ console.warn('opening build', id, e && e.message); }
       }
       return;   // one island a frame; the next frame comes back for the rest
+    }
+  }
+  /* AND THE KIT MERGE, BEHIND THE SPINNER TOO (nav v262). Run in idle slices after the reveal it
+     landed in the first two seconds of the opening camera move: the owner's 12:29 frame row put
+     five frames of 140-364 ms there, the Corniche's merge the largest single block (250 ms on
+     the phone). One island a frame here, capped at MERGE_WAIT_MS past the last opening build. */
+  if (complete && openingWhole() && BGU){
+    const d = DISTRICTS.find(x => x.built && !x._merged && OPENING_IDS.includes(x.id));
+    if (d){
+      if (!_mergeFrom) _mergeFrom = performance.now();
+      if (performance.now() - _mergeFrom < MERGE_WAIT_MS){
+        try { task('merge:' + d.id, () => mergeStatic(d)); } catch (e){ d._merged = true; }
+        return;
+      }
     }
   }
   if (g && !g.classList.contains('ready')){ g.classList.add('ready'); _paintSrc = complete ? 'complete' : 'forced'; }
@@ -7208,7 +7224,7 @@ function scheduleOpeningFill(delay){
     const id = OPENING_FILL.find(x => { const d = DISTRICTS.find(y => y.id === x); return d && d.pending; });
     if (!id){ postIsles(); scheduleGroundRefine(200); return; }   // the shot is complete: sharpen the ground, then the far islands
     const d = DISTRICTS.find(y => y.id === id);
-    if (roadsIn(id) && bakeSettled(id)){ console.info('build ' + id + ' via opening fill (bake ' + bakeState.get(id) + ')'); try { buildAndRegister(d); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(120); }
+    if (roadsIn(id) && bakeSettled(id)){ console.info('build ' + id + ' via opening fill (bake ' + bakeState.get(id) + ')'); try { task('fill:' + id, () => buildAndRegister(d)); } catch (e){ console.warn('opening fill', id, e && e.message); } scheduleOpeningFill(120); }
     else Promise.all([whenRoads(id), whenBake(id)]).then(() => scheduleOpeningFill(0));
   };
   /* Short gaps and a short idle deadline (nav v259): a baked build is 50-600 ms, and the five
@@ -7242,7 +7258,7 @@ function scheduleDeferredIsland(delay){
        its own, and the footprints, ground features and water are all registered separately.
        buildAndRegister is the sequence a rail visit already performs, and skipping it was exactly
        how Zayed City came out as a dark plate in the first render of this change. */
-    try { buildAndRegister(d); }
+    try { task('deferred:' + d.id, () => buildAndRegister(d)); }
     catch (e){ console.warn('deferred island build failed', e); return; }
     if (DISTRICTS.some(x => x.onDemand && x.pending)) scheduleDeferredIsland(300);
     else scheduleDeferredIsland(2500);   // one last pass for anything whose roads arrived late
@@ -7257,7 +7273,7 @@ function scheduleGroundRefine(delay){
   if (typeof refineGroundStep !== 'function') return;
   const run = () => {
     let more = false;
-    try { more = refineGroundStep(); }
+    try { more = task('groundRefine', refineGroundStep); }
     catch (e){ console.warn('ground refine failed, leaving the half-resolution paint', e); more = false; }
     if (more) scheduleGroundRefine(120);
     else scheduleDeferredIsland(200);
@@ -7302,6 +7318,16 @@ const _camPrev = new THREE.Vector3(), _camPrevQ = new THREE.Quaternion(); let _c
    app idled and woke the world, and the eight worst frames with what the renderer did in them.
    Posted once as 'frames'; the app logs it. */
 const FS = { n: 0, sum: 0, max: 0, n50: 0, n100: 0, dts: [], worst: [], toggles: 0, prog0: 0, tex0: 0, last: 0, sent: false };
+/* WHICH TASK MADE A LONG FRAME (nav v262). The idle-time work after the reveal — island builds,
+   the kit merge, the Corniche fill, ground refines — runs inside frames the person is watching;
+   every one longer than 30 ms is named here with its start and length, and the frames row
+   carries the first twelve. */
+const TASKS = [];
+function task(name, fn){
+  const t0 = performance.now();
+  try { return fn(); }
+  finally { const ms = performance.now() - t0; if (ms > 30 && TASKS.length < 12) TASKS.push(name + '/' + Math.round(t0) + '/' + Math.round(ms)); }
+}
 function frameStat(){
   if (!_paintedSent || FS.sent) return;
   const now = performance.now();
@@ -7318,7 +7344,7 @@ function frameStat(){
       n50: FS.n50, n100: FS.n100, toggles: FS.toggles, prog: renderer.info.programs.length - FS.prog0, tex: renderer.info.memory.textures - FS.tex0,
       dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100, worst: FS.worst.join(';'),
       mat5: FS.mat5 || '', mat40: stockWear(true) + ' ' + view, vlog: viewLog.join(' '),
-      merged: MERGED.removed, mergedTo: MERGED.meshes, mergeMs: MERGED.ms }, '*'); } catch (e){}
+      merged: MERGED.removed, mergedTo: MERGED.meshes, mergeMs: MERGED.ms, tasks: TASKS.join(';') }, '*'); } catch (e){}
   }
 }
 function frame(){
