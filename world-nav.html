@@ -11,8 +11,8 @@
 <script type="importmap">{ "imports": {
   "three": "./vendor/three/build/three.module.js",
   "three/addons/": "./vendor/three/examples/jsm/",
-  "./w2h-terminal-a.js": "./w2h-terminal-a.js?v=navv269",
-  "./area-rail.js": "./area-rail.js?v=navv269"
+  "./w2h-terminal-a.js": "./w2h-terminal-a.js?v=navv270",
+  "./area-rail.js": "./area-rail.js?v=navv270"
 } }</script>
 <!-- THE TWO MODULES IMPORTED BY NAME CARRY THE STAMP THROUGH THE MAP (nav v265). w2h-city.js
      imports w2h-terminal-a.js with a fixed specifier and the nav imports area-rail.js the same
@@ -24,7 +24,7 @@
      preload script checks they agree and the bench fails if they do not. -->
 <!-- THE NAV STAMP LIVES HERE (nav v261). The module below reads it, and so does the preload
      script next to it, which has to run while the page is still being parsed. Bump it here. -->
-<meta name="w2h-nav" content="nav v269">
+<meta name="w2h-nav" content="nav v270">
 <script>
 /* EVERYTHING THE OPENING NEEDS, REQUESTED WHILE THE PAGE IS STILL PARSING (nav v257). The
    friend's iPhone on 11 Sep: 3.3 s importing six modules one after another, 4.1 s for the bake,
@@ -799,7 +799,7 @@ const PAGE_T0 = performance.now();
    had not changed, and sw.js could never hold them. The embed now asks for ./w2h-world.js?v=navv248,
    a URL that changes exactly when NAV_STAMP does — so the discipline is the one NEXT_SESSION.md
    already states: any module change bumps nav. The development shell keeps Date.now(). */
-const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v269').trim();
+const NAV_STAMP = ((document.querySelector('meta[name="w2h-nav"]') || {}).content || 'nav v270').trim();
 const V = EMBED ? '?v=' + NAV_STAMP.replace(/\s+/g, '') : '?v=' + Date.now();
 
 /* THE BAKED CORNICHE (nav v256). tools/bake-stock.mjs ran this page once on the bench and wrote

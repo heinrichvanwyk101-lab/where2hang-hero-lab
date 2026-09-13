@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_STANDS, TERM_ROOF, TERM_HUB } from './w
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v182';
+export const BUILD = 'city v183';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6756,13 +6756,19 @@ function zayedTerminal(x0, z0){
   const shell = saadKitMat(0x555A60, 0xC8CBCE, 0.40, 0.30, 0xFFF4E2, 0.02, 0.55);
   const shellU= saadKitMat(0x3A3D41, 0x6E7175, 0.60, 0.05, 0xFFE9C8, 0.04, 0.45);
   const fascia= saadKitMat(0xE6E7E4, 0xFFFFFF, 0.50, 0, 0xFFF4E2, 0.05, 0.70);
-  const glass = kitGlass(0x22343F, 0x9FBACB, 0.18, 0.5);
-  /* LIT FROM INSIDE AFTER DARK (city v179). kitGlass carries the window sheet as its dusk map
-     but no emissive, so at dusk the terminal's front was a dark band under a white lip. The
-     dusk photograph is the reverse: the glass is the brightest thing in it, warm from the halls
-     behind. The sheet doubles as the emissive map, so what glows is the windows, not the wall;
-     the view switcher scales the intensity for dusk and night and Day swaps the material out. */
-  glass.emissive = new THREE.Color(0xFFD9A8); glass.emissiveMap = TEX_TOWER; glass.emissiveIntensity = 1.4;
+  const glass = kitGlass(0x2B5C82, 0x6FA8D6, 0.12, 0.55);
+  /* BLUE, AND LIT AS A HALL, NOT AS WINDOWS (city v183). The owner's three screenshots, Day,
+     dusk and night: "glass looks like a wall, should be a blue face colour; at dusk lights should
+     start showing and at night more". The day face was a grey-blue that read as concrete on the
+     shaded side, so the day material carries a blue emissive floor — the face is blue whichever
+     way the sun is. The dusk material had the window sheet as its emissive map, which at the
+     district distance is dots on black; a hall this size glows as a whole. So the glow is plain:
+     a warm emissive with no map, registered like every other kit material, so the switcher gives
+     it 0.42 of this at dusk and NIGHT_EMI times it at night — lights coming on, then more. */
+  glass.map = null; glass.emissive = new THREE.Color(0xE8B070); glass.emissiveIntensity = 0.9;   // 0.38 at dusk, 1.08 at night; 1.6 bloomed the whole front white
+  glass.roughness = 0.2; glass.metalness = 0.35;
+  glass.userData.dayMats.emissive = new THREE.Color(0x1B4E78); glass.userData.dayMats.emissiveIntensity = 0.30;
+  glass.userData.dayMats.envMapIntensity = 1.3;
   const deck  = saadKitMat(0x55544F, 0x8C8B85, 0.85, 0.02);
   const conc  = saadKitMat(0x47453F, 0x6E6C66, 0.92, 0);   // apron: dark, so the white roof stands off it
   const tar   = saadKitMat(0x2A2A28, 0x454543, 0.95, 0);   // runway
@@ -7024,6 +7030,31 @@ function zayedTerminal(x0, z0){
   /* Taxiway back to the apron, so the runway is joined to the terminal rather than parked beside
      it. Straight: at this scale a fillet is three more boxes nobody will resolve. */
   box(RS_X + 205, RS_Z + 40, 300, 26, 0.4, tar, 0.7, -RW_A - 0.9);
+
+  /* ---- THE AIRFIELD AFTER DARK (city v183) -------------------------------------------------- */
+  /* "Runway lights are missing mate." White edge lights every 60 m down both sides, white
+     centreline every 30 m, a green threshold bar across each end, blue edge lights along the
+     taxiway every 40 m. One InstancedMesh per colour, nightOnly with origMat set so the view
+     switcher shows them at dusk and night; small enough that the bloom pass turns each into a
+     point of light rather than a blob. */
+  const lamp = (hex, n) => {
+    const m = new THREE.MeshStandardMaterial({ color:0x000000, emissive:hex, emissiveIntensity:4, roughness:1 });
+    const im = new THREE.InstancedMesh(new THREE.SphereGeometry(1.1 / M, 6, 4), m, n);
+    im.userData.nightOnly = true; im.userData.origMat = m; im.userData.noShadow = true;
+    im.count = 0; g.add(im); return im;
+  };
+  const drop = (im, ax, az, y) => { const [wx, wz] = at(ax, az); dummy.position.set(wx, (y || 0.9) / M, wz); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); im.setMatrixAt(im.count++, dummy.matrix); };
+  const ca = Math.cos(RW_A), sa = Math.sin(RW_A);
+  const white = lamp(0xFFF4DC, 2 * 20 + 38), green = lamp(0x4CFF7A, 18), blue = lamp(0x5C9CFF, 18);
+  for (let t = -RL / 2; t <= RL / 2; t += 60) for (const e of [-1, 1])
+    drop(white, rc[0] + ca * t - sa * e * (RW / 2 + 2), rc[1] + sa * t + ca * e * (RW / 2 + 2));
+  for (let t = -RL / 2 + 15; t < RL / 2; t += 30) drop(white, rc[0] + ca * t, rc[1] + sa * t, 0.6);
+  for (const e of [-1, 1]) for (let k = -4; k <= 4; k++)
+    drop(green, rc[0] + ca * (RL / 2) * e - sa * k * 6.5, rc[1] + sa * (RL / 2) * e + ca * k * 6.5);
+  { const th = RW_A + 0.9, tc = Math.cos(th), ts = Math.sin(th), cx = RS_X + 205, cz = RS_Z + 40;
+    for (let t = -150; t <= 150; t += 40) for (const e of [-1, 1])
+      drop(blue, cx + tc * t - ts * e * 15, cz + ts * t + tc * e * 15); }
+  for (const im of [white, green, blue]) im.instanceMatrix.needsUpdate = true;
 
   /* ---- LANDSIDE: THE CRESCENT AND THE LOOP (city v179) ------------------------------------- */
   /* The reference aerials show one thing in front of the hub: a crescent car park, concave to the

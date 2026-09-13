@@ -202,6 +202,13 @@
 > day materials of the wall and the fascia bands too, the wall is wound outward by construction,
 > the soffit's day material is BackSide like its dusk one. Rule: a kit that sets side on a
 > material must set it on that material's dayMats as well.
+> city v183 / nav v270 — "glass looks like a wall, should be a blue face colour; at dusk lights
+> should start showing and at night more; runway lights are missing": the day glass is blue with
+> a blue emissive floor (0x1B4E78 x 0.30) so the shaded face still reads as glass; the dusk
+> material drops the window sheet for a plain warm emissive (0xE8B070 x 0.9 — the lift makes it
+> 0.38 at dusk, 1.08 at night; 1.6 bloomed the whole front white on the bench); the airfield has
+> nightOnly lamps — white runway edge every 60 m and centreline every 30 m, green threshold bars,
+> blue taxiway edge every 40 m — one InstancedMesh per colour, emissive 4 so bloom makes points.
 >
 > Read this file, then `docs/VENUE-BUILDINGS.md` in the app repo, then the task list below.
 > Check the four `BUILD` stamps in the raw files before saying what is live.
@@ -211,7 +218,7 @@ App repo: `heinrichvanwyk101-lab/Where2hang` (Next.js 16, Supabase project `wwex
 
 ## Handed over on 7 September 2026
 
-Stamps at hand-over: `nav v269 / city v182 / world v353 / props v41` (12 Sep 2026; basemap v30). The nav stamp
+Stamps at hand-over: `nav v270 / city v183 / world v353 / props v41` (12 Sep 2026; basemap v30). The nav stamp
 lives in `<meta name="w2h-nav">` at the top of world-nav.html (the module and the head preload script both read it). Verify with
 `grep -n "BUILD = \|B_NAV = " w2h-city.js w2h-world.js world-nav.html`.
 
