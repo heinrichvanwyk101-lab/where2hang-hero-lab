@@ -20,7 +20,7 @@ import { TERM_ENVELOPE, TERM_APRON, TERM_STANDS, TERM_ROOF, TERM_HUB } from './w
    Three deploys in a row were diagnosed from screenshots that turned out to be a stale cache,
    which costs a full cycle each time and, worse, produces confident wrong conclusions about
    code that was never running. One line per module ends that argument in one screenshot. */
-export const BUILD = 'city v181';
+export const BUILD = 'city v182';
 
 /* THE PALACE FOOTPRINT, EXPORTED, because w2h-world.js sizes the estate reservation and the lawn
    against it and has now got that wrong twice by reading a stale comment instead of the geometry.
@@ -6871,7 +6871,8 @@ function zayedTerminal(x0, z0){
   const up = under.attributes.position;
   for (let v = 0; v < up.count; v++) up.setY(v, up.getY(v) - 1.5 / M);
   under.computeVertexNormals();
-  const um = new THREE.Mesh(under, shellU); um.material.side = THREE.BackSide; g.add(um);
+  shellU.side = THREE.BackSide; shellU.userData.dayMats.side = THREE.BackSide;
+  const um = new THREE.Mesh(under, shellU); g.add(um);
 
   /* ---- THE CURTAIN WALL, HUNG FROM THE ROOF -------------------------------------------------- */
   /* The eave points are the first TERM_ROOF.edge vertices, in ring order, so the glass top edge is
@@ -6912,7 +6913,23 @@ function zayedTerminal(x0, z0){
   const gg = new THREE.BufferGeometry();
   gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
   gg.setIndex(gi); gg.computeVertexNormals();
-  const gm = new THREE.Mesh(gg, glass); gm.material.side = THREE.DoubleSide; g.add(gm);
+  /* BOTH SIDES ON THE DAY MATERIAL TOO (city v182). The view switcher hands the mesh its
+     material's dayMats in Day, a separate material that was still single-sided, and the strip's
+     winding faces the hall — so the owner's 06:14 Day screenshot had the roof floating over bare
+     ground with no glass under it. Dusk had it because DoubleSide was set on the dusk material
+     alone. Set on both, and the strip is wound outward as well, for any material that is not. */
+  {
+    const nr = gg.attributes.normal, ps = gg.attributes.position; let dot = 0;
+    for (let i = 0; i < NE; i++){
+      const p = RP[i], q = RP[(i + 1) % NE], o = RP[(i + NE - 1) % NE];
+      const dx = q[0] - o[0], dz = q[1] - o[1], L = Math.hypot(dx, dz) || 1;
+      const ox = dz / L * nSign, oz = -dx / L * nSign;          // outward = minus the inward normal
+      dot += nr.getX(i * 2) * ox + nr.getZ(i * 2) * oz;
+    }
+    if (dot < 0){ const ix = gg.index.array; for (let t = 0; t < ix.length; t += 3){ const k = ix[t + 1]; ix[t + 1] = ix[t + 2]; ix[t + 2] = k; } gg.computeVertexNormals(); }
+  }
+  glass.side = THREE.DoubleSide; glass.userData.dayMats.side = THREE.DoubleSide;
+  const gm = new THREE.Mesh(gg, glass); g.add(gm);
 
   /* ---- THE EAVE, LIT AFTER DARK (city v179) ------------------------------------------------- */
   /* The night aerial is a white line of light drawn round the whole roof edge, every pier, every
@@ -6935,7 +6952,8 @@ function zayedTerminal(x0, z0){
     const bg = new THREE.BufferGeometry();
     bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3));
     bg.setIndex(bi); bg.computeVertexNormals();
-    const bm = new THREE.Mesh(bg, mat); bm.material.side = THREE.DoubleSide; g.add(bm); return bm;
+    mat.side = THREE.DoubleSide; if (mat.userData && mat.userData.dayMats) mat.userData.dayMats.side = THREE.DoubleSide;
+    const bm = new THREE.Mesh(bg, mat); g.add(bm); return bm;
   };
   band(-3.0, 0.3, fascia);
   const em = band(-3.8, -3.1, eaveMat);
